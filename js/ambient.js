@@ -162,13 +162,13 @@ export function drawWeather(ctx, cam, t, w) {
 
 // Draws an image in thin horizontal bands, the top ones pushed sideways by the wind:
 // the plant bends from its foot instead of sliding as a block.
-export function swayBlit(ctx, im, x, y, flip, t, seed, amp) {
+export function swayBlit(ctx, im, x, y, flip, t, seed, amp, band = 4) {
   const k = amp * (1 + 2.5 * gust(t)), h = im.height;
   ctx.save();
   ctx.translate(flip ? x + im.width : x, y);
   if (flip) ctx.scale(-1, 1);
-  for (let b = 0; b < h; b += 4) {
-    const dx = Math.round(Math.sin(t * 1.7 + seed + b * 0.06) * k * (1 - b / h) ** 1.5), bh = Math.min(4, h - b);
+  for (let b = 0; b < h; b += band) {
+    const dx = Math.round(Math.sin(t * 1.7 + seed + b * 0.06) * k * (1 - b / h) ** 1.5), bh = Math.min(band, h - b);
     ctx.drawImage(im, 0, b, im.width, bh, flip ? -dx : dx, b, im.width, bh);
   }
   ctx.restore();

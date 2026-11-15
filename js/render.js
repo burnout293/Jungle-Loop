@@ -14,7 +14,7 @@ import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js'
 const built = (id, platTop, slabTop, hollow) => ({ platform: id + '-platform', pillar: id + '-pillar', crate: id + '-crate', slab: id + '-slab', tunnel: id + '-tunnel', platTop, slabTop, hollow });
 export const BIOMES = [
   { id: 'jungle', name: 'Jungle mystique', bg: 'bg-far', mid: 'mid', grounds: ['ground-0', 'ground-1', 'ground-2'], prop: 'prop-', props: 9, shade: null,
-    platform: 'platform', pillar: 'prop-0', crate: 'crate', slab: 'slab', tunnel: 'log', platTop: 13, slabTop: 5, hollow: ['#3b2014', '#24120f', '#4d2d1a', '#160b0c'] },
+    platform: 'platform', pillar: 'pillar', crate: 'crate', slab: 'slab', tunnel: 'log', platTop: 13, slabTop: 5, hollow: ['#3b2014', '#24120f', '#4d2d1a', '#160b0c'] },
   { id: 'ruins', name: 'Ruines oubliées', bg: 'ruins-bg', mid: 'ruins-mid', grounds: ['ruins-ground'], prop: 'ruins-prop-', props: 4, shade: '#3b2331',
     ...built('ruins', 2, 5, ['#6b3a22', '#2c1611', '#8a5632', '#1c0e0b']) },
   { id: 'city', name: 'Cité du futur', bg: 'city-bg', mid: 'city-mid', grounds: ['city-ground'], prop: 'city-prop-', props: 4, shade: '#120c2c',
@@ -24,7 +24,7 @@ export const BIOMES = [
 ];
 
 const DIR = 'assets/img/';
-const NAMES = ['fore', 'temple', 'hero-body', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-moskito', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-moskito', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -45,10 +45,14 @@ export const quality = () => Q;
 const snap = (v) => Math.round(v * Q) / Q;             // to the nearest spot the canvas can show
 const n = (v) => Math.round(v / PIXEL * Q) / Q;        // the same, from game units
 
+// A picture handed to the graphics chip once and for all: decoded now rather than in the middle of
+// a run, and never uploaded again. Works on images and on the canvases made from them.
+const baked = async (im) => { try { return im && window.createImageBitmap ? await createImageBitmap(im) : im; } catch { return im; } };
+
 function load(name) {
   return new Promise((done) => {
     const im = new Image();
-    im.onload = () => { IMG[name] = im; done(); };
+    im.onload = async () => { IMG[name] = await baked(im); done(); };
     im.onerror = done;                                 // a missing image is skipped, not fatal
     im.src = DIR + name + '.png';
   });
@@ -66,6 +70,17 @@ export async function loadAssets() {
   for (const [k, frames] of [['spiky', 1], ['fly', meta.fly.frames], ['mosquito', meta.mosquito.frames]])
     HAZ[k] = { im: rim(IMG[k], frames), ghost: rim(tinted(IMG[k], 'rgba(110,215,255,.55)'), frames, '#d8f6ff'), frames };
   FAR = { fist: tinted(IMG['hero-fist'], 'rgba(16,12,40,.38)'), shoe: tinted(IMG['hero-shoe'], 'rgba(16,12,40,.38)') };
+  // everything made above is a canvas: turned into ready pictures too
+  const jobs = [];
+  const bake = (o, k) => jobs.push(baked(o[k]).then((b) => { o[k] = b; }));
+  for (const S of SCENE) {
+    for (const k of ['pillar', 'fore', 'tunnel']) bake(S, k);
+    S.props.forEach((_, i) => bake(S.props, i));
+    for (const g of S.ground.pieces) bake(g, 'im');
+  }
+  for (const H of Object.values(HAZ)) { bake(H, 'im'); bake(H, 'ghost'); }
+  bake(FAR, 'fist'); bake(FAR, 'shoe');
+  await Promise.all(jobs);
   ready = true;
 }
 
@@ -113,6 +128,15 @@ function rowColour(im, row, fallback) {
 
 const DIM = 'rgba(16,12,40,.3)';                       // the veil over scenery that stands where obstacles do
 
+// A long drawing made shorter by taking out its middle: both ends stay whole.
+function shortened(im, w) {
+  if (!im || im.width <= w) return im;
+  const c = canvasOf(w, im.height), x = c.getContext('2d'), half = w >> 1;
+  x.drawImage(im, 0, 0, half, im.height, 0, 0, half, im.height);
+  x.drawImage(im, im.width - (w - half), 0, w - half, im.height, half, 0, w - half, im.height);
+  return c;
+}
+
 function buildScene(b) {
   // The floor is a long fixed sequence of the ground pieces, some mirrored, repeated only every few
   // thousand pixels: far too long for the eye to catch the pattern at running speed.
@@ -134,7 +158,7 @@ function buildScene(b) {
   const props = [];
   for (let i = 0; i < b.props; i++) props.push(tinted(IMG[b.prop + i], DIM));
   return {
-    platform: IMG[b.platform], pillar: tinted(IMG[b.pillar], DIM), crate: IMG[b.crate], stacks: [], slab: IMG[b.slab], tunnel: IMG[b.tunnel],
+    platform: IMG[b.platform], pillar: tinted(IMG[b.pillar], DIM), crate: IMG[b.crate], stacks: [], slab: IMG[b.slab], tunnel: shortened(IMG[b.tunnel], Math.round(LOG.w / PIXEL)),
     platTop: b.platTop, slabTop: b.slabTop, hollow: b.hollow,
     bg: IMG[b.bg], mid: IMG[b.mid], ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c') }, props, fore,
     sky: rowColour(IMG[b.bg], 0, '#7fb9ec'), base: rowColour(IMG[b.mid], -1, '#1c2c3a'),
@@ -180,14 +204,22 @@ function drawGround(ctx, run, G, cam, x0, x1, bottom) {
     for (const g of G.pieces) {
       const px = snap(base + g.x), w = g.im.width, h = g.im.height;
       if (px >= x1 || px + w <= x0) continue;
-      for (let k = 0; k < w; k += SLICE) {
-        const x = px + k, cw = Math.min(SLICE, w - k);
-        if (x >= x1 || x + cw <= x0) continue;
-        const y = n(floorAt(run, (cam + x + cw / 2) * PIXEL)) - 4;
-        ctx.drawImage(g.im, k, 0, cw, h, x, y, cw, h);
-        // under a raised stretch: the earth of the piece's lower half again, as often as needed
-        for (let yy = y + h - 1; yy < VH; yy += EARTH) ctx.drawImage(g.im, k, h - EARTH - 2, cw, EARTH, x, yy, cw, EARTH);
-        if (y + h < bottom && y + h >= VH) ctx.fillRect(x, y + h, cw, bottom - y - h);
+      // Columns standing at the same height are drawn as one block: on the flat, which is nearly
+      // everywhere, a whole piece goes down in a single call instead of one per column.
+      let a = Math.max(0, Math.floor((x0 - px) / SLICE) * SLICE), ya = null;
+      for (let k = a; ; k += SLICE) {
+        const out = k >= w || px + k >= x1;
+        const y = out ? null : n(floorAt(run, (cam + px + k + Math.min(SLICE, w - k) / 2) * PIXEL)) - 4;
+        if (y === ya && !out) continue;
+        if (ya !== null) {
+          const cw = Math.min(k, w) - a, x = px + a;
+          ctx.drawImage(g.im, a, 0, cw, h, x, ya, cw, h);
+          // under a raised stretch: the earth of the piece's lower half again, as often as needed
+          for (let yy = ya + h - 1; yy < VH; yy += EARTH) ctx.drawImage(g.im, a, h - EARTH - 2, cw, EARTH, x, yy, cw, EARTH);
+          if (ya + h < bottom && ya + h >= VH) ctx.fillRect(x, ya + h, cw, bottom - ya - h);
+        }
+        if (out) break;
+        a = k; ya = y;
       }
     }
   ctx.restore();
@@ -237,11 +269,11 @@ function edges(ctx, im, cam, t, width) {
   if (!im) return;
   const off = cam * 1.35;
   for (let i = Math.floor(off / im.width); i * im.width - off < width; i++)
-    swayBlit(ctx, im, snap(i * im.width - off), VH - im.height + 26, i & 1, t, 0, 2.5);
+    swayBlit(ctx, im, snap(i * im.width - off), VH - im.height + 26, i & 1, t, 0, 2.5, 8);
   const top = cam * 1.2 + 230;
   ctx.save(); ctx.translate(0, 30); ctx.scale(1, -1);
   for (let i = Math.floor(top / im.width); i * im.width - top < width; i++)
-    swayBlit(ctx, im, snap(i * im.width - top), 0, i & 1, t, 2, 2);
+    swayBlit(ctx, im, snap(i * im.width - top), 0, i & 1, t, 2, 2, 8);
   ctx.restore();
 }
 
@@ -252,10 +284,10 @@ function blend(ctx, run, v, edge, soft, paint) {
   const A = SCENE[run.prevBiome], B = SCENE[run.biome];
   if (A === B || edge <= -soft) { paint(ctx, B); return; }
   if (edge - soft >= v.w) { paint(ctx, A); return; }
-  const W = Math.ceil(v.w * Q), H = VH * Q;
+  const q = Math.min(Q, 2), W = Math.ceil(v.w * q), H = VH * q;      // far scenery, mid-fade: half the detail is plenty
   if (!scratch || scratch.width !== W || scratch.height !== H) scratch = canvasOf(W, H);
   const s = scratch.getContext('2d');
-  s.setTransform(Q, 0, 0, Q, 0, 0); s.imageSmoothingEnabled = false;
+  s.setTransform(q, 0, 0, q, 0, 0); s.imageSmoothingEnabled = false;
   const g = s.createLinearGradient(edge - soft, 0, edge + soft, 0);
   g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, '#000');
   // the old one fades out to the right of the edge, the new one fades in: both have see-through parts
@@ -263,7 +295,7 @@ function blend(ctx, run, v, edge, soft, paint) {
     s.globalCompositeOperation = 'source-over'; s.clearRect(0, 0, v.w + 1, VH);
     paint(s, S);
     s.globalCompositeOperation = op; s.fillStyle = g; s.fillRect(0, 0, v.w + 1, VH);
-    ctx.drawImage(scratch, 0, 0, W / Q, VH);
+    ctx.drawImage(scratch, 0, 0, W / q, VH);
   }
 }
 
@@ -288,8 +320,11 @@ function shadow(ctx, cx, y, w) {
 // An image centred on a point, turned by `rot` (radians, clockwise).
 function part(ctx, im, cx, cy, rot) {
   if (!rot) { ctx.drawImage(im, snap(cx - im.width / 2), snap(cy - im.height / 2)); return; }
-  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); ctx.drawImage(im, -im.width / 2, -im.height / 2); ctx.restore();
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); soft(ctx); ctx.drawImage(im, -im.width / 2, -im.height / 2); ctx.restore();
 }
+// Anything drawn turned: its pixels no longer fall on the canvas's own, so their edges are blended
+// instead of breaking into stair-steps. Call between save() and restore(), which puts it back.
+function soft(ctx) { if (Q > 1) { ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'low'; } }
 const mix = (a, b, k) => a + (b - a) * k;
 
 // One shoe of the run: half a turn in the air swinging forward, half a turn on the floor going back.
@@ -309,10 +344,11 @@ function drawHero(ctx, run, t, seat) {
     ctx.fillStyle = g; ctx.fillRect(ox - r, oy - 18 - r, r * 2, r * 2);
   }
   if (p.inv > 0 && !run.leap && !(seat && seat.k < 1) && Math.floor(t * 14) % 2) return;   // blinking while invincible
-  if (p.ball) {                                        // the Sphère: curled up around his head, leaves and all, and rolling
-    const B = meta.rig.body;
-    ctx.save(); ctx.translate(ox, oy - 10); ctx.rotate(p.roll); ctx.scale(0.62, 0.62);
-    ctx.drawImage(IMG['hero-body'], -B.hx, -B.hy);
+  if (p.ball) {                                        // the Sphère: a ball of leaves, rolling. It swells out of a puff as he curls up.
+    const im = IMG['hero-ball'], k = Math.min(1, (p.balled || 0) / 0.18), s = 0.55 + 0.45 * k + 0.18 * Math.sin(Math.PI * k);
+    if (!im) return;
+    ctx.save(); ctx.translate(ox, oy - im.height / 2 + 1); ctx.rotate(p.roll); ctx.scale(s, s); soft(ctx);
+    ctx.drawImage(im, -im.width / 2, -im.height / 2);
     ctx.restore();
     return;
   }
@@ -344,7 +380,7 @@ function drawHero(ctx, run, t, seat) {
   }
 
   ctx.save(); ctx.translate(ox, oy);
-  if (run.leap) { ctx.translate(0, -20); ctx.rotate(p.roll); ctx.translate(0, 20); }     // knocked out: he tumbles
+  if (run.leap) { ctx.translate(0, -20); ctx.rotate(p.roll); ctx.translate(0, 20); soft(ctx); }     // knocked out: he tumbles
   if (shoes[0]) part(ctx, FAR.shoe, shoes[0].x, shoes[0].y, shoes[0].r);
   part(ctx, FAR.fist, fists[0].x, fists[0].y, 0);
   ctx.save(); ctx.translate(snap(bx), snap(by)); if (tilt) ctx.rotate(tilt);
@@ -390,16 +426,21 @@ function drawHang(ctx, frame, x) {
 // The vines the gorilla travels along: one long liana sagging from knot to knot across the top of
 // the frame, a strand hanging from each knot. `k` slides them in from above (0 hidden, 1 down).
 const VINE = 72;                                       // pixels from one knot to the next
+let liana = null;                                      // one sagging stretch of it, drawn once
 function drawVines(ctx, cam, t, width, k) {
+  if (!liana) {
+    liana = canvasOf(VINE, 12); const c = liana.getContext('2d');
+    for (let u = 0; u < VINE; u += 2) {
+      const y = Math.round(Math.sin(u / VINE * Math.PI) * 4);
+      c.fillStyle = '#1a1024'; c.fillRect(u, y, 2, 7);
+      c.fillStyle = '#5d8a2c'; c.fillRect(u, y + 1, 2, 5);
+      c.fillStyle = '#a4d64a'; c.fillRect(u, y + 1, 2, 1);
+    }
+  }
   const dy = Math.round((k - 1) * 50), first = Math.floor(cam / VINE);
   for (let i = first - 1; i * VINE - cam < width; i++) {
     const x0 = snap(i * VINE - cam);
-    for (let u = 0; u < VINE; u += 2) {
-      const y = dy + 7 + Math.round(Math.sin(u / VINE * Math.PI) * 4);
-      ctx.fillStyle = '#1a1024'; ctx.fillRect(x0 + u, y, 2, 7);
-      ctx.fillStyle = '#5d8a2c'; ctx.fillRect(x0 + u, y + 1, 2, 5);
-      ctx.fillStyle = '#a4d64a'; ctx.fillRect(x0 + u, y + 1, 2, 1);
-    }
+    ctx.drawImage(liana, x0, dy + 7);
     const len = 18 + Math.round(h01(i, 81) * 26);      // the strand under the knot, swaying from its top
     for (let v = 0; v < len; v += 2) {
       const sway = Math.round(Math.sin(t * 1.6 + i) * 2.5 * v / len);
@@ -506,14 +547,19 @@ export function draw(ctx, run, v, t) {
       for (const c of run.coins) if (c.tight === 'log' && c.x >= z.x && c.x < z.x + z.w) coinAt(c);
       ribs(z, false);
     } else {
-      const deep = n(GALLERY), ramp = n(70), [rimC, wall, floor] = S.hollow;
-      for (let k = 0; k < w; k += 2) {
-        const kk = Math.max(0, Math.min(1, k / ramp, (w - k) / ramp)), bottom = GN + 2 + Math.round(deep * kk), top = Math.max(GN + 1, bottom - 23);
-        ctx.fillStyle = '#1a1024'; ctx.fillRect(x + k, top - 1, 2, bottom - top + 2);
-        ctx.fillStyle = wall; ctx.fillRect(x + k, top, 2, bottom - top);
-        ctx.fillStyle = rimC; ctx.fillRect(x + k, top, 2, 2);
-        ctx.fillStyle = floor; ctx.fillRect(x + k, bottom - 2, 2, 2);
+      if (z.im === undefined || z.of !== S) {            // the burrow is drawn once, then kept with its zone
+        const deep = Math.round(GALLERY / PIXEL), ramp = Math.round(70 / PIXEL), [rimC, wall, floor] = S.hollow, W = Math.ceil(w);
+        z.im = canvasOf(W, deep + 4); z.of = S;
+        const c = z.im.getContext('2d');
+        for (let k = 0; k < W; k += 2) {
+          const kk = Math.max(0, Math.min(1, k / ramp, (W - k) / ramp)), bottom = 2 + Math.round(deep * kk), top = Math.max(1, bottom - 23);
+          c.fillStyle = '#1a1024'; c.fillRect(k, top - 1, 2, bottom - top + 2);
+          c.fillStyle = wall; c.fillRect(k, top, 2, bottom - top);
+          c.fillStyle = rimC; c.fillRect(k, top, 2, 2);
+          c.fillStyle = floor; c.fillRect(k, bottom - 2, 2, 2);
+        }
       }
+      ctx.drawImage(z.im, x, GN);
     }
   }
 
@@ -591,7 +637,7 @@ export function draw(ctx, run, v, t) {
       if (im) {
         const cw = im.width / K.frames;
         ctx.save(); ctx.globalAlpha = 1 - k * k;
-        ctx.translate(sx(g.x), n(g.y) - im.height / 2 - 46 * Math.sin(k * Math.PI * 0.6)); ctx.rotate(-k * 1.4); ctx.scale(1 - 0.55 * k, 1 - 0.55 * k);
+        ctx.translate(sx(g.x), n(g.y) - im.height / 2 - 46 * Math.sin(k * Math.PI * 0.6)); ctx.rotate(-k * 1.4); ctx.scale(1 - 0.55 * k, 1 - 0.55 * k); soft(ctx);
         ctx.drawImage(im, 0, 0, cw, im.height, -cw / 2, -im.height / 2, cw, im.height);
         ctx.restore();
       }
@@ -645,7 +691,7 @@ export function draw(ctx, run, v, t) {
     if (q.shard !== undefined) {                       // a quarter of a crate's own picture, spinning
       const im = SCENE[q.biome].crate, hw = im.width / 2, hh = im.height / 2;
       ctx.globalAlpha = Math.min(1, 3 * (1 - q.life / q.max));
-      ctx.save(); ctx.translate(sx(q.x), n(q.y)); ctx.rotate(q.rot);
+      ctx.save(); ctx.translate(sx(q.x), n(q.y)); ctx.rotate(q.rot); soft(ctx);
       ctx.drawImage(im, (q.shard % 2) * hw, (q.shard >> 1) * hh, hw, hh, -hw / 2, -hh / 2, hw, hh);
       ctx.restore();
       continue;

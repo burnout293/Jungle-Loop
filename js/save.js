@@ -29,11 +29,12 @@ export const UPGRADES = [
   { id: 'rewind', icon: 'rewind', kind: 'passif', name: 'Rembobinage', desc: 'Une fois par course, la relique annule ta chute.', costs: [2500] },
 ];
 
+export const QUALITIES = ['auto', 'smooth', 'sharp'];   // how the picture is drawn, see resize in main.js
 export const MAX_EQUIPPED = 3;   // owning is not enough: only three upgrades go on a run
 export const isPower = (id) => !!UPGRADES.find((u) => u.id === id && u.power);
 
 function blank() {
-  return { v: 1, coins: 0, best: 0, loops: 0, upgrades: {}, music: true, sfx: true, pixelFont: true, smooth: true, seenIntro: false,
+  return { v: 1, coins: 0, best: 0, loops: 0, upgrades: {}, musicVol: 7, sfxVol: 7, pixelFont: true, quality: 'auto', full: true, seenIntro: false,
     equipped: [], powersOff: [], xp: 0, quests: [], questsDone: 0, lastQuest: '' };
 }
 
@@ -45,10 +46,13 @@ function sanitize(raw) {
   s.coins = int(raw.coins);
   s.best = int(raw.best);
   s.loops = int(raw.loops);
-  s.music = raw.music !== false;
-  s.sfx = raw.sfx !== false;
+  // volumes go from 0 (off) to 10; older saves only knew on and off
+  const vol = (v, on) => (Number.isInteger(v) && v >= 0 && v <= 10 ? v : on === false ? 0 : 7);
+  s.musicVol = vol(raw.musicVol, raw.music);
+  s.sfxVol = vol(raw.sfxVol, raw.sfx);
   s.pixelFont = raw.pixelFont !== false;
-  s.smooth = raw.smooth !== false;
+  s.quality = QUALITIES.includes(raw.quality) ? raw.quality : 'auto';
+  s.full = raw.full !== false;
   s.seenIntro = !!raw.seenIntro;
   for (const u of UPGRADES) {
     const lvl = int(raw.upgrades && raw.upgrades[u.id]);

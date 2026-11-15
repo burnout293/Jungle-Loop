@@ -18,7 +18,7 @@ const CRATE = { w: 63, h: 52 }, SPIKY = { w: 68, h: 54 }, FLY = { w: 64, h: 54 }
 
 // Raised ways: a stone slab on pillars (a cave underneath) and a hollow log (a tunnel inside).
 // `t` is how thick the roof is: the hero can run under it, and bumps his head if he jumps there.
-export const SLAB = { h: 100, t: 50 }, LOG = { h: 133, t: 48, w: 774 };
+export const SLAB = { h: 100, t: 50 }, LOG = { h: 133, t: 48, w: 520 };
 const TOUCH_H = 130;            // scenery only reacts to a hero running past, not flying far above
 const MONKEY_H = 230;           // how high the hero must be to greet a monkey
 
@@ -31,6 +31,7 @@ const SLOW_CD = 20;
 const MAGNET = [0, 110, 170, 240];
 const DRUNK = [0, 0.06, 0.1, 0.15];     // Faune alcoolisée: share of the creatures that are harmless
 const FLAP = 430;                       // how fast the leaf rotor climbs
+export const SPEED = { base: 360, max: 900, gain: 5, sprint: 160 };   // units per second: at the door, at most, gained each second, added by Sprint
 
 // Mounts: rare friendly animals waiting on the path. Running into one puts the hero on its back until
 // something hits them: the animal takes the blow and vanishes. Each one plays its own game, and the
@@ -67,7 +68,7 @@ export const GALLERY = 58;
 export function newRun(upgrades) {
   return {
     up: upgrades, viewW: 960,
-    t: 0, cam: 0, sx: 10, base: 360 + (upgrades.sprint ? 110 : 0), speed: 360, dist: 0, gold: 0, gems: 0,
+    t: 0, cam: 0, sx: 10, base: SPEED.base + (upgrades.sprint ? SPEED.sprint : 0), speed: SPEED.base, dist: 0, gold: 0, gems: 0,
     hearts: HEARTS + (upgrades.heart ? 1 : 0), maxHearts: HEARTS + (upgrades.heart ? 1 : 0),
     p: { y: GROUND, vy: 0, ground: true, plat: null, jumps: 0, buf: 0, phase: 0, flying: false, rotor: false, spin: 0, roll: 0, inv: 0, squash: 0, hang: false, vineLeap: false, ball: null },
     obs: [], coins: [], plats: [], parts: [], events: [],
@@ -580,7 +581,7 @@ export function update(run, dt, input) {
 
   // --- scrolling: the hero first runs out of the temple, then the camera follows him ---
   run.t += d;
-  run.speed = Math.min(900, run.base + run.t * 5)
+  run.speed = Math.min(SPEED.max, run.base + run.t * SPEED.gain)
     + (run.mount && run.mount.kind === 'rhino' ? Math.min(420, run.mount.t * 20) : 0);   // the rhino only ever gathers speed
   run.vine = Math.max(0, Math.min(1, run.vine + (run.mount && run.mount.kind === 'gorilla' ? 1 : -1) * dt * 2.5));
   if (run.leap) run.leap.v = Math.max(160, run.leap.v - 170 * d);       // knocked out: he only slows down
@@ -609,16 +610,18 @@ export function update(run, dt, input) {
     p.spin = Math.max(0, p.spin - dt);
     p.flying = false;
     const half = M ? M.half : HERO_HALF, tall = M ? M.tall : HERO_H;
-    if (p.ball && px > p.ball.x + p.ball.w) { p.ball = null; p.y = fl; }      // out at the far end, back on his feet
+    // curling up and uncurling: a puff of leaves hides the change
+    const puff = () => { for (let i = 0; i < 12; i++) run.parts.push({ x: px + rnd(-22, 22), y: p.y - rnd(8, 60), vx: rnd(-180, 120), vy: rnd(-200, 40), life: 0, max: rnd(0.3, 0.6), c: pick(['#8fd14a', '#c9e86a', '#5fae3a', '#f4f0e0']), s: rnd(5, 11), g: 300 }); };
+    if (p.ball && px > p.ball.x + p.ball.w) { p.ball = null; p.y = fl; puff(); run.events.push('unroll'); }      // out at the far end, back on his feet
     if (!p.ball && up.sphere && !M && p.ground && !p.plat) {                   // the Sphère: a tight place begins here, in he rolls
       p.ball = run.zones.find((z) => px >= z.x && px < z.x + 110) || null;
-      if (p.ball) run.events.push('roll');
+      if (p.ball) { p.balled = 0; puff(); run.events.push('roll'); }
     }
     if (p.ball) {
       const z = p.ball, k = Math.min(1, (px - z.x) / 70, (z.x + z.w - px) / 70);
       p.ground = true; p.plat = null; p.vy = 0; p.rotor = false; p.jumps = 0;
       p.y = fl + (z.kind === 'gallery' ? GALLERY * Math.max(0, k) : 0);
-      p.roll += run.speed * d / 26;
+      p.roll += run.speed * d / 26; p.balled += dt;
     } else if (M && M.fly) {
       // the Moskito: held, it climbs; let go, it sinks. It turns round at once, no run-up either way.
       p.ground = false; p.plat = null; p.rotor = false;

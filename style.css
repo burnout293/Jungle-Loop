@@ -10,7 +10,7 @@
   --relic: #5cf2e0;
   --leaf: #6cc22e;
   --berry: #e0456b;
-  --font: "Silkscreen", "Trebuchet MS", system-ui, sans-serif;
+  --font: "Press Start 2P", "Trebuchet MS", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -28,13 +28,13 @@ body { display: flex; align-items: center; justify-content: center; }
    le plus petit texte y mesure 2,4 mm, un bouton au moins 8 mm. */
 #stage {
   --ui: 2px;
-  --fk: .82;                                      /* correction de taille propre à la police */
+  --fk: .62;                                      /* correction de taille propre à la police */
   --t-s: calc(var(--ui) * 11 * var(--fk));     /* petit texte */
   --t-m: calc(var(--ui) * 14 * var(--fk));     /* texte courant, boutons */
   --t-l: calc(var(--ui) * 19 * var(--fk));     /* HUD, bouton principal */
   --t-xl: calc(var(--ui) * 26 * var(--fk));    /* titres d'écran */
   --m: calc(var(--ui) * 8);        /* marge aux bords de la scène */
-  position: relative; overflow: hidden; flex: none;
+  position: relative; overflow: hidden; overflow: clip; flex: none;   /* clip : rien ne peut la faire défiler, pas même un bouton qui prend le focus hors cadre */
   color: var(--ink); font-family: var(--font); font-size: var(--t-m); line-height: 1.2;
 }
 #rotate { display: none; position: fixed; left: 0; right: 0; bottom: 6vh; margin: 0; text-align: center; color: #8fa3b8; font: 15px var(--font); }
@@ -157,6 +157,14 @@ button.square img { height: calc(var(--ui) * 24); }
 
 /* ---------- Accueil ---------- */
 #menu-settings { left: var(--m); top: var(--m); }
+#menu-full { left: calc(var(--m) + var(--ui) * 42); top: var(--m); }
+/* quatre coins : le signe du plein écran */
+#menu-full i { width: calc(var(--ui) * 18); height: calc(var(--ui) * 14); --c: calc(var(--ui) * 3); --l: calc(var(--ui) * 7);
+  background: linear-gradient(var(--ink) 0 0) 0 0 / var(--l) var(--c), linear-gradient(var(--ink) 0 0) 0 0 / var(--c) var(--l),
+    linear-gradient(var(--ink) 0 0) 100% 0 / var(--l) var(--c), linear-gradient(var(--ink) 0 0) 100% 0 / var(--c) var(--l),
+    linear-gradient(var(--ink) 0 0) 0 100% / var(--l) var(--c), linear-gradient(var(--ink) 0 0) 0 100% / var(--c) var(--l),
+    linear-gradient(var(--ink) 0 0) 100% 100% / var(--l) var(--c), linear-gradient(var(--ink) 0 0) 100% 100% / var(--c) var(--l);
+  background-repeat: no-repeat; }
 h1 {                         /* la plaque de pierre du titre, à sa taille exacte : 250 x 68 */
   left: calc(var(--ui) * 159.5); top: calc(var(--ui) * 4);
   margin: 0; width: calc(var(--ui) * 250); height: calc(var(--ui) * 68); padding-bottom: calc(var(--ui) * 5);
@@ -212,7 +220,17 @@ button.tab.sel { border-color: var(--gold); color: var(--gold); background: #2c3
 #settings-back { left: var(--m); top: calc(var(--ui) * 6); width: calc(var(--ui) * 152); }
 #screen-settings .pane { height: calc(var(--ui) * 256); }   /* no buttons under these two: they may run lower */
 .toggle { display: flex; align-items: center; justify-content: space-between; }
-.toggle button { width: calc(var(--ui) * 130); }
+.toggle > button { width: calc(var(--ui) * 130); }
+/* volume : moins, dix crans, plus */
+.vol { display: flex; align-items: center; gap: calc(var(--ui) * 4); width: calc(var(--ui) * 130); }
+.vol button.square { width: calc(var(--ui) * 28); height: calc(var(--ui) * 28); font-size: var(--t-l); line-height: 1; padding-bottom: calc(var(--ui) * 2); }
+.vol .bar { height: calc(var(--ui) * 12); min-width: 0; }
+.vol .bar i { background: var(--gold); box-shadow: inset 0 calc(var(--ui) * 1.5) 0 #fff0b0; transition: width .12s; }
+/* ouverts depuis la pause : seuls le son et l'affichage, au milieu ; la sauvegarde attend la fin de la course */
+#screen-settings.inrun .pane.right { display: none; }
+#screen-settings.inrun .pane.left { left: calc(var(--ui) * 153.5); }
+#screen-pause .actions button { min-width: calc(var(--ui) * 150); }
+#fps { position: absolute; left: calc(var(--ui) * 4); bottom: calc(var(--ui) * 4); z-index: 9; font: calc(var(--ui) * 8) Consolas, monospace; color: #fff; background: rgba(0, 0, 0, .6); padding: calc(var(--ui) * 2) calc(var(--ui) * 4); pointer-events: none; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--ui) * 4); }
 textarea { width: 100%; height: calc(var(--ui) * 26); flex: none; resize: none; padding: calc(var(--ui) * 3); color: var(--ink); font: calc(var(--ui) * 7)/1.3 Consolas, monospace; user-select: text; -webkit-user-select: text; }
 #save-msg:empty { display: none; }
@@ -220,7 +238,7 @@ textarea { width: 100%; height: calc(var(--ui) * 26); flex: none; resize: none; 
 
 /* ---------- Pause et fin de course ---------- */
 .score { align-items: center; justify-content: center; text-align: center; gap: calc(var(--ui) * 8); }
-.huge { font-size: calc(var(--ui) * 46); font-weight: 700; line-height: 1; text-shadow: 0 calc(var(--ui) * 3) 0 var(--line); }
+.huge { font-size: calc(var(--ui) * 52 * var(--fk)); white-space: nowrap; font-weight: 700; line-height: 1; text-shadow: 0 calc(var(--ui) * 3) 0 var(--line); }
 .gain { font-size: var(--t-xl); font-weight: 700; line-height: 1; color: var(--gold); text-shadow: 0 calc(var(--ui) * 2) 0 var(--line); }
 #over-best.record { color: var(--gold); font-size: var(--t-m); animation: hop .6s ease-in-out infinite; }
 .confetti { position: absolute; top: -6%; width: calc(var(--ui) * 5); height: calc(var(--ui) * 8); pointer-events: none; z-index: 5; animation: fall linear forwards; }

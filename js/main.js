@@ -8,7 +8,7 @@ import * as S from './save.js';
 import * as P from './progress.js';
 
 const $ = (id) => document.getElementById(id);
-const cv = $('c'), ctx = cv.getContext('2d');
+const cv = $('c'), ctx = cv.getContext('2d', { alpha: false });   // nothing shows through it: one layer less to blend
 const demoCv = $('demo'), demoCtx = demoCv.getContext('2d');
 const SCREENS = ['menu', 'intro', 'shop', 'settings', 'over', 'pause'];
 
@@ -21,14 +21,19 @@ let lastDist = 0, hintStep = 0, hintTimer = 0;      // hintStep: 0 none, 1 "tap 
 let picked = S.UPGRADES[0].id;         // the upgrade shown in the preview
 let tab = 'up';                        // which list the Améliorations screen shows: 'up' (to equip) or 'power' (always on)
 const view = { w: 569, top: 0, logicalW: 1280 };   // art pixels, plus the width in game units
+const CAP_KEY = 'jungle-loop-cap';     // the finest canvas this device has proved it can keep up with
+const CAP_START = window.matchMedia('(pointer: coarse)').matches ? 3 : 4;   // a phone's chip fills far fewer pixels than a PC's
+let cap = CAP_START;
+try { cap = Math.max(1, Math.min(4, Number(localStorage.getItem(CAP_KEY)) || CAP_START)); } catch { /* private mode */ }
 const input = { pressed: false, hold: false, dash: false, slow: false };
 
-audio.musicOn = save.music; audio.sfxOn = save.sfx;
+audio.setVolumes(save.musicVol, save.sfxVol);
+let inRun = false;                     // the settings were opened from the pause screen: the run waits behind them
 
 // The game's own pixel typeface, or a plain rounded one for whoever reads it better (a setting).
-// `fk` evens out their sizes: Silkscreen is wide and all capitals, Fredoka is narrower.
+// `fk` evens out their sizes: Press Start 2P is very wide, Fredoka is narrower.
 function applyFont() {
-  const [name, fk] = save.pixelFont ? ['Silkscreen', 0.82] : ['Fredoka', 0.95];
+  const [name, fk] = save.pixelFont ? ['Press Start 2P', 0.62] : ['Fredoka', 0.95];
   $('stage').style.setProperty('--font', `"${name}", "Trebuchet MS", system-ui, sans-serif`);
   $('stage').style.setProperty('--fk', fk);
 }
@@ -60,18 +65,61 @@ function resize() {
   stage.style.height = (STAGE_H * ui).toFixed(2) + 'px';
   stage.style.setProperty('--ui', ui.toFixed(4) + 'px');
   view.w = STAGE_W; view.logicalW = STAGE_W * PIXEL;
-  // Smoothing: the canvas gets as many real pixels per art pixel as the screen shows (4 at most),
-  // so sprites can scroll by fractions of an art pixel and the browser softens the stair-steps when
-  // it fits the picture to the screen. Without it: one canvas pixel per art pixel, hard squares.
-  const q = save.smooth ? Math.max(1, Math.min(4, Math.ceil(ui * (window.devicePixelRatio || 1) - 0.01))) : 1;
+  // The canvas holds q x q real pixels per art pixel. `want` is what the screen can show (4 at most):
+  // sprites then scroll by fractions of an art pixel and the browser softens the stair-steps when it
+  // fits the picture to the screen. That is "smooth". It costs: a phone has to fill sixteen times the
+  // pixels. So "auto" starts there and comes down as far as it takes to keep the frame rate (see
+  // watch); "sharp" settles for 2 and shows them as hard squares, the lightest and crispest picture.
+  const real = ui * (window.devicePixelRatio || 1), want = Math.max(1, Math.min(4, Math.ceil(real - 0.01)));
+  const q = save.quality === 'sharp' ? Math.max(1, Math.min(2, Math.floor(real + 0.01))) : save.quality === 'smooth' ? want : Math.min(want, cap);
   setQuality(q);
-  stage.classList.toggle('smooth', q > 1);
+  // A canvas finer than the screen is fitted smoothly. A coarser one (2 or less) is shown as hard
+  // squares instead: stretched smoothly it would only look out of focus.
+  stage.classList.toggle('smooth', save.quality !== 'sharp' && (q >= real - 0.01 || q > 2));
   cv.width = STAGE_W * q; cv.height = STAGE_H * q;
   demoCv.width = DEMO_W * q; demoCv.height = DEMO_H * q;
   ctx.imageSmoothingEnabled = demoCtx.imageSmoothingEnabled = false;
 }
 window.addEventListener('resize', resize);
 resize();
+
+// "auto" quality: while playing, frames are timed. Two slow spells in a row (under 48 a second) and
+// the canvas goes down one step. If that changed nothing, the device is simply capped (battery saver,
+// 30 Hz screen): the step is given back and nothing more is tried. What was found is kept for this device.
+const perf = { n: 0, sum: 0, bad: 0, before: 0, locked: false, fps: 0 };
+function watch(ms) {
+  if (state !== 'play' || ms > 100 || !run || run.t < 2) return;
+  perf.n++; perf.sum += ms;
+  if (perf.n < 90) return;
+  const avg = perf.sum / perf.n;
+  perf.n = perf.sum = 0; perf.fps = Math.round(1000 / avg);
+  if (save.quality !== 'auto' || perf.locked) return;
+  if (perf.before) {                                   // just came down a step: was it worth it?
+    if (avg > perf.before * 0.9) { cap = quality() + 1; perf.locked = true; }
+    perf.before = 0; perf.bad = 0;
+  } else if (avg > 21 && quality() > 1) {
+    if (++perf.bad < 2) return;
+    cap = quality() - 1; perf.before = avg;
+  } else { perf.bad = 0; return; }
+  try { localStorage.setItem(CAP_KEY, cap); } catch { /* not kept, found again next time */ }
+  resize();
+}
+
+// Full screen, where the browser has it (not on iPhone, where the game must be added to the home
+// screen instead). A phone turns to landscape with it. Installed as an app it already fills the screen.
+const canFull = !!document.documentElement.requestFullscreen && document.fullscreenEnabled !== false
+  && !window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+async function fullscreen(on) {
+  try {
+    if (on && !document.fullscreenElement) {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      try { await screen.orientation.lock('landscape'); } catch { /* desktop, or not allowed: no matter */ }
+    } else if (!on && document.fullscreenElement) await document.exitFullscreen();
+  } catch { /* refused: the game stays as it is */ }
+}
+document.addEventListener('fullscreenchange', () => { resize(); if (state === 'settings') refreshSettings(); });
+$('menu-full').hidden = $('row-full').hidden = !canFull;
+$('menu-full').addEventListener('click', () => { save.full = !document.fullscreenElement; S.store(save); fullscreen(save.full); });
 
 // Every "fly" block leaves towards, and comes back from, the edge of the frame it sits closest to.
 // Worked out once, from where the block really is, before any screen has been slid away.
@@ -222,10 +270,13 @@ function slotInfo(id, slot) {
 document.addEventListener('click', () => { $('menu-info').hidden = true; for (const s of document.querySelectorAll('#menu-loadout .slot')) s.classList.remove('sel'); });
 
 function refreshSettings() {
-  for (const [id, on] of [['tg-music', save.music], ['tg-sfx', save.sfx], ['tg-font', save.pixelFont], ['tg-smooth', save.smooth]]) {
+  for (const [id, on] of [['tg-font', save.pixelFont], ['tg-full', !!document.fullscreenElement]]) {
     $(id).textContent = on ? 'Oui' : 'Non';
-    $(id).className = on ? 'on' : 'plain';
+    $(id).className = (on ? 'on' : 'plain') + ' small';
   }
+  $('tg-smooth').textContent = { auto: 'Auto', smooth: 'Maximum', sharp: 'Net' }[save.quality];
+  $('tg-smooth').className = 'on small';
+  for (const [id, v] of [['vol-music', save.musicVol], ['vol-sfx', save.sfxVol]]) $(id).querySelector('i').style.width = v * 10 + '%';
 }
 
 // Left: the list. Right: the preview of the upgrade picked in the list.
@@ -300,7 +351,13 @@ function bank() {
 
 function go(name) {
   audio.unlock();
+  if (inRun) {                                          // leaving the settings opened from the pause: back to the pause
+    inRun = false;
+    if (name === 'menu') { state = 'pause'; show('pause'); audio.music(''); return; }
+  }
+  if (name === 'settings' && state === 'pause') inRun = true;
   if (name === 'play') {
+    if (canFull && save.full && window.matchMedia('(pointer: coarse)').matches) fullscreen(true);   // a phone plays full screen
     if (!save.seenIntro) { save.seenIntro = true; S.store(save); state = 'intro'; show('intro'); return; }
     run = newRun(S.loadout(save));                      // only the three equipped upgrades come along
     run.viewW = view.logicalW;
@@ -317,12 +374,12 @@ function go(name) {
     audio.setBiome(0); audio.music('');                 // silence for the rumble: the theme starts on the blast
     return;
   }
-  if (state === 'pause') bank();
+  if (state === 'pause' && !inRun) bank();
   hint(0);
   if (name === 'menu') refreshMenu();
   if (name === 'shop') refreshShop();
-  if (name === 'settings') { refreshSettings(); $('save-code').value = ''; $('save-msg').textContent = ''; }
-  audio.music(name === 'intro' ? '' : 'menu');
+  if (name === 'settings') { refreshSettings(); $('save-code').value = ''; $('save-msg').textContent = ''; $('screen-settings').classList.toggle('inrun', inRun); }
+  audio.music(name === 'intro' ? '' : inRun ? 'run' : 'menu');
   state = name; show(name);
 }
 
@@ -362,10 +419,20 @@ $('btn-pause').addEventListener('click', pause);
 
 // ---------- settings ----------
 
-$('tg-music').addEventListener('click', () => { save.music = audio.musicOn = !save.music; S.store(save); refreshSettings(); audio.music('menu'); });
-$('tg-sfx').addEventListener('click', () => { save.sfx = audio.sfxOn = !save.sfx; S.store(save); refreshSettings(); });
+for (const [id, key] of [['vol-music', 'musicVol'], ['vol-sfx', 'sfxVol']])
+  for (const b of $(id).querySelectorAll('button')) b.addEventListener('click', () => {
+    save[key] = Math.max(0, Math.min(10, save[key] + Number(b.dataset.d)));
+    audio.setVolumes(save.musicVol, save.sfxVol); S.store(save); refreshSettings();
+    if (key === 'musicVol') audio.music(inRun ? 'run' : 'menu'); else audio.sfx('coin');   // heard at once
+  });
 $('tg-font').addEventListener('click', () => { save.pixelFont = !save.pixelFont; S.store(save); applyFont(); refreshSettings(); });
-$('tg-smooth').addEventListener('click', () => { save.smooth = !save.smooth; S.store(save); resize(); refreshSettings(); });
+$('tg-smooth').addEventListener('click', () => {      // choosing again also forgets what "auto" had settled for
+  save.quality = S.QUALITIES[(S.QUALITIES.indexOf(save.quality) + 1) % S.QUALITIES.length];
+  cap = CAP_START; perf.locked = false; perf.bad = perf.before = 0;
+  try { localStorage.removeItem(CAP_KEY); } catch { /* nothing kept */ }
+  S.store(save); resize(); refreshSettings();
+});
+$('tg-full').addEventListener('click', () => { save.full = !document.fullscreenElement; S.store(save); fullscreen(save.full); });
 const msg = (t) => { $('save-msg').textContent = t; };
 
 function applyImport(code) {
@@ -373,7 +440,7 @@ function applyImport(code) {
   if (!s) { msg('Code invalide : rien n\'a été changé.'); return; }
   if (!confirm(`Remplacer la partie actuelle par celle-ci ?\n◈ ${s.coins} · record ${s.best} m · ${s.loops} courses`)) return;
   save = s; S.store(save);
-  audio.musicOn = save.music; audio.sfxOn = save.sfx;
+  audio.setVolumes(save.musicVol, save.sfxVol);
   applyFont(); resize(); refreshSettings();
   msg('Partie importée.');
 }
@@ -399,7 +466,7 @@ $('save-input').addEventListener('change', async (e) => {
 });
 $('save-reset').addEventListener('click', () => {
   if (!confirm('Effacer toute la progression ? C\'est définitif.')) return;
-  save = S.reset(); S.store(save); applyFont(); resize(); refreshSettings(); msg('Progression effacée.');
+  save = S.reset(); S.store(save); audio.setVolumes(save.musicVol, save.sfxVol); applyFont(); resize(); refreshSettings(); msg('Progression effacée.');
 });
 
 // ---------- input ----------
@@ -416,7 +483,7 @@ $('btn-dash').addEventListener('pointerdown', (e) => { e.preventDefault(); input
 $('btn-slow').addEventListener('pointerdown', (e) => { e.preventDefault(); input.slow = true; });
 
 // Browsers only allow sound after a first gesture: the menu's music starts with it.
-document.addEventListener('pointerdown', () => { audio.unlock(); if (state !== 'play' && state !== 'pause' && state !== 'intro') audio.music('menu'); }, true);
+document.addEventListener('pointerdown', () => { audio.unlock(); if (state !== 'play' && state !== 'pause' && state !== 'intro') audio.music(inRun ? 'run' : 'menu'); }, true);
 document.addEventListener('click', (e) => { if (e.target.closest('button')) audio.sfx('click'); }, true);
 
 window.addEventListener('keydown', (e) => {
@@ -430,7 +497,7 @@ window.addEventListener('keydown', (e) => {
     else if (state === 'pause') resume();
   } else if (k === 'shift' || k === 'e') input.dash = true;
   else if (k === 'a' || k === 'q') input.slow = true;
-  else if (k === 'escape' || k === 'p') { if (state === 'play') pause(); else if (state === 'pause') resume(); }
+  else if (k === 'escape' || k === 'p') { if (state === 'play') pause(); else if (state === 'pause') resume(); else if (inRun) go('menu'); }
 });
 window.addEventListener('keyup', (e) => {
   const k = e.key.toLowerCase();
@@ -438,13 +505,15 @@ window.addEventListener('keyup', (e) => {
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 // Closing the tab mid-run still keeps the coins picked up so far.
-window.addEventListener('pagehide', () => { if (state === 'play' || state === 'pause') bank(); });
+window.addEventListener('pagehide', () => { if (state === 'play' || state === 'pause' || inRun) bank(); });
 
 // ---------- HUD ----------
 
 function cooldown(btn, a) {
-  const cd = a.max ? a.cd / a.max : 0;
-  btn.style.setProperty('--cd', cd.toFixed(3));
+  const cd = (a.max ? a.cd / a.max : 0).toFixed(2);
+  if (btn.dataset.cd === cd) return;                   // the page is only touched when something changed
+  btn.dataset.cd = cd;
+  btn.style.setProperty('--cd', cd);
   btn.classList.toggle('cooling', cd > 0);
 }
 
@@ -468,10 +537,15 @@ function hud() {
 
 // ---------- loop ----------
 
-let last = performance.now();
+let last = performance.now(), fpsTick = 0;
+// "?fps" in the address shows the frame rate and the canvas in a corner: for checking a phone
+const fpsBox = new URLSearchParams(location.search).has('fps') ? $('stage').appendChild(el('div')) : null;
+if (fpsBox) fpsBox.id = 'fps';
 function frame(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
+  watch(now - last);
   last = now;
+  if (fpsBox && (fpsTick = (fpsTick + 1) % 30) === 0) fpsBox.textContent = `${perf.fps || '…'} i/s · x${quality()} · ${cv.width}x${cv.height} · ${save.quality}`;
 
   if (state === 'play' || state === 'over') {
     run.viewW = view.logicalW;
@@ -507,7 +581,7 @@ function frame(now) {
   if (bannerTimer > 0 && (bannerTimer -= dt) <= 0) $('banner').classList.remove('on');
 
   // Behind the menus: the temple, frozen. The hero only appears once the run starts.
-  const shown = state === 'play' || state === 'pause' || state === 'over' ? run : still;
+  const shown = state === 'play' || state === 'pause' || state === 'over' || inRun ? run : still;
   ctx.setTransform(quality(), 0, 0, quality(), 0, 0);
   draw(ctx, shown, view, now / 1000);
   if (state === 'shop') drawDemo(demoCtx, dt, now / 1000);

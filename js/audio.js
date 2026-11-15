@@ -108,9 +108,18 @@ function silence() {
 
 loadList();   // a plain fetch: no need to wait for the first gesture
 
+// Volumes go from 0 (off) to 10. 7, where a new game starts, is the level the sounds were made for.
+const gainOf = (v) => 0.5 * v / 7;
+let vols = [7, 7];
+
 export const audio = {
   musicOn: true,
   sfxOn: true,
+
+  setVolumes(music, sfx) {
+    vols = [music, sfx]; this.musicOn = music > 0; this.sfxOn = sfx > 0;
+    if (ac) { musicOut.gain.value = gainOf(music); sfxOut.gain.value = gainOf(sfx); }
+  },
 
   // Browsers only allow sound after a user gesture: call this from one.
   unlock() {
@@ -118,8 +127,8 @@ export const audio = {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       ac = new AC();
-      sfxOut = ac.createGain(); sfxOut.gain.value = 0.5; sfxOut.connect(ac.destination);
-      musicOut = ac.createGain(); musicOut.gain.value = 0.5; musicOut.connect(ac.destination);
+      sfxOut = ac.createGain(); sfxOut.gain.value = gainOf(vols[1]); sfxOut.connect(ac.destination);
+      musicOut = ac.createGain(); musicOut.gain.value = gainOf(vols[0]); musicOut.connect(ac.destination);
       loadList();
     }
     if (ac.state === 'suspended') ac.resume();
@@ -153,6 +162,7 @@ export const audio = {
       case 'unmount': tone(o, 420, 0.3, 'square', 0.2, 0, 110); break;
       case 'bye': tone(o, 700, 0.12, 'triangle', 0.14, 0, 500); tone(o, 500, 0.16, 'triangle', 0.14, 0.12, 350); break;
       case 'roll': tone(o, 240, 0.22, 'triangle', 0.16, 0, 520); break;
+      case 'unroll': tone(o, 520, 0.18, 'triangle', 0.14, 0, 260); break;
       case 'heart': [12, 16, 19, 24].forEach((s, k) => tone(o, hz(s + 12), 0.22, 'triangle', 0.2, k * 0.07)); break;
       case 'grab': tone(o, 620, 0.08, 'triangle', 0.14, 0, 880); break;
       case 'drop': tone(o, 520, 0.1, 'triangle', 0.12, 0, 300); break;

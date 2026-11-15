@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#0a0f14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <title>Jungle Loop</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -36,6 +38,7 @@
 
 <section id="screen-menu" class="screen">
   <button class="fly square" id="menu-settings" data-go="settings" aria-label="Réglages"><img src="assets/img/ui-gear.png" alt=""></button>
+  <button class="fly square" id="menu-full" aria-label="Plein écran" hidden><i></i></button>
   <h1 id="title" class="fly" aria-label="Jungle Loop"></h1>
   <div class="fly" id="menu-status">
     <div id="menu-level" class="level"></div>
@@ -84,11 +87,12 @@
   <h2 class="fly head">Réglages</h2>
   <div class="fly pane left">
     <p class="label">Son</p>
-    <div class="toggle">Musique<button id="tg-music"></button></div>
-    <div class="toggle">Effets<button id="tg-sfx"></button></div>
+    <div class="toggle">Musique<span class="vol" id="vol-music"><button class="square" data-d="-1">−</button><span class="bar"><i></i></span><button class="square" data-d="1">+</button></span></div>
+    <div class="toggle">Effets<span class="vol" id="vol-sfx"><button class="square" data-d="-1">−</button><span class="bar"><i></i></span><button class="square" data-d="1">+</button></span></div>
     <p class="label">Affichage</p>
-    <div class="toggle">Police personnalisée<button id="tg-font"></button></div>
+    <div class="toggle">Police pixel<button id="tg-font"></button></div>
     <div class="toggle">Lissage<button id="tg-smooth"></button></div>
+    <div class="toggle" id="row-full">Plein écran<button id="tg-full"></button></div>
   </div>
   <div class="fly pane right">
     <p class="label">Sauvegarde</p>
@@ -136,6 +140,7 @@
   </div>
   <div class="fly actions">
     <button data-go="menu">Abandonner</button>
+    <button data-go="settings">Réglages</button>
     <button class="big" id="btn-resume">Reprendre</button>
   </div>
 </section>
