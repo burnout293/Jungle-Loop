@@ -5,6 +5,5 @@ assets/essais-pixellab/
 assets/music/*.mp3
 !assets/music/menu-brass.mp3
 !assets/music/run-brass.mp3
-!assets/music/over-brass.mp3
 .claude/
 __pycache__/

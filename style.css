@@ -192,28 +192,37 @@ h1 span:nth-child(odd) { color: #ffe9a0; }
 /* ---------- Histoire ---------- */
 #intro-pane { left: calc(var(--ui) * 104); top: calc(var(--ui) * 52); width: calc(var(--ui) * 361); gap: calc(var(--ui) * 10); text-align: center; }
 
-/* ---------- Améliorations ---------- */
-#shop-back { left: var(--m); top: calc(var(--ui) * 6); width: calc(var(--ui) * 152); }
-/* Retour : rien ne passe devant, et la zone qui réagit au doigt déborde largement de la plaque */
-#shop-back, #settings-back { z-index: 3; }
-#shop-back::after, #settings-back::after { content: ""; position: absolute; inset: calc(var(--ui) * -27) calc(var(--ui) * -50); }
-#shop-tabs { left: var(--m); top: calc(var(--ui) * 48); width: calc(var(--ui) * 296); display: flex; gap: calc(var(--ui) * 4); }
-button.tab { flex: 1; height: calc(var(--ui) * 28); font-size: var(--t-s); color: var(--dim); text-shadow: none; }
-button.tab.sel { border-color: var(--gold); color: var(--gold); background: #2c3558; }
-#shop-coins { right: var(--m); top: var(--m); height: calc(var(--ui) * 34); min-width: calc(var(--ui) * 80); justify-content: center; }
-#shop-level { left: calc(var(--ui) * 168); right: calc(var(--ui) * 96); top: var(--m); height: calc(var(--ui) * 34); }
-#shop-list { left: var(--m); top: calc(var(--ui) * 80); bottom: var(--m); width: calc(var(--ui) * 296); display: flex; flex-direction: column; gap: calc(var(--ui) * 4); overflow: hidden auto; scrollbar-width: none; touch-action: pan-y; }
-.shop-row { flex: none; display: grid; grid-template-columns: calc(var(--ui) * 34) 1fr auto; gap: 0 calc(var(--ui) * 8); align-items: center; padding: calc(var(--ui) * 6) calc(var(--ui) * 8); min-height: calc(var(--ui) * 50); cursor: pointer; }
-.shop-row img { grid-row: 1 / span 2; width: calc(var(--ui) * 34); height: calc(var(--ui) * 34); object-fit: contain; }
-.shop-row b { align-self: end; }
-.shop-row small { grid-column: 2; align-self: start; font-size: var(--t-s); color: var(--dim); }
-.shop-row button { grid-row: 1 / span 2; grid-column: 3; width: calc(var(--ui) * 118); }
-.shop-row.sel { border-color: var(--gold); background: #2c3558; }
-.shop-row.equipped small { color: var(--relic); }
-.shop-row.bought { animation: bought .5s; }
-#shop-preview { right: var(--m); top: calc(var(--ui) * 50); bottom: var(--m); width: calc(var(--ui) * 249); padding: calc(var(--ui) * 6); gap: calc(var(--ui) * 5); }
+/* ---------- Améliorations ----------
+   À gauche, les quatre familles et le retour, sous le pouce. Au milieu, les objets en tuiles et la
+   fiche de celui qui est choisi. À droite, son aperçu animé et sa description. */
+#shop-side { left: calc(var(--ui) * 6); top: calc(var(--ui) * 6); bottom: calc(var(--ui) * 6); width: calc(var(--ui) * 50); display: flex; flex-direction: column; gap: calc(var(--ui) * 4); }
+#shop-side .tab { flex: 1; width: 100%; height: auto; flex-direction: column; gap: calc(var(--ui) * 2); font-size: calc(var(--ui) * 6.5); color: var(--dim); text-shadow: none; }
+#shop-side .tab img { height: calc(var(--ui) * 26); }
+#shop-side .tab.sel { border-color: var(--gold); color: var(--gold); background: #2c3558; }
+#shop-side #shop-back { flex: 0 0 calc(var(--ui) * 36); color: var(--ink); font-size: calc(var(--ui) * 7); }
+#settings-back { z-index: 3; }
+#settings-back::after { content: ""; position: absolute; inset: calc(var(--ui) * -27) calc(var(--ui) * -50); }
+#shop-title { left: calc(var(--ui) * 64); top: calc(var(--ui) * 11); text-shadow: 0 calc(var(--ui) * 1.5) 0 var(--line); }
+#shop-coins { right: var(--m); top: calc(var(--ui) * 4); height: calc(var(--ui) * 22); min-width: calc(var(--ui) * 80); justify-content: center; }
+#shop-list { left: calc(var(--ui) * 62); top: calc(var(--ui) * 30); width: calc(var(--ui) * 262); height: calc(var(--ui) * 196); display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: calc(var(--ui) * 62); gap: calc(var(--ui) * 4); align-content: start; overflow: hidden auto; scrollbar-width: none; touch-action: pan-y; }
+.tile { background: var(--box); border: calc(var(--ui) * 1.5) solid var(--line); box-shadow: inset 0 calc(var(--ui) * 1.5) 0 var(--box-hi), inset 0 calc(var(--ui) * -1.5) 0 var(--box-lo);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--ui) * 2); cursor: pointer; font-size: calc(var(--ui) * 6.5); color: var(--dim); text-align: center; line-height: 1; }
+.tile img { height: calc(var(--ui) * 34); max-width: calc(var(--ui) * 52); object-fit: contain; }
+.tile i.mount { width: calc(var(--ui) * 54); height: calc(var(--ui) * 38); background: 0 100% / 400% auto no-repeat; image-rendering: pixelated; }
+.tile.sel { border-color: var(--gold); background: #2c3558; }
+.tile.on small { color: var(--relic); }
+.tile.gold small { color: var(--gold); }
+.tile.locked img { filter: grayscale(1) brightness(.6); }
+.tile.bought { animation: bought .5s; }
+#shop-list .sub { grid-column: 1 / -1; padding: calc(var(--ui) * 8); line-height: 1.4; }
+#shop-card { left: calc(var(--ui) * 62); top: calc(var(--ui) * 230); width: calc(var(--ui) * 262); height: calc(var(--ui) * 82); padding: calc(var(--ui) * 6); gap: calc(var(--ui) * 3); overflow: hidden; }
+#card-name { color: var(--gold); font-size: var(--t-m); white-space: nowrap; }
+#card-status { font-size: var(--t-s); color: var(--dim); line-height: 1.2; }
+#card-actions { position: absolute; left: calc(var(--ui) * 6); right: calc(var(--ui) * 6); bottom: calc(var(--ui) * 6); display: flex; gap: calc(var(--ui) * 4); justify-content: flex-end; }
+#card-actions button { min-width: calc(var(--ui) * 108); }
+#shop-preview { right: var(--m); top: calc(var(--ui) * 30); bottom: var(--m); width: calc(var(--ui) * 227); padding: calc(var(--ui) * 6); gap: calc(var(--ui) * 6); }
 #demo { width: 100%; aspect-ratio: 284 / 170; border: calc(var(--ui) * 1.5) solid var(--line); flex: none; }
-#demo-name { font-size: var(--t-l); }
+#demo-desc { line-height: 1.35; }
 
 /* ---------- Réglages ---------- */
 #settings-back { left: var(--m); top: calc(var(--ui) * 6); width: calc(var(--ui) * 152); }

@@ -19,7 +19,7 @@ const still = newRun({});              // never updated: the frozen temple scene
 let deadFor = 0, bannerTimer = 0;
 let lastDist = 0, hintStep = 0, hintTimer = 0;      // hintStep: 0 none, 1 "tap to jump", 2 "hold to jump higher"
 let picked = S.UPGRADES[0].id;         // the upgrade shown in the preview
-let tab = 'up';                        // which list the Améliorations screen shows: 'up' (to equip) or 'power' (always on)
+let tab = 'up';                        // which family the Améliorations screen shows: 'up', 'power', 'mount' or 'skin'
 const view = { w: 569, top: 0, logicalW: 1280 };   // art pixels, plus the width in game units
 const CAP_KEY = 'jungle-loop-cap';     // the finest canvas this device has proved it can keep up with
 const CAP_START = window.matchMedia('(pointer: coarse)').matches ? 3 : 4;   // a phone's chip fills far fewer pixels than a PC's
@@ -287,57 +287,70 @@ function refreshSettings() {
   for (const [id, v] of [['vol-music', save.musicVol], ['vol-sfx', save.sfxVol]]) $(id).querySelector('i').style.width = v * 10 + '%';
 }
 
-// Left: the list. Right: the preview of the upgrade picked in the list.
+// The shop: four families down the left side, their items as tiles, the card of the one picked
+// under them, its animated preview and its description on the right.
+const TABS = { up: 'Équipements', power: 'Pouvoirs', mount: 'Montures', skin: 'Skins' };
+const MOUNT_TEXT = {
+  gorilla: 'Il saute plus haut, et son second saut l\'emmène jusqu\'aux lianes du haut de l\'écran. Appuie pour en redescendre.',
+  rhino: 'Il saute peu mais court de plus en plus vite, pulvérise les caisses et les ronces, et ramasse large.',
+  moskito: 'Il vole : appuie pour monter, relâche pour descendre.',
+};
+let pickedMount = 'gorilla';
+
 function refreshShop(justBought) {
-  levelBar('shop-level', true);
   $('shop-coins').replaceChildren(icon('coin-icon'), String(save.coins));
+  for (const b of document.querySelectorAll('#shop-side [data-tab]')) b.classList.toggle('sel', b.dataset.tab === tab);
+  $('shop-title').textContent = TABS[tab] + (tab === 'up' ? ` · ${save.equipped.length} / ${S.MAX_EQUIPPED}` : '');
+  const card = (name, status, desc, note) => { $('card-name').textContent = name; $('card-status').textContent = status; $('demo-desc').textContent = desc; $('demo-slots').textContent = note || ''; };
+  const acts = $('card-actions'); acts.replaceChildren();
+
+  if (tab === 'mount') {                                // nothing to buy here yet: what each animal does
+    $('shop-list').replaceChildren(...Object.keys(MOUNTS).map((k) => {
+      const t = el('div', 'tile' + (k === pickedMount ? ' sel' : '')), im = el('i', 'mount');
+      im.style.backgroundImage = `url(assets/img/mount-${k}.png)`;
+      t.append(im, el('small', '', MOUNTS[k].name));
+      t.addEventListener('click', () => { pickedMount = k; refreshShop(); });
+      return t;
+    }));
+    card(MOUNTS[pickedMount].name, 'Rare. Elle attend sur le chemin : touche-la pour monter. Au premier coup, elle s\'en va à ta place.', MOUNT_TEXT[pickedMount]);
+    showDemo('m-' + pickedMount, 1);
+    return;
+  }
+  if (tab === 'skin') {
+    $('shop-list').replaceChildren(el('p', 'sub', 'Bientôt : la tenue, les cheveux, la cape et les baskets du héros, à changer séparément.'));
+    card('Skins', 'À venir.', '');
+    showDemo('sprint', 1);
+    return;
+  }
+
   const full = save.equipped.length >= S.MAX_EQUIPPED;
   const shown = S.UPGRADES.filter((u) => !!u.power === (tab === 'power'));
   if (!shown.some((u) => u.id === picked)) picked = shown[0].id;
-  for (const b of document.querySelectorAll('#shop-tabs .tab')) b.classList.toggle('sel', b.dataset.tab === tab);
+  const stateOf = (u) => {
+    const lvl = S.level(save, u.id), on = save.equipped.includes(u.id), off = save.powersOff.includes(u.id);
+    return { lvl, on, off, cost: S.nextCost(save, u), locked: u.needs && !S.level(save, u.needs), active: on || (u.power && lvl && !off) };
+  };
   $('shop-list').replaceChildren(...shown.map((u) => {
-    const lvl = S.level(save, u.id), cost = S.nextCost(save, u), on = save.equipped.includes(u.id);
-    const locked = u.needs && !S.level(save, u.needs);
-    const row = el('div', 'shop-row' + (u.id === picked ? ' sel' : '') + (on || (u.power && lvl && !save.powersOff.includes(u.id)) ? ' equipped' : '') + (u.id === justBought ? ' bought' : ''));
-    const pips = u.costs.length > 1 ? ' ' + '●'.repeat(lvl) + '○'.repeat(u.costs.length - lvl) : '';
-    const status = locked ? 'Demande : ' + S.UPGRADES.find((x) => x.id === u.needs).name
-      : u.power ? (!lvl ? 'Pouvoir permanent' : save.powersOff.includes(u.id) ? 'Désactivé' : 'Actif') : on ? 'Équipé' + pips : lvl ? 'Possédé' + pips : (u.kind === 'actif' ? 'Bouton en jeu' : 'Toujours actif');
-    row.append(icon('ico-' + u.icon), el('b', '', u.name), el('small', '', status));
-    row.addEventListener('click', () => { picked = u.id; refreshShop(); });
-
-    // one action per row: buy it, then put it on or take it off (levels are bought from the preview side)
-    const btn = el('button', 'small');
-    if (!lvl) {
-      btn.textContent = '◈ ' + cost; btn.classList.add('gold');
-      btn.disabled = locked || save.coins < cost;
-      btn.addEventListener('click', (e) => { e.stopPropagation(); buy(u); });
-    } else if (u.power) {                              // a power takes no slot: it is just switched off or on
-      const off = save.powersOff.includes(u.id);
-      btn.textContent = off ? 'Activer' : 'Désactiver';
-      btn.classList.add(off ? 'on' : 'plain');
-      btn.addEventListener('click', (e) => { e.stopPropagation(); picked = u.id; S.togglePower(save, u.id); refreshShop(); });
-    } else {
-      btn.textContent = on ? 'Retirer' : 'Équiper';
-      btn.classList.add(on ? 'plain' : 'on');
-      btn.disabled = !on && full;
-      btn.addEventListener('click', (e) => { e.stopPropagation(); picked = u.id; S.toggleEquip(save, u.id); refreshShop(); });
-    }
-    row.append(btn);
-    return row;
+    const s = stateOf(u);
+    const t = el('div', 'tile' + (u.id === picked ? ' sel' : '') + (s.active ? ' on' : '') + (!s.lvl ? ' gold' : '') + (s.locked ? ' locked' : '') + (u.id === justBought ? ' bought' : ''));
+    t.append(icon('ico-' + u.icon), el('small', '', !s.lvl ? '◈ ' + s.cost : u.power ? (s.off ? 'Coupé' : 'Actif') : s.on ? 'Équipé' : u.costs.length > 1 ? 'Niv. ' + s.lvl : 'Possédé'));
+    t.addEventListener('click', () => { picked = u.id; refreshShop(); });
+    return t;
   }));
 
-  const u = S.UPGRADES.find((x) => x.id === picked), lvl = S.level(save, u.id), cost = S.nextCost(save, u);
-  $('demo-name').textContent = u.name;
-  $('demo-desc').textContent = u.desc;
-  const slots = $('demo-slots');
-  slots.textContent = u.power ? 'Pouvoir : sans emplacement, désactivable' : `Équipements : ${save.equipped.length} / ${S.MAX_EQUIPPED}`;
-  if (lvl && cost !== null) {                           // already owned, a stronger level is for sale
-    const up = el('button', 'small gold', `Niveau ${lvl + 1} · ◈ ${cost}`);
-    up.disabled = save.coins < cost; up.style.marginLeft = '1em';
-    up.addEventListener('click', () => buy(u));
-    slots.append(up);
-  }
-  showDemo(u.id, lvl);
+  const u = S.UPGRADES.find((x) => x.id === picked), s = stateOf(u);
+  const pips = u.costs.length > 1 ? '  ' + '●'.repeat(s.lvl) + '○'.repeat(u.costs.length - s.lvl) : '';
+  card(u.name + pips,
+    s.locked ? 'Demande : ' + S.UPGRADES.find((x) => x.id === u.needs).name
+      : u.power ? (!s.lvl ? 'Pouvoir permanent, sans emplacement.' : s.off ? 'Désactivé.' : 'Actif.')
+        : s.on ? 'Équipé.' : s.lvl ? (full ? 'Possédé. Les 3 emplacements sont pris.' : 'Possédé.') : (u.kind === 'actif' ? 'Bouton en jeu.' : 'Toujours actif une fois équipé.'),
+    u.desc);
+  const button = (text, cls, fn, disabled) => { const b = el('button', 'small ' + cls, text); b.disabled = !!disabled; b.addEventListener('click', fn); acts.append(b); };
+  if (s.lvl && s.cost !== null) button(`Niv. ${s.lvl + 1} · ◈ ${s.cost}`, 'gold', () => buy(u), save.coins < s.cost);
+  if (!s.lvl) button('◈ ' + s.cost, 'gold', () => buy(u), s.locked || save.coins < s.cost);
+  else if (u.power) button(s.off ? 'Activer' : 'Désactiver', s.off ? 'on' : 'plain', () => { S.togglePower(save, u.id); refreshShop(); });
+  else button(s.on ? 'Retirer' : 'Équiper', s.on ? 'plain' : 'on', () => { S.toggleEquip(save, u.id); refreshShop(); }, !s.on && full);
+  showDemo(u.id, s.lvl);
 }
 
 function buy(u) {
@@ -423,7 +436,7 @@ function pause() {
 function resume() { if (state === 'pause') { state = 'play'; show(null); audio.duck(false); } }
 
 for (const b of document.querySelectorAll('[data-go]')) b.addEventListener('click', () => go(b.dataset.go));
-for (const b of document.querySelectorAll('#shop-tabs .tab')) b.addEventListener('click', () => { tab = b.dataset.tab; refreshShop(); });
+for (const b of document.querySelectorAll('#shop-side [data-tab]')) b.addEventListener('click', () => { tab = b.dataset.tab; refreshShop(); });
 $('btn-resume').addEventListener('click', resume);
 $('btn-pause').addEventListener('click', pause);
 

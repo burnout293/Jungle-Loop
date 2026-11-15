@@ -4,7 +4,7 @@
 // but they can stand and scroll at any Q-th of a pixel, which is what keeps a fast run steady,
 // and the browser smooths the picture's edges when it fits the canvas to the screen.
 
-import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, MOUNTS, LOG, GALLERY, propAt, floorAt, flatAt, biomeAt } from './game.js';
+import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, MOUNTS, LOG, GALLERY, BRAMBLE, propAt, floorAt, flatAt, biomeAt } from './game.js';
 import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js';
 
 // Each scenery has its own far background, middle distance, floor, props, and its own version of
@@ -24,7 +24,7 @@ export const BIOMES = [
 ];
 
 const DIR = 'assets/img/';
-const NAMES = ['fore', 'temple', 'temple-rubble', 'spider', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-moskito', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'temple-rubble', 'spider', 'bat', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-moskito', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -69,9 +69,12 @@ export async function loadAssets() {
   }
   await Promise.all(names.map(load));
   SCENE = BIOMES.map(buildScene);
-  for (const [k, frames] of [['spiky', 1], ['fly', meta.fly.frames], ['mosquito', meta.mosquito.frames], ['spider', 2]])
+  for (const [k, frames] of [['spiky', 1], ['fly', meta.fly.frames], ['mosquito', meta.mosquito.frames], ['spider', 2], ['bat', 3]])
     if (IMG[k]) HAZ[k] = { im: rim(IMG[k], frames), ghost: rim(tinted(IMG[k], 'rgba(110,215,255,.55)'), frames, '#d8f6ff'), frames };
   FAR = { fist: tinted(IMG['hero-fist'], 'rgba(16,12,40,.38)'), shoe: tinted(IMG['hero-shoe'], 'rgba(16,12,40,.38)') };
+  // a block of the ruins' pillar (its capital), and a stretch of brambles drawn here
+  if (IMG['ruins-pillar']) { const c = canvasOf(IMG['ruins-pillar'].width, 26); c.getContext('2d').drawImage(IMG['ruins-pillar'], 0, 0); HAZ.stone = { im: rim(c), frames: 1 }; }
+  HAZ.bramble = { im: rim(brambles()), frames: 1 };
   // the hero's pieces, redrawn four times finer with their stair-steps rounded off (see rounded)
   for (const k of ['hero-body', 'hero-rotor', 'hero-fist', 'hero-shoe', 'hero-ball']) if (IMG[k]) HI.set(IMG[k], rounded(rounded(IMG[k])));
   for (const k of ['fist', 'shoe']) HI.set(FAR[k], tinted(HI.get(IMG['hero-' + k]), 'rgba(16,12,40,.38)'));
@@ -203,8 +206,7 @@ function buildScene(b) {
     pieces.push({ im: flip ? mirrored(kinds[k]) : kinds[k], x: len });
     len += kinds[k].width - (kinds.length > 1 ? 3 : 0);
   }
-  let fore = IMG.fore;
-  if (fore && b.shade) fore = tinted(fore, b.shade);   // elsewhere than the jungle the edge leaves are plain shadows
+  const fore = silhouettes(b.shade || '#16224a');
   // Props and pillars stand on the path, right where crates and creatures do, but are only there to
   // be looked at: they are darkened a little so the eye does not take them for something to dodge.
   const props = [];
@@ -216,6 +218,22 @@ function buildScene(b) {
     bg: IMG[b.bg], mid: IMG[b.mid], ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c'), top: kinds.length > 1 ? 4 : surface(kinds[0]) + 1 }, props, fore,
     sky: rowColour(IMG[b.bg], 0, '#7fb9ec'), base: rowColour(IMG[b.mid], -1, '#1c2c3a'),
   };
+}
+
+// A stretch of brambles, 64 pixels long, that repeats: arching stems, thorns, a few dark leaves.
+function brambles() {
+  const W = 64, H = Math.round(BRAMBLE.h / PIXEL) + 3, c = canvasOf(W, H), x = c.getContext('2d');
+  for (let k = 0; k < 5; k++) {
+    const x0 = k * 13 + 2, span = 22 + Math.round(h01(k, 61) * 10), top = 1 + Math.round(h01(k, 63) * 3);
+    for (let u = 0; u <= span; u++) {
+      const px = (x0 + u) % W, py = Math.round(H - 2 - Math.sin(u / span * Math.PI) * (H - 3 - top));
+      x.fillStyle = '#3a2416'; x.fillRect(px, py, 2, 2);
+      x.fillStyle = '#6b4526'; x.fillRect(px, py, 1, 1);
+      if (u % 4 === 1) { x.fillStyle = '#e8d9b0'; x.fillRect(px + (u & 4 ? 1 : -1), py - 2, 1, 2); }       // a thorn
+      if (u % 7 === 3) { x.fillStyle = '#2f5a2a'; x.fillRect(px - 1, py + 1, 3, 2); }                     // a leaf
+    }
+  }
+  return c;
 }
 
 // A pile of `count` crates as one outlined picture, made the first time it is needed.
@@ -316,18 +334,46 @@ function drawBlast(ctx, x) {
   }
 }
 
-// The leaves that close the frame: a strip along the bottom edge and the same strip turned upside
-// down along the top, both swaying and moving faster than the floor.
-function edges(ctx, im, cam, t, width) {
-  if (!im) return;
-  const off = cam * 1.35;
-  for (let i = Math.floor(off / im.width); i * im.width - off < width; i++)
-    swayBlit(ctx, im, snap(i * im.width - off), VH - im.height + 26, i & 1, t, 0, 2.5, 8);
-  const top = cam * 1.2 + 230;
-  ctx.save(); ctx.translate(0, 30); ctx.scale(1, -1);
-  for (let i = Math.floor(top / im.width); i * im.width - top < width; i++)
-    swayBlit(ctx, im, snap(i * im.width - top), 0, i & 1, t, 2, 2, 8);
-  ctx.restore();
+// What passes in front of the picture, along its bottom and top edges: plain shadows that never move
+// on their own, in two depths (a bluish row behind, a black one in front that scrolls faster). Each
+// edge only shows what belongs there: plants growing up from the bottom, foliage and creepers hanging
+// from the top. They stay low: `peak` is the most a row may reach into the picture.
+const FORE_W = 640;
+function lowRow(colour, seed, count, scale, peak) {
+  const c = canvasOf(FORE_W, peak), x = c.getContext('2d'), plants = [3, 4, 5, 3].map((k) => IMG['prop-' + k]).filter(Boolean);
+  for (let i = 0; i < count && plants.length; i++) {
+    const im = plants[Math.floor(h01(i, seed) * plants.length)], k = scale * (0.7 + 0.5 * h01(i, seed + 1));
+    const w = Math.round(im.width * k), h = Math.round(im.height * k), px = Math.round(i * FORE_W / count + h01(i, seed + 2) * 24);
+    const top = peak - Math.min(peak, Math.round(h * (0.45 + 0.3 * h01(i, seed + 3))));      // sunk into the edge, more or less
+    for (const dx of [0, -FORE_W]) x.drawImage(im, px + dx, top, w, h);
+  }
+  return tinted(c, colour);
+}
+function highRow(colour, seed, peak) {
+  const c = canvasOf(FORE_W, peak), x = c.getContext('2d');
+  x.fillStyle = colour;
+  const disc = (cx, cy, r) => { for (let dy = -r; dy <= r; dy++) { const half = Math.round(Math.sqrt(r * r - dy * dy)); for (const dx of [0, -FORE_W, FORE_W]) x.fillRect(cx - half + dx, cy + dy, half * 2, 1); } };
+  for (let i = 0; i < 46; i++) disc(Math.round(h01(i, seed) * FORE_W), Math.round(h01(i, seed + 1) * 5) - 2, 5 + Math.round(h01(i, seed + 2) * 7));   // the canopy's underside
+  for (let i = 0; i < 15; i++) {                       // creepers hanging from it, a leaf on either side every few pixels
+    const cx = Math.round((i + h01(i, seed + 3)) * FORE_W / 15), len = 8 + Math.round(h01(i, seed + 4) * (peak - 10));
+    for (let y = 0; y < len; y++) {
+      const wx = cx + Math.round(Math.sin(y * 0.35 + i) * 1.2);
+      x.fillRect(wx, y, 2, 1);
+      if (y % 5 === 3) x.fillRect(wx + (y % 10 === 3 ? -3 : 2), y, 3, 2);
+    }
+    disc(cx + 1, len, 2);
+  }
+  return c;
+}
+function silhouettes(shade) {
+  const black = '#0b0916';
+  return { low: [lowRow(shade, 11, 13, 0.55, 22), lowRow(black, 31, 8, 0.8, 30)], high: [highRow(shade, 51, 24), highRow(black, 71, 30)] };
+}
+function edges(ctx, F, cam, t, width) {
+  if (!F) return;
+  const lay = (im, par, y) => { const off = cam * par; for (let i = Math.floor(off / im.width); i * im.width - off < width; i++) ctx.drawImage(im, snap(i * im.width - off), y); };
+  lay(F.high[0], 1.1, -3); lay(F.low[0], 1.15, VH - F.low[0].height + 2);
+  lay(F.high[1], 1.45, -5); lay(F.low[1], 1.6, VH - F.low[1].height + 3);
 }
 
 // Two sceneries meet at `edge` (screen x). The far scenery changes tile by tile, like a picture
@@ -678,6 +724,40 @@ export function draw(ctx, run, v, t) {
       const S = SCENE[biomeAt(run, o.x)], im = stack(S, o.n);
       shadow(ctx, x + im.width / 2 - 1, foot - 1, im.width + 2);
       ctx.drawImage(im, x - 1, foot - im.height + 1);
+      continue;
+    }
+    if (o.kind === 'bramble') {                        // a carpet of thorns, its picture laid end to end
+      const im = HAZ.bramble.im, w = n(o.w);
+      for (let k = 0; k < w; k += im.width - 2) { const part = Math.min(im.width, w - k + 2); ctx.drawImage(im, 0, 0, part, im.height, x + k - 1, foot - im.height + 2, part, im.height); }
+      continue;
+    }
+    if (o.kind === 'geyser') {                         // a ring of stones round a dark hole; steam before, the jet after
+      const cx = x + n(o.w) / 2, f = n(o.floor), h = n(o.h);
+      ctx.fillStyle = '#1a1024'; ctx.fillRect(snap(cx - 9), f - 3, 18, 5); ctx.fillStyle = '#0b0814'; ctx.fillRect(snap(cx - 7), f - 2, 14, 3);
+      ctx.fillStyle = '#8a7a6a'; ctx.fillRect(snap(cx - 11), f - 4, 4, 3); ctx.fillRect(snap(cx + 7), f - 4, 4, 3); ctx.fillStyle = '#b9a890'; ctx.fillRect(snap(cx - 11), f - 4, 4, 1); ctx.fillRect(snap(cx + 7), f - 4, 4, 1);
+      if (o.rise < 1) for (let k = 0; k < 3; k++) { const up = (t * 16 + k * 7 + o.x) % 20; ctx.globalAlpha = 0.75 * (1 - up / 20); ctx.fillStyle = '#eafcff'; ctx.fillRect(snap(cx - 3 + k * 3 + Math.sin(up * 0.5 + k) * 2), f - 5 - up, 2, 2); }
+      ctx.globalAlpha = 1;
+      if (h > 4) for (let yy = 0; yy < h; yy += 3) {     // the jet: pale outline, white heart, narrower and shakier towards the top
+        const k = yy / h, wob = Math.round(Math.sin(t * 22 + yy * 0.5) * (1 + 2 * k)), half = 5 - 2 * k;
+        ctx.fillStyle = '#fff2c8'; ctx.fillRect(snap(cx - half - 1 + wob), f - yy - 3, half * 2 + 2, 3);
+        ctx.fillStyle = k > 0.8 ? '#ffffff' : '#9fe8ff'; ctx.fillRect(snap(cx - half + wob), f - yy - 3, half * 2, 3);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(snap(cx - 1 + wob), f - yy - 3, 2, 3);
+      }
+      continue;
+    }
+    if (o.kind === 'bat') {                            // asleep under the ceiling, then wings beating
+      const H = HAZ.bat; if (!H) continue;
+      const fw = H.im.width / 3, frame = o.dive ? 1 + (Math.floor(t * 12 + o.ph) & 1) : 0;
+      if (o.dive) shadow(ctx, x + n(o.w) / 2, floorPx(x + 14) - 1, 20);
+      if (o.ghost) ctx.globalAlpha = 0.7;
+      sheet(ctx, o.ghost ? H.ghost : H.im, 3, frame, snap(x + n(o.w) / 2 - fw / 2), o.dive ? y - 4 : -2);
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    if (o.kind === 'spider' && o.stone) {              // the ruins' falling block: its shadow grows on the path as it comes
+      const im = HAZ.stone.im, cx = x + n(o.w) / 2, f = floorPx(cx), k = Math.max(0, Math.min(1, (y + 30) / (f - 30)));
+      if (o.dropped) shadow(ctx, cx, f - 1, 10 + 22 * k);
+      ctx.drawImage(im, snap(cx - im.width / 2), foot - im.height + 1);
       continue;
     }
     if (o.kind === 'spider') {                         // on its thread: curled up under the leaves, legs out once it has dropped

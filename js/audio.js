@@ -169,6 +169,7 @@ export const audio = {
       old.playbackRate.setValueAtTime(1, t); old.playbackRate.exponentialRampToValueAtTime(0.12, t + 0.85);
       old.g.gain.setValueAtTime(1, t + 0.45); old.g.gain.linearRampToValueAtTime(0, t + 0.85);
       try { old.stop(t + 0.9); } catch { /* already stopped */ }
+      if (!tracks.over) which = 'menu';                    // no jingle on file: the menu's music comes in over the last breath
       wanted = which;
     } else { wanted = which; silence(); }
     if (!which) return;
@@ -194,6 +195,9 @@ export const audio = {
       case 'unmount': tone(o, 420, 0.3, 'square', 0.2, 0, 110); break;
       case 'bye': tone(o, 700, 0.12, 'triangle', 0.14, 0, 500); tone(o, 500, 0.16, 'triangle', 0.14, 0.12, 350); break;
       case 'spider': tone(o, 1500, 0.16, 'sawtooth', 0.07, 0, 320); break;
+      case 'thud': tone(o, 110, 0.22, 'sine', 0.4, 0, 40); noise(o, 0.2, 0.4, 500); break;
+      case 'geyser': noise(o, 0.45, 0.3, 2600); break;
+      case 'bat': tone(o, 2200, 0.07, 'square', 0.06, 0, 3000); tone(o, 2400, 0.07, 'square', 0.06, 0.09, 3200); break;
       case 'roll': tone(o, 240, 0.22, 'triangle', 0.16, 0, 520); break;
       case 'unroll': tone(o, 520, 0.18, 'triangle', 0.14, 0, 260); break;
       case 'heart': [12, 16, 19, 24].forEach((s, k) => tone(o, hz(s + 12), 0.22, 'triangle', 0.2, k * 0.07)); break;

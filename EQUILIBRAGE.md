@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 15/11/2026, version 0.13. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 15/11/2026, version 0.14. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -49,7 +49,9 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Moment | Liste | Chance de chacun |
 |---|---|---|
 | 70 premiers mètres | caisse, hérisson, pièces, plateforme | 25 % |
-| Ensuite | araignée ×2, caisse, hérisson ×2, doublé, volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux | 16 entrées : 6,25 % (12,5 % pour araignée, hérisson et corniche) |
+| Ensuite | caisse, hérisson ×2, doublé, volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux | 14 entrées, plus celles du décor (ligne suivante) |
+| Propre au décor | jungle : araignée ×3 · ruines : bloc de pilier ×2, geyser ×2 · cité : rien · donjon : chauve-souris ×3 | jungle 17,6 % d'araignées, ruines 11 % de chaque, donjon 17,6 % de chauves-souris |
+| Avec Vol | + ronces (tapis de 10,5 à 17,5 m, pièces au-dessus) | 1 entrée |
 | Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | 18 entrées : 5,6 %, dessin 11 % |
 | Avec Double saut | + pile de 2 caisses, + volant | 20 entrées : 5 % |
 | Avec Vol | + mur de 4 caisses, + essaim ×2 | 23 entrées : 4,3 % |
@@ -61,7 +63,11 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Écart entre deux motifs | (vitesse × 0,7 s + 3,75 m) × hasard de 0,85 à 1,4 ; × 1,3 après des pièces | `spawnPattern` |
 | Caisse | 1,6 m × 1,3 m | `CRATE` |
 | Hérisson | 1,7 m × 1,35 m | `SPIKY` |
-| Araignée | 1,5 m × 1,4 m ; tombe quand tu es à 0,9 s d'elle ; 6 fois sur 10 elle s'arrête au ras du sol (à sauter), sinon à 5,35 m (ne pas sauter, 5 pièces dessous) | `SPIDER`, `addSpider` |
+| Bloc de pilier (ruines) | comme l'araignée basse : tombe quand tu es à 0,9 s, reste au sol, à sauter | `addBlock` |
+| Geyser (ruines) | jaillit quand tu es à 1,1 s ; jet de 1,75 m à pied, 3 m avec Double saut, 7,5 m avec Vol | `GEYSER` |
+| Chauve-souris (donjon) | plonge quand tu es à 1 s, rase le sol et vient vers toi à 4 m/s, à sauter | `BAT` |
+| Ronces | 0,65 m de haut ; seulement avec Vol ou sur le Moskito ; le rhino les écrase | `BRAMBLE` |
+| Araignée (jungle) | 1,5 m × 1,4 m ; tombe quand tu es à 0,9 s d'elle ; 6 fois sur 10 elle s'arrête au ras du sol (à sauter), sinon à 5,35 m (ne pas sauter, 5 pièces dessous) | `SPIDER`, `addSpider` |
 | Volant | 1,6 m × 1,35 m, avance vers toi à 3 m/s | `FLY` |
 | Hauteur des volants | 4,4 m ; 4,4 ou 7,25 m avec Double saut ; 4,4 / 7,25 / 10 / 12,75 m avec Vol | `spawnPattern` |
 | Plateforme | 6,35 m de long, à 3,4 m du sol | `PLAT_W` |
@@ -180,5 +186,6 @@ Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans 
 | Lissage « Net » | finesse ×2 au plus, pixels francs | `resize` |
 | Volumes | 0 à 10, 7 au départ | js/save.js |
 | Musique en pause | 30 % du volume | `DUCK`, js/audio.js |
-| Fin de course | la musique ralentit et s'éteint en 0,85 s, le jingle entre à 0,6 s, puis la musique du menu | `music('over')`, js/audio.js |
+| Fin de course | la musique ralentit et s'éteint en 0,85 s ; la musique du menu entre à 0,6 s | `music('over')`, js/audio.js |
+| Avant-plan | deux rangées d'ombres fixes ; au plus 22 et 30 pixels en bas, 24 et 30 en haut (sur 320) | `silhouettes`, js/render.js |
 | Changement de décor | mosaïque : carreaux de 16 pixels, étalés sur 120 pixels de part et d'autre | `TILE`, `SPREAD`, js/render.js |

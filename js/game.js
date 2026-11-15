@@ -33,6 +33,12 @@ const DRUNK = [0, 0.06, 0.1, 0.15];     // Faune alcoolisée: share of the creat
 const FLAP = 430;                       // how fast the leaf rotor climbs
 export const SPEED = { base: 280, gain: 5, sprint: 160 };   // units per second: at the door, gained each second (for ever), added by Sprint
 const SPIDER = { w: 60, h: 56, ahead: 0.9 };   // it drops when the hero is `ahead` seconds away
+// What only some sceneries have (see spawnPattern): the spider in the jungle; in the ruins a block of
+// a pillar that falls the same way, and a geyser; in the dungeon a bat that swoops down. Brambles, a
+// long carpet of thorns, only ever lie in front of someone who need not touch the ground.
+export const GEYSER = { w: 34, ahead: 1.1, top: [70, 120, 300] };   // how high it spouts: on foot, with the double jump, flying
+const BAT = { w: 60, h: 44, ahead: 1.0, speed: 160 };
+export const BRAMBLE = { h: 26 };
 
 // Mounts: rare friendly animals waiting on the path. Running into one puts the hero on its back until
 // something hits them: the animal takes the blow and vanishes. Each one plays its own game, and the
@@ -181,6 +187,25 @@ export function addSpider(run, x, low) {
   return o;
 }
 
+// The ruins' own spider: a block of pillar that comes down from the top and stays on the path.
+export function addBlock(run, x) { const o = addSpider(run, x, true); o.stone = true; o.ghost = false; o.rest = floorAt(run, x) - SPIDER.h; return o; }
+
+// A hole in the floor that gives itself away with wisps of steam, then spouts as the hero comes: to be jumped.
+export function addGeyser(run, x, tier) {
+  const f = floorAt(run, x), o = addObs(run, x, f - 4, GEYSER.w, 4, 'geyser', false);
+  o.ghost = false; o.floor = f; o.top = GEYSER.top[tier]; o.rise = 0;
+  return o;
+}
+
+// Asleep under the ceiling, it swoops down to just above the floor and skims it towards the hero: to be jumped.
+export function addBat(run, x) {
+  const o = addObs(run, x, 30, BAT.w, BAT.h, 'bat', false);
+  o.low = floorAt(run, x) - BAT.h - 26; o.ph = rnd(0, 6);
+  return o;
+}
+
+export function addBrambles(run, x, w) { const o = addObs(run, x, floorAt(run, x) - BRAMBLE.h, w, BRAMBLE.h, 'bramble', false); o.ghost = false; return o; }
+
 export function addFlyer(run, x, alt) {
   const o = addObs(run, x, floorAt(run, x) - alt - FLY.h / 2, FLY.w, FLY.h, 'fly', false);
   o.baseY = o.y; o.ph = rnd(0, 6);
@@ -236,7 +261,9 @@ function spawnPattern(run) {
   // The first metres are a warm-up: one obstacle at a time, nothing in the air.
   let opts = x < 70 * PPM ? ['crate', 'spiky', 'coins', 'plat']
     : ['crate', 'spiky', 'spiky', 'double', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
-  if (x >= 70 * PPM) opts.push('spider', 'spider');
+  const where = biomeAt(run, x);                                      // each scenery has its own dangers
+  if (x >= 70 * PPM) opts.push(...[['spider', 'spider', 'spider'], ['block', 'block', 'geyser', 'geyser'], [], ['bat', 'bat', 'bat']][where]);
+  if (tier >= 2 && x >= 70 * PPM) opts.push('brambles');
   if (tier >= 1 && x >= 70 * PPM) opts.push('stack', 'fly');
   if (tier >= 2 && x >= 70 * PPM) opts.push('wall', 'swarm', 'swarm');
   const shapes = SHAPES.filter((s) => s.top <= REACH[tier]);
@@ -251,6 +278,14 @@ function spawnPattern(run) {
     case 'crate': addCrates(run, x, 1); len = CRATE.w; break;
     case 'spiky': addSpiky(run, x); len = SPIKY.w; break;
     case 'shape': len = layShape(run, pick(shapes), x); break;         // a drawing made of coins
+    case 'block': addBlock(run, x); len = SPIDER.w; break;
+    case 'geyser': addGeyser(run, x, tier); len = GEYSER.w; break;
+    case 'bat': addBat(run, x + 200); len = 260; break;
+    case 'brambles': {                                                 // to fly over, coins along the way
+      const w = Math.round(rnd(420, 700));
+      addBrambles(run, x, w); coinLine(run, x + 20, floorAt(run, x) - 190, Math.floor(w / 44));
+      len = w; break;
+    }
     case 'spider':
       if (Math.random() < 0.6) addSpider(run, x, true);
       else { addSpider(run, x + 88, false); coinLine(run, x, floorAt(run, x) - 40, 5); }   // high: coins underneath, for whoever stays down
@@ -402,7 +437,8 @@ function spawnRide(run) {
     }
   } else {
     const lanes = [70, 180, 290, 400, 510];                            // heights above the floor
-    switch (pick(['flyers', 'flyers', 'gate', 'gate', 'tower', 'zigzag', 'zigzag', 'shape', 'shape'])) {
+    switch (pick(['flyers', 'flyers', 'gate', 'gate', 'tower', 'zigzag', 'zigzag', 'shape', 'shape', 'brambles'])) {
+      case 'brambles': { const w = Math.round(rnd(500, 900)); addBrambles(run, x, w); coinLine(run, x + 20, G - 150, Math.floor(w / 44)); len = w; break; }
       case 'flyers': {
         const mixed = lanes.slice().sort(() => Math.random() - 0.5).slice(0, Math.random() < 0.4 ? 3 : 2);
         mixed.forEach((alt, k) => still(x + k * 260, alt));
@@ -756,13 +792,27 @@ export function update(run, dt, input) {
         if (!o.dropped && o.x - px < run.speed * SPIDER.ahead) { o.dropped = true; run.events.push('spider'); }
         if (o.dropped && (o.y < o.rest || o.vy)) {
           o.vy += 2600 * d; o.y += o.vy * d;
-          if (o.y >= o.rest) { o.y = o.rest; o.vy = o.vy > 160 ? -o.vy * 0.3 : 0; }
+          if (o.y >= o.rest) {
+            if (o.stone) {                             // stone does not bounce: it lands for good, in a cloud of dust
+              o.y = o.rest; o.vy = 0; run.shake = Math.max(run.shake, 0.35); run.events.push('thud');
+              for (let i = 0; i < 10; i++) run.parts.push({ x: o.x + rnd(0, o.w), y: o.y + o.h - 4, vx: rnd(-200, 200), vy: rnd(-120, -20), life: 0, max: rnd(0.3, 0.6), c: pick(['#e9dcc0', '#cbb894', '#fff6dc']), s: rnd(6, 14), g: 0 });
+            } else { o.y = o.rest; o.vy = o.vy > 160 ? -o.vy * 0.3 : 0; }
+          }
         }
+      }
+      if (o.kind === 'geyser') {                   // it spouts once, and keeps spouting
+        if (!o.rise && o.x - px < run.speed * GEYSER.ahead) run.events.push('geyser');
+        if (o.rise || o.x - px < run.speed * GEYSER.ahead) o.rise = Math.min(1, o.rise + d * 4);
+        o.h = Math.max(4, o.top * o.rise); o.y = o.floor - o.h;
+      }
+      if (o.kind === 'bat') {
+        if (!o.dive && o.x - px < run.speed * BAT.ahead) { o.dive = true; run.events.push('bat'); }
+        if (o.dive) { o.x -= BAT.speed * d; o.y += (o.low - o.y) * Math.min(1, d * 5); }
       }
       if (o.gone || o.x + 6 > box.R || o.x + o.w - 6 < box.L || o.y + 6 > box.B || o.y + o.h - 6 < box.T) continue;
       if (dashing) destroy(run, o);
       else if (o.ghost) { if (!o.passed) { o.passed = true; burst(run, o.x + o.w / 2, o.y + o.h / 2, '#c9f3ff', 6, 120); } }
-      else if (M && M.smash && o.kind === 'crate') destroy(run, o);
+      else if (M && M.smash && (o.kind === 'crate' || o.kind === 'bramble')) destroy(run, o);   // the rhino ploughs through thorns too
       else if (o.fragile && up.breaker) destroy(run, o);
       else if (p.inv === 0) { hit(run, o); if (run.dead) return; break; }
     }

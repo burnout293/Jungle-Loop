@@ -85,3 +85,10 @@ frames = [tall(im, 32) for im in pieces('araignee')]
 cw = max(f.width for f in frames); sheet = Image.new('RGBA', (cw * 2, 32), (0, 0, 0, 0))
 for i, f in enumerate(frames): sheet.alpha_composite(f, (i * cw + (cw - f.width) // 2, 0))
 save(sheet, 'spider')
+
+# the bat: asleep, wings up, wings down, in cells of the same size, all at the same scale
+b = pieces('chauve-souris'); k = 30 / b[0].height
+frames = [shrink(im, k) for im in b]
+cw, ch = max(f.width for f in frames), max(f.height for f in frames); sheet = Image.new('RGBA', (cw * 3, ch), (0, 0, 0, 0))
+for i, f in enumerate(frames): sheet.alpha_composite(f, (i * cw + (cw - f.width) // 2, 0 if i == 0 else (ch - f.height) // 2))
+save(sheet, 'bat')

@@ -2,7 +2,7 @@
 // Not a video: a real, tiny run of the game with only that upgrade on, a hand-placed stretch of
 // jungle and a scripted player, restarted every five seconds. It always shows the real behaviour.
 
-import { newRun, update, addCrates, addSpiky, addFlyer, coinLine, GROUND, PX, PIXEL } from './game.js';
+import { newRun, update, addCrates, addSpiky, addFlyer, coinLine, GROUND, PX, PIXEL, HANG_Y, LOG } from './game.js';
 import { draw, quality } from './render.js';
 
 const LOOP = 5;                                  // seconds
@@ -59,8 +59,8 @@ const SCENES = {
   },
   sphere: {
     build(run, x) {
-      run.zones.push({ x: x + 520, w: 774, kind: 'log' });
-      for (let i = 0; i < 15; i++) run.coins.push({ x: x + 600 + i * 40, y: GROUND - 24, tight: 'log', gem: i % 6 === 3 ? 'r' : undefined });
+      run.zones.push({ x: x + 520, w: LOG.w, kind: 'log' });
+      for (let i = 0; i < 9; i++) run.coins.push({ x: x + 600 + i * 40, y: GROUND - 24, tight: 'log', gem: i % 6 === 3 ? 'r' : undefined });
     },
     play: () => {},
   },
@@ -87,6 +87,21 @@ const SCENES = {
   lastLeap: {
     build(run, x) { run.hearts = 1; addSpiky(run, x + 600); for (const o of run.obs) o.ghost = false; },
     play: () => {},
+  },
+  // the mounts, shown from the Montures family: the animal waits a few steps ahead
+  'm-gorilla': {
+    build(run, x) { run.items.push({ x: x + 300, kind: 'gorilla', ph: 0 }); coinLine(run, x + 900, HANG_Y - 50, 12); addSpiky(run, x + 1100); },
+    play: (run, ahead, t, inp) => {                    // up to the vines in two jumps, along them, then down
+      for (const [k, at] of [['a', 1.3], ['b', 1.55], ['c', 3.9]]) if (t > at && !run['_' + k]) { run['_' + k] = true; inp.pressed = true; }
+    },
+  },
+  'm-rhino': {
+    build(run, x) { run.items.push({ x: x + 300, kind: 'rhino', ph: 0 }); addCrates(run, x + 900, 2); addCrates(run, x + 1400, 3); coinLine(run, x + 800, GROUND - 40, 18); for (const o of run.obs) o.ghost = false; },
+    play: () => {},
+  },
+  'm-moskito': {
+    build(run, x) { run.items.push({ x: x + 300, kind: 'moskito', ph: 0 }); for (let i = 0; i < 24; i++) run.coins.push({ x: x + 700 + i * 44, y: GROUND - 160 - Math.sin(i * 0.45) * 90 }); },
+    play: (run, ahead, t, inp) => { inp.hold = Math.sin(t * 3.2 - 1.4) > 0; },
   },
   rewind: {
     build(run, x) { run.hearts = 1; addSpiky(run, x + 760); addSpiky(run, x + 1500); },
