@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION at each release so players get the new files.
-const VERSION = 'jungle-loop-0.9.0';
+const VERSION = 'jungle-loop-0.10.0';
 // The code is fetched up front; images and music are kept as the game asks for them,
 // so this list never has to follow the art.
 const FILES = ['./', 'index.html', 'style.css', 'icon.svg', 'manifest.webmanifest',
