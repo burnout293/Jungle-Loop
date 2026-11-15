@@ -1,0 +1,147 @@
+// Save data, shop catalogue, export / import.
+
+import { KINDS, MAX_ACTIVE, fill } from './progress.js';
+
+// "?bac" in the address plays on a separate, throw-away save: for trying things without touching the real one.
+const KEY = 'jungle-loop-save-v1' + (new URLSearchParams(location.search).has('bac') ? '-bac' : '');
+const PREFIX = 'JL1.';
+
+// The shop's catalogue. The ones to equip are called « Équipements » in the game, the others « Pouvoirs ».
+// costs[n] = price of level n+1. `needs` = upgrade required first. `icon` = assets/img/ico-<icon>.png.
+// Two families. Upgrades are chosen for each run: only three can be equipped. Powers (`power: true`)
+// are bought once and then on without taking a slot, unless the player switches them off (save.powersOff).
+export const UPGRADES = [
+  { id: 'doubleJump', icon: 'jump', kind: 'passif', name: 'Double saut', desc: 'Un second saut en l\'air.', costs: [120] },
+  { id: 'spring', icon: 'spring', kind: 'passif', name: 'Ressort', desc: 'Saute plus haut.', costs: [250, 600] },
+  { id: 'magnet', icon: 'magnet', kind: 'passif', name: 'Aimant', desc: 'Attire les pièces proches.', costs: [150, 400, 900] },
+  { id: 'lucky', icon: 'lucky', kind: 'passif', name: 'Trèfle', desc: 'Les gemmes apparaissent plus souvent.', costs: [300, 800] },
+  { id: 'scatter', icon: 'gems', kind: 'passif', name: 'Gemmes dispersées', desc: 'De temps en temps, une gemme prend la place d\'une pièce. Jaune : 5 pièces, rouge : 10, bleue : 20.', costs: [500, 1200, 2500] },
+  { id: 'breaker', icon: 'break', kind: 'passif', name: 'Brise-obstacle', desc: 'Fonce à travers les caisses : elles volent en éclats et lâchent 2 pièces chacune.', costs: [350] },
+  { id: 'heart', icon: 'heart', kind: 'passif', name: 'Cœur en plus', desc: 'Un quatrième cœur pour la course.', costs: [900] },
+  { id: 'drunk', icon: 'drunk', kind: 'passif', name: 'Faune alcoolisée', desc: 'De rares créatures deviennent éthérées : pâles et titubantes, elles ne font aucun dégât.', costs: [400, 900, 1800] },
+  { id: 'nature', icon: 'nature', kind: 'passif', name: 'Ami de la nature', desc: 'Les montures, rares, se montrent un peu plus souvent.', costs: [300, 700, 1500] },
+  { id: 'dash', icon: 'dash', kind: 'actif', name: 'Ruée', desc: 'Fonce, invincible, en pulvérisant tout. Recharge plus vite à chaque niveau.', costs: [300, 700, 1400] },
+  { id: 'slow', icon: 'slow', kind: 'actif', name: 'Sablier', desc: 'Ralentit le temps quelques secondes.', costs: [450, 1000] },
+  { id: 'lastLeap', icon: 'leap', kind: 'passif', name: 'Dernier élan', desc: 'Au dernier cœur perdu, tu rebondis encore pour gagner quelques mètres.', costs: [400, 900, 1800] },
+  { id: 'flight', icon: 'flight', kind: 'passif', power: true, name: 'Vol', desc: 'En l\'air, chaque appui te fait remonter d\'un coup d\'hélice. Relâche : tu retombes.', costs: [1200] },
+  { id: 'sprint', icon: 'shoes', kind: 'passif', power: true, name: 'Sprint', desc: 'Cours plus vite dès le départ, les jambes en tourbillon.', costs: [1000] },
+  { id: 'sphere', icon: 'sphere', kind: 'passif', power: true, name: 'Sphère', desc: 'Roule en boule dans les endroits exigus, troncs creux et galeries : il n\'y a que des trésors là-dedans.', costs: [1500] },
+  { id: 'rewind', icon: 'rewind', kind: 'passif', name: 'Rembobinage', desc: 'Une fois par course, la relique annule ta chute.', costs: [2500] },
+];
+
+export const MAX_EQUIPPED = 3;   // owning is not enough: only three upgrades go on a run
+export const isPower = (id) => !!UPGRADES.find((u) => u.id === id && u.power);
+
+function blank() {
+  return { v: 1, coins: 0, best: 0, loops: 0, upgrades: {}, music: true, sfx: true, pixelFont: true, smooth: true, seenIntro: false,
+    equipped: [], powersOff: [], xp: 0, quests: [], questsDone: 0, lastQuest: '' };
+}
+
+// Keeps only known fields with sane types: an imported code is untrusted text.
+function sanitize(raw) {
+  const s = blank();
+  if (!raw || typeof raw !== 'object') { fill(s); return s; }
+  const int = (x) => (Number.isFinite(x) && x > 0 ? Math.floor(x) : 0);
+  s.coins = int(raw.coins);
+  s.best = int(raw.best);
+  s.loops = int(raw.loops);
+  s.music = raw.music !== false;
+  s.sfx = raw.sfx !== false;
+  s.pixelFont = raw.pixelFont !== false;
+  s.smooth = raw.smooth !== false;
+  s.seenIntro = !!raw.seenIntro;
+  for (const u of UPGRADES) {
+    const lvl = int(raw.upgrades && raw.upgrades[u.id]);
+    if (lvl) s.upgrades[u.id] = Math.min(lvl, u.costs.length);
+  }
+  // saves from before the three-slot rule: the first three owned upgrades are put on
+  const wanted = Array.isArray(raw.equipped) ? raw.equipped : Object.keys(s.upgrades);
+  for (const id of wanted) if (s.upgrades[id] && !isPower(id) && !s.equipped.includes(id) && s.equipped.length < MAX_EQUIPPED) s.equipped.push(id);
+  for (const id of Array.isArray(raw.powersOff) ? raw.powersOff : []) if (isPower(id) && !s.powersOff.includes(id)) s.powersOff.push(id);
+  s.xp = Number.isFinite(raw.xp) && raw.xp > 0 ? raw.xp : 0;
+  s.questsDone = int(raw.questsDone);
+  if (typeof raw.lastQuest === 'string' && KINDS[raw.lastQuest]) s.lastQuest = raw.lastQuest;
+  for (const q of Array.isArray(raw.quests) ? raw.quests.slice(0, MAX_ACTIVE) : []) {
+    if (!q || !KINDS[q.k] || s.quests.some((x) => x.k === q.k) || !int(q.goal)) continue;
+    s.quests.push({ k: q.k, goal: int(q.goal), p: Math.min(int(q.goal), Number.isFinite(q.p) && q.p > 0 ? q.p : 0), reward: int(q.reward), xp: int(q.xp) || 40 });
+  }
+  fill(s);
+  return s;
+}
+
+export function load() {
+  try { return sanitize(JSON.parse(localStorage.getItem(KEY))); } catch { return sanitize(null); }
+}
+
+export function store(save) {
+  try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* private mode: play without saving */ }
+}
+
+export function reset() {
+  try { localStorage.removeItem(KEY); } catch { /* nothing to remove */ }
+  return sanitize(null);
+}
+
+export function exportCode(save) {
+  const bytes = new TextEncoder().encode(JSON.stringify(save));
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return PREFIX + btoa(bin);
+}
+
+// Returns a save, or null when the code is not valid.
+export function importCode(code) {
+  try {
+    const txt = String(code).trim();
+    if (!txt.startsWith(PREFIX)) return null;
+    const bin = atob(txt.slice(PREFIX.length));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const raw = JSON.parse(new TextDecoder().decode(bytes));
+    if (!raw || raw.v !== 1) return null;
+    return sanitize(raw);
+  } catch { return null; }
+}
+
+export function level(save, id) { return save.upgrades[id] || 0; }
+
+export function nextCost(save, u) {
+  const lvl = level(save, u.id);
+  return lvl < u.costs.length ? u.costs[lvl] : null;
+}
+
+export function buy(save, u) {
+  const cost = nextCost(save, u);
+  if (cost === null || save.coins < cost) return false;
+  if (u.needs && !level(save, u.needs)) return false;
+  save.coins -= cost;
+  save.upgrades[u.id] = level(save, u.id) + 1;
+  if (!u.power && !save.equipped.includes(u.id) && save.equipped.length < MAX_EQUIPPED) save.equipped.push(u.id);
+  store(save);
+  return true;
+}
+
+// What a run starts with: the equipped upgrades, at the level owned, and every power bought.
+export function loadout(save) {
+  const up = {};
+  for (const id of save.equipped) up[id] = save.upgrades[id];
+  for (const u of UPGRADES) if (u.power && save.upgrades[u.id] && !save.powersOff.includes(u.id)) up[u.id] = save.upgrades[u.id];
+  return up;
+}
+
+// Switches an owned power off, or back on.
+export function togglePower(save, id) {
+  const i = save.powersOff.indexOf(id);
+  if (i >= 0) save.powersOff.splice(i, 1); else save.powersOff.push(id);
+  store(save);
+}
+
+// Puts an owned upgrade on or takes it off. Returns false when the three slots are taken.
+export function toggleEquip(save, id) {
+  const i = save.equipped.indexOf(id);
+  if (isPower(id)) return false;
+  if (i >= 0) save.equipped.splice(i, 1);
+  else if (save.upgrades[id] && save.equipped.length < MAX_EQUIPPED) save.equipped.push(id);
+  else return false;
+  store(save);
+  return true;
+}

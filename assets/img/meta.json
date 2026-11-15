@@ -1,0 +1,75 @@
+{
+ "fly": {
+  "frames": 4
+ },
+ "coin": {
+  "frames": 6
+ },
+ "rig": {
+  "body": {
+   "w": 39,
+   "h": 40,
+   "hx": 29.9,
+   "hy": 23.6,
+   "tx": 26.2
+  },
+  "rotor": {
+   "w": 58,
+   "h": 34,
+   "hx": 28.3,
+   "hy": 15.7,
+   "tx": 28.6,
+   "blade": 12
+  },
+  "fist": {
+   "w": 8,
+   "h": 8
+  },
+  "shoe": {
+   "w": 12,
+   "h": 9
+  }
+ },
+ "mounts": {
+  "gorilla": {
+   "frames": 4,
+   "seatX": 41,
+   "seatY": 21
+  },
+  "rhino": {
+   "frames": 4,
+   "seatX": 41,
+   "seatY": 20
+  },
+  "moskito": {
+   "frames": 4,
+   "seatX": 33,
+   "seatY": 39
+  },
+  "gorilla-hang": {
+   "frames": 4,
+   "seatX": 46,
+   "seats": [
+    [
+     28,
+     54
+    ],
+    [
+     32,
+     59
+    ],
+    [
+     33,
+     56
+    ],
+    [
+     32,
+     52
+    ]
+   ]
+  }
+ },
+ "mosquito": {
+  "frames": 4
+ }
+}

@@ -1,0 +1,9 @@
+# Sources of the art (large generated sheets) and trials: kept on the computer, not needed to play
+tools/raw/
+assets/essais-pixellab/
+# Only the two pieces of music the game plays
+assets/music/*.mp3
+!assets/music/menu-brass.mp3
+!assets/music/run-brass.mp3
+.claude/
+__pycache__/
