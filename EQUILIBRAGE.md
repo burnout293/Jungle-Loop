@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 15/11/2026, version 0.12. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 15/11/2026, version 0.13. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -10,10 +10,10 @@ L'écran fait 720 unités de haut (18 m), le sol est à 630. Les vitesses sont d
 
 | Valeur | Aujourd'hui | Où (js/game.js) |
 |---|---|---|
-| Vitesse au départ | 9 m/s (360 u/s) | `SPEED.base` |
+| Vitesse au départ | 7 m/s (280 u/s) | `SPEED.base` |
 | Accélération | +0,125 m/s chaque seconde | `SPEED.gain` |
-| Vitesse maximale | 22,5 m/s (900 u/s), atteinte après 108 s | `SPEED.max` |
-| **Sprint** | départ à 13 m/s : **+44 %** (+160 u/s). Le maximum ne change pas, il est atteint après 76 s | `SPEED.sprint` |
+| Vitesse maximale | aucune : 14,5 m/s après 1 min, 22 m/s après 2 min, 37 m/s après 4 min | |
+| **Sprint** | départ à 11 m/s : **+57 %** (+4 m/s, gardés toute la course) | `SPEED.sprint` |
 | Sortie du temple | vitesse × 1,8 jusqu'à sa place à l'écran | `update` |
 | Ruée | vitesse × 1,7 pendant 0,55 s | `update` |
 | Sablier | le monde tourne à 45 % | `update` |
@@ -49,18 +49,19 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Moment | Liste | Chance de chacun |
 |---|---|---|
 | 70 premiers mètres | caisse, hérisson, pièces, plateforme | 25 % |
-| Ensuite | caisse, hérisson ×2, doublé, volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux | 7,1 % (14,3 % pour hérisson et corniche) |
-| Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | 16 entrées : 6,25 %, dessin 12,5 % |
-| Avec Double saut | + pile de 2 caisses, + volant | 18 entrées : 5,6 % |
-| Avec Vol | + mur de 4 caisses, + essaim ×2 | 21 entrées : 4,8 % |
+| Ensuite | araignée ×2, caisse, hérisson ×2, doublé, volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux | 16 entrées : 6,25 % (12,5 % pour araignée, hérisson et corniche) |
+| Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | 18 entrées : 5,6 %, dessin 11 % |
+| Avec Double saut | + pile de 2 caisses, + volant | 20 entrées : 5 % |
+| Avec Vol | + mur de 4 caisses, + essaim ×2 | 23 entrées : 4,3 % |
 | Monture en vue | jamais de grotte | |
 | Moustiques annoncés | pièces seulement | |
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Écart entre deux motifs | (vitesse × 0,8 s + 4,25 m) × hasard de 0,85 à 1,4 ; × 1,3 après des pièces | `spawnPattern` |
+| Écart entre deux motifs | (vitesse × 0,7 s + 3,75 m) × hasard de 0,85 à 1,4 ; × 1,3 après des pièces | `spawnPattern` |
 | Caisse | 1,6 m × 1,3 m | `CRATE` |
 | Hérisson | 1,7 m × 1,35 m | `SPIKY` |
+| Araignée | 1,5 m × 1,4 m ; tombe quand tu es à 0,9 s d'elle ; 6 fois sur 10 elle s'arrête au ras du sol (à sauter), sinon à 5,35 m (ne pas sauter, 5 pièces dessous) | `SPIDER`, `addSpider` |
 | Volant | 1,6 m × 1,35 m, avance vers toi à 3 m/s | `FLY` |
 | Hauteur des volants | 4,4 m ; 4,4 ou 7,25 m avec Double saut ; 4,4 / 7,25 / 10 / 12,75 m avec Vol | `spawnPattern` |
 | Plateforme | 6,35 m de long, à 3,4 m du sol | `PLAT_W` |
@@ -138,7 +139,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Dernier élan | 400 / 900 / 1800 | 1 / 2 / 3 rebonds |
 | Rembobinage | 2500 | 1 fois par course |
 | Vol (pouvoir) | 1200 | |
-| Sprint (pouvoir) | 1000 | +44 % au départ |
+| Sprint (pouvoir) | 1000 | +4 m/s |
 | Sphère (pouvoir) | 1500 | |
 
 Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans `UPGRADES`.
@@ -175,8 +176,9 @@ Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
 | Image | 569 × 320 pixels de dessin, 16:9 | js/main.js |
-| Lissage « Auto » | finesse de départ ×4 sur PC, ×3 sur téléphone ; baisse d'un cran sous 48 images/s | `watch` |
+| Lissage « Auto » | finesse de départ ×4 sur PC, ×3 sur téléphone ; baisse d'un cran sous 54 images/s | `watch` |
 | Lissage « Net » | finesse ×2 au plus, pixels francs | `resize` |
 | Volumes | 0 à 10, 7 au départ | js/save.js |
 | Musique en pause | 30 % du volume | `DUCK`, js/audio.js |
+| Fin de course | la musique ralentit et s'éteint en 0,85 s, le jingle entre à 0,6 s, puis la musique du menu | `music('over')`, js/audio.js |
 | Changement de décor | mosaïque : carreaux de 16 pixels, étalés sur 120 pixels de part et d'autre | `TILE`, `SPREAD`, js/render.js |

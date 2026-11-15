@@ -24,7 +24,7 @@ export const BIOMES = [
 ];
 
 const DIR = 'assets/img/';
-const NAMES = ['fore', 'temple', 'temple-rubble', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-moskito', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'temple-rubble', 'spider', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-moskito', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -47,7 +47,9 @@ const n = (v) => Math.round(v / PIXEL * Q) / Q;        // the same, from game un
 
 // A picture handed to the graphics chip once and for all: decoded now rather than in the middle of
 // a run, and never uploaded again. Works on images and on the canvases made from them.
-const baked = async (im) => { try { return im && window.createImageBitmap ? await createImageBitmap(im) : im; } catch { return im; } };
+// (They used to be turned into ImageBitmaps here. On some phones' chips the large ones came out as
+// noise, so images and canvases are now drawn as they are; an image is only decoded ahead of time.)
+const baked = async (im) => { try { if (im && im.decode) await im.decode(); } catch { /* drawn anyway */ } return im; };
 
 function load(name) {
   return new Promise((done) => {
@@ -67,9 +69,12 @@ export async function loadAssets() {
   }
   await Promise.all(names.map(load));
   SCENE = BIOMES.map(buildScene);
-  for (const [k, frames] of [['spiky', 1], ['fly', meta.fly.frames], ['mosquito', meta.mosquito.frames]])
-    HAZ[k] = { im: rim(IMG[k], frames), ghost: rim(tinted(IMG[k], 'rgba(110,215,255,.55)'), frames, '#d8f6ff'), frames };
+  for (const [k, frames] of [['spiky', 1], ['fly', meta.fly.frames], ['mosquito', meta.mosquito.frames], ['spider', 2]])
+    if (IMG[k]) HAZ[k] = { im: rim(IMG[k], frames), ghost: rim(tinted(IMG[k], 'rgba(110,215,255,.55)'), frames, '#d8f6ff'), frames };
   FAR = { fist: tinted(IMG['hero-fist'], 'rgba(16,12,40,.38)'), shoe: tinted(IMG['hero-shoe'], 'rgba(16,12,40,.38)') };
+  // the hero's pieces, redrawn four times finer with their stair-steps rounded off (see rounded)
+  for (const k of ['hero-body', 'hero-rotor', 'hero-fist', 'hero-shoe', 'hero-ball']) if (IMG[k]) HI.set(IMG[k], rounded(rounded(IMG[k])));
+  for (const k of ['fist', 'shoe']) HI.set(FAR[k], tinted(HI.get(IMG['hero-' + k]), 'rgba(16,12,40,.38)'));
   // everything made above is a canvas: turned into ready pictures too
   const jobs = [];
   const bake = (o, k) => jobs.push(baked(o[k]).then((b) => { o[k] = b; }));
@@ -88,6 +93,35 @@ export async function loadAssets() {
 const h01 = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
 
 function canvasOf(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+
+// A drawing twice as fine, its diagonals smoothed the way pixel artists do it by hand (the "Scale2x"
+// rule): a pixel's corner takes the colour of its two neighbours on that side when they agree and the
+// opposite ones do not. No new colour appears, nothing gets blurry; done twice, a staircase of 1-pixel
+// steps becomes a slope of quarter steps. HI keeps these finer versions; put() draws them at the
+// original's size, so the rest of the code never sees the difference.
+const HI = new Map(), HI_K = 4;
+function rounded(im) {
+  const w = im.width, h = im.height, src = canvasOf(w, h), sx = src.getContext('2d');
+  sx.drawImage(im, 0, 0);
+  const s = new Uint32Array(sx.getImageData(0, 0, w, h).data.buffer), out = canvasOf(w * 2, h * 2), ox = out.getContext('2d');
+  const img = ox.createImageData(w * 2, h * 2), d = new Uint32Array(img.data.buffer);
+  const at = (x, y) => { if (x < 0 || y < 0 || x >= w || y >= h) return 0; const v = s[y * w + x]; return v >>> 24 < 128 ? 0 : v; };
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1), i = (y * 2) * (w * 2) + x * 2;
+    d[i] = C === A && C !== D && A !== B ? A : P;
+    d[i + 1] = A === B && A !== C && B !== D ? B : P;
+    d[i + w * 2] = D === C && D !== B && C !== A ? C : P;
+    d[i + w * 2 + 1] = B === D && B !== A && D !== C ? D : P;
+  }
+  ox.putImageData(img, 0, 0);
+  return out;
+}
+// drawImage, for images that may have a finer version: same arguments, in the original's own pixels.
+function put(ctx, im, a, b, c, d, e, f, g, h) {
+  const hi = HI.get(im), k = hi ? HI_K : 1;
+  if (c === undefined) ctx.drawImage(hi || im, a, b, im.width, im.height);
+  else ctx.drawImage(hi || im, a * k, b * k, c * k, d * k, e, f, g, h);
+}
 function mirrored(im) {
   const c = canvasOf(im.width, im.height), x = c.getContext('2d');
   x.translate(im.width, 0); x.scale(-1, 1); x.drawImage(im, 0, 0);
@@ -115,6 +149,15 @@ function rim(im, frames = 1, colour = '#fff2c8') {
     x.drawImage(one, f * (fw + 2), 0);
   }
   return c;
+}
+// The first row of an image that is solid nearly all the way across: where a floor piece really begins,
+// under whatever grass or rubble sticks out of it.
+function surface(im) {
+  if (!im) return 3;
+  const c = canvasOf(im.width, 16).getContext('2d'); c.drawImage(im, 0, 0);
+  const d = c.getImageData(0, 0, im.width, 16).data;
+  for (let y = 0; y < 16; y++) { let n = 0; for (let x = 0; x < im.width; x++) if (d[(y * im.width + x) * 4 + 3] > 128) n++; if (n > im.width * 0.8) return y; }
+  return 3;
 }
 // The colour of the first solid pixel found on a row of an image (row < 0 counts from the bottom).
 function rowColour(im, row, fallback) {
@@ -169,7 +212,8 @@ function buildScene(b) {
   return {
     platform: IMG[b.platform], pillar: tinted(IMG[b.pillar], DIM), crate: IMG[b.crate], stacks: [], slab: IMG[b.slab], tunnel: tinted(lowered(shortened(IMG[b.tunnel], Math.round(LOG.w / PIXEL)), LOG_CUT, 49), DIM),
     platTop: b.platTop, slabTop: b.slabTop, hollow: b.hollow,
-    bg: IMG[b.bg], mid: IMG[b.mid], ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c') }, props, fore,
+    // `top`: how far above the floor line a piece is drawn, so that its solid surface is what feet stand on
+    bg: IMG[b.bg], mid: IMG[b.mid], ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c'), top: kinds.length > 1 ? 4 : surface(kinds[0]) + 1 }, props, fore,
     sky: rowColour(IMG[b.bg], 0, '#7fb9ec'), base: rowColour(IMG[b.mid], -1, '#1c2c3a'),
   };
 }
@@ -218,7 +262,7 @@ function drawGround(ctx, run, G, cam, x0, x1, bottom) {
       let a = Math.max(0, Math.floor((x0 - px) / SLICE) * SLICE), ya = null;
       for (let k = a; ; k += SLICE) {
         const out = k >= w || px + k >= x1;
-        const y = out ? null : n(floorAt(run, (cam + px + k + Math.min(SLICE, w - k) / 2) * PIXEL)) - 4;
+        const y = out ? null : n(floorAt(run, (cam + px + k + Math.min(SLICE, w - k) / 2) * PIXEL)) - G.top;
         if (y === ya && !out) continue;
         if (ya !== null) {
           const cw = Math.min(k, w) - a, x = px + a;
@@ -249,7 +293,7 @@ function drawProps(ctx, run, cam, width, t) {
     if (biome) { blit(ctx, im, x, y, pr.flip); continue; }
     // brushed by the hero a moment ago: it shakes hard, then settles
     const since = run.touched.has(i) ? run.t - run.touched.get(i) : 9, shiver = since < 1 ? 1 - since : 0;
-    if (shiver) swayBlit(ctx, im, x, y, pr.flip, t * 7, i, 5 * shiver);
+    if (shiver && pr.kind !== PROP.LANTERN) swayBlit(ctx, im, x, y, pr.flip, t * 7, i, 5 * shiver);   // a lantern lights up, it does not shake
     else if (SWAYING.includes(pr.kind)) swayBlit(ctx, im, x, y, pr.flip, t, i, 2);
     else blit(ctx, im, x, y, pr.flip);
     if (pr.kind === PROP.LANTERN || (pr.kind === PROP.SHROOM && shiver)) {   // the flame breathes, the caps light up
@@ -334,8 +378,8 @@ function shadow(ctx, cx, y, w) {
 
 // An image centred on a point, turned by `rot` (radians, clockwise).
 function part(ctx, im, cx, cy, rot) {
-  if (!rot) { ctx.drawImage(im, snap(cx - im.width / 2), snap(cy - im.height / 2)); return; }
-  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); soft(ctx); ctx.drawImage(im, -im.width / 2, -im.height / 2); ctx.restore();
+  if (!rot) { put(ctx, im, snap(cx - im.width / 2), snap(cy - im.height / 2)); return; }
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot); soft(ctx); put(ctx, im, -im.width / 2, -im.height / 2); ctx.restore();
 }
 // Anything drawn turned: its pixels no longer fall on the canvas's own, so their edges are blended
 // instead of breaking into stair-steps. Call between save() and restore(), which puts it back.
@@ -363,7 +407,7 @@ function drawHero(ctx, run, t, seat) {
     const im = IMG['hero-ball'], k = Math.min(1, (p.balled || 0) / 0.18), s = 0.55 + 0.45 * k + 0.18 * Math.sin(Math.PI * k);
     if (!im) return;
     ctx.save(); ctx.translate(ox, oy - im.height / 2 + 1); ctx.rotate(p.roll); ctx.scale(s, s); soft(ctx);
-    ctx.drawImage(im, -im.width / 2, -im.height / 2);
+    put(ctx, im, -im.width / 2, -im.height / 2);
     ctx.restore();
     return;
   }
@@ -401,9 +445,25 @@ function drawHero(ctx, run, t, seat) {
   ctx.save(); ctx.translate(snap(bx), snap(by)); if (tilt) ctx.rotate(tilt);
   if (spin) {                                          // the blades are squeezed sideways, back and forth: they spin
     const w = 0.25 + 0.75 * Math.abs(Math.cos(t * 26)), bw = B.w * w;
-    ctx.drawImage(body, 0, 0, B.w, B.blade, snap(B.hx - B.tx - B.hx * w), -B.h, snap(bw), B.blade);
-    ctx.drawImage(body, 0, B.blade, B.w, B.h - B.blade, -B.tx, -B.h + B.blade, B.w, B.h - B.blade);
-  } else ctx.drawImage(body, snap(-B.tx), -B.h);
+    put(ctx, body, 0, 0, B.w, B.blade, snap(B.hx - B.tx - B.hx * w), -B.h, snap(bw), B.blade);
+    put(ctx, body, 0, B.blade, B.w, B.h - B.blade, -B.tx, -B.h + B.blade, B.w, B.h - B.blade);
+  } else {
+    // His leaves and his scarf live: the picture is cut in thin bands that the wind moves. Above his
+    // face, rows slide sideways, more and more towards the tips; behind him, columns of the scarf ride
+    // a wave that runs along it. The faster he goes, the harder both are pulled back.
+    if (tilt) soft(ctx);
+    const x0 = snap(-B.tx), y0 = -B.h, w = body.width, h = body.height, hair = Math.round(B.hy - 5), scarf = Math.round(B.hx - 11);
+    const pull = Math.min(1, run.speed / 700), air = p.ground ? 0 : Math.max(-1, Math.min(1, p.vy / 700));
+    put(ctx, body, scarf, hair, w - scarf, h - hair, x0 + scarf, y0 + hair, w - scarf, h - hair);
+    for (let c = 0; c < scarf; c += 2) {
+      const far = (scarf - c) / scarf, dy = (Math.sin(t * (11 + 6 * pull) - c * 0.5) * 2.4 - air * 4) * far;
+      put(ctx, body, c, hair, 2, h - hair, x0 + c, y0 + hair + snap(dy), 2, h - hair);
+    }
+    for (let r = 0; r < hair; r += 2) {
+      const up = 1 - r / hair, dx = (Math.sin(t * 8 + r * 0.4) * 1.3 - 1.6 * pull) * up * up, dy = -air * 2.5 * up;
+      put(ctx, body, 0, r, w, 2, x0 + snap(dx), y0 + r + snap(dy), w, 2);
+    }
+  }
   ctx.restore();
   if (shoes[1]) part(ctx, IMG['hero-shoe'], shoes[1].x, shoes[1].y, shoes[1].r);
   else if (!shoes[0]) {                                // the cartoon whirl: shoes chasing each other round a blur, streaks flying off it
@@ -618,6 +678,16 @@ export function draw(ctx, run, v, t) {
       const S = SCENE[biomeAt(run, o.x)], im = stack(S, o.n);
       shadow(ctx, x + im.width / 2 - 1, foot - 1, im.width + 2);
       ctx.drawImage(im, x - 1, foot - im.height + 1);
+      continue;
+    }
+    if (o.kind === 'spider') {                         // on its thread: curled up under the leaves, legs out once it has dropped
+      const H = HAZ.spider; if (!H) continue;
+      const fw = H.im.width / 2, cx = x + n(o.w) / 2, sway = o.dropped ? Math.sin(t * 5 + o.x) * 1.5 : 0;
+      ctx.fillStyle = 'rgba(235,240,255,.8)'; ctx.fillRect(snap(cx), -8, 1, y + 12);
+      if (o.dropped) shadow(ctx, cx, floorPx(cx) - 1, Math.max(8, 26 - ((floorPx(cx) - foot) >> 3)));
+      if (o.ghost) ctx.globalAlpha = 0.7;
+      sheet(ctx, o.ghost ? H.ghost : H.im, 2, o.dropped ? 0 : 1, snap(cx - fw / 2 + sway), y - 2);
+      ctx.globalAlpha = 1;
       continue;
     }
     const H = HAZ[o.kind], frame = o.kind === 'fly' ? Math.floor(t * 14 + o.ph) % H.frames : 0;

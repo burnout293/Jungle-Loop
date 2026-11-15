@@ -157,14 +157,9 @@ button.square img { height: calc(var(--ui) * 24); }
 
 /* ---------- Accueil ---------- */
 #menu-settings { left: var(--m); top: var(--m); }
-#menu-full { left: calc(var(--m) + var(--ui) * 42); top: var(--m); }
-/* quatre coins : le signe du plein écran */
-#menu-full i { width: calc(var(--ui) * 18); height: calc(var(--ui) * 14); --c: calc(var(--ui) * 3); --l: calc(var(--ui) * 7);
-  background: linear-gradient(var(--ink) 0 0) 0 0 / var(--l) var(--c), linear-gradient(var(--ink) 0 0) 0 0 / var(--c) var(--l),
-    linear-gradient(var(--ink) 0 0) 100% 0 / var(--l) var(--c), linear-gradient(var(--ink) 0 0) 100% 0 / var(--c) var(--l),
-    linear-gradient(var(--ink) 0 0) 0 100% / var(--l) var(--c), linear-gradient(var(--ink) 0 0) 0 100% / var(--c) var(--l),
-    linear-gradient(var(--ink) 0 0) 100% 100% / var(--l) var(--c), linear-gradient(var(--ink) 0 0) 100% 100% / var(--c) var(--l);
-  background-repeat: no-repeat; }
+/* l'engrenage seul, sans cadre : une icône posée sur le décor */
+#menu-settings { background: none; border: 0; box-shadow: none; width: calc(var(--ui) * 40); height: calc(var(--ui) * 40); }
+#menu-settings img { height: calc(var(--ui) * 34); filter: drop-shadow(0 calc(var(--ui) * 2) 0 var(--line)); }
 h1 {                         /* la plaque de pierre du titre, à sa taille exacte : 250 x 68 */
   left: calc(var(--ui) * 159.5); top: calc(var(--ui) * 4);
   margin: 0; width: calc(var(--ui) * 250); height: calc(var(--ui) * 68); padding-bottom: calc(var(--ui) * 5);
@@ -184,7 +179,11 @@ h1 span:nth-child(odd) { color: #ffe9a0; }
 #menu-loadout { left: calc(var(--ui) * 212.5); bottom: var(--m); }
 .slot { width: calc(var(--ui) * 42); height: calc(var(--ui) * 42); display: flex; align-items: center; justify-content: center; color: var(--box-hi); font-size: var(--t-l); font-weight: 700; cursor: pointer; }
 .slot img { height: calc(var(--ui) * 30); }
-.slot.sel { outline: calc(var(--ui) * 1.5) solid var(--gold); }
+.slot.sel { outline: calc(var(--ui) * 1.5) solid var(--ink); outline-offset: calc(var(--ui) * 1.5); }
+/* vide : une place en pointillé sur le décor ; garni : un médaillon de pierre cerclé d'or */
+.slot { background: rgba(16, 20, 40, .5); border: calc(var(--ui) * 1.5) dashed rgba(255, 248, 230, .4); box-shadow: none; color: rgba(255, 248, 230, .6); }
+.slot.full { background: radial-gradient(circle at 50% 38%, #46528a, #1b2138 78%); border: calc(var(--ui) * 2) solid var(--gold);
+  box-shadow: 0 0 0 calc(var(--ui) * 1.5) var(--line), inset 0 0 0 calc(var(--ui) * 1.5) var(--line), 0 calc(var(--ui) * 3) 0 calc(var(--ui) * 1.5) rgba(10, 6, 24, .5); }
 /* what an equipped item is, shown above the three slots when one is touched */
 #menu-info { position: absolute; left: 50%; bottom: calc(var(--m) + var(--ui) * 50); transform: translateX(-50%); width: calc(var(--ui) * 300); height: auto; z-index: 4; text-align: center; }
 #menu-info b { color: var(--gold); font-size: var(--t-m); }

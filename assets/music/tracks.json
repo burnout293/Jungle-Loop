@@ -1,4 +1,5 @@
 {
   "menu": { "file": "menu-brass.mp3" },
-  "run": { "file": "run-brass.mp3" }
+  "run": { "file": "run-brass.mp3" },
+  "over": { "file": "over-brass.mp3", "once": true }
 }

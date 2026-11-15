@@ -31,7 +31,8 @@ const SLOW_CD = 20;
 const MAGNET = [0, 110, 170, 240];
 const DRUNK = [0, 0.06, 0.1, 0.15];     // Faune alcoolisée: share of the creatures that are harmless
 const FLAP = 430;                       // how fast the leaf rotor climbs
-export const SPEED = { base: 360, max: 900, gain: 5, sprint: 160 };   // units per second: at the door, at most, gained each second, added by Sprint
+export const SPEED = { base: 280, gain: 5, sprint: 160 };   // units per second: at the door, gained each second (for ever), added by Sprint
+const SPIDER = { w: 60, h: 56, ahead: 0.9 };   // it drops when the hero is `ahead` seconds away
 
 // Mounts: rare friendly animals waiting on the path. Running into one puts the hero on its back until
 // something hits them: the animal takes the blow and vanishes. Each one plays its own game, and the
@@ -171,6 +172,15 @@ function addObs(run, x, y, w, h, kind, fragile) {
 export function addCrates(run, x, n) { addObs(run, x, floorAt(run, x) - CRATE.h * n, CRATE.w, CRATE.h * n, 'crate', true).n = n; }
 export function addSpiky(run, x) { addObs(run, x, floorAt(run, x) - SPIKY.h, SPIKY.w, SPIKY.h, 'spiky', false); }
 
+// A spider waits curled up at the top of the screen and drops on its thread as the hero comes.
+// Low, it stops just above the floor and must be jumped (the thread hurts nobody); high, it stops at
+// head height of a jump: the thing to do is to stay down.
+export function addSpider(run, x, low) {
+  const o = addObs(run, x, 14, SPIDER.w, SPIDER.h, 'spider', false);
+  o.rest = floorAt(run, x) - (low ? SPIDER.h + 8 : 270); o.vy = 0;
+  return o;
+}
+
 export function addFlyer(run, x, alt) {
   const o = addObs(run, x, floorAt(run, x) - alt - FLY.h / 2, FLY.w, FLY.h, 'fly', false);
   o.baseY = o.y; o.ph = rnd(0, 6);
@@ -226,6 +236,7 @@ function spawnPattern(run) {
   // The first metres are a warm-up: one obstacle at a time, nothing in the air.
   let opts = x < 70 * PPM ? ['crate', 'spiky', 'coins', 'plat']
     : ['crate', 'spiky', 'spiky', 'double', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
+  if (x >= 70 * PPM) opts.push('spider', 'spider');
   if (tier >= 1 && x >= 70 * PPM) opts.push('stack', 'fly');
   if (tier >= 2 && x >= 70 * PPM) opts.push('wall', 'swarm', 'swarm');
   const shapes = SHAPES.filter((s) => s.top <= REACH[tier]);
@@ -240,6 +251,10 @@ function spawnPattern(run) {
     case 'crate': addCrates(run, x, 1); len = CRATE.w; break;
     case 'spiky': addSpiky(run, x); len = SPIKY.w; break;
     case 'shape': len = layShape(run, pick(shapes), x); break;         // a drawing made of coins
+    case 'spider':
+      if (Math.random() < 0.6) addSpider(run, x, true);
+      else { addSpider(run, x + 88, false); coinLine(run, x, floorAt(run, x) - 40, 5); }   // high: coins underneath, for whoever stays down
+      len = 220; break;
     case 'double': {
       const d = run.speed + 90;
       if (Math.random() < 0.5) addCrates(run, x, 1); else addSpiky(run, x);
@@ -316,7 +331,7 @@ function spawnPattern(run) {
     if (o.x + o.w > pl.x - 30 && o.x < pl.x + pl.w + 30 && o.y + o.h > pl.y + pl.t) o.gone = true;
   if (kind !== 'coins' && kind !== 'mount') run.blockEnd = x + len;
 
-  const gap = (run.speed * 0.8 + 170) * rnd(0.85, 1.4) * (kind === 'coins' ? 1.3 : 1);
+  const gap = (run.speed * 0.7 + 150) * rnd(0.85, 1.4) * (kind === 'coins' ? 1.3 : 1);
   if (kind === 'coins' || Math.random() < 0.55) {
     const n = Math.min(8, Math.floor((gap - 200) / 44));
     const cx = x + len + 100;
@@ -617,7 +632,7 @@ export function update(run, dt, input) {
 
   // --- scrolling: the hero first runs out of the temple, then the camera follows him ---
   run.t += d;
-  run.speed = Math.min(SPEED.max, run.base + run.t * SPEED.gain)
+  run.speed = run.base + run.t * SPEED.gain
     + (run.mount && run.mount.kind === 'rhino' ? Math.min(420, run.mount.t * 20) : 0);   // the rhino only ever gathers speed
   run.vine = Math.max(0, Math.min(1, run.vine + (run.mount && run.mount.kind === 'gorilla' ? 1 : -1) * dt * 2.5));
   if (run.leap) run.leap.v = Math.max(160, run.leap.v - 170 * d);       // knocked out: he only slows down
@@ -715,7 +730,7 @@ export function update(run, dt, input) {
         }
       } else {
         // strides per second: quicker as he speeds up, but never a blur
-        p.phase += (1.7 + (Math.min(900, run.speed) - 360) / 600) * Math.PI * 2 * d * (dashing ? 1.4 : 1);
+        p.phase += (1.75 + (Math.min(900, run.speed) - 360) / 600) * Math.PI * 2 * d * (dashing ? 1.4 : 1);
         if (Math.random() < 0.25) run.parts.push({ x: px - 30, y: p.y - 2, vx: rnd(-90, -30), vy: rnd(-50, -10), life: 0, max: 0.35, c: '#f4f0e0', s: rnd(4, 8), g: 0 });
       }
     }
@@ -737,6 +752,13 @@ export function update(run, dt, input) {
     for (const o of run.obs) {
       if (p.ball) break;                           // nothing reaches him in there
       if (o.kind === 'fly') { if (!o.still) o.x -= 120 * d; o.y = o.baseY + Math.sin(run.t * 3 + o.ph) * 12; }
+      if (o.kind === 'spider') {                   // down it comes, with a little bounce at the end of its thread
+        if (!o.dropped && o.x - px < run.speed * SPIDER.ahead) { o.dropped = true; run.events.push('spider'); }
+        if (o.dropped && (o.y < o.rest || o.vy)) {
+          o.vy += 2600 * d; o.y += o.vy * d;
+          if (o.y >= o.rest) { o.y = o.rest; o.vy = o.vy > 160 ? -o.vy * 0.3 : 0; }
+        }
+      }
       if (o.gone || o.x + 6 > box.R || o.x + o.w - 6 < box.L || o.y + 6 > box.B || o.y + o.h - 6 < box.T) continue;
       if (dashing) destroy(run, o);
       else if (o.ghost) { if (!o.passed) { o.passed = true; burst(run, o.x + o.w / 2, o.y + o.h / 2, '#c9f3ff', 6, 120); } }

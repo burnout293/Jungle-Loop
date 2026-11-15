@@ -5,7 +5,9 @@
 
 const MUSIC_DIR = 'assets/music/';
 
-let ac = null, sfxOut = null, musicOut = null;
+// Two audio contexts: effects want the shortest delay, music wants the largest buffer the device
+// offers (latencyHint 'playback'), which is what stops it crackling when a phone is busy drawing.
+let ac = null, acM = null, sfxOut = null, musicOut = null;
 let timer = null, step = 0, nextT = 0, root = 0;
 let tracks = {}, listLoading = null;          // { menu: { file, loopStart?, loopEnd? }, run: { ... } }
 const buffers = new Map();
@@ -22,7 +24,7 @@ const THEMES = [
 ];
 
 function tone(out, freq, dur, type, vol, when = 0, slideTo = 0) {
-  const t = ac.currentTime + when;
+  const ac = out.context, t = ac.currentTime + when;
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type;
   o.frequency.setValueAtTime(freq, t);
@@ -36,6 +38,7 @@ function tone(out, freq, dur, type, vol, when = 0, slideTo = 0) {
 // A burst of hiss around `freq`: the grain of wood breaking, which no plain tone can give.
 let hiss = null;
 function noise(out, dur, vol, freq, when = 0) {
+  const ac = out.context;
   if (!hiss) {
     hiss = ac.createBuffer(1, ac.sampleRate / 2, ac.sampleRate);
     const d = hiss.getChannelData(0);
@@ -49,6 +52,7 @@ function noise(out, dur, vol, freq, when = 0) {
 }
 
 function schedule() {
+  const ac = acM;
   const th = THEMES[current % THEMES.length];
   const beat = 60 / th.bpm / 2;                        // eighth notes
   while (nextT < ac.currentTime + 0.3) {
@@ -84,21 +88,24 @@ function soundBounds(buf) {
   return [a / buf.sampleRate, (b + 1) / buf.sampleRate];
 }
 
-async function playFile(which) {
+async function playFile(which, delay = 0) {
   const t = tracks[which];
   let buf = buffers.get(which);
   if (!buf) {
     const r = await fetch(MUSIC_DIR + t.file);
-    buf = await ac.decodeAudioData(await r.arrayBuffer());
+    buf = await acM.decodeAudioData(await r.arrayBuffer());
     buffers.set(which, buf);
   }
   if (wanted !== which || source) return;              // stopped or changed while loading
   const [a, b] = soundBounds(buf);
-  source = ac.createBufferSource();
-  source.buffer = buf; source.loop = true;
-  source.loopStart = t.loopStart ?? a; source.loopEnd = t.loopEnd ?? b;
-  source.connect(musicOut);
-  source.start(0, source.loopStart);
+  const src = source = acM.createBufferSource();
+  src.buffer = buf; src.loop = !t.once;
+  src.loopStart = t.loopStart ?? a; src.loopEnd = t.loopEnd ?? b;
+  src.g = acM.createGain();                              // its own volume: one piece can fade while the next begins
+  src.connect(src.g).connect(musicOut);
+  src.start(acM.currentTime + delay, src.loopStart);
+  // a piece played once (the end-of-run jingle) hands over to the menu's music when it is done
+  if (t.once) src.onended = () => { if (source === src) { source = null; if (wanted === which) { wanted = ''; audio.music('menu'); } } };
 }
 
 function silence() {
@@ -126,23 +133,25 @@ export const audio = {
   duck(on) {
     if (ducked === on) return;
     ducked = on;
-    if (ac) musicOut.gain.setTargetAtTime(gainOf(vols[0]) * (on ? DUCK : 1), ac.currentTime, 0.12);
+    if (ac) musicOut.gain.setTargetAtTime(gainOf(vols[0]) * (on ? DUCK : 1), acM.currentTime, 0.12);
   },
 
   // The page is hidden (another tab, the phone locked): everything stops, and picks up where it was.
-  sleep(on) { if (ac) { if (on) ac.suspend(); else ac.resume(); } },
+  sleep(on) { if (ac) for (const c of new Set([ac, acM])) { if (on) c.suspend(); else c.resume(); } },
 
   // Browsers only allow sound after a user gesture: call this from one.
   unlock() {
     if (!ac) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
-      ac = new AC();
+      ac = new AC({ latencyHint: 'interactive' });
+      try { acM = new AC({ latencyHint: 'playback' }); } catch { acM = ac; }
       sfxOut = ac.createGain(); sfxOut.gain.value = gainOf(vols[1]); sfxOut.connect(ac.destination);
-      musicOut = ac.createGain(); musicOut.gain.value = gainOf(vols[0]) * (ducked ? DUCK : 1); musicOut.connect(ac.destination);
+      musicOut = acM.createGain(); musicOut.gain.value = gainOf(vols[0]) * (ducked ? DUCK : 1); musicOut.connect(acM.destination);
       loadList();
     }
     if (ac.state === 'suspended') ac.resume();
+    if (acM.state === 'suspended') acM.resume();
   },
 
   // Plays 'menu' or 'run' music, or nothing (''). Asking again for what already plays changes nothing,
@@ -150,12 +159,24 @@ export const audio = {
   async music(which) {
     if (!ac || !this.musicOn) which = '';
     if (which === wanted && (source || timer || !which)) return;
-    wanted = which; silence();
+    if (which === 'menu' && wanted === 'over' && source) return;   // the jingle finishes first, then leads to the menu's music by itself
+    // 'over', the end of a run: whatever bar the run's music is in, it winds down like a record under
+    // a thumb (pitch and speed dropping together), and the jingle comes in over its last breath. A
+    // slowing record has no key and no beat left to clash with: it joins up from any point.
+    let delay = 0;
+    if (which === 'over' && wanted === 'run' && source) {
+      const old = source, t = acM.currentTime; source = null; delay = 0.6;
+      old.playbackRate.setValueAtTime(1, t); old.playbackRate.exponentialRampToValueAtTime(0.12, t + 0.85);
+      old.g.gain.setValueAtTime(1, t + 0.45); old.g.gain.linearRampToValueAtTime(0, t + 0.85);
+      try { old.stop(t + 0.9); } catch { /* already stopped */ }
+      wanted = which;
+    } else { wanted = which; silence(); }
     if (!which) return;
     await loadList();
     if (wanted !== which || source || timer) return;
-    if (tracks[which]) { playFile(which).catch(() => { delete tracks[which]; wanted = ''; this.music(which); }); return; }
-    if (which === 'run') { step = 0; nextT = ac.currentTime + 0.05; timer = setInterval(schedule, 100); }
+    if (tracks[which]) { playFile(which, delay).catch(() => { delete tracks[which]; wanted = ''; this.music(which === 'over' ? 'menu' : which); }); return; }
+    if (which === 'over') { wanted = ''; this.music('menu'); return; }   // no jingle on file: straight to the menu's music
+    if (which === 'run') { step = 0; nextT = acM.currentTime + 0.05; timer = setInterval(schedule, 100); }
   },
 
   // Built-in themes change key with the scenery.
@@ -172,6 +193,7 @@ export const audio = {
       case 'mount': [0, 7, 12, 19].forEach((s, k) => tone(o, hz(s + 12), 0.2, 'square', 0.14, k * 0.07)); break;
       case 'unmount': tone(o, 420, 0.3, 'square', 0.2, 0, 110); break;
       case 'bye': tone(o, 700, 0.12, 'triangle', 0.14, 0, 500); tone(o, 500, 0.16, 'triangle', 0.14, 0.12, 350); break;
+      case 'spider': tone(o, 1500, 0.16, 'sawtooth', 0.07, 0, 320); break;
       case 'roll': tone(o, 240, 0.22, 'triangle', 0.16, 0, 520); break;
       case 'unroll': tone(o, 520, 0.18, 'triangle', 0.14, 0, 260); break;
       case 'heart': [12, 16, 19, 24].forEach((s, k) => tone(o, hz(s + 12), 0.22, 'triangle', 0.2, k * 0.07)); break;

@@ -64,6 +64,15 @@ function resize() {
   stage.style.width = (STAGE_W * ui).toFixed(2) + 'px';
   stage.style.height = (STAGE_H * ui).toFixed(2) + 'px';
   stage.style.setProperty('--ui', ui.toFixed(4) + 'px');
+  // The pixel typeface is only sharp when one of its own pixels covers a whole number of the screen's:
+  // its sizes are brought to the nearest such size (it is drawn on a grid of 8). The rounded typeface
+  // keeps the sizes of style.css.
+  const dpr = window.devicePixelRatio || 1;
+  for (const [name, base] of [['--t-s', 11], ['--t-m', 14], ['--t-l', 19], ['--t-xl', 26]]) {
+    if (!save.pixelFont) { stage.style.removeProperty(name); continue; }
+    const dev = base * 0.82 * ui * dpr;
+    stage.style.setProperty(name, (Math.max(8, Math.round(dev / 8 - 0.12) * 8) / dpr).toFixed(3) + 'px');
+  }
   view.w = STAGE_W; view.logicalW = STAGE_W * PIXEL;
   // The canvas holds q x q real pixels per art pixel. `want` is what the screen can show (4 at most):
   // sprites then scroll by fractions of an art pixel and the browser softens the stair-steps when it
@@ -84,7 +93,7 @@ window.addEventListener('resize', resize);
 resize();
 
 // "auto" quality: while playing, frames are timed. Two slow spells in a row (under 48 a second) and
-// the canvas goes down one step. If that changed nothing, the device is simply capped (battery saver,
+// the canvas goes down one step (slow: under 54 frames a second). If that changed nothing, the device is simply capped (battery saver,
 // 30 Hz screen): the step is given back and nothing more is tried. What was found is kept for this device.
 const perf = { n: 0, sum: 0, bad: 0, before: 0, locked: false, fps: 0 };
 function watch(ms) {
@@ -97,7 +106,7 @@ function watch(ms) {
   if (perf.before) {                                   // just came down a step: was it worth it?
     if (avg > perf.before * 0.9) { cap = quality() + 1; perf.locked = true; }
     perf.before = 0; perf.bad = 0;
-  } else if (avg > 21 && quality() > 1) {
+  } else if (avg > 18.5 && quality() > 1) {
     if (++perf.bad < 2) return;
     cap = quality() - 1; perf.before = avg;
   } else { perf.bad = 0; return; }
@@ -118,8 +127,7 @@ async function fullscreen(on) {
   } catch { /* refused: the game stays as it is */ }
 }
 document.addEventListener('fullscreenchange', () => { resize(); if (state === 'settings') refreshSettings(); });
-$('menu-full').hidden = $('row-full').hidden = !canFull;
-$('menu-full').addEventListener('click', () => { save.full = !document.fullscreenElement; S.store(save); fullscreen(save.full); });
+$('row-full').hidden = !canFull;
 
 // Every "fly" block leaves towards, and comes back from, the edge of the frame it sits closest to.
 // Worked out once, from where the block really is, before any screen has been slid away.
@@ -250,7 +258,7 @@ function refreshMenu() {
   questCards('menu-quests');
   // the three slots: what goes on the next run
   $('menu-loadout').replaceChildren(...[0, 1, 2].map((i) => {
-    const id = save.equipped[i], slot = el('div', 'slot', id ? undefined : '+');
+    const id = save.equipped[i], slot = el('div', id ? 'slot full' : 'slot', id ? undefined : '+');
     if (id) slot.append(icon('ico-' + S.UPGRADES.find((u) => u.id === id).icon));
     // an empty slot leads to the shop; a filled one only says what it holds
     slot.addEventListener('click', (e) => { audio.sfx('click'); if (!id) { tab = 'up'; go('shop'); return; } e.stopPropagation(); slotInfo(id, slot); });
@@ -400,7 +408,7 @@ function gameOver() {
   best.classList.toggle('record', record);
   best.textContent = record ? '★ Nouveau record ! ★' : `Record : ${save.best} m`;
   if (record) { confetti(60); audio.sfx('record'); }
-  audio.music('menu');
+  audio.music('over');                                  // the run's music winds down into the jingle, which leads to the menu's
   state = 'over'; show('over');
 }
 
@@ -427,7 +435,7 @@ for (const [id, key] of [['vol-music', 'musicVol'], ['vol-sfx', 'sfxVol']])
     audio.setVolumes(save.musicVol, save.sfxVol); S.store(save); refreshSettings();
     if (key === 'musicVol') audio.music(inRun ? 'run' : 'menu'); else audio.sfx('coin');   // heard at once
   });
-$('tg-font').addEventListener('click', () => { save.pixelFont = !save.pixelFont; S.store(save); applyFont(); refreshSettings(); });
+$('tg-font').addEventListener('click', () => { save.pixelFont = !save.pixelFont; S.store(save); applyFont(); resize(); refreshSettings(); });
 $('tg-smooth').addEventListener('click', () => {      // choosing again also forgets what "auto" had settled for
   save.quality = S.QUALITIES[(S.QUALITIES.indexOf(save.quality) + 1) % S.QUALITIES.length];
   cap = CAP_START; perf.locked = false; perf.bad = perf.before = 0;

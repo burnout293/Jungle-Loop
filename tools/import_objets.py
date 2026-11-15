@@ -1,5 +1,6 @@
 # Cuts the later generated sheets of tools/raw/gen into game sprites. python tools/import_objets.py
 #   objets3.png : amphora, drum, heart, the hero as a ball, a jungle tree, a trunk used as a pillar
+#   araignee.png: the spider, legs out and legs curled in
 #   gravats.png : four ways of blocking the temple's doorway, for mockups/gravats.html
 # Run it AFTER import_gen.py, which still writes the old ruins and city crates.
 import os
@@ -78,3 +79,9 @@ save(tall(trunk, 81), 'pillar')                        # what holds a slab up in
 for i, im in enumerate(pieces('gravats')):
     save(tall(im, 90), 'gravats-%d' % (i + 1), os.path.join(ROOT, 'mockups', 'img'))
     if i == 3: save(tall(im, 90), 'temple-rubble')     # the one chosen: boulders held in roots
+
+# the spider: two frames in cells of the same size, centred, hanging from the top
+frames = [tall(im, 32) for im in pieces('araignee')]
+cw = max(f.width for f in frames); sheet = Image.new('RGBA', (cw * 2, 32), (0, 0, 0, 0))
+for i, f in enumerate(frames): sheet.alpha_composite(f, (i * cw + (cw - f.width) // 2, 0))
+save(sheet, 'spider')
