@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 15/11/2026, version 0.11. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 15/11/2026, version 0.12. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -36,10 +36,10 @@ L'écran fait 720 unités de haut (18 m), le sol est à 630. Les vitesses sont d
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Cœurs | 3 (4 avec Cœur en plus) | `HEARTS` |
+| Cœurs | 1 (2 avec Cœur en plus) ; le compteur est caché quand il n'y en a qu'un | `HEARTS` |
 | Invincible après un coup | 1,6 s | `hit` |
 | Invincible après la perte d'une monture | 1,5 s | `dismount` |
-| Rembobinage | 1 fois par course, rend 2 cœurs, 2 s d'invincibilité | `hit` |
+| Rembobinage | 1 fois par course, rend tous les cœurs, 2 s d'invincibilité | `hit` |
 | Dernier élan | 1, 2 ou 3 rebonds ; vitesse de départ ≥ 10,5 m/s, perd 4,25 m/s par seconde | `hit`, `update` |
 
 ## 4. Ce qui apparaît sur la route
@@ -50,8 +50,9 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 |---|---|---|
 | 70 premiers mètres | caisse, hérisson, pièces, plateforme | 25 % |
 | Ensuite | caisse, hérisson ×2, doublé, volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux | 7,1 % (14,3 % pour hérisson et corniche) |
-| Avec Double saut | + pile de 2 caisses, + volant | 16 entrées : 6,25 % |
-| Avec Vol | + mur de 4 caisses, + essaim ×2 | 19 entrées : 5,3 % |
+| Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | 16 entrées : 6,25 %, dessin 12,5 % |
+| Avec Double saut | + pile de 2 caisses, + volant | 18 entrées : 5,6 % |
+| Avec Vol | + mur de 4 caisses, + essaim ×2 | 21 entrées : 4,8 % |
 | Monture en vue | jamais de grotte | |
 | Moustiques annoncés | pièces seulement | |
 
@@ -66,7 +67,8 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Corniche | +3,4 m pendant 17,5 à 27,5 m, hérisson dessus 6 fois sur 10 | `STEP` |
 | Creux | −1,65 m pendant 15 à 24 m | `HOLLOW` |
 | Grotte | 20 à 30 m, toit à 2,5 m | `SLAB` |
-| Tronc (Sphère) | 13 m | `LOG.w` |
+| Tronc (Sphère) | 13 m de long, 2,65 m de haut | `LOG.w`, `LOG.h` |
+| Dessin de pièces : sommet atteignable | 5 rangées à pied, 9 avec Double saut, 13 avec Vol (1,1 m par rangée) | `REACH`, `CELL` |
 | Galerie (Sphère) | 20 à 30 m, 1,45 m sous le sol | `GALLERY` |
 
 ## 5. Pièces, gemmes, cœurs
@@ -83,7 +85,8 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Caisse détruite | 2 pièces par caisse | `destroy` |
 | Créature détruite (Ruée) | 1 pièce ; nuée de moustiques : 3 | `destroy`, `followers` |
 | Endroit exigu | une pièce tous les mètres, 1 sur 6 est une gemme, cœur 3 % | `tight` |
-| Explosion du temple | 44 pièces projetées (décor : elles ne se ramassent pas) | `update` |
+| Cœur ramassé sans vie à rendre | 25 pièces | `HEART_GOLD` |
+| Explosion du temple | 30 pièces projetées sur les 35 premiers mètres environ, à ramasser | `BLAST_COINS` |
 | Aimant | portée 2,75 / 4,25 / 6 m | `MAGNET` |
 | Portée de ramassage | 1,1 m | `update` |
 
@@ -100,6 +103,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Rhino | saut 1,6 m (2,6 m maintenu) ; +0,5 m/s chaque seconde, jusqu'à +10,5 m/s ; ramasse sur 3,9 m de large et 3,75 m de haut | `MOUNTS.rhino` |
 | Moskito | monte à 12 m/s, descend à 11 m/s | `update` |
 | Zigzag du Moskito | chaque pente dure 1,2 s | `spawnRide` |
+| Formes du Moskito | 6 fois sur 10 un dessin de `assets/patterns.txt`, sinon losange, carré, triangle ou cercle | `spawnRide` |
 
 ## 7. Moustiques (monstres suiveurs)
 
@@ -126,7 +130,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Trèfle | 300 / 800 | voir § 5 |
 | Gemmes dispersées | 500 / 1200 / 2500 | 1,2 / 2,2 / 3,5 % |
 | Brise-obstacle | 350 | traverse les caisses |
-| Cœur en plus | 900 | 4 cœurs |
+| Cœur en plus | 900 | 2 cœurs |
 | Faune alcoolisée | 400 / 900 / 1800 | 6 / 10 / 15 % |
 | Ami de la nature | 300 / 700 / 1500 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
 | Ruée | 300 / 700 / 1400 | recharge 14 / 10 / 7 s |
@@ -174,3 +178,5 @@ Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans 
 | Lissage « Auto » | finesse de départ ×4 sur PC, ×3 sur téléphone ; baisse d'un cran sous 48 images/s | `watch` |
 | Lissage « Net » | finesse ×2 au plus, pixels francs | `resize` |
 | Volumes | 0 à 10, 7 au départ | js/save.js |
+| Musique en pause | 30 % du volume | `DUCK`, js/audio.js |
+| Changement de décor | mosaïque : carreaux de 16 pixels, étalés sur 120 pixels de part et d'autre | `TILE`, `SPREAD`, js/render.js |

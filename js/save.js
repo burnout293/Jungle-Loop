@@ -17,7 +17,7 @@ export const UPGRADES = [
   { id: 'lucky', icon: 'lucky', kind: 'passif', name: 'Trèfle', desc: 'Les gemmes apparaissent plus souvent.', costs: [300, 800] },
   { id: 'scatter', icon: 'gems', kind: 'passif', name: 'Gemmes dispersées', desc: 'De temps en temps, une gemme prend la place d\'une pièce. Jaune : 5 pièces, rouge : 10, bleue : 20.', costs: [500, 1200, 2500] },
   { id: 'breaker', icon: 'break', kind: 'passif', name: 'Brise-obstacle', desc: 'Fonce à travers les caisses : elles volent en éclats et lâchent 2 pièces chacune.', costs: [350] },
-  { id: 'heart', icon: 'heart', kind: 'passif', name: 'Cœur en plus', desc: 'Un quatrième cœur pour la course.', costs: [900] },
+  { id: 'heart', icon: 'heart', kind: 'passif', name: 'Cœur en plus', desc: 'Un second cœur : le premier coup ne t\'arrête plus.', costs: [900] },
   { id: 'drunk', icon: 'drunk', kind: 'passif', name: 'Faune alcoolisée', desc: 'De rares créatures deviennent éthérées : pâles et titubantes, elles ne font aucun dégât.', costs: [400, 900, 1800] },
   { id: 'nature', icon: 'nature', kind: 'passif', name: 'Ami de la nature', desc: 'Les montures, rares, se montrent un peu plus souvent.', costs: [300, 700, 1500] },
   { id: 'dash', icon: 'dash', kind: 'actif', name: 'Ruée', desc: 'Fonce, invincible, en pulvérisant tout. Recharge plus vite à chaque niveau.', costs: [300, 700, 1400] },

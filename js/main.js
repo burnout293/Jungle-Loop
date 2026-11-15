@@ -1,6 +1,6 @@
 // Glue: screens, input, HUD and the frame loop.
 
-import { newRun, update, launch, PIXEL, VIEW_H, MOUNTS } from './game.js';
+import { newRun, update, launch, setShapes, PIXEL, VIEW_H, MOUNTS } from './game.js';
 import { draw, loadAssets, setQuality, quality, BIOMES } from './render.js';
 import { showDemo, drawDemo, DEMO_W, DEMO_H } from './demo.js';
 import { audio } from './audio.js';
@@ -31,9 +31,9 @@ audio.setVolumes(save.musicVol, save.sfxVol);
 let inRun = false;                     // the settings were opened from the pause screen: the run waits behind them
 
 // The game's own pixel typeface, or a plain rounded one for whoever reads it better (a setting).
-// `fk` evens out their sizes: Press Start 2P is very wide, Fredoka is narrower.
+// `fk` evens out their sizes: Silkscreen is wide and all capitals, Fredoka is narrower.
 function applyFont() {
-  const [name, fk] = save.pixelFont ? ['Press Start 2P', 0.62] : ['Fredoka', 0.95];
+  const [name, fk] = save.pixelFont ? ['Silkscreen', 0.82] : ['Fredoka', 0.95];
   $('stage').style.setProperty('--font', `"${name}", "Trebuchet MS", system-ui, sans-serif`);
   $('stage').style.setProperty('--fk', fk);
 }
@@ -353,8 +353,9 @@ function go(name) {
   audio.unlock();
   if (inRun) {                                          // leaving the settings opened from the pause: back to the pause
     inRun = false;
-    if (name === 'menu') { state = 'pause'; show('pause'); audio.music(''); return; }
+    if (name === 'menu') { state = 'pause'; show('pause'); audio.duck(true); return; }
   }
+  audio.duck(false);
   if (name === 'settings' && state === 'pause') inRun = true;
   if (name === 'play') {
     if (canFull && save.full && window.matchMedia('(pointer: coarse)').matches) fullscreen(true);   // a phone plays full screen
@@ -363,7 +364,8 @@ function go(name) {
     run.viewW = view.logicalW;
     launch(run);                                        // rumble, then the doorway blows out
     deadFor = 0; hudState.dist = hudState.gold = hudState.hearts = -1;
-    $('hud-hearts').replaceChildren(...Array.from({ length: run.hearts }, () => icon('heart')));   // three, or four with Cœur en plus
+    $('hud-hearts').replaceChildren(...Array.from({ length: run.hearts }, () => icon('heart')));
+    $('hud-hearts').style.visibility = run.maxHearts > 1 ? '' : 'hidden';   // a single life needs no counter
     lastDist = 0; $('toasts').textContent = '';
     state = 'play'; show(null);
     P.startRun(save);
@@ -408,9 +410,9 @@ function pause() {
   $('pause-gold').textContent = '+' + run.gold + ' ◈';
   $('pause-best').textContent = `Record : ${save.best} m`;
   levelBar('pause-level', true); questCards('pause-quests');
-  state = 'pause'; show('pause'); audio.music('');
+  state = 'pause'; show('pause'); audio.duck(true);    // the music goes on, quieter
 }
-function resume() { if (state === 'pause') { state = 'play'; show(null); audio.music('run'); } }
+function resume() { if (state === 'pause') { state = 'play'; show(null); audio.duck(false); } }
 
 for (const b of document.querySelectorAll('[data-go]')) b.addEventListener('click', () => go(b.dataset.go));
 for (const b of document.querySelectorAll('#shop-tabs .tab')) b.addEventListener('click', () => { tab = b.dataset.tab; refreshShop(); });
@@ -503,7 +505,7 @@ window.addEventListener('keyup', (e) => {
   const k = e.key.toLowerCase();
   if (e.code === 'Space' || k === 'arrowup' || k === 'z' || k === 'w') input.hold = false;
 });
-document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); audio.sleep(document.hidden); });
 // Closing the tab mid-run still keeps the coins picked up so far.
 window.addEventListener('pagehide', () => { if (state === 'play' || state === 'pause' || inRun) bank(); });
 
@@ -587,6 +589,9 @@ function frame(now) {
   if (state === 'shop') drawDemo(demoCtx, dt, now / 1000);
   requestAnimationFrame(frame);
 }
+
+// The groups of coins drawn in assets/patterns.txt: anyone can add theirs there.
+fetch('assets/patterns.txt', { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : '')).then(setShapes).catch(() => {});
 
 refreshMenu();
 aimFlyers();           // before the first show(): every block is still at its resting place

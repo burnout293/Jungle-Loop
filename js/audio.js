@@ -110,7 +110,8 @@ loadList();   // a plain fetch: no need to wait for the first gesture
 
 // Volumes go from 0 (off) to 10. 7, where a new game starts, is the level the sounds were made for.
 const gainOf = (v) => 0.5 * v / 7;
-let vols = [7, 7];
+let vols = [7, 7], ducked = false;
+const DUCK = 0.3;                             // how much of the music is left on the pause screen
 
 export const audio = {
   musicOn: true,
@@ -118,8 +119,18 @@ export const audio = {
 
   setVolumes(music, sfx) {
     vols = [music, sfx]; this.musicOn = music > 0; this.sfxOn = sfx > 0;
-    if (ac) { musicOut.gain.value = gainOf(music); sfxOut.gain.value = gainOf(sfx); }
+    if (ac) { musicOut.gain.value = gainOf(music) * (ducked ? DUCK : 1); sfxOut.gain.value = gainOf(sfx); }
   },
+
+  // On the pause screen the music keeps playing, turned down.
+  duck(on) {
+    if (ducked === on) return;
+    ducked = on;
+    if (ac) musicOut.gain.setTargetAtTime(gainOf(vols[0]) * (on ? DUCK : 1), ac.currentTime, 0.12);
+  },
+
+  // The page is hidden (another tab, the phone locked): everything stops, and picks up where it was.
+  sleep(on) { if (ac) { if (on) ac.suspend(); else ac.resume(); } },
 
   // Browsers only allow sound after a user gesture: call this from one.
   unlock() {
@@ -128,7 +139,7 @@ export const audio = {
       if (!AC) return;
       ac = new AC();
       sfxOut = ac.createGain(); sfxOut.gain.value = gainOf(vols[1]); sfxOut.connect(ac.destination);
-      musicOut = ac.createGain(); musicOut.gain.value = gainOf(vols[0]); musicOut.connect(ac.destination);
+      musicOut = ac.createGain(); musicOut.gain.value = gainOf(vols[0]) * (ducked ? DUCK : 1); musicOut.connect(ac.destination);
       loadList();
     }
     if (ac.state === 'suspended') ac.resume();

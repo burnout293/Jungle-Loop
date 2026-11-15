@@ -77,3 +77,4 @@ save(tall(trunk, 81), 'pillar')                        # what holds a slab up in
 
 for i, im in enumerate(pieces('gravats')):
     save(tall(im, 90), 'gravats-%d' % (i + 1), os.path.join(ROOT, 'mockups', 'img'))
+    if i == 3: save(tall(im, 90), 'temple-rubble')     # the one chosen: boulders held in roots

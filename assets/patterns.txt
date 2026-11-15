@@ -1,0 +1,114 @@
+# Jungle Loop : les groupes de pièces, dessinés à la main.
+#
+# Pour en ajouter un : une ligne « = nom », puis le dessin, une ligne de texte par rangée.
+#   o   une pièce                 .   rien (ou un espace)
+#   y   gemme jaune (5 pièces)    r   gemme rouge (10)    b   gemme bleue (20)
+# Chaque caractère vaut 1,1 m de large et de haut. La rangée du bas se ramasse en courant.
+# « = nom, base 3 » remonte tout le dessin de 3 rangées.
+# Le jeu ne pose un dessin que si son sommet est atteignable : 5 rangées à pied,
+# 9 avec le Double saut, 13 avec le Vol. 14 rangées et 40 colonnes au plus.
+# Les lignes qui commencent par # sont ignorées. Recharge la page pour voir tes changements.
+
+= coeur
+.oo.oo.
+ooooooo
+ooooooo
+.ooooo.
+..ooo..
+...r...
+
+= losange
+..o..
+.o.o.
+o.y.o
+.o.o.
+..o..
+
+= fleche
+....o..
+.....o.
+ooooooo
+.....o.
+....o..
+
+= vague
+..oo......oo....
+.o..o....o..o...
+o....o..o....o.o
+......oo......o.
+
+= escalier
+......oo
+....oo..
+..oo....
+oo......
+
+= montagne
+...o...
+..o.o..
+.o...o.
+o.....o
+
+= rail
+oooooooooo
+..........
+oooooooooo
+
+= damier
+o.o.o.o.
+.o.o.o.o
+o.o.o.o.
+
+= sourire, base 1
+.oo..oo.
+.oo..oo.
+........
+o......o
+.o....o.
+..oooo..
+
+= couronne, base 2
+o..o..o
+oo.o.oo
+ooooooo
+ooyryoo
+
+= croix, base 2
+..oo..
+..oo..
+oooooo
+oooooo
+..oo..
+..oo..
+
+= anneau, base 3
+..ooo..
+.o...o.
+o..b..o
+o.....o
+.o...o.
+..ooo..
+
+= etoile, base 4
+....o....
+....o....
+...ooo...
+ooooroooo
+.ooooooo.
+..ooooo..
+..oo.oo..
+.oo...oo.
+
+= serpent, base 5
+oooo....oooo....oooo
+...o....o..o....o...
+...o....o..o....o...
+...oooooo..oooooo...
+
+= spirale, base 6
+ooooooo
+o.....o
+o.ooo.o
+o.o.b.o
+o.o...o
+o.ooooo

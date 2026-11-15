@@ -24,7 +24,7 @@ export const BIOMES = [
 ];
 
 const DIR = 'assets/img/';
-const NAMES = ['fore', 'temple', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-moskito', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'temple-rubble', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-moskito', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -128,6 +128,15 @@ function rowColour(im, row, fallback) {
 
 const DIM = 'rgba(16,12,40,.3)';                       // the veil over scenery that stands where obstacles do
 
+// The same the other way: `cut` rows taken out around row `at`, top and bottom whole.
+const LOG_CUT = 12;
+function lowered(im, cut, at) {
+  if (!im) return im;
+  const c = canvasOf(im.width, im.height - cut), x = c.getContext('2d'), a = at - (cut >> 1);
+  x.drawImage(im, 0, 0, im.width, a, 0, 0, im.width, a);
+  x.drawImage(im, 0, a + cut, im.width, im.height - a - cut, 0, a, im.width, im.height - a - cut);
+  return c;
+}
 // A long drawing made shorter by taking out its middle: both ends stay whole.
 function shortened(im, w) {
   if (!im || im.width <= w) return im;
@@ -158,7 +167,7 @@ function buildScene(b) {
   const props = [];
   for (let i = 0; i < b.props; i++) props.push(tinted(IMG[b.prop + i], DIM));
   return {
-    platform: IMG[b.platform], pillar: tinted(IMG[b.pillar], DIM), crate: IMG[b.crate], stacks: [], slab: IMG[b.slab], tunnel: shortened(IMG[b.tunnel], Math.round(LOG.w / PIXEL)),
+    platform: IMG[b.platform], pillar: tinted(IMG[b.pillar], DIM), crate: IMG[b.crate], stacks: [], slab: IMG[b.slab], tunnel: tinted(lowered(shortened(IMG[b.tunnel], Math.round(LOG.w / PIXEL)), LOG_CUT, 49), DIM),
     platTop: b.platTop, slabTop: b.slabTop, hollow: b.hollow,
     bg: IMG[b.bg], mid: IMG[b.mid], ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c') }, props, fore,
     sky: rowColour(IMG[b.bg], 0, '#7fb9ec'), base: rowColour(IMG[b.mid], -1, '#1c2c3a'),
@@ -277,26 +286,32 @@ function edges(ctx, im, cam, t, width) {
   ctx.restore();
 }
 
-// Two sceneries meet at `edge` (screen x). Each is painted on a spare canvas and made to fade out,
-// or in, across `soft` pixels on each side of the edge: the new place grows out of the old one
-// instead of switching on.
-function blend(ctx, run, v, edge, soft, paint) {
+// Two sceneries meet at `edge` (screen x). The far scenery changes tile by tile, like a picture
+// loading: each tile of the screen has its own moment, up to SPREAD pixels before or after the edge,
+// and flashes as it turns. The new scenery is painted once on a spare canvas and copied tile by tile;
+// what is well past the edge on either side is painted straight, so a change costs little more than none.
+const TILE = 16, SPREAD = 120;
+function mosaic(ctx, run, v, edge, paint) {
   const A = SCENE[run.prevBiome], B = SCENE[run.biome];
-  if (A === B || edge <= -soft) { paint(ctx, B); return; }
-  if (edge - soft >= v.w) { paint(ctx, A); return; }
-  const q = Math.min(Q, 2), W = Math.ceil(v.w * q), H = VH * q;      // far scenery, mid-fade: half the detail is plenty
+  if (A === B || edge <= -SPREAD) { paint(ctx, B); return; }
+  if (edge - SPREAD >= v.w) { paint(ctx, A); return; }
+  paint(ctx, A);
+  const q = Math.min(Q, 2), W = Math.ceil(v.w * q), H = VH * q;      // far scenery: half the detail is plenty
   if (!scratch || scratch.width !== W || scratch.height !== H) scratch = canvasOf(W, H);
   const s = scratch.getContext('2d');
   s.setTransform(q, 0, 0, q, 0, 0); s.imageSmoothingEnabled = false;
-  const g = s.createLinearGradient(edge - soft, 0, edge + soft, 0);
-  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, '#000');
-  // the old one fades out to the right of the edge, the new one fades in: both have see-through parts
-  for (const [S, op] of [[A, 'destination-out'], [B, 'destination-in']]) {
-    s.globalCompositeOperation = 'source-over'; s.clearRect(0, 0, v.w + 1, VH);
-    paint(s, S);
-    s.globalCompositeOperation = op; s.fillStyle = g; s.fillRect(0, 0, v.w + 1, VH);
-    ctx.drawImage(scratch, 0, 0, W / q, VH);
+  s.fillStyle = B.sky; s.fillRect(0, 0, v.w + 1, VH);
+  paint(s, B);
+  const left = Math.max(0, Math.floor((edge - SPREAD) / TILE) * TILE), right = Math.min(Math.ceil(v.w / TILE) * TILE, Math.ceil((edge + SPREAD) / TILE) * TILE);
+  if (right < v.w) ctx.drawImage(scratch, right * q, 0, W - right * q, H, right, 0, (W - right * q) / q, VH);
+  const lit = [];
+  for (let x = left; x < right; x += TILE) for (let y = 0; y < VH; y += TILE) {
+    const at = edge + (h01(x / TILE + 31 * (y / TILE), 2) - 0.5) * 2 * SPREAD;
+    if (x > at) ctx.drawImage(scratch, x * q, y * q, TILE * q, TILE * q, x, y, TILE, TILE);
+    else if (x > at - 14) lit.push(x, y);
   }
+  ctx.fillStyle = 'rgba(210,255,250,.8)';
+  for (let i = 0; i < lit.length; i += 2) ctx.fillRect(lit[i], lit[i + 1], TILE, TILE);
 }
 
 function sheet(ctx, im, frames, frame, x, y) {
@@ -463,7 +478,7 @@ function chevron(ctx, x, y, dir, colour, size = 4) {
 
 // A hollow log or pipe is shown cut open: bark all around, and openings through which the hero is seen
 // running inside. LOG_ROOF and LOG_FLOOR are the rows of the sprite between which the tunnel lies.
-const LOG_ROOF = 30, LOG_FLOOR = 68, LOG_WINDOW = 54, LOG_RIB = 20;
+const LOG_ROOF = 30, LOG_FLOOR = 68 - LOG_CUT, LOG_WINDOW = 54, LOG_RIB = 20;
 function logWindows(pl, x0) { const out = []; for (let x = x0 + 34; x + LOG_WINDOW < x0 + n(pl.w) - 30; x += LOG_WINDOW + LOG_RIB) out.push(x); return out; }
 
 const SWARM = [[0, 0], [-15, -7], [13, -8], [-10, 9], [15, 7], [-26, 2], [27, -1]];   // where each mosquito of a swarm flies
@@ -481,14 +496,14 @@ export function draw(ctx, run, v, t) {
 
   // three depths of scenery
   ctx.fillStyle = now.sky; ctx.fillRect(0, -8, v.w, VH + 16);
-  blend(ctx, run, v, edge, 150, (c, S) => { if (S.bg) strip(c, S.bg, cam * 0.18, VH - S.bg.height, v.w); });
-  drawSky(ctx, t, v.w);
-  blend(ctx, run, v, edge, 70, (c, S) => {
+  mosaic(ctx, run, v, edge, (c, S) => {
+    if (S.bg) strip(c, S.bg, cam * 0.18, VH - S.bg.height, v.w);
     if (!S.mid) return;
     const y = GN + 20 - S.mid.height;
     strip(c, S.mid, cam * 0.5, y, v.w);
     c.fillStyle = S.base; c.fillRect(0, y + S.mid.height, v.w, VH);  // seen only where the path dips
   });
+  drawSky(ctx, t, v.w);
 
   drawProps(ctx, run, cam, v.w, t);
   const cut = Math.max(0, Math.min(v.w, edge));        // the floor changes exactly where the new place begins
@@ -500,14 +515,9 @@ export function draw(ctx, run, v, t) {
   if (inTemple) ctx.drawImage(IMG.temple, templeX, GN - IMG.temple.height + 3);
   if (inTemple && run.exploded) drawBlast(ctx, templeX);
 
-  if (inTemple && !run.exploded) {                     // the way out is walled up with fallen stones, until the blast
-    for (let r = 0; r < 6; r++) for (let k = 0; k < 4; k++) {
-      const w = 9 + Math.round(h01(r * 4 + k, 91) * 5), bx = templeX + 82 + k * 11 + (r & 1 ? 4 : 0) + Math.round(h01(r * 4 + k, 93) * 3), by = GN - 14 - r * 11 - Math.round(h01(r * 4 + k, 95) * 3);
-      ctx.fillStyle = '#1a1024'; ctx.fillRect(bx - 1, by - 1, w + 2, 12);
-      ctx.fillStyle = ['#6a6f8c', '#8a8fa8', '#4a4f6c', '#7a7f9a'][(r + k) % 4]; ctx.fillRect(bx, by, w, 10);
-      ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(bx, by, w, 2);
-      if (h01(r * 4 + k, 97) > 0.7) { ctx.fillStyle = '#7bd13c'; ctx.fillRect(bx + 1, by - 1, 4, 2); }
-    }
+  if (inTemple && !run.exploded && IMG['temple-rubble']) {   // the jungle has closed the way out: boulders held in roots, until the blast
+    const im = IMG['temple-rubble'];
+    ctx.drawImage(im, templeX + 105 - (im.width >> 1), GN - 14 - im.height);
   }
 
   // tight places, for the ball only. The hollow trunk stands behind the path: its openings show what

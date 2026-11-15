@@ -11,14 +11,14 @@ export const PPM = 40;          // logical units per metre
 export const PIXEL = 2.25;      // logical units per art pixel (720 units = 320 art pixels)
 export const BIOME_LEN = 400;   // metres between two changes of scenery
 export const BIOME_COUNT = 4;
-export const HEARTS = 3;
+export const HEARTS = 1;         // one life: the first blow ends the run (Cœur en plus gives a second)
 
 const HERO_H = 80, HERO_HALF = 14;      // hitbox, smaller than the sprite: forgiving
 const CRATE = { w: 63, h: 52 }, SPIKY = { w: 68, h: 54 }, FLY = { w: 64, h: 54 }, PLAT_W = 254;
 
 // Raised ways: a stone slab on pillars (a cave underneath) and a hollow log (a tunnel inside).
 // `t` is how thick the roof is: the hero can run under it, and bumps his head if he jumps there.
-export const SLAB = { h: 100, t: 50 }, LOG = { h: 133, t: 48, w: 520 };
+export const SLAB = { h: 100, t: 50 }, LOG = { h: 106, t: 48, w: 520 };
 const TOUCH_H = 130;            // scenery only reacts to a hero running past, not flying far above
 const MONKEY_H = 230;           // how high the hero must be to greet a monkey
 
@@ -59,6 +59,37 @@ export const FM = { w: 90, h: 64, rush: 1150, lanes: 5, step: 110 };
 export const GEMS = { y: 5, r: 10, b: 20 };
 const gemKind = () => pick('yyyyyyrrrb');
 const SCATTER = [0, 0.012, 0.022, 0.035];   // Gemmes dispersées: share of the coins that become gems
+const HEART_GOLD = 25;                      // what a heart is worth to someone who has all his lives
+const BLAST_COINS = 30;                     // thrown out of the temple when its doorway blows: they can be picked up
+
+// Groups of coins drawn as text in assets/patterns.txt (see that file). Each character is one cell of
+// CELL units; the bottom row sits at running height, `base` cells higher if asked. A shape is only laid
+// where the hero can reach its top with what he owns: on foot, with the double jump, flying.
+const CELL = 44, REACH = [230, 400, 600];
+let SHAPES = [];
+export function setShapes(text) {
+  const found = []; let cur = null;
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.replace(/\s+$/, '');
+    if (line.startsWith('#') || !line.trim()) continue;
+    if (line.startsWith('=')) { const m = /base\s+(\d+)/.exec(line); cur = { name: line.slice(1).split(',')[0].trim(), base: m ? Math.min(12, Number(m[1])) : 0, rows: [] }; found.push(cur); }
+    else if (cur && cur.rows.length < 14) cur.rows.push(line.slice(0, 40));
+  }
+  SHAPES = found.filter((s) => s.rows.some((r) => /[^. ]/.test(r)));
+  for (const s of SHAPES) { s.cols = Math.max(...s.rows.map((r) => r.length)); s.top = 40 + (s.base + s.rows.length - 1) * CELL; }
+}
+function layShape(run, s, x, lift = 0) {
+  s.rows.forEach((row, r) => {
+    const h = 40 + lift + (s.base + s.rows.length - 1 - r) * CELL;
+    [...row].forEach((ch, k) => {
+      if (ch === '.' || ch === ' ') return;
+      const c = { x: x + k * CELL, y: floorAt(run, x + k * CELL) - h };
+      if ('yrb'.includes(ch)) c.gem = ch;                // y, r, b: a yellow, red or blue gem; anything else is a coin
+      run.coins.push(c);
+    });
+  });
+  return s.cols * CELL;
+}
 
 // Tight places, for the Sphère power only: a hollow trunk standing behind the path, a gallery dug
 // under it. Whoever has the power rolls in by himself; everyone else just runs past. They only ever
@@ -197,6 +228,8 @@ function spawnPattern(run) {
     : ['crate', 'spiky', 'spiky', 'double', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
   if (tier >= 1 && x >= 70 * PPM) opts.push('stack', 'fly');
   if (tier >= 2 && x >= 70 * PPM) opts.push('wall', 'swarm', 'swarm');
+  const shapes = SHAPES.filter((s) => s.top <= REACH[tier]);
+  if (shapes.length && x >= 70 * PPM) opts.push('shape', 'shape');
   if (riding) opts = opts.filter((k) => k !== 'cave');
   if (run.fm || run.fmDue) opts = ['coins'];                          // a follower monster needs a clear road
   else if (!riding && x > 70 * PPM && x / PPM >= run.nextMount) opts = ['mount'];
@@ -206,6 +239,7 @@ function spawnPattern(run) {
   switch (kind) {
     case 'crate': addCrates(run, x, 1); len = CRATE.w; break;
     case 'spiky': addSpiky(run, x); len = SPIKY.w; break;
+    case 'shape': len = layShape(run, pick(shapes), x); break;         // a drawing made of coins
     case 'double': {
       const d = run.speed + 90;
       if (Math.random() < 0.5) addCrates(run, x, 1); else addSpiky(run, x);
@@ -376,6 +410,8 @@ function spawnRide(run) {
         len = count * 44; break;
       }
       case 'shape': {
+        const drawn = SHAPES.filter((s) => s.top <= REACH[2] - 80);        // one from the file, lifted into the sky, or a plain figure
+        if (drawn.length && Math.random() < 0.6) { const s = pick(drawn); len = layShape(run, s, x, rnd(0, REACH[2] - 80 - s.top)); break; }
         const [sides, each, turn] = pick([[4, 3, 0], [4, 3, Math.PI / 4], [3, 4, 0], [12, 1, 0]]);
         shape(run, x + 100, rnd(210, G - 190), 96, sides, each, turn);
         len = 200; break;
@@ -442,7 +478,7 @@ function hit(run, o) {
   }
   if (run.rewindLeft > 0) {
     run.rewindLeft--;
-    run.hearts = 2;
+    run.hearts = run.maxHearts;
     run.p.inv = 2;
     run.glitch = 1;
     run.obs = run.obs.filter((q) => q.x > run.cam + run.viewW);
@@ -560,8 +596,8 @@ export function update(run, dt, input) {
       run.parts.push({ x: rnd(60, 130), y: GROUND - rnd(40, 220), vx: rnd(80, 900), vy: rnd(-760, -40), life: 0, max: rnd(0.8, 1.7),
         c: pick(['#8a8fa8', '#6a6f8c', '#4a4f6c', '#7bd13c', '#cfd3e6']), s: rnd(8, 22), g: 1500 });
     }
-    for (let i = 0; i < 44; i++) {              // and the temple's gold flies out towards the jungle: that is where its coins come from
-      run.parts.push({ x: rnd(70, 130), y: GROUND - rnd(50, 200), vx: rnd(520, 1900), vy: rnd(-820, -120), life: 0, max: rnd(1.6, 2.6), coin: i, g: 1000 });
+    for (let i = 0; i < BLAST_COINS; i++) {     // and the temple's gold flies out towards the jungle: real coins, which bounce and wait on the path
+      run.coins.push({ x: rnd(70, 130), y: GROUND - rnd(50, 200), toss: { vx: rnd(420, 1500), vy: rnd(-820, -120) } });
     }
     run.events.push('boom');
   }
@@ -760,6 +796,11 @@ export function update(run, dt, input) {
   const grab = run.mount && MOUNTS[run.mount.kind].grab;
   for (const c of run.coins) {
     if (c.tight && !p.ball) continue;                // inside a tight place: for the ball only
+    if (c.toss) {                                    // thrown by the blast: it falls, bounces lower each time, then stays at running height
+      const q = c.toss, f = floorAt(run, c.x) - 40;
+      q.vy += 1000 * d; c.x += q.vx * d; c.y += q.vy * d;
+      if (c.y > f && q.vy > 0) { c.y = f; q.vy *= -0.45; q.vx *= 0.55; if (q.vy > -70) c.toss = null; }
+    }
     const dx = px - c.x, dy = cy - c.y, dist = Math.hypot(dx, dy);
     if (c.loot !== undefined) {                      // out of a crate: thrown up and ahead, then drawn to the hero
       c.loot += d;
@@ -768,7 +809,10 @@ export function update(run, dt, input) {
     }
     if (grab ? Math.abs(dx) < grab.w && c.y > p.y - grab.h && c.y < p.y + 10 : dist < 44) {
       c.gone = true;
-      if (c.heart) { run.hearts = Math.min(run.maxHearts, run.hearts + 1); run.events.push('heart'); burst(run, c.x, c.y, '#ff6b8a', 14, 260); }
+      if (c.heart) {                                 // a heart found: a life back, or its worth in gold when none is missing
+        if (run.hearts < run.maxHearts) run.hearts++; else run.gold += HEART_GOLD;
+        run.events.push('heart'); burst(run, c.x, c.y, '#ff6b8a', 14, 260);
+      }
       else if (c.gem) { run.gold += GEMS[c.gem] || 10; run.gems++; run.events.push('gem'); burst(run, c.x, c.y, { y: '#ffe36a', r: '#ff6b6b' }[c.gem] || '#5cc8ff', 10, 220); }
       else { run.gold++; run.events.push('coin'); burst(run, c.x, c.y, '#fff3a8', 4, 150); }
       continue;

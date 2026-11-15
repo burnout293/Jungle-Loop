@@ -10,7 +10,7 @@
   --relic: #5cf2e0;
   --leaf: #6cc22e;
   --berry: #e0456b;
-  --font: "Press Start 2P", "Trebuchet MS", system-ui, sans-serif;
+  --font: "Silkscreen", "Trebuchet MS", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -28,7 +28,7 @@ body { display: flex; align-items: center; justify-content: center; }
    le plus petit texte y mesure 2,4 mm, un bouton au moins 8 mm. */
 #stage {
   --ui: 2px;
-  --fk: .62;                                      /* correction de taille propre à la police */
+  --fk: .82;                                      /* correction de taille propre à la police */
   --t-s: calc(var(--ui) * 11 * var(--fk));     /* petit texte */
   --t-m: calc(var(--ui) * 14 * var(--fk));     /* texte courant, boutons */
   --t-l: calc(var(--ui) * 19 * var(--fk));     /* HUD, bouton principal */
