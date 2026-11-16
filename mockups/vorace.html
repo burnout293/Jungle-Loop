@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jungle Loop — Vorace</title>
+<style>
+  body { margin: 0; padding: 20px; background: #0a0f14; color: #e8ecf4; font: 15px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: #ffd35c; }
+  p { margin: 0 0 16px; color: #9fb0c4; max-width: 80ch; }
+  main { display: grid; gap: 22px; }
+  figure { margin: 0; background: #151b2c; border: 2px solid #2a3350; padding: 10px; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+  @media (max-width: 900px) { figure { grid-template-columns: 1fr; } }
+  canvas { width: 100%; display: block; image-rendering: pixelated; background: #000; }
+  .strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: #24304a; padding: 4px; }
+  .strip img { width: 100%; image-rendering: pixelated; background: #2c3a32; }
+  .strip span { font-size: 11px; color: #9fb0c4; text-align: center; display: block; }
+  figcaption { grid-column: 1 / -1; } figcaption b { color: #5cf2e0; font-size: 16px; } figcaption span { display: block; color: #9fb0c4; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>Vorace — 3 directions</h1>
+<p>Chaque proposition est dessinée d'un seul tenant : repos, charge, crachat, coup de l'arbre, enfouissement. Les tentacules font partie du dessin, plus rien n'est ajouté par le programme. À gauche, la séquence jouée en boucle dans la forêt : repos, charge, crachat, repos, puis l'arbre et la fin. À droite, les six images. Donne-moi la lettre retenue (ou ce qu'il faut mélanger).</p>
+<main id="grid"></main>
+<script>
+const W = 569, H = 320, GN = 280, DIR = '../assets/img/';
+const IDEAS = [
+  { key: 'a', name: 'A · Vorace dressée', text: 'La plante carnivore classique, mieux construite : une grosse tête de dionée sur une tige courbe, trois tentacules épineuses posées au sol qui se soulèvent. Lisible de loin, proche de l\'actuelle.', mouth: [0.38, 0.33] },
+  { key: 'b', name: 'B · Vorace tapie', text: 'Une gueule énorme qui sort de terre au ras du sol, un œil au bout d\'une tige qui surveille Pépito, des lianes qui sortent du sol. Plus menaçante, et l\'arbre qui l\'écrase s\'intègre naturellement.', mouth: [0.4, 0.62] },
+  { key: 'c', name: 'C · Vorace fleur-reine', text: 'Une plante-urne violette couronnée de pétales autour d\'une gueule, un grand œil orange, quatre fouets épineux qui ondulent. Plus originale, l\'acide déborde de l\'urne à sa mort.', mouth: [0.4, 0.25] },
+];
+const IMG = {};
+const load = (src) => new Promise((ok) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = src; });
+const canvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+function strip(c, im, off, y) { for (let i = Math.floor(off / im.width); i * im.width - off < W; i++) { const x = Math.round(i * im.width - off); if (i & 1) { c.save(); c.translate(x + im.width, y); c.scale(-1, 1); c.drawImage(im, 0, 0); c.restore(); } else c.drawImage(im, x, y); } }
+
+// The loop, in seconds: what is shown when.
+const LOOP = 9;
+function frameAt(t) {
+  if (t < 2) return Math.floor(t / 0.4) % 2;           // idle, swaying
+  if (t < 2.5) return 2;                               // charging
+  if (t < 3.1) return 3;                               // spitting
+  if (t < 4.6) return Math.floor(t / 0.4) % 2;
+  if (t < 5.2) return 2;
+  if (t < 5.8) return 3;
+  if (t < 6.4) return Math.floor(t / 0.4) % 2;
+  if (t < 7.2) return 4;                               // the tree lands
+  return 5;                                            // crushed, sinking
+}
+(async () => {
+  const [bg, mid, ground, body, shoe] = await Promise.all(['bg-far', 'mid', 'ground-1', 'hero-body', 'hero-shoe'].map((n) => load(DIR + n + '.png')));
+  const views = [];
+  for (const idea of IDEAS) {
+    const frames = await Promise.all([1, 2, 3, 4, 5, 6].map((i) => load(`img/vorace-${idea.key}-${i}.png`)));
+    const f = document.createElement('figure'), cv = canvas(W, H), side = document.createElement('div'), cap = document.createElement('figcaption');
+    side.className = 'strip';
+    ['repos', 'repos 2', 'charge', 'crachat', 'l\'arbre', 'enfoui'].forEach((label, i) => { const d = document.createElement('div'); const im = document.createElement('img'); im.src = frames[i].src; const s = document.createElement('span'); s.textContent = label; d.append(im, s); side.append(d); });
+    cap.innerHTML = `<b>${idea.name}</b><span>${idea.text}</span>`;
+    f.append(cv, side, cap); document.getElementById('grid').append(f);
+    const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+    views.push({ idea, frames, c });
+  }
+  const t0 = performance.now();
+  (function frame(now) {
+    const T = (now - t0) / 1000, t = T % LOOP, cam = T * 220;
+    for (const { idea, frames, c } of views) {
+      strip(c, bg, cam * 0.18, 0); strip(c, mid, cam * 0.5, GN + 20 - mid.height); strip(c, ground, cam, GN - 4);
+      c.fillStyle = 'rgba(16,12,40,.25)'; c.fillRect(0, 0, W, GN - 4);
+      const im = frames[frameAt(t)], x = W - im.width - 20, shake = t > 6.4 && t < 6.7 ? Math.round(Math.sin(t * 90) * 3) : 0;
+      const sink = t > 7.2 ? Math.min(30, (t - 7.2) * 25) : 0;
+      c.save(); c.beginPath(); c.rect(0, 0, W, GN + 6); c.clip();
+      c.drawImage(im, x + shake, GN + 8 - im.height + sink);
+      c.restore();
+      if (t > 3.1 && t < 4.3 || t > 5.8 && t < 7) {    // the acid it spat, crossing the path
+        const k = ((t > 5.8 ? t - 5.8 : t - 3.1)) / 1.2, mx = x + im.width * idea.mouth[0], my = GN + 8 - im.height + im.height * idea.mouth[1];
+        const bx = mx - (mx - 90) * k, by = my + (GN - 30 - my) * k;
+        const g = c.createRadialGradient(bx, by, 1, bx, by, 10); g.addColorStop(0, '#f4ffc8'); g.addColorStop(0.5, '#8cf03c'); g.addColorStop(1, 'rgba(47,154,42,0)');
+        c.fillStyle = g; c.beginPath(); c.arc(bx, by, 10, 0, Math.PI * 2); c.fill();
+      }
+      const hop = Math.abs(Math.sin(T * 9)) * 3;        // Pépito, running
+      c.drawImage(shoe, 92 + Math.round(Math.cos(T * 11) * 6), GN - 9); c.drawImage(body, 80, GN - 50 - hop); c.drawImage(shoe, 94 - Math.round(Math.cos(T * 11) * 6), GN - 9);
+    }
+    requestAnimationFrame(frame);
+  })(t0);
+})();
+</script>
+</body>
+</html>
