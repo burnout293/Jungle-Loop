@@ -49,7 +49,12 @@ const n = (v) => Math.round(v / PIXEL * Q) / Q;        // the same, from game un
 // a run, and never uploaded again. Works on images and on the canvases made from them.
 // (They used to be turned into ImageBitmaps here. On some phones' chips the large ones came out as
 // noise, so images and canvases are now drawn as they are; an image is only decoded ahead of time.)
-const baked = async (im) => { try { if (im && im.decode) await im.decode(); } catch { /* drawn anyway */ } return im; };
+// decode() can wait for as long as the page is hidden (a phone locked while the game loads): never more
+// than a second here, the picture is drawn anyway.
+const baked = async (im) => {
+  try { if (im && im.decode) await Promise.race([im.decode(), new Promise((ok) => setTimeout(ok, 1000))]); } catch { /* drawn anyway */ }
+  return im;
+};
 
 function load(name) {
   return new Promise((done) => {
@@ -494,20 +499,28 @@ function drawHero(ctx, run, t, seat) {
     put(ctx, body, 0, 0, B.w, B.blade, snap(B.hx - B.tx - B.hx * w), -B.h, snap(bw), B.blade);
     put(ctx, body, 0, B.blade, B.w, B.h - B.blade, -B.tx, -B.h + B.blade, B.w, B.h - B.blade);
   } else {
-    // His leaves and his scarf live: the picture is cut in thin bands that the wind moves. Above his
-    // face, rows slide sideways, more and more towards the tips; behind him, columns of the scarf ride
-    // a wave that runs along it. The faster he goes, the harder both are pulled back.
+    // His leaves live: the picture is cut in thin rows that the wind moves, more and more towards the
+    // tips, pulled back harder the faster he goes. His head, his trunk and the backpack with the relic
+    // (the columns behind him, up to the relic) stay still.
     if (tilt) soft(ctx);
-    const x0 = snap(-B.tx), y0 = -B.h, w = body.width, h = body.height, hair = Math.round(B.hy - 5), scarf = Math.round(B.hx - 11);
+    const x0 = snap(-B.tx), y0 = -B.h, w = body.width, h = body.height, hair = Math.round(B.hy - 6), pack = Math.round((B.gx || 0) + 5);
     const pull = Math.min(1, run.speed / 700), air = p.ground ? 0 : Math.max(-1, Math.min(1, p.vy / 700));
-    put(ctx, body, scarf, hair, w - scarf, h - hair, x0 + scarf, y0 + hair, w - scarf, h - hair);
-    for (let c = 0; c < scarf; c += 2) {
-      const far = (scarf - c) / scarf, dy = (Math.sin(t * (11 + 6 * pull) - c * 0.5) * 2.4 - air * 4) * far;
-      put(ctx, body, c, hair, 2, h - hair, x0 + c, y0 + hair + snap(dy), 2, h - hair);
-    }
+    put(ctx, body, 0, hair, w, h - hair, x0, y0 + hair, w, h - hair);
+    put(ctx, body, 0, 0, pack, hair, x0, y0, pack, hair);
     for (let r = 0; r < hair; r += 2) {
       const up = 1 - r / hair, dx = (Math.sin(t * 8 + r * 0.4) * 1.3 - 1.6 * pull) * up * up, dy = -air * 2.5 * up;
-      put(ctx, body, 0, r, w, 2, x0 + snap(dx), y0 + r + snap(dy), w, 2);
+      put(ctx, body, pack, r, w - pack, 2, x0 + pack + snap(dx), y0 + r + snap(dy), w - pack, 2);
+    }
+  }
+  // the relic in his backpack: a soft glow, which flares when it moves the world (a boss coming, a new place)
+  if (B.gx !== undefined) {
+    const gx = -B.tx + B.gx, gy = -B.h + B.gy, k = run.relic || 0, r = 7 + 16 * k;
+    const g = ctx.createRadialGradient(gx, gy, 1, gx, gy, r);
+    g.addColorStop(0, `rgba(160,250,255,${0.3 + 0.12 * Math.sin(t * 3) + 0.6 * k})`); g.addColorStop(1, 'rgba(92,242,224,0)');
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.fillRect(gx - r, gy - r, r * 2, r * 2); ctx.restore();
+    if (k > 0.2) {
+      ctx.fillStyle = '#eaffff';
+      for (let i = 0; i < 5; i++) { const a = t * 3 + i * 1.26, d = 6 + 10 * k + 3 * Math.sin(t * 9 + i); ctx.fillRect(snap(gx + Math.cos(a) * d), snap(gy + Math.sin(a) * d), 1, 1); }
     }
   }
   ctx.restore();
@@ -758,21 +771,45 @@ export function draw(ctx, run, v, t) {
     chevron(ctx, x + 6, n(it.y) - 52 - bounce, 1, '#ffd35c', 6);
   }
 
-  // the boss: the giant plant at the right edge, jaws opening before it spits; then it topples into the hole
+  // Vorace, at the right edge: tentacles crawling on the floor around it, jaws opening before it spits.
+  // Its end: a tree comes down on it, it is crushed flat and swallowed by the floor with the tree.
   if (run.boss && IMG['boss-plant']) {
-    const b = run.boss, im = IMG['boss-plant'], fw = im.width / 2, left = n(b.sx), top = GN + 6 - im.height;
-    const open = b.wind > 0 || b.open > 0, bob = Math.round(Math.sin(t * 2.2) * 2);
+    const b = run.boss, im = IMG['boss-plant'], fw = im.width / 2, left = n(b.sx), top = GN + 6 - im.height, base = left + fw * 0.52;
+    const open = b.wind > 0 || b.open > 0 || b.phase === 'fall', bob = Math.round(Math.sin(t * 2.2) * 2);
+    const crushed = b.phase === 'fall' && b.t >= 0.9, sink = crushed ? Math.max(0, b.t - 1.05) ** 2 * 650 : 0;
+    const pit = run.pits[run.pits.length - 1];
+    ctx.save();
+    if (crushed && pit) {                              // from now on, below the floor it only shows inside the hole
+      ctx.beginPath(); ctx.rect(-50, -50, v.w + 100, GN + 50); ctx.rect(sx(pit.x0), GN, sx(pit.x1) - sx(pit.x0), VH); ctx.clip();
+    }
+    ctx.translate(0, sink);
+    for (let k = 0; k < 9; k++) {                      // the tentacles, crawling on the floor, tips lifting
+      const dir = k % 4 === 3 ? 1 : -1, len = 70 + h01(k, 41) * 110, x0 = base - 20 + (h01(k, 43) - 0.5) * 70;
+      for (let u = 0; u < len; u += 2) {
+        const tip = u / len, x = x0 + dir * u, y = GN + 2 - Math.round((Math.sin(t * 4 + k * 1.7 - u * 0.15) * 3 + 6 * tip * tip) * (0.4 + tip)), th = Math.max(2, Math.round(7 * (1 - tip)));
+        ctx.fillStyle = '#1a1024'; ctx.fillRect(snap(x), y - th - 1, 2, th + 2);
+        ctx.fillStyle = u % 8 < 2 ? '#7bd13c' : '#3f7a2c'; ctx.fillRect(snap(x), y - th, 2, th);
+      }
+    }
     if (b.wind > 0) {                                  // the acid glowing in its throat: something is coming
       const mx = left + n(BOSS.mouthX), my = n(BOSS.mouthY), g = ctx.createRadialGradient(mx, my, 2, mx, my, 40);
       g.addColorStop(0, `rgba(168,255,60,${0.55 + 0.3 * Math.sin(t * 30)})`); g.addColorStop(1, 'rgba(168,255,60,0)');
       ctx.fillStyle = g; ctx.fillRect(mx - 40, my - 40, 80, 80);
     }
-    if (b.phase === 'fall') {                          // over it goes, head first, and down
-      const k = Math.min(1, b.t / 0.7), drop = Math.max(0, b.t - 0.5) ** 2 * 700;
-      ctx.save(); ctx.translate(left + fw * 0.5, GN + drop); ctx.rotate(-Math.PI * k); soft(ctx);
-      ctx.drawImage(im, fw, 0, fw, im.height, -fw * 0.5, 6 - im.height, fw, im.height);
-      ctx.restore();
-    } else ctx.drawImage(im, open ? fw : 0, 0, fw, im.height, left, top + (open ? 0 : bob), fw, im.height);
+    if (crushed) {                                     // squashed flat under the trunk
+      const k = Math.min(1, (b.t - 0.9) / 0.15), sy = 1 - 0.62 * k, sxk = 1 + 0.25 * k;
+      ctx.save(); ctx.translate(base, GN + 6); ctx.scale(sxk, sy); soft(ctx);
+      ctx.drawImage(im, fw, 0, fw, im.height, left - base, -im.height, fw, im.height); ctx.restore();
+    } else {
+      const shiver = b.phase === 'fall' ? Math.round(Math.sin(t * 50) * 1.5) : 0;            // it sees the tree coming
+      ctx.drawImage(im, open ? fw : 0, 0, fw, im.height, left + shiver, top + (open ? 0 : bob), fw, im.height);
+    }
+    if (b.phase === 'fall' && IMG['prop-0']) {         // the tree: it tips over from the left and lands across it
+      const tree = IMG['prop-0'], sc = 2.3, a = Math.PI / 2 * Math.min(1, (b.t / 0.9) ** 2), px0 = left - 14;
+      ctx.save(); ctx.translate(px0, GN + 4); ctx.rotate(a); ctx.scale(sc, sc); soft(ctx);
+      ctx.drawImage(tree, -tree.width / 2, -tree.height + 2); ctx.restore();
+    }
+    ctx.restore();
   }
 
   for (const o of run.obs) {
@@ -786,6 +823,21 @@ export function draw(ctx, run, v, t) {
     }
     if (o.kind === 'acid') {                           // the plant's acid: a glowing ball in the air, a bubbling puddle on the floor
       const w = n(o.w), cx = x + w / 2;
+      if (o.tentacle) {                                // a tentacle slithering along the floor towards him, thorns up
+        for (let u = 0; u < w; u += 2) {
+          const tip = 1 - u / w, y0 = foot - 2 - Math.round(Math.abs(Math.sin(t * 10 + u * 0.18 + o.ph)) * 4 * (1 - tip * 0.6)), th = Math.max(2, Math.round(9 * (0.35 + 0.65 * (1 - tip))));
+          ctx.fillStyle = '#fff2c8'; ctx.fillRect(x + u, y0 - th - 2, 2, th + 3);
+          ctx.fillStyle = '#1a1024'; ctx.fillRect(x + u, y0 - th - 1, 2, th + 1);
+          ctx.fillStyle = u % 10 < 2 ? '#a8ff3c' : '#3f8f3a'; ctx.fillRect(x + u, y0 - th, 2, th - 1);
+          if (u % 8 === 4) { ctx.fillStyle = '#e8d9b0'; ctx.fillRect(x + u, y0 - th - 3, 1, 2); }
+        }
+        continue;
+      }
+      if (o.drop) {                                    // its shadow on the floor shows where it will land
+        const f = floorPx(cx), k = Math.max(0, Math.min(1, (y + 60) / (f + 20)));
+        ctx.fillStyle = `rgba(20,40,6,${0.25 + 0.4 * k})`; ctx.fillRect(snap(cx - 4 - 10 * k), f - 2, snap(8 + 20 * k), 3);
+        ctx.fillStyle = `rgba(168,255,60,${0.2 + 0.4 * k})`; ctx.fillRect(snap(cx - 2 - 6 * k), f - 1, snap(4 + 12 * k), 1);
+      }
       if (o.puddle) {
         const g = ctx.createRadialGradient(x + w / 2, foot - 4, 2, x + w / 2, foot - 4, w * 0.7);   // a sickly glow around it
         g.addColorStop(0, `rgba(168,255,60,${0.35 + 0.15 * Math.sin(t * 6 + o.x)})`); g.addColorStop(1, 'rgba(168,255,60,0)');

@@ -4,6 +4,7 @@
 #   libellule.png: the dragonfly mount, four frames (it replaced the Moskito)
 #   brouilleur.png: the shop icon of the Brouilleur
 #   boss.png    : the giant carnivorous plant, jaws shut and jaws open
+#   pepito.png  : Pépito's body with his backpack and the relic, the same under his leaf rotor, the backpack icon
 #   gravats.png : four ways of blocking the temple's doorway, for mockups/gravats.html
 # Run it AFTER import_gen.py, which still writes the old ruins and city crates.
 import os
@@ -140,17 +141,7 @@ meta['mounts'].pop('moskito', None)
 meta['mounts']['dragonfly'] = {'frames': 4, 'seatX': round(left * k), 'seatY': round(up * k)}
 json.dump(meta, open(mp, 'w'), indent=1); print('dragonfly seat', meta['mounts']['dragonfly'])
 
-# the Brouilleur's icon: everything on the sheet (sparks included), 54 pixels at most like the others
-im = Image.open(os.path.join(SRC, 'brouilleur.png')).convert('RGBA'); px = im.load()
-for y in range(im.height):
-    for x in range(im.width):
-        if magenta(px[x, y]): px[x, y] = (255, 0, 255, 255)
-mask = Image.new('L', im.size, 0); mpx = mask.load()
-for y in range(im.height):
-    for x in range(im.width):
-        if not magenta(px[x, y]): mpx[x, y] = 255
-icon = im.crop(mask.getbbox())
-save(shrink(icon, 54 / max(icon.size)), 'ico-jammer')
+# (the Brouilleur's icon, brouilleur.png, gave way to the Gros sac à dos: see Pépito below)
 
 # the boss: both drawings cut with the same box (they were drawn at the same place), drips included,
 # side by side in one sheet of two frames
@@ -177,3 +168,35 @@ for i in range(2):
 sheet = Image.new('RGBA', (frames[0].width * 2, frames[0].height), (0, 0, 0, 0))
 for i, f in enumerate(frames): sheet.alpha_composite(f, (i * frames[0].width, 0))
 save(sheet, 'boss-plant')
+
+# Pépito: his body (head, leaf hair, trunk, the backpack with the relic sticking out) and the same under
+# his leaf rotor, at the size of the body they replace, with the points render.js needs: the middle of
+# his head (hx, hy), the middle of the bottom of his trunk (tx), the relic (gx, gy), and for the rotor
+# how many rows its blades take (blade).
+from PIL import ImageFilter
+body, rotor, bag = pieces('pepito')
+K = 42 / body.height
+def mask_centre(im, test, blur=0):
+    px = im.load(); m = Image.new('L', im.size, 0); d = m.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            q = px[x, y]
+            if not magenta(q) and test(q): d[x, y] = 255
+    if blur: m = m.filter(ImageFilter.GaussianBlur(blur)); d = m.load()
+    top = m.getextrema()[1]
+    pts = [(x, y) for y in range(im.height) for x in range(im.width) if d[x, y] > top * 0.7]
+    return sum(q[0] for q in pts) / len(pts), sum(q[1] for q in pts) / len(pts)
+dark = lambda q: max(q[:3]) < 50
+cyan = lambda q: q[2] > 200 and q[1] > 160 and q[0] < 190
+rig = json.load(open(os.path.join(OUT, 'meta.json')))['rig']
+for name, im in (('body', body), ('rotor', rotor)):
+    hx, hy = mask_centre(im, dark, 14)
+    px = im.load(); low = [x for y in range(im.height - 8, im.height) for x in range(im.width) if not magenta(px[x, y])]
+    gx, gy = mask_centre(im.crop((0, 0, round(hx), im.height)), cyan)          # the relic: the cyan behind his head
+    sm = shrink(im, K); save(sm, 'hero-' + name)
+    rig[name] = {'w': sm.width, 'h': sm.height, 'hx': round(hx * K, 1), 'hy': round(hy * K, 1), 'tx': round(sum(low) / len(low) * K, 1), 'gx': round(gx * K, 1), 'gy': round(gy * K, 1)}
+px = rotor.load(); wide = [sum(1 for x in range(rotor.width) if not magenta(px[x, y])) for y in range(rotor.height)]
+rig['rotor']['blade'] = round(next(y for y in range(int(rotor.height * 0.15), rotor.height) if wide[y] < 0.45 * max(wide)) * K)
+save(shrink(bag, 54 / max(bag.size)), 'ico-jammer')                 # the Gros sac à dos
+mp = os.path.join(OUT, 'meta.json'); meta = json.load(open(mp)); meta['rig'] = rig
+json.dump(meta, open(mp, 'w'), indent=1); print('rig', rig)

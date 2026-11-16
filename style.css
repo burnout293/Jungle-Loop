@@ -252,6 +252,7 @@ h1 span:nth-child(odd) { color: #ffe9a0; }
 #debug .row > span:first-child { min-width: 190px; }
 #debug small { color: #9fb0c4; }
 #debug .say { color: #7bd13c; min-height: 1.4em; margin: 4px 0; }
+#info { position: absolute; left: calc(var(--ui) * 4); bottom: calc(var(--ui) * 16); z-index: 9; font: calc(var(--ui) * 8) Consolas, monospace; color: #fff; background: rgba(0, 0, 0, .6); padding: calc(var(--ui) * 2) calc(var(--ui) * 4); pointer-events: none; }
 #fps { position: absolute; left: calc(var(--ui) * 4); bottom: calc(var(--ui) * 4); z-index: 9; font: calc(var(--ui) * 8) Consolas, monospace; color: #fff; background: rgba(0, 0, 0, .6); padding: calc(var(--ui) * 2) calc(var(--ui) * 4); pointer-events: none; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--ui) * 4); }
 textarea { width: 100%; height: calc(var(--ui) * 26); flex: none; resize: none; padding: calc(var(--ui) * 3); color: var(--ink); font: calc(var(--ui) * 7)/1.3 Consolas, monospace; user-select: text; -webkit-user-select: text; }

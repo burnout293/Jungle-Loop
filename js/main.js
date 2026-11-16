@@ -9,7 +9,7 @@ import * as P from './progress.js';
 import { open as openDebug, debugRun, dbg } from './debug.js';
 
 // The game's version, shown on the home screen. sw.js names its cache after it: both move together.
-const VERSION = '0.17.0';
+const VERSION = '0.18.0';
 
 const $ = (id) => document.getElementById(id);
 // (A canvas without transparency, { alpha: false }, is a little lighter, but some Firefox builds on
@@ -242,7 +242,10 @@ function progress(stats) {
   let xp = stats.dist || 0;
   for (const q of done) { toast('ico-target', 'Défi réussi !', q.reward, q.xp); xp += q.xp; }
   const levels = xp ? P.addXp(save, xp) : [];
-  for (const l of levels) toast('ico-star', 'Niveau ' + l + ' !', P.levelReward(l));
+  for (const l of levels) {
+    toast('ico-star', 'Niveau ' + l + ' !', P.levelReward(l));
+    for (const u of S.UPGRADES) if (u.unlock === l) toast('ico-' + u.icon, 'Débloqué : ' + u.name);   // now for sale in the shop
+  }
   if (done.length || levels.length) { audio.sfx(levels.length ? 'level' : 'quest'); S.store(save); }
 }
 
@@ -335,12 +338,12 @@ function refreshShop(justBought) {
   if (!shown.some((u) => u.id === picked)) picked = shown[0].id;
   const stateOf = (u) => {
     const lvl = S.level(save, u.id), on = save.equipped.includes(u.id), off = save.powersOff.includes(u.id);
-    return { lvl, on, off, cost: S.nextCost(save, u), locked: u.needs && !S.level(save, u.needs), active: on || (u.power && lvl && !off) };
+    return { lvl, on, off, cost: S.nextCost(save, u), locked: (u.needs && !S.level(save, u.needs)) || !S.unlocked(save, u), active: on || (u.power && lvl && !off) };
   };
   $('shop-list').replaceChildren(...shown.map((u) => {
     const s = stateOf(u);
     const t = el('div', 'tile' + (u.id === picked ? ' sel' : '') + (s.active ? ' on' : '') + (!s.lvl ? ' gold' : '') + (s.locked ? ' locked' : '') + (u.id === justBought ? ' bought' : ''));
-    t.append(icon('ico-' + u.icon), el('small', '', !s.lvl ? '◈ ' + s.cost : u.power ? (s.off ? 'Coupé' : 'Actif') : s.on ? 'Équipé' : u.costs.length > 1 ? 'Niv. ' + s.lvl : 'Possédé'));
+    t.append(icon('ico-' + u.icon), el('small', '', !S.unlocked(save, u) ? '🔒 Niv. ' + u.unlock : !s.lvl ? '◈ ' + s.cost : u.power ? (s.off ? 'Coupé' : 'Actif') : s.on ? 'Équipé' : u.costs.length > 1 ? 'Niv. ' + s.lvl : 'Possédé'));
     t.addEventListener('click', () => { picked = u.id; refreshShop(); });
     return t;
   }));
@@ -348,7 +351,8 @@ function refreshShop(justBought) {
   const u = S.UPGRADES.find((x) => x.id === picked), s = stateOf(u);
   const pips = u.costs.length > 1 ? '  ' + '●'.repeat(s.lvl) + '○'.repeat(u.costs.length - s.lvl) : '';
   card(u.name + pips,
-    s.locked ? 'Demande : ' + S.UPGRADES.find((x) => x.id === u.needs).name
+    !S.unlocked(save, u) ? `Se débloque au niveau ${u.unlock}, puis s'achète.`
+      : s.locked ? 'Demande : ' + S.UPGRADES.find((x) => x.id === u.needs).name
       : u.power ? (!s.lvl ? 'Pouvoir permanent, sans emplacement.' : s.off ? 'Désactivé.' : 'Actif.')
         : s.on ? 'Équipé.' : s.lvl ? (full ? 'Possédé. Les 3 emplacements sont pris.' : 'Possédé.') : (u.kind === 'actif' ? 'Bouton en jeu.' : 'Toujours actif une fois équipé.'),
     u.desc);
@@ -574,12 +578,17 @@ const fpsBox = $('stage').appendChild(el('div'));
 fpsBox.id = 'fps';
 const showFps = (on) => { fpsBox.hidden = !on; };
 showFps(new URLSearchParams(location.search).has('fps') || dbg.fps);
+const infoBox = $('stage').appendChild(el('div'));
+infoBox.id = 'info';
+const showInfo = (on) => { infoBox.hidden = !on; };
+showInfo(dbg.info);
 function frame(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   watch(now - last);
   last = now;
   fpsCount++;
   if (now - fpsFrom >= 500) { fpsNow = Math.round(fpsCount * 1000 / (now - fpsFrom)); fpsCount = 0; fpsFrom = now; }
+  if (!infoBox.hidden && run && fpsTick % 5 === 0) infoBox.textContent = `${(run.speed / 40).toFixed(1)} m/s (propre ${(run.own / 40).toFixed(1)}) · ${Math.floor(run.dist)} m · ${Math.round(run.t)} s · hauteur ${run.h.toFixed(2)} m · max ${run.maxH.toFixed(2)} m`;
   if (!fpsBox.hidden && (fpsTick = (fpsTick + 1) % 15) === 0) fpsBox.textContent = `${fpsNow} i/s · x${quality()} · ${cv.width}x${cv.height} · ${save.quality}`;
 
   if (state === 'play' || state === 'over') {
@@ -602,9 +611,11 @@ function frame(now) {
       if (ev === 'dodge') stats.dodges++;
       if (ev === 'fm' && run.fm && !run.fm.seen) { run.fm.seen = true; banner('Moustiques !'); }
       if (ev === 'boom') { audio.music('run'); banner('Cours !'); }
-      if (ev === 'boss') banner('Plante géante !');
+      if (ev === 'debug') banner('Debug actif');
+      if (ev === 'boss') banner('Vorace !');
+      if (ev === 'timber') banner('Ça tombe !');
       if (ev === 'bossfall') banner('Saute le trou !');
-      if (ev === 'bossdown') banner('Elle est tombée !');
+      if (ev === 'bossdown') banner('Vorace est vaincue !');
       if (ev === 'hurt' || ev === 'rewind' || ev === 'hit') stats.hurt = true;
     }
     run.events.length = 0;
@@ -638,7 +649,7 @@ $('menu-level').addEventListener('click', () => {
   taps = taps.filter((t) => now - t < 2000); taps.push(now);
   if (taps.length < 5) return;
   taps = [];
-  openDebug({ save: () => save, store: () => S.store(save), changed: () => { refreshMenu(); if (state === 'shop') refreshShop(); }, fps: showFps });
+  openDebug({ save: () => save, store: () => S.store(save), changed: () => { refreshMenu(); if (state === 'shop') refreshShop(); }, fps: showFps, info: showInfo });
 });
 
 // On a phone, full screen follows the way it is held. Turning the phone is not a gesture the browser

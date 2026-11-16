@@ -1,6 +1,6 @@
 // Save data, shop catalogue, export / import.
 
-import { KINDS, MAX_ACTIVE, fill } from './progress.js';
+import { KINDS, MAX_ACTIVE, fill, levelInfo } from './progress.js';
 
 // "?bac" in the address plays on a separate, throw-away save: for trying things without touching the real one.
 const KEY = 'jungle-loop-save-v1' + (new URLSearchParams(location.search).has('bac') ? '-bac' : '');
@@ -8,26 +8,27 @@ const PREFIX = 'JL1.';
 
 // The shop's catalogue. The ones to equip are called « Équipements » in the game, the others « Pouvoirs ».
 // costs[n] = price of level n+1. `needs` = upgrade required first. `icon` = assets/img/ico-<icon>.png.
+// `unlock` = the player's level from which it can be bought (what was bought before stays).
 // Two families. Upgrades are chosen for each run: only three can be equipped. Powers (`power: true`)
 // are bought once and then on without taking a slot, unless the player switches them off (save.powersOff).
 export const UPGRADES = [
-  { id: 'doubleJump', icon: 'jump', kind: 'passif', name: 'Double saut', desc: 'Un second saut en l\'air.', costs: [480] },
-  { id: 'spring', icon: 'spring', kind: 'passif', name: 'Ressort', desc: 'Saute plus haut.', costs: [1000, 2400] },
-  { id: 'magnet', icon: 'magnet', kind: 'passif', name: 'Aimant', desc: 'Attire les pièces proches.', costs: [600, 1600, 3600] },
-  { id: 'lucky', icon: 'lucky', kind: 'passif', name: 'Trèfle', desc: 'Les gemmes apparaissent plus souvent.', costs: [1200, 3200] },
-  { id: 'scatter', icon: 'gems', kind: 'passif', name: 'Gemmes dispersées', desc: 'De temps en temps, une gemme prend la place d\'une pièce. Jaune : 5 pièces, rouge : 10, bleue : 20.', costs: [2000, 4800, 10000] },
-  { id: 'breaker', icon: 'break', kind: 'passif', name: 'Brise-obstacle', desc: 'Fonce à travers les caisses : elles volent en éclats et lâchent 2 pièces chacune.', costs: [1400] },
-  { id: 'heart', icon: 'heart', kind: 'passif', name: 'Cœur en plus', desc: 'Un second cœur : le premier coup ne t\'arrête plus.', costs: [3600] },
-  { id: 'drunk', icon: 'drunk', kind: 'passif', name: 'Faune alcoolisée', desc: 'De rares créatures deviennent éthérées : pâles et titubantes, elles ne font aucun dégât.', costs: [1600, 3600, 7200] },
-  { id: 'nature', icon: 'nature', kind: 'passif', name: 'Ami de la nature', desc: 'Les montures, rares, se montrent un peu plus souvent.', costs: [1200, 2800, 6000] },
-  { id: 'jammer', icon: 'jammer', kind: 'passif', name: 'Brouilleur', desc: 'La relique est perturbée : le décor ne change plus qu\'une seule fois.', costs: [2400] },
-  { id: 'dash', icon: 'dash', kind: 'actif', name: 'Ruée', desc: 'Fonce, invincible, en pulvérisant tout. Recharge plus vite à chaque niveau.', costs: [1200, 2800, 5600] },
-  { id: 'slow', icon: 'slow', kind: 'actif', name: 'Sablier', desc: 'Ralentit le temps quelques secondes.', costs: [1800, 4000] },
-  { id: 'lastLeap', icon: 'leap', kind: 'passif', name: 'Dernier élan', desc: 'Au dernier cœur perdu, tu rebondis encore pour gagner quelques mètres.', costs: [1600, 3600, 7200] },
-  { id: 'flight', icon: 'flight', kind: 'passif', power: true, name: 'Vol', desc: 'En l\'air, chaque appui te fait remonter d\'un coup d\'hélice. Relâche : tu retombes.', costs: [4800] },
-  { id: 'sprint', icon: 'shoes', kind: 'passif', power: true, name: 'Sprint', desc: 'Cours plus vite dès le départ, les jambes en tourbillon.', costs: [4000] },
-  { id: 'sphere', icon: 'sphere', kind: 'passif', power: true, name: 'Sphère', desc: 'Roule en boule dans les endroits exigus, troncs creux et galeries : il n\'y a que des trésors là-dedans.', costs: [6000] },
-  { id: 'rewind', icon: 'rewind', kind: 'passif', name: 'Rembobinage', desc: 'Une fois par course, la relique annule ta chute.', costs: [10000] },
+  { id: 'doubleJump', unlock: 2, icon: 'jump', kind: 'passif', name: 'Double saut', desc: 'Un second saut en l\'air.', costs: [480] },
+  { id: 'spring', unlock: 3, icon: 'spring', kind: 'passif', name: 'Ressort', desc: 'Saute plus haut.', costs: [1000, 2400] },
+  { id: 'magnet', unlock: 2, icon: 'magnet', kind: 'passif', name: 'Aimant', desc: 'Attire les pièces proches.', costs: [600, 1600, 3600] },
+  { id: 'lucky', unlock: 4, icon: 'lucky', kind: 'passif', name: 'Trèfle', desc: 'Avec Gemmes dispersées, les gemmes apparaissent plus souvent.', costs: [1200, 3200] },
+  { id: 'scatter', unlock: 6, icon: 'gems', kind: 'passif', name: 'Gemmes dispersées', desc: 'De temps en temps, une gemme prend la place d\'une pièce. Jaune : 5 pièces, rouge : 10, bleue : 20.', costs: [2000, 4800, 10000] },
+  { id: 'breaker', unlock: 3, icon: 'break', kind: 'passif', name: 'Brise-obstacle', desc: 'Fonce à travers les caisses : elles volent en éclats et lâchent 2 pièces chacune.', costs: [1400] },
+  { id: 'heart', unlock: 7, icon: 'heart', kind: 'passif', name: 'Cœur en plus', desc: 'Un second cœur : le premier coup ne t\'arrête plus.', costs: [3600] },
+  { id: 'drunk', unlock: 5, icon: 'drunk', kind: 'passif', name: 'Faune alcoolisée', desc: 'De rares créatures deviennent éthérées : pâles et titubantes, elles ne font aucun dégât.', costs: [1600, 3600, 7200] },
+  { id: 'nature', unlock: 4, icon: 'nature', kind: 'passif', name: 'Ami de la nature', desc: 'Les montures, rares, se montrent un peu plus souvent.', costs: [1200, 2800, 6000] },
+  { id: 'jammer', unlock: 8, icon: 'jammer', kind: 'passif', name: 'Gros sac à dos', desc: 'Pépito a prévu un sac plus grand pour la relique. Ça réduira peut-être ses effets… ou pas.', costs: [2400] },
+  { id: 'dash', unlock: 5, icon: 'dash', kind: 'actif', name: 'Ruée', desc: 'Fonce, invincible, en pulvérisant tout. Recharge plus vite à chaque niveau.', costs: [1200, 2800, 5600] },
+  { id: 'slow', unlock: 7, icon: 'slow', kind: 'actif', name: 'Sablier', desc: 'Ralentit le temps quelques secondes.', costs: [1800, 4000] },
+  { id: 'lastLeap', unlock: 6, icon: 'leap', kind: 'passif', name: 'Dernier élan', desc: 'Au dernier cœur perdu, tu rebondis encore pour gagner quelques mètres.', costs: [1600, 3600, 7200] },
+  { id: 'flight', unlock: 10, icon: 'flight', kind: 'passif', power: true, name: 'Vol', desc: 'En l\'air, chaque appui te fait remonter d\'un coup d\'hélice. Relâche : tu retombes.', costs: [4800] },
+  { id: 'sprint', unlock: 8, icon: 'shoes', kind: 'passif', power: true, name: 'Sprint', desc: 'Cours plus vite dès le départ, les jambes en tourbillon.', costs: [4000] },
+  { id: 'sphere', unlock: 10, icon: 'sphere', kind: 'passif', power: true, name: 'Sphère', desc: 'Roule en boule dans les endroits exigus, troncs creux et galeries : il n\'y a que des trésors là-dedans.', costs: [6000] },
+  { id: 'rewind', unlock: 12, icon: 'rewind', kind: 'passif', name: 'Rembobinage', desc: 'Une fois par course, la relique annule ta chute.', costs: [10000] },
 ];
 
 export const QUALITIES = ['auto', 'smooth', 'sharp'];   // how the picture is drawn, see resize in main.js
@@ -109,6 +110,8 @@ export function importCode(code) {
 
 export function level(save, id) { return save.upgrades[id] || 0; }
 
+export const unlocked = (save, u) => !u.unlock || levelInfo(save.xp).level >= u.unlock || level(save, u.id) > 0;
+
 export function nextCost(save, u) {
   const lvl = level(save, u.id);
   return lvl < u.costs.length ? u.costs[lvl] : null;
@@ -118,6 +121,7 @@ export function buy(save, u) {
   const cost = nextCost(save, u);
   if (cost === null || save.coins < cost) return false;
   if (u.needs && !level(save, u.needs)) return false;
+  if (!unlocked(save, u)) return false;
   save.coins -= cost;
   save.upgrades[u.id] = level(save, u.id) + 1;
   if (!u.power && !save.equipped.includes(u.id) && save.equipped.length < MAX_EQUIPPED) save.equipped.push(u.id);

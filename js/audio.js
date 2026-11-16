@@ -192,6 +192,8 @@ export const audio = {
       case 'unmount': tone(o, 420, 0.3, 'square', 0.2, 0, 110); break;
       case 'bye': tone(o, 700, 0.12, 'triangle', 0.14, 0, 500); tone(o, 500, 0.16, 'triangle', 0.14, 0.12, 350); break;
       case 'spider': tone(o, 1500, 0.16, 'sawtooth', 0.07, 0, 320); break;
+      case 'timber': tone(o, 160, 0.9, 'sawtooth', 0.22, 0, 60); noise(o, 0.8, 0.35, 700); break;
+      case 'slither': noise(o, 0.5, 0.25, 1800); break;
       case 'boss': tone(o, 60, 1.2, 'sawtooth', 0.4, 0, 30); tone(o, 220, 0.9, 'square', 0.18, 0.1, 70); noise(o, 1, 0.4, 300); break;
       case 'spit': tone(o, 300, 0.2, 'triangle', 0.2, 0, 900); noise(o, 0.15, 0.25, 2000); break;
       case 'acid': tone(o, 180, 0.25, 'sawtooth', 0.16, 0, 600); break;

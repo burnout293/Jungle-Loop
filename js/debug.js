@@ -2,7 +2,7 @@
 // Plain on purpose. It changes the save (coins, level, purchases), what the next runs start with,
 // and a few of the game's numbers. Its own settings are kept on this device only.
 
-import { SPEED, FROM, BOSS, PPM, BIOME_LEN, MOUNTS, GROUND, PX } from './game.js';
+import { SPEED, FROM, BOSS, JUMP, PPM, MOUNTS, GROUND, PX } from './game.js';
 import { BIOMES } from './render.js';
 import * as S from './save.js';
 import * as P from './progress.js';
@@ -10,14 +10,21 @@ import * as P from './progress.js';
 const KEY = 'jungle-loop-debug';
 // The game's own numbers as they are written in game.js, before anything here changes them.
 const ORIGIN = { base: SPEED.base, gain: SPEED.gain, sprint: SPEED.sprint, boss: BOSS.at, ...Object.fromEntries(Object.entries(FROM).map(([k, v]) => ['from_' + k, v])) };
-const BLANK = { fps: false, god: false, start: 0, biome: 0, mount: '', fm: false, ...ORIGIN };
+const BLANK = { fps: false, info: false, god: false, start: 0, biome: 0, mount: '', fm: false, ...ORIGIN };
 export const dbg = { ...BLANK };
-try { Object.assign(dbg, JSON.parse(localStorage.getItem(KEY)) || {}); } catch { /* nothing kept */ }
+// Only the game numbers changed by hand here are kept and applied: the others always follow game.js,
+// even when a new version of the game changes them.
+const changed = new Set();
+try {
+  const kept = JSON.parse(localStorage.getItem(KEY)) || {};
+  for (const k of Array.isArray(kept.changed) ? kept.changed : []) if (k in ORIGIN) changed.add(k);
+  for (const [k, v] of Object.entries(kept)) if (k in BLANK && typeof v === typeof BLANK[k] && (!(k in ORIGIN) || changed.has(k))) dbg[k] = v;
+} catch { /* nothing kept */ }
 
 function apply() {
   SPEED.base = dbg.base; SPEED.gain = dbg.gain; SPEED.sprint = dbg.sprint; BOSS.at = dbg.boss;
   for (const k of Object.keys(FROM)) FROM[k] = dbg['from_' + k];
-  try { localStorage.setItem(KEY, JSON.stringify(dbg)); } catch { /* not kept */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ ...dbg, changed: [...changed] })); } catch { /* not kept */ }
 }
 apply();
 
@@ -25,12 +32,13 @@ apply();
 export function debugRun(run) {
   run.god = dbg.god;
   if (dbg.biome) run.biome = run.prevBiome = dbg.biome;
+  if (changed.has('boss')) run.bossAt = BOSS.at;       // a boss set by hand comes exactly there
+  if (dbg.god || dbg.start || dbg.biome || dbg.mount || dbg.fm) run.events.push('debug');   // said on screen: nothing should look normal by mistake
   if (dbg.start > 0) {                                  // as if the first metres had already been run
     const D = dbg.start * PPM, g = SPEED.gain;
     run.t = g ? (-run.base + Math.sqrt(run.base * run.base + 2 * g * D)) / g : D / run.base;   // the speed it would have reached
     run.cam = D; run.dist = dbg.start; run.nextX = D + 1500;
     run.terrain = [{ x: -1e9, y: GROUND }];
-    run.nextBiomeAt = (Math.floor(dbg.start / BIOME_LEN) + 1) * BIOME_LEN;
     run.nextMount += dbg.start; run.nextFM += dbg.start;
   }
   if (dbg.mount) run.items.push({ x: run.cam + PX + 700, kind: dbg.mount, ph: 0 });
@@ -54,9 +62,31 @@ const pickOne = (key, options) => {
 // A number of the game: typed in the unit shown, kept in the game's own (`k` units per shown unit).
 const tune = (label, key, unit, k = 1, step = 1) => {
   const i = num(+(dbg[key] / k).toFixed(3), step);
-  i.addEventListener('change', () => { const v = Number(i.value); if (Number.isFinite(v) && v >= 0) { dbg[key] = v * k; apply(); } });
+  i.addEventListener('change', () => { const v = Number(i.value); if (Number.isFinite(v) && v >= 0) { dbg[key] = v * k; if (key in ORIGIN) changed.add(key); apply(); } });
   return row(label, i, tag('small', { textContent: unit + (key in ORIGIN ? ` (origine ${+(ORIGIN[key] / k).toFixed(3)})` : '') }));
 };
+
+// Speed and time at a given distance, from the numbers in force (and with the Sprint).
+function calc() {
+  const at = num(1000, 100), out = tag('small');
+  const show = () => {
+    const D = Math.max(0, Number(at.value) || 0) * PPM, g = SPEED.gain;
+    const line = (b) => { const t = g ? (-b + Math.sqrt(b * b + 2 * g * D)) / g : D / b; return `${((b + g * t) / PPM).toFixed(1)} m/s après ${Math.floor(t / 60)} min ${Math.round(t % 60)} s`; };
+    out.textContent = `à pied : ${line(SPEED.base)} · avec Sprint : ${line(SPEED.base + SPEED.sprint)}`;
+  };
+  at.addEventListener('input', show); show();
+  return row('Vitesse à (m)', at, out);
+}
+// How high each jump goes, in metres, from the numbers of game.js (Ressort: +10 % of push per level).
+function jumps() {
+  const h = (v, g) => v * v / (2 * g) / PPM, f = (x) => x.toFixed(2) + ' m';
+  const rows = [0, 1, 2].map((lvl) => {
+    const k = 1 + 0.1 * lvl, v = JUMP.v * k, d = JUMP.double * k;
+    return `${lvl ? 'Ressort ' + lvl : 'Sans Ressort'} : bref ${f(h(v, JUMP.gravity))}, maintenu ${f(h(v, JUMP.held))}, avec double saut jusqu'à ${f(h(v, JUMP.held) + h(d, JUMP.held))}`;
+  });
+  rows.push(`Montures : gorille ${f(h(-MOUNTS.gorilla.jump, JUMP.gravity))} (maintenu ${f(h(-MOUNTS.gorilla.jump, JUMP.held))}), rhino ${f(h(-MOUNTS.rhino.jump, JUMP.gravity))} (maintenu ${f(h(-MOUNTS.rhino.jump, JUMP.held))})`);
+  return tag('div', {}, tag('div', { className: 'row' }, tag('span', { textContent: 'Hauteurs de saut' })), ...rows.map((r) => tag('div', { className: 'row' }, tag('small', { textContent: r }))));
+}
 
 function build() {
   const save = host.save();
@@ -78,6 +108,10 @@ function build() {
     row('Défis', btn('Nouveaux défis', () => { const s = host.save(); s.quests = []; P.fill(s); done('Trois nouveaux défis.'); })),
     tag('h3', { textContent: 'Affichage' }),
     row('Images par seconde', box('fps', () => host.fps(dbg.fps))),
+    row('Mesures en jeu', box('info', () => host.info(dbg.info)), tag('small', { textContent: 'vitesse, vitesse propre, distance, hauteur, hauteur max' })),
+    tag('h3', { textContent: 'Calculs' }),
+    calc(),
+    jumps(),
     tag('h3', { textContent: 'Prochaines courses' }),
     row('Invincible', box('god')),
     tune('Départ à', 'start', 'm'),
@@ -93,7 +127,7 @@ function build() {
     tune('Ronces dès', 'from_brambles', 'm'),
     tune('Geyser dès', 'from_geyser', 'm'),
     tune('Boss à', 'boss', 'm'),
-    row('', btn('Valeurs d\'origine', () => { Object.assign(dbg, ORIGIN); apply(); open(host); say.textContent = 'Valeurs d\'origine remises.'; })),
+    row('', btn('Valeurs d\'origine', () => { Object.assign(dbg, ORIGIN); changed.clear(); apply(); open(host); say.textContent = 'Valeurs d\'origine remises.'; })),
   );
   return panel;
 }

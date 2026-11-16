@@ -31,7 +31,11 @@ const SLOW_CD = 20;
 const MAGNET = [0, 110, 170, 240];
 const DRUNK = [0, 0.06, 0.1, 0.15];     // Faune alcoolisée: share of the creatures that are harmless
 const FLAP = 430;                       // how fast the leaf rotor climbs
-export const SPEED = { base: 280, gain: 5, sprint: 160 };   // units per second: at the door, gained each second (for ever), added by Sprint
+export const SPEED = { base: 280, gain: 5, sprint: 160 };
+// A jump: the push of a press (units per second), of the double jump, and gravity, lighter while the
+// press is held on the way up. (The debug menu works out heights from these.)
+const RAMP = 70;
+export const JUMP = { v: 760, double: 700, gravity: 2400, held: 1500 };   // units per second: at the door, gained each second (for ever), added by Sprint
 const SPIDER = { w: 60, h: 56, ahead: 1.4 };   // it drops when the hero is `ahead` seconds away: it has settled well before he arrives
 // What only some sceneries have (see spawnPattern): the spider in the jungle; in the ruins a block of
 // a pillar that falls the same way, and a geyser; in the dungeon a bat that swoops down. Brambles, a
@@ -64,14 +68,21 @@ export const MOUNTS = {
   rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, grab: { w: 78, h: 150 }, speed: { base: 300, gain: 22 }, ahead: 0 },   // grab: it sweeps up coins well above its back
   dragonfly: { name: 'Libellule', fly: true, half: 28, tall: 92, speed: { base: 320, gain: 14 }, ahead: 0.5 },
 };
-// The boss: at BOSS.at metres a giant carnivorous plant comes in on the right and keeps pace with the
-// hero, who runs at BOSS.speed meanwhile. It spits acid: blobs that land on the path and stay there as
-// puddles (jump them), and balls fired low (jump) or high (stay down). After BOSS.fight seconds the
-// floor gives way under it: it topples head first into a huge hole, which the hero has to jump.
-// BOSS.w is how wide it is on screen, the mouth where its acid comes from (both in units).
-export const BOSS = { at: 4000, speed: 560, fight: 22, w: 420, mouthX: 100, mouthY: 170, hole: 270, holeX: 120 };
+// The boss, Vorace: a giant carnivorous plant. Around BOSS.at metres, in the forest only, it comes in on
+// the right and keeps pace with the hero, who runs at BOSS.speed meanwhile; the relic in his backpack
+// lights up as it comes. Its tentacles crawl on the floor around it, and it attacks from every side:
+// blobs of acid lobbed onto the path (puddles to jump), balls along a low lane (jump), a middle one (stay
+// down) or a high one (no big jump), two balls at once, a rain of drops from the sky (their shadows show
+// where), a tentacle slithering along the floor (jump). Every attack is announced (jaws open and glow,
+// shadows) and every pair leaves a way through. What it throws depends on what the hero rides. After
+// BOSS.fight seconds a tree falls on it and crushes it into a hole the hero must jump: a line of blue gems
+// shows where to take off. BOSS.w is how wide it stands on screen, the mouth where its acid comes from.
+export const BOSS = { at: 2000, speed: 560, fight: 26, w: 420, mouthX: 100, mouthY: 170, hole: 270, holeX: 120 };
+const LANE = { low: 28, mid: 115, high: 250, vine: 470 };   // height of a ball's centre above the floor
 const ACID = { ball: 36, puddle: 120, closing: 650 };
-export const PERCH = 240;               // how high above the floor the waiting gorilla's feet hang
+// How high above the floor the waiting gorilla's feet hang: right up in the vines, out of reach of a
+// plain jump. Flying gets there, and the double jump with a Ressort.
+export const PERCH = 400;
 const ZIG = { low: 70, high: 230, period: 1.6 };   // the waiting dragonfly's zigzag: heights of its body, seconds per zig and zag
 export const HANG_Y = 190;              // where the gorilla's feet are when it hangs from the vines
 const friend = (up) => 1 + 0.25 * (up.nature || 0);      // Ami de la nature: mounts come that much sooner
@@ -85,6 +96,8 @@ export const FM = { w: 90, h: 64, rush: 1150, lanes: 5, step: 110 };
 // Gems: what each colour is worth, and how often each turns up.
 export const GEMS = { y: 5, r: 10, b: 20 };
 const gemKind = () => pick('yyyyyyrrrb');
+// Gems only turn up for whoever wears Gemmes dispersées (and as the boss's prize): elsewhere, a coin.
+const gem = (run) => (run.up.scatter ? gemKind() : undefined);
 const SCATTER = [0, 0.012, 0.022, 0.035];   // Gemmes dispersées: share of the coins that become gems
 const HEART_GOLD = 25;                      // what a heart is worth to someone who has all his lives
 const BLAST_COINS = 30;                     // thrown out of the temple when its doorway blows: they can be picked up
@@ -111,7 +124,7 @@ function layShape(run, s, x, lift = 0) {
     [...row].forEach((ch, k) => {
       if (ch === '.' || ch === ' ') return;
       const c = { x: x + k * CELL, y: floorAt(run, x + k * CELL) - h };
-      if ('yrb'.includes(ch)) c.gem = ch;                // y, r, b: a yellow, red or blue gem; anything else is a coin
+      if ('yrb'.includes(ch) && run.up.scatter) c.gem = ch;   // y, r, b: a yellow, red or blue gem (with Gemmes dispersées); anything else is a coin
       run.coins.push(c);
     });
   });
@@ -131,7 +144,7 @@ export function newRun(upgrades) {
     p: { y: GROUND, vy: 0, ground: true, plat: null, jumps: 0, buf: 0, phase: 0, flying: false, rotor: false, spin: 0, roll: 0, inv: 0, squash: 0, hang: false, vineLeap: false, ball: null },
     obs: [], coins: [], plats: [], parts: [], events: [],
     nextX: 1500,
-    biome: 0, prevBiome: 0, blend: 1, nextBiomeAt: BIOME_LEN, glitch: 0,
+    biome: 0, prevBiome: 0, blend: 1, nextBiomeAt: Infinity, glitch: 0,   // the scenery only changes once a boss is beaten
     dash: { t: 0, cd: 0, max: DASH_CD[upgrades.dash || 0] },
     slow: { t: 0, cd: 0, max: SLOW_CD },
     rewindLeft: upgrades.rewind ? 1 : 0,
@@ -142,10 +155,13 @@ export function newRun(upgrades) {
     terrain: [{ x: -1e9, y: GROUND }],           // the floor's outline, see floorAt
     zones: [],                                   // tight places ahead (see GALLERY)
     items: [], mount: null, gone: null, vine: 0,             // mounts waiting ahead, the one ridden, how far the vines have come down
-    nextMount: rnd(300, 480) / friend(upgrades),  // in metres: mounts are a rare treat
+    nextMount: rnd(700, 1000) / friend(upgrades), // in metres: mounts are a rare treat
     fm: null, fmDue: false, nextFM: rnd(150, 230), blockEnd: 0,   // follower monster; where the last blocking pattern ends
     leap: null,                                  // Dernier élan: the bounces after the last heart
-    boss: null, bossDone: false, pits: [],       // the giant plant, and the hole it falls into
+    boss: null, bossDone: false, pits: [],       // Vorace, the giant plant, and the hole it falls into
+    bossAt: BOSS.at + rnd(-100, 100),            // where it comes, in metres
+    relic: 0,                                    // how bright the relic in his backpack shines (1: flaring)
+    own: 0, h: 0, maxH: 0,                       // measures: his own speed, his height above the floor and the highest this run
   };
 }
 
@@ -261,7 +277,7 @@ function tight(run, kind, x, w, y) {
   const count = Math.floor((w - 160) / 40);
   for (let i = 0; i < count; i++) {
     const c = { x: x + 80 + i * 40, y, tight: kind };
-    if (i % 6 === 3) c.gem = gemKind();
+    if (i % 6 === 3) c.gem = gem(run);
     run.coins.push(c);
   }
   if (Math.random() < 0.03) run.coins.push({ x: x + w - 70, y, tight: kind, heart: true });
@@ -331,7 +347,7 @@ function spawnPattern(run) {
       const y = G - 135;
       run.plats.push({ x, y, w: PLAT_W });
       coinLine(run, x + 40, y - 40, 4);
-      if (Math.random() < 0.35 + 0.2 * (up.lucky || 0)) run.coins.push({ x: x + PLAT_W / 2, y: y - 110, gem: gemKind() });
+      if (Math.random() < 0.35 + 0.2 * (up.lucky || 0)) run.coins.push({ x: x + PLAT_W / 2, y: y - 110, gem: gem(run) });
       len = PLAT_W; break;
     }
     case 'cave': {                                                     // two ways: down through the hollow, or over its roof
@@ -340,7 +356,7 @@ function spawnPattern(run) {
       run.plats.push({ x: x + R, y, w, t: SLAB.t, kind: 'slab' });     // the roof only covers the deep part: headroom everywhere
       coinLine(run, x + R + w * 0.25, G + HOLLOW - 40, Math.floor(w * 0.5 / 44));         // below: no room to jump, so only coins
       coinLine(run, x + R + 70, y - 40, Math.min(16, Math.floor((w - 140) / 60)));        // above: the bigger reward
-      run.coins.push({ x: x + R + w - 60, y: y - 110, gem: gemKind() });
+      run.coins.push({ x: x + R + w - 60, y: y - 110, gem: gem(run) });
       run.monkeys.push({ x: x + R + w * rnd(0.3, 0.7), ph: rnd(0, 6) });
       len = 2 * R + w; break;
     }
@@ -371,7 +387,7 @@ function spawnPattern(run) {
         run.plats.push({ x: px, y: py, w: PLAT_W });
         coinLine(run, px + 60, py - 40, 3);
       }
-      run.coins.push({ x: x + 600 + PLAT_W / 2, y: G - 344 - 110, gem: gemKind() });
+      run.coins.push({ x: x + 600 + PLAT_W / 2, y: G - 344 - 110, gem: gem(run) });
       run.monkeys.push({ x: x + 600 + PLAT_W * 0.6, ph: rnd(0, 6) });
       addSpiky(run, x + 420);
       len = 600 + PLAT_W; break;
@@ -379,7 +395,7 @@ function spawnPattern(run) {
     case 'mount': {                                                    // an animal waiting: a trail of coins leads to it
       coinLine(run, x, G - 40, 5);
       run.items.push({ x: x + 330, kind: pick(Object.keys(MOUNTS)), ph: rnd(0, ZIG.period * 2), y: G - ZIG.low });
-      run.nextMount = x / PPM + rnd(650, 950) / friend(up);
+      run.nextMount = x / PPM + rnd(1300, 1800) / friend(up);
       len = 460; break;
     }
   }
@@ -399,7 +415,7 @@ function spawnPattern(run) {
         const wx = cx + i * 44;
         run.coins.push({ x: wx, y: floorAt(run, wx) - (style === 'line' ? 40 : 320 - Math.sin(i * 0.7) * 130) });
       }
-      if (up.lucky && Math.random() < 0.12 * up.lucky) run.coins.push({ x: cx + n * 44 + 30, y: floorAt(run, cx + n * 44 + 30) - 110, gem: gemKind() });
+      if (up.lucky && up.scatter && Math.random() < 0.12 * up.lucky) run.coins.push({ x: cx + n * 44 + 30, y: floorAt(run, cx + n * 44 + 30) - 110, gem: gem(run) });
     }
   }
   run.nextX = x + len + gap;
@@ -501,14 +517,24 @@ function spawnRide(run) {
 // ---------- the boss ----------
 
 function boss(run, d) {
+  const p = run.p;
   if (!run.boss) {
-    if (run.bossDone || run.dist < BOSS.at || run.mount) return;
+    if (run.bossDone || run.dist < run.bossAt || run.biome !== 0 || run.prevBiome !== 0) return;   // only ever in the forest
     run.boss = { phase: 'enter', t: 0, sx: run.viewW + 60, next: 1.2, wind: 0, attack: '', open: 0 };
     run.items.length = 0;                                                  // no mount waiting during the fight
-    run.shake = Math.max(run.shake, 0.6); run.events.push('boss');
+    run.relic = 1; run.shake = Math.max(run.shake, 0.6); run.events.push('boss');
     return;
   }
   const b = run.boss, mouth = { x: run.cam + b.sx + BOSS.mouthX, y: BOSS.mouthY };
+  const ball = (h) => {                                                  // a ball along a lane, h above the floor
+    const o = addObs(run, mouth.x, mouth.y, ACID.ball, ACID.ball, 'acid', false);
+    o.ghost = false; o.ball = true; o.lane = GROUND - h - ACID.ball / 2; o.vx = run.speed - ACID.closing;
+  };
+  const lob = (ahead, T = 0.9) => {                                      // a blob that lands on the path, `ahead` of the hero
+    const land = run.cam + run.sx + ahead + run.speed * T, g = 1600;
+    const o = addObs(run, mouth.x, mouth.y, ACID.ball, ACID.ball, 'acid', false);
+    o.ghost = false; o.lob = true; o.vx = (land - mouth.x) / T; o.vy = (GROUND - ACID.ball - mouth.y - 0.5 * g * T * T) / T; o.g = g;
+  };
   b.t += d; b.open = Math.max(0, b.open - d);
   if (b.phase === 'enter') {                                             // it slides in from the right edge
     b.sx += (run.viewW - BOSS.w - b.sx) * Math.min(1, d * 2.5);
@@ -519,38 +545,69 @@ function boss(run, d) {
     if (b.wind > 0) {                                                    // its jaws open, acid glows: then it fires
       if ((b.wind -= d) <= 0) {
         b.open = 0.35;
-        if (b.attack === 'puddle') {                                     // a blob lobbed onto the path ahead
-          const T = 0.9, land = run.cam + run.sx + rnd(380, 640) + run.speed * T, g = 1600;
-          const o = addObs(run, mouth.x, mouth.y, ACID.ball, ACID.ball, 'acid', false);
-          o.ghost = false; o.lob = true; o.vx = (land - mouth.x) / T; o.vy = (GROUND - ACID.ball - mouth.y - 0.5 * g * T * T) / T; o.g = g;
-          run.events.push('spit');
-        } else {                                                         // a ball fired along a low or a high lane
-          const low = b.attack === 'low', o = addObs(run, mouth.x, mouth.y, ACID.ball, ACID.ball, 'acid', false);
-          o.ghost = false; o.ball = true; o.lane = GROUND - (low ? 22 : 150) - ACID.ball; o.vx = run.speed - ACID.closing;
-          run.events.push('acid');
+        switch (b.attack) {
+          case 'puddle': lob(rnd(380, 640)); run.events.push('spit'); break;
+          case 'spray': lob(320); lob(760); run.events.push('spit'); break;          // two puddles, room to land between them
+          case 'low': case 'mid': case 'high': case 'vine': ball(LANE[b.attack]); run.events.push('acid'); break;
+          case 'pair': ball(LANE.high); ball(pick([LANE.low, LANE.mid])); run.events.push('acid'); break;   // a short jump or staying down gets through
+          case 'fan': {                                                  // on the dragonfly: every lane but two neighbours
+            const free = Math.floor(Math.random() * 4);
+            [70, 180, 290, 400, 510].forEach((h, k) => { if (k !== free && k !== free + 1) ball(h); });
+            run.events.push('acid'); break;
+          }
+          case 'rain':                                                   // drops from the sky, their shadows on the floor first
+            for (const ahead of [420, 860]) {
+              const x = run.cam + run.sx + ahead + run.speed * 0.9, o = addObs(run, x, -60, ACID.ball, ACID.ball, 'acid', false);
+              o.ghost = false; o.drop = true; o.vx = 0; o.vy = 0; o.g = 2 * (GROUND - ACID.ball + 60) / (0.9 * 0.9);
+            }
+            run.events.push('spit'); break;
+          case 'tentacle': {                                             // a tentacle slithering along the floor towards him
+            const o = addObs(run, run.cam + b.sx + 40, GROUND - 30, 150, 30, 'acid', false);
+            o.ghost = false; o.tentacle = true; o.vx = run.speed - 330; o.ph = rnd(0, 6);
+            run.events.push('slither'); break;
+          }
         }
       }
     } else if ((b.next -= d) <= 0) {
-      b.attack = pick(['puddle', 'puddle', 'low', 'high', 'low']);
-      b.wind = 0.45; b.next = Math.max(1.15, 1.8 - b.t * 0.025);
+      // what it throws depends on how he gets about
+      const M = run.mount && run.mount.kind;
+      const set = M === 'dragonfly' ? ['fan', 'fan', 'rain', 'low', 'high', 'mid']
+        : M === 'rhino' ? ['puddle', 'spray', 'low', 'low', 'high', 'rain', 'tentacle']
+          : ['puddle', 'spray', 'low', 'low', 'mid', 'high', 'pair', 'rain', 'tentacle', ...(p.hang ? ['vine', 'vine'] : [])];
+      b.attack = pick(set);
+      b.wind = 0.45; b.next = Math.max(0.7, 1.2 - b.t * 0.025);   // more and more often
     }
-    if (b.t > BOSS.fight && b.wind <= 0) {                               // the floor gives way under it
-      b.phase = 'fall'; b.t = 0; b.wx = run.cam + b.sx;
-      const x0 = b.wx + BOSS.holeX, x1 = x0 + BOSS.hole;            // right under its roots
-      run.terrain.push({ x: x0, y: GROUND }, { x: x0 + 1, y: GROUND + 900 }, { x: x1 - 1, y: GROUND + 900 }, { x: x1, y: GROUND });
-      run.terrain.sort((a, c) => a.x - c.x);
-      run.pits.push({ x0, x1 });
-      coinArc(run, x0 - 120, 150, 9, BOSS.hole + 240);                  // the way over, in gold
+    if (b.t > BOSS.fight && b.wind <= 0) {                               // a tree comes down on it
+      b.phase = 'fall'; b.t = 0; b.wx = run.cam + b.sx; b.crushed = false;
+      const x0 = b.wx + BOSS.holeX, x1 = x0 + BOSS.hole, take = x0 - 50, v = BOSS.speed;
+      // blue gems along the very path of a plain jump taken at the right spot: the first one says "now"
+      for (let k = 0; k <= 9; k++) {
+        const tau = k * 0.07, h = JUMP.v * tau - JUMP.gravity * tau * tau / 2;
+        run.coins.push({ x: take + v * tau, y: GROUND - Math.max(0, h) - 40, gem: 'b' });
+      }
       run.nextX = Math.max(run.nextX, x1 + 600);
-      run.shake = 1; run.events.push('bossfall');
+      run.events.push('timber');
     }
     return;
   }
-  // falling: it stays where the floor opened, the hero runs on to the hole
+  // falling: it stays where it stood; the tree lands at 0.9 s, the floor gives way, the hero jumps the hole
   b.sx = b.wx - run.cam;
-  if (run.cam + run.sx > run.pits[run.pits.length - 1].x1 + 40) {        // over the hole: the fight is won
+  if (!b.crushed && b.t >= 0.9) {
+    b.crushed = true;
+    const x0 = b.wx + BOSS.holeX, x1 = x0 + BOSS.hole;
+    run.terrain.push({ x: x0, y: GROUND }, { x: x0 + 1, y: GROUND + 900 }, { x: x1 - 1, y: GROUND + 900 }, { x: x1, y: GROUND });
+    run.terrain.sort((a, c) => a.x - c.x);
+    run.pits.push({ x0, x1 });
+    for (let i = 0; i < 30; i++) run.parts.push({ x: x0 + rnd(-80, BOSS.hole + 80), y: GROUND - rnd(0, 40), vx: rnd(-260, 260), vy: rnd(-420, -60), life: 0, max: rnd(0.5, 1), c: pick(['#5d8a2c', '#3b2014', '#cbb894', '#7bd13c']), s: rnd(8, 18), g: 900 });
+    run.shake = 1; run.events.push('bossfall');
+  }
+  const pit = run.pits[run.pits.length - 1];
+  if (b.crushed && run.cam + run.sx > pit.x1 + 40) {                     // over the hole: the fight is won
     run.boss = null; run.bossDone = true;
     for (let i = 0; i < 24; i++) loot(run, run.cam + run.sx + rnd(40, 400), GROUND - rnd(80, 300));
+    for (const g of 'yrb') { loot(run, run.cam + run.sx + rnd(100, 300), GROUND - 200); run.coins[run.coins.length - 1].gem = g; }   // and a gem of each colour
+    // and the world moves on, unless the Gros sac à dos muffles the relic (one time in two)
+    if (!(run.up.jammer && Math.random() < 0.5)) run.nextBiomeAt = run.dist;
     run.events.push('bossdown');
   }
 }
@@ -598,7 +655,7 @@ function dismount(run) {
   run.mount = null;
   p.hang = false; p.vineLeap = false; p.jumps = 1;
   p.inv = 1.5; run.shake = 0.5; run.flash = 0.6;
-  run.nextMount = Math.max(run.nextMount, run.dist + rnd(350, 550) / friend(run.up));
+  run.nextMount = Math.max(run.nextMount, run.dist + rnd(900, 1200) / friend(run.up));
   run.events.push('unmount');
 }
 
@@ -761,7 +818,10 @@ export function update(run, dt, input) {
   // The hero's own speed grows for ever; a mount, then the boss, impose theirs while they last.
   const own = run.base + run.t * SPEED.gain, R = run.mount && MOUNTS[run.mount.kind].speed;
   const pace = run.boss ? BOSS.speed : R ? R.base + R.gain * run.mount.t : own;
-  run.speed += (pace - run.speed) * Math.min(1, dt * 3);                 // one pace slides into the other
+  // Slowing down is quick; speeding back up (after a mount or the boss) is gradual: RAMP units per
+  // second each second, so a big gap takes a few seconds to close.
+  run.speed = pace > run.speed ? Math.min(pace, run.speed + RAMP * dt) : run.speed + (pace - run.speed) * Math.min(1, dt * 3);
+  run.own = own; run.relic = Math.max(0, run.relic - dt * 0.6);
   run.vine = Math.max(0, Math.min(1, run.vine + (run.mount && run.mount.kind === 'gorilla' ? 1 : -1) * dt * 2.5));
   if (run.leap) run.leap.v = Math.max(160, run.leap.v - 170 * d);       // knocked out: he only slows down
   // he is thrown out of the temple faster than he runs
@@ -815,11 +875,11 @@ export function update(run, dt, input) {
       if (input.pressed) { p.hang = false; p.vy = 160; p.jumps = 1; run.events.push('drop'); }
     } else {
       if (input.pressed) {
-        if (p.ground) jump(run, (M ? M.jump : -760) * spring);     // on foot, a press is a plain jump
+        if (p.ground) jump(run, (M ? M.jump : -JUMP.v) * spring);     // on foot, a press is a plain jump
         else if (gorilla && p.jumps < 2) {                         // the gorilla's second jump goes as high as it takes to reach the vines
           jump(run, -Math.sqrt(2 * 2400 * Math.max(80, p.y - HANG_Y + 40))); p.vineLeap = true;
           burst(run, px, p.y, '#ffffff', 8, 160);
-        } else if (!M && up.doubleJump && p.jumps < 2) { jump(run, -700 * spring); burst(run, px, p.y, '#ffffff', 6, 120); p.rotor = !!up.flight; }
+        } else if (!M && up.doubleJump && p.jumps < 2) { jump(run, -JUMP.double * spring); burst(run, px, p.y, '#ffffff', 6, 120); p.rotor = !!up.flight; }
         else if (!M && up.flight) {                                // in the air, every press lifts him at once
           p.rotor = true; p.spin = 0.22; p.vy = Math.min(p.vy, -FLAP);
           run.events.push('flap');
@@ -835,7 +895,7 @@ export function update(run, dt, input) {
       if (!p.ground) {
         const before = p.y;
         if (p.rotor) p.vy = Math.min(-FLAP, p.vy + 2400 * d);    // the leaf rotor: a steady climb for as long as it is held
-        else p.vy += (input.hold && p.vy < 0 && !p.vineLeap ? 1500 : 2400) * d;   // holding makes the jump higher
+        else p.vy += (input.hold && p.vy < 0 && !p.vineLeap ? JUMP.held : JUMP.gravity) * d;   // holding makes the jump higher
         p.flying = p.rotor || p.spin > 0;
         if (p.flying && Math.random() < 0.25) run.parts.push({ x: px + rnd(-40, 40), y: p.y - 105, vx: rnd(-160, -40), vy: rnd(-40, 60), life: 0, max: 0.6, c: pick(['#8fd14a', '#c9e86a', '#5fae3a']), s: rnd(4, 8), g: 300 });   // leaves shaken off his rotor
         p.y += p.vy * d;
@@ -856,7 +916,7 @@ export function update(run, dt, input) {
           p.y = land; p.vy = 0; p.ground = true; p.plat = on; p.jumps = 0; p.squash = 1; p.rotor = false; p.spin = 0; p.vineLeap = false;
           for (let i = 0; i < 5; i++) run.parts.push({ x: px + rnd(-16, 16), y: land - 2, vx: rnd(-140, 140), vy: rnd(-70, -20), life: 0, max: 0.3, c: '#f4f0e0', s: rnd(4, 8), g: 0 });
           if (on) run.events.push('land');
-          if (p.buf > 0) jump(run, (M ? M.jump : -760) * spring);
+          if (p.buf > 0) jump(run, (M ? M.jump : -JUMP.v) * spring);
         }
       } else {
         // strides per second: quicker as he speeds up, but never a blur
@@ -884,6 +944,8 @@ export function update(run, dt, input) {
       burst(run, it.x, p.y - 70, '#ffd35c', 16, 260);
       run.events.push('mount');
     }
+
+    run.h = Math.max(0, (floorAt(run, px) - p.y) / PPM); run.maxH = Math.max(run.maxH, run.h);
 
     // --- obstacles ---
     const box = { L: px - half, R: px + half, T: p.y - tall + 6, B: p.y - 2 };
@@ -913,6 +975,11 @@ export function update(run, dt, input) {
             run.events.push('splash');
           }
         } else if (o.ball) o.y += (o.lane - o.y) * Math.min(1, d * 4);
+        else if (o.drop) {                           // a drop from the sky: a small puddle where it lands
+          o.vy += o.g * d; o.y += o.vy * d;
+          const f = floorAt(run, o.x + o.w / 2);
+          if (o.y + o.h >= f) { o.drop = false; o.x -= 27; o.w = 90; o.h = 22; o.y = f - o.h; o.puddle = true; run.events.push('splash'); }
+        }
       }
       if (o.kind === 'geyser') {                   // it spouts once, and keeps spouting
         if (!o.rise && o.x - px < run.speed * GEYSER.ahead) run.events.push('geyser');
@@ -959,8 +1026,8 @@ export function update(run, dt, input) {
     run.prevBiome = run.biome;
     run.biome = (run.biome + 1 + Math.floor(Math.random() * (BIOME_COUNT - 1))) % BIOME_COUNT;
     run.biomeX = run.cam + run.viewW + 400;       // the new scenery starts ahead, off screen, and scrolls in
-    run.nextBiomeAt += run.up.jammer ? Infinity : BIOME_LEN;          // Brouilleur: the relic is jammed, it only manages once
-    if (run.up.jammer) run.glitch = Math.max(run.glitch, 0.7);
+    run.nextBiomeAt = Infinity;                                        // until the next boss
+    run.relic = 1; run.glitch = Math.max(run.glitch, 0.5);             // the relic flares: it is what moves the world
     run.events.push('biome');
   }
 

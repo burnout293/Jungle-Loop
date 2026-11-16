@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 16/11/2026, version 0.17.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint et les distances minimum. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 16/11/2026, version 0.18.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -17,7 +17,7 @@ L'écran fait 720 unités de haut (18 m), le sol est à 630. Les vitesses sont d
 | Sortie du temple | vitesse × 1,8 jusqu'à sa place à l'écran | `update` |
 | Ruée | vitesse × 1,7 pendant 0,55 s | `update` |
 | Sablier | le monde tourne à 45 % | `update` |
-| Changement de décor | tous les 400 m, tiré au sort parmi les 3 autres ; avec le Brouilleur, une seule fois (à 400 m) | `BIOME_LEN` |
+| Changement de décor | seulement après avoir vaincu un boss (aujourd'hui Vorace, une fois) ; avec le Gros sac à dos, 1 fois sur 2 le décor reste | `boss` |
 
 ## 2. Saut et vol
 
@@ -84,14 +84,15 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 |---|---|---|
 | Traînée de pièces après un motif | 55 % des fois (toujours après « pièces ») | `spawnPattern` |
 | Longueur d'une traînée | 3 à 8 pièces, une tous les 1,1 m | `spawnPattern` |
-| Plateforme | 4 pièces ; gemme 35 % (+20 % par niveau de Trèfle) | `spawnPattern` |
-| Trèfle | en plus : gemme après une traînée, 12 % par niveau | `spawnPattern` |
+| Plateforme | 4 pièces ; avec Gemmes dispersées, gemme 35 % (+20 % par niveau de Trèfle) | `spawnPattern` |
+| Trèfle | avec Gemmes dispersées : gemme après une traînée, 12 % par niveau | `spawnPattern` |
+| Gemmes | uniquement avec Gemmes dispersées équipé ; ailleurs, une pièce à la place. Exception : la victoire sur un boss (une de chaque couleur, et l'arche bleue au-dessus du trou) | `gem` |
 | Gemme jaune / rouge / bleue | 5 / 10 / 20 pièces | `GEMS` |
 | Couleur d'une gemme | jaune 60 %, rouge 30 %, bleue 10 % | `gemKind` |
 | Gemmes dispersées | 1,2 % / 2,2 % / 3,5 % des pièces deviennent des gemmes | `SCATTER` |
 | Caisse détruite | 2 pièces par caisse | `destroy` |
 | Créature détruite (Ruée) | 1 pièce ; nuée de moustiques : 3 | `destroy`, `followers` |
-| Endroit exigu | une pièce tous les mètres, 1 sur 6 est une gemme, cœur 3 % | `tight` |
+| Endroit exigu | une pièce tous les mètres ; avec Gemmes dispersées, 1 sur 6 est une gemme ; cœur 3 % | `tight` |
 | Cœur ramassé sans vie à rendre | 25 pièces | `HEART_GOLD` |
 | Explosion du temple | 30 pièces projetées sur les 35 premiers mètres environ, à ramasser | `BLAST_COINS` |
 | Aimant | portée 2,75 / 4,25 / 6 m | `MAGNET` |
@@ -101,31 +102,34 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Première monture | entre 300 et 480 m | `newRun` |
-| Suivantes | 650 à 950 m après la précédente | `spawnPattern` |
-| Après en avoir perdu une | pas avant 350 à 550 m | `dismount` |
+| Première monture | entre 700 et 1000 m | `newRun` |
+| Suivantes | 1300 à 1800 m après la précédente | `spawnPattern` |
+| Après en avoir perdu une | pas avant 900 à 1200 m | `dismount` |
 | Ami de la nature | ces distances divisées par 1,25 / 1,5 / 1,75 | `friend` |
 | Laquelle | 1 chance sur 3 chacune | `spawnPattern` |
-| Comment elles attendent | gorille suspendu à une liane, pieds à 6 m du sol, avance à 45 % de ta vitesse : il faut un saut maintenu ; rhino immobile qui broute : il faut le toucher au sol, un saut le fait rater ; libellule qui zigzague entre 1,75 et 5,75 m (un aller en 1,6 s) et avance à 50 % de ta vitesse | `MOUNTS.ahead`, `PERCH`, `ZIG` |
-| Vitesse sur une monture | la sienne : départ à 7,5 m/s (libellule 8 m/s), puis + 0,3 m/s par seconde (gorille), + 0,55 (rhino), + 0,35 (libellule). Ta propre vitesse continue de monter en parallèle et reprend quand la monture part ; le passage de l'une à l'autre se fait en 1 s environ | `MOUNTS.speed` |
+| Comment elles attendent | gorille tout en haut des lianes, pieds à 10 m du sol, avance à 45 % de ta vitesse : il faut le Vol (ou Double saut + Ressort) ; rhino immobile qui broute : il faut le toucher au sol, un saut le fait rater ; libellule qui zigzague entre 1,75 et 5,75 m (un aller en 1,6 s) et avance à 50 % de ta vitesse | `MOUNTS.ahead`, `PERCH`, `ZIG` |
+| Vitesse sur une monture | la sienne : départ à 7,5 m/s (libellule 8 m/s), puis + 0,3 m/s par seconde (gorille), + 0,55 (rhino), + 0,35 (libellule). Ta propre vitesse continue de monter en parallèle ; quand la monture part, la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne | `MOUNTS.speed`, `RAMP` |
 | Gorille | saut 3,5 m (5,6 m maintenu), second saut jusqu'aux lianes | `MOUNTS.gorilla` |
 | Rhino | saut 1,6 m (2,6 m maintenu) ; ramasse sur 3,9 m de large et 3,75 m de haut | `MOUNTS.rhino` |
 | Libellule | monte à 12 m/s, descend à 11 m/s | `update` |
 | Zigzag de la Libellule | chaque pente dure 1,2 s | `spawnRide` |
 | Formes de la Libellule | 6 fois sur 10 un dessin de `assets/patterns.txt`, sinon losange, carré, triangle ou cercle | `spawnRide` |
 
-## 6 bis. Boss : la plante carnivore
+## 6 bis. Boss : Vorace, la plante carnivore
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Apparition | à 4000 m, une fois par course (sauf sur une monture : elle attend que tu en descendes) | `BOSS.at` |
-| Vitesse pendant le combat | 14 m/s ; ta propre vitesse continue de monter en parallèle et reprend après | `BOSS.speed` |
-| Durée | 22 s d'attaques, puis elle tombe | `BOSS.fight` |
-| Attaques | une toutes les 1,8 s au début, jusqu'à 1,15 s ; la gueule s'ouvre et l'acide brille 0,45 s avant | `boss` |
-| Flaque | crachée devant toi, retombe en 0,9 s, 3 m de large ; à sauter (2 fois sur 5) | `ACID.puddle` |
-| Boule basse / haute | arrive en 1,2 s environ ; basse : sauter (2 fois sur 5), haute : rester au sol (1 fois sur 5) | `ACID` |
-| Le trou | 6,75 m de large, une arche de pièces au-dessus ; tomber dedans coûte un cœur et te repose de l'autre côté | `BOSS.hole` |
-| Récompense | 24 pièces projetées après le trou | `boss` |
+| Apparition | vers 2000 m (± 100 m), une fois par course, seulement dans la forêt ; aussi sur une monture ; la relique du sac de Pépito s'illumine | `BOSS.at`, `bossAt` |
+| Vitesse pendant le combat | 14 m/s ; ta propre vitesse continue de monter en parallèle | `BOSS.speed` |
+| Après le combat | la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne (de 14 à 29 m/s : environ 9 s) | `RAMP` |
+| Durée | 26 s d'attaques, puis un arbre l'écrase | `BOSS.fight` |
+| Rythme | une attaque toutes les 1,65 s au début, jusqu'à 1,15 s ; la gueule s'ouvre et l'acide brille 0,45 s avant | `boss` |
+| À pied (et gorille) | flaque, double flaque, boule basse (sauter), moyenne (rester au sol), haute (pas de grand saut), deux boules (haute + basse ou moyenne), pluie de 2 gouttes (ombre au sol avant), tentacule rampante (sauter) ; suspendu aux lianes : boules à hauteur des lianes | `boss` |
+| Sur le rhino | flaques, boules basses et hautes, pluie, tentacule (pas de boule moyenne) | `boss` |
+| Sur la libellule | éventail sur 5 couloirs avec 2 couloirs voisins libres, pluie, boules isolées | `boss` |
+| Pièces | des traînées continuent d'apparaître pendant le combat | `spawnPattern` |
+| Le trou | 6,75 m de large, une arche de 10 gemmes bleues sur la trajectoire d'un saut simple, la première au point d'appel ; tomber dedans coûte un cœur et te repose de l'autre côté | `BOSS.hole` |
+| Récompense | 24 pièces et une gemme de chaque couleur, puis le décor change | `boss` |
 
 ## 7. Moustiques (monstres suiveurs)
 
@@ -144,25 +148,25 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 ## 8. Boutique
 
-| Objet | Prix par niveau | Effet chiffré |
-|---|---|---|
-| Double saut | 480 | |
-| Ressort | 1000 / 2400 | +10 % d'élan par niveau |
-| Aimant | 600 / 1600 / 3600 | 2,75 / 4,25 / 6 m |
-| Trèfle | 1200 / 3200 | voir § 5 |
-| Gemmes dispersées | 2000 / 4800 / 10000 | 1,2 / 2,2 / 3,5 % |
-| Brise-obstacle | 1400 | traverse les caisses |
-| Cœur en plus | 3600 | 2 cœurs |
-| Faune alcoolisée | 1600 / 3600 / 7200 | 6 / 10 / 15 % |
-| Ami de la nature | 1200 / 2800 / 6000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
-| Brouilleur | 2400 | le décor ne change qu'une fois |
-| Ruée | 1200 / 2800 / 5600 | recharge 14 / 10 / 7 s |
-| Sablier | 1800 / 4000 | 3 / 4,5 s, recharge 20 s |
-| Dernier élan | 1600 / 3600 / 7200 | 1 / 2 / 3 rebonds |
-| Rembobinage | 10000 | 1 fois par course |
-| Vol (pouvoir) | 4800 | |
-| Sprint (pouvoir) | 4000 | +4 m/s |
-| Sphère (pouvoir) | 6000 | |
+| Objet | Débloqué au niveau | Prix par niveau | Effet chiffré |
+|---|---|---|---|
+| Double saut | 2 | 480 |  |
+| Ressort | 3 | 1000 / 2400 | +10 % d'élan par niveau |
+| Aimant | 2 | 600 / 1600 / 3600 | 2,75 / 4,25 / 6 m |
+| Trèfle | 4 | 1200 / 3200 | voir § 5 |
+| Gemmes dispersées | 6 | 2000 / 4800 / 10000 | 1,2 / 2,2 / 3,5 % |
+| Brise-obstacle | 3 | 1400 | traverse les caisses |
+| Cœur en plus | 7 | 3600 | 2 cœurs |
+| Faune alcoolisée | 5 | 1600 / 3600 / 7200 | 6 / 10 / 15 % |
+| Ami de la nature | 4 | 1200 / 2800 / 6000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
+| Gros sac à dos | 8 | 2400 | après un boss, 1 fois sur 2 le décor ne change pas |
+| Ruée | 5 | 1200 / 2800 / 5600 | recharge 14 / 10 / 7 s |
+| Sablier | 7 | 1800 / 4000 | 3 / 4,5 s, recharge 20 s |
+| Dernier élan | 6 | 1600 / 3600 / 7200 | 1 / 2 / 3 rebonds |
+| Vol (pouvoir) | 10 | 4800 |  |
+| Sprint (pouvoir) | 8 | 4000 | +4 m/s |
+| Sphère (pouvoir) | 10 | 6000 |  |
+| Rembobinage | 12 | 10000 | 1 fois par course |
 
 Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans `UPGRADES`.
 
