@@ -4,7 +4,7 @@
 // but they can stand and scroll at any Q-th of a pixel, which is what keeps a fast run steady,
 // and the browser smooths the picture's edges when it fits the canvas to the screen.
 
-import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, MOUNTS, LOG, GALLERY, BRAMBLE, propAt, floorAt, flatAt, biomeAt } from './game.js';
+import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, MOUNTS, LOG, GALLERY, BRAMBLE, PERCH, BOSS, propAt, floorAt, flatAt, biomeAt } from './game.js';
 import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js';
 
 // Each scenery has its own far background, middle distance, floor, props, and its own version of
@@ -24,7 +24,7 @@ export const BIOMES = [
 ];
 
 const DIR = 'assets/img/';
-const NAMES = ['fore', 'temple', 'temple-rubble', 'spider', 'spider-low', 'spider-mid', 'bat', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'temple-rubble', 'boss-plant', 'spider', 'spider-low', 'spider-mid', 'bat', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -620,6 +620,15 @@ export function draw(ctx, run, v, t) {
   if (run.prevBiome !== run.biome) drawGround(ctx, run, SCENE[run.prevBiome].ground, cam, 0, cut, VH + 8);
   drawGround(ctx, run, now.ground, cam, run.prevBiome !== run.biome ? cut : 0, v.w, VH + 8);
   drawLife(ctx, cam, t, v.w, floorPx);
+  for (const h of run.pits) {                          // a hole where the floor gave way: dark, ragged rims, no bottom
+    const x0 = sx(h.x0), x1 = sx(h.x1);
+    if (x1 < 0 || x0 > v.w) continue;
+    const g = ctx.createLinearGradient(0, GN - 4, 0, VH);
+    g.addColorStop(0, '#1c1430'); g.addColorStop(0.25, '#0a0712'); g.addColorStop(1, '#000');
+    ctx.fillStyle = g; ctx.fillRect(x0, GN - 4, x1 - x0, VH - GN + 8);
+    ctx.fillStyle = '#1a1024';
+    for (let y = GN - 4; y < VH; y += 6) { const k = Math.round(h01(y, 7) * 4); ctx.fillRect(x0 - 2, y, 2 + k, 6); ctx.fillRect(x1 - k, y, k + 2, 6); }
+  }
 
   const templeX = snap(TEMPLE_X - cam), inTemple = IMG.temple && templeX > -IMG.temple.width;
   if (inTemple) ctx.drawImage(IMG.temple, templeX, GN - IMG.temple.height + 3);
@@ -709,16 +718,61 @@ export function draw(ctx, run, v, t) {
   if (run.vine > 0) drawVines(ctx, cam, t, v.w, run.vine);
 
   // mounts waiting on the path: a warm glow and a bouncing arrow say "come here", not "watch out"
+  // Each one waits its own way: the gorilla swings along a vine high up, the rhino grazes, the
+  // dragonfly zigzags ahead. Missed, it is gone.
   for (const it of run.items) {
-    const x = sx(it.x), f = floorPx(x), fly = MOUNTS[it.kind].fly, im = IMG['mount-' + it.kind];
-    if (x > v.w + 60 || x < -80 || !im) continue;
-    const foot = fly ? seatFloor(it.kind, f - 70 + Math.round(Math.sin(t * 3 + it.ph) * 4)) : f;   // the dragonfly hovers
-    const g = ctx.createRadialGradient(x + 10, foot - 28, 4, x + 10, foot - 28, 62);
-    g.addColorStop(0, `rgba(255,224,120,${0.42 + 0.14 * Math.sin(t * 5)})`); g.addColorStop(1, 'rgba(255,224,120,0)');
-    ctx.fillStyle = g; ctx.fillRect(x - 54, foot - 92, 128, 100);
-    shadow(ctx, x + 12, f - 1, fly ? 30 : 64);
-    drawMount(ctx, it.kind, fly ? Math.floor(t * 16) % 4 : 1, x, foot, fly ? 0 : Math.round(Math.sin(t * 3 + it.ph)));
-    chevron(ctx, x + 6, foot - im.height - 6 - Math.round(Math.abs(Math.sin(t * 5)) * 6), 1, '#ffd35c', 6);
+    const x = sx(it.x), f = floorPx(x), im = IMG['mount-' + it.kind];
+    if (x > v.w + 80 || x < -100 || !im) continue;
+    const glow = (cx, cy) => {
+      const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, 60);
+      g.addColorStop(0, `rgba(255,224,120,${0.42 + 0.14 * Math.sin(t * 5)})`); g.addColorStop(1, 'rgba(255,224,120,0)');
+      ctx.fillStyle = g; ctx.fillRect(cx - 60, cy - 60, 120, 120);
+    };
+    const bounce = Math.round(Math.abs(Math.sin(t * 5)) * 6);
+    if (it.kind === 'gorilla') {
+      const H = IMG['mount-gorilla-hang'], M = meta.mounts['gorilla-hang'];
+      if (!H) continue;
+      const cw = H.width / M.frames, top = f - n(PERCH) - H.height, left = snap(x + 12 - M.seatX);
+      glow(x + 12, top + H.height * 0.6);
+      ctx.fillStyle = '#1a1024'; ctx.fillRect(snap(x + 11), -8, 4, top + 14);                  // the vine it hangs from
+      ctx.fillStyle = '#5d8a2c'; ctx.fillRect(snap(x + 12), -8, 2, top + 14);
+      ctx.drawImage(H, cw * (Math.floor(t * 6 + it.ph) % 4), 0, cw, H.height, left, top, cw, H.height);
+      chevron(ctx, x + 12, top + H.height + 8 + bounce, -1, '#ffd35c', 6);                     // an arrow under it: up there
+      continue;
+    }
+    if (it.kind === 'rhino') {                         // head down in the grass, nibbling
+      glow(x + 6, f - 28);
+      shadow(ctx, x + 12, f - 1, 64);
+      ctx.save(); ctx.translate(x - 30, f); ctx.rotate(0.06 + 0.03 * Math.sin(t * 6 + it.ph)); soft(ctx);
+      drawMount(ctx, 'rhino', 1, 30, 0, 0);
+      ctx.restore();
+      ctx.fillStyle = '#7bd13c';
+      for (let k = 0; k < 3; k++) { const up = (t * 9 + k * 2.3 + it.ph) % 3; ctx.fillRect(snap(x + 30 + k * 3), f - 3 - Math.round(up * 2), 1, 3); }
+      chevron(ctx, x + 6, f - im.height - 6 - bounce, 1, '#ffd35c', 6);
+      continue;
+    }
+    const foot = seatFloor(it.kind, n(it.y) - 10);    // the dragonfly, zigzagging on ahead
+    glow(x + 6, n(it.y) - 14);
+    shadow(ctx, x + 6, f - 1, 30);
+    drawMount(ctx, it.kind, Math.floor(t * 16) % 4, x, foot, 0);
+    chevron(ctx, x + 6, n(it.y) - 52 - bounce, 1, '#ffd35c', 6);
+  }
+
+  // the boss: the giant plant at the right edge, jaws opening before it spits; then it topples into the hole
+  if (run.boss && IMG['boss-plant']) {
+    const b = run.boss, im = IMG['boss-plant'], fw = im.width / 2, left = n(b.sx), top = GN + 6 - im.height;
+    const open = b.wind > 0 || b.open > 0, bob = Math.round(Math.sin(t * 2.2) * 2);
+    if (b.wind > 0) {                                  // the acid glowing in its throat: something is coming
+      const mx = left + n(BOSS.mouthX), my = n(BOSS.mouthY), g = ctx.createRadialGradient(mx, my, 2, mx, my, 40);
+      g.addColorStop(0, `rgba(168,255,60,${0.55 + 0.3 * Math.sin(t * 30)})`); g.addColorStop(1, 'rgba(168,255,60,0)');
+      ctx.fillStyle = g; ctx.fillRect(mx - 40, my - 40, 80, 80);
+    }
+    if (b.phase === 'fall') {                          // over it goes, head first, and down
+      const k = Math.min(1, b.t / 0.7), drop = Math.max(0, b.t - 0.5) ** 2 * 700;
+      ctx.save(); ctx.translate(left + fw * 0.5, GN + drop); ctx.rotate(-Math.PI * k); soft(ctx);
+      ctx.drawImage(im, fw, 0, fw, im.height, -fw * 0.5, 6 - im.height, fw, im.height);
+      ctx.restore();
+    } else ctx.drawImage(im, open ? fw : 0, 0, fw, im.height, left, top + (open ? 0 : bob), fw, im.height);
   }
 
   for (const o of run.obs) {
@@ -728,6 +782,27 @@ export function draw(ctx, run, v, t) {
       const S = SCENE[biomeAt(run, o.x)], im = stack(S, o.n);
       shadow(ctx, x + im.width / 2 - 1, foot - 1, im.width + 2);
       ctx.drawImage(im, x - 1, foot - im.height + 1);
+      continue;
+    }
+    if (o.kind === 'acid') {                           // the plant's acid: a glowing ball in the air, a bubbling puddle on the floor
+      const w = n(o.w), cx = x + w / 2;
+      if (o.puddle) {
+        const g = ctx.createRadialGradient(x + w / 2, foot - 4, 2, x + w / 2, foot - 4, w * 0.7);   // a sickly glow around it
+        g.addColorStop(0, `rgba(168,255,60,${0.35 + 0.15 * Math.sin(t * 6 + o.x)})`); g.addColorStop(1, 'rgba(168,255,60,0)');
+        ctx.fillStyle = g; ctx.fillRect(x - w * 0.2, foot - 30, w * 1.4, 34);
+        ctx.fillStyle = '#1a1024'; ctx.fillRect(x + 4, foot - 11, w - 8, 12); ctx.fillRect(x, foot - 8, w, 9);
+        ctx.fillStyle = '#5cd23c'; ctx.fillRect(x + 5, foot - 10, w - 10, 10); ctx.fillRect(x + 1, foot - 7, w - 2, 7);
+        ctx.fillStyle = '#a8ff3c'; ctx.fillRect(x + 7, foot - 10, w - 14, 3);
+        ctx.fillStyle = '#e8ffb0'; ctx.fillRect(x + 10, foot - 10, w - 20, 1);
+        for (let k = 0; k < 4; k++) { const up = (t * 2.5 + k * 0.29 + o.x * 0.01) % 1; ctx.globalAlpha = 1 - up; ctx.fillStyle = '#e8ffb0'; ctx.fillRect(snap(x + 8 + k * (w - 16) / 3), foot - 12 - Math.round(up * 12), 3, 3); }
+        ctx.globalAlpha = 1;
+      } else {
+        const r = w / 2, cy = y + r, g = ctx.createRadialGradient(cx - 2, cy - 2, 1, cx, cy, r + 6);
+        g.addColorStop(0, '#f4ffc8'); g.addColorStop(0.5, '#8cf03c'); g.addColorStop(0.8, '#2f9a2a'); g.addColorStop(1, 'rgba(47,154,42,0)');
+        ctx.fillStyle = '#1a1024'; ctx.beginPath(); ctx.arc(cx, cy, r + 1, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(168,255,60,.5)'; for (let k = 1; k < 4; k++) ctx.fillRect(snap(cx + k * 6), snap(cy - 1 + Math.sin(t * 20 + k) * 2), 3, 3);   // dripping trail
+      }
       continue;
     }
     if (o.kind === 'bramble') {                        // a carpet of thorns, its picture laid end to end
@@ -752,9 +827,11 @@ export function draw(ctx, run, v, t) {
     if (o.kind === 'bat') {                            // asleep under the ceiling, then wings beating
       const H = HAZ.bat; if (!H) continue;
       const fw = H.im.width / 3, frame = o.dive ? 1 + (Math.floor(t * 12 + o.ph) & 1) : 0;
+      const shiver = o.wake && !o.dive ? Math.round(Math.sin(t * 60)) : 0;            // awake: it shivers before it drops
       if (o.dive) shadow(ctx, x + n(o.w) / 2, floorPx(x + 14) - 1, 20);
       if (o.ghost) ctx.globalAlpha = 0.7;
-      sheet(ctx, o.ghost ? H.ghost : H.im, 3, frame, snap(x + n(o.w) / 2 - fw / 2), o.dive ? y - 4 : -2);
+      sheet(ctx, o.ghost ? H.ghost : H.im, 3, frame, snap(x + n(o.w) / 2 - fw / 2) + shiver, o.dive ? y - 4 : -2);
+      if (o.wake && !o.dive) { ctx.fillStyle = '#ff4040'; ctx.fillRect(snap(x + n(o.w) / 2) - 4, 16, 2, 2); ctx.fillRect(snap(x + n(o.w) / 2) + 2, 16, 2, 2); }
       ctx.globalAlpha = 1;
       continue;
     }

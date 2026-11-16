@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 16/11/2026, version 0.16.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint et les distances minimum. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 16/11/2026, version 0.17.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint et les distances minimum. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -65,9 +65,9 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Hérisson | 1,7 m × 1,35 m | `SPIKY` |
 | Bloc de pilier (ruines) | comme l'araignée basse : tombe quand tu es à 0,9 s, reste au sol, à sauter | `addBlock` |
 | Geyser (ruines) | dès 250 m ; jaillit quand tu es à 1,1 s ; jet de 1,75 m à pied, 3 m avec Double saut, 7,5 m avec Vol | `GEYSER` |
-| Chauve-souris (donjon) | plonge quand tu es à 1 s, rase le sol et vient vers toi à 4 m/s, à sauter | `BAT` |
+| Chauve-souris (donjon) | se réveille (frisson, yeux rouges) quand tu es à 2,1 s, plonge à 1,6 s, rase le sol et avance vers toi à 1 m/s, à sauter | `BAT` |
 | Ronces | 0,65 m de haut ; dès 1000 m ; seulement avec Vol ou sur la Libellule ; le rhino les écrase ; si la monture est perdue, tout ce qui avait été posé pour elle disparaît | `BRAMBLE`, `FROM`, `dismount` |
-| Araignée (jungle) | 1,5 m × 1,4 m ; tombe quand tu es à 0,9 s d'elle. Jaune : s'arrête au ras du sol (à sauter), dès 500 m. Rouge : s'arrête à 5,35 m (ne pas sauter, 5 pièces dessous), dès 1500 m, 4 fois sur 10 | `SPIDER`, `FROM`, `addSpider` |
+| Araignée (jungle) | 1,5 m × 1,4 m ; tombe quand tu es à 1,4 s d'elle. Jaune : s'arrête au ras du sol (à sauter), dès 500 m. Rouge : s'arrête à 5,35 m (ne pas sauter, 5 pièces dessous), dès 1500 m, 4 fois sur 10 | `SPIDER`, `FROM`, `addSpider` |
 | Volant | 1,6 m × 1,35 m, avance vers toi à 3 m/s | `FLY` |
 | Hauteur des volants | 4,4 m ; 4,4 ou 7,25 m avec Double saut ; 4,4 / 7,25 / 10 / 12,75 m avec Vol | `spawnPattern` |
 | Plateforme | 6,35 m de long, à 3,4 m du sol | `PLAT_W` |
@@ -106,11 +106,26 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Après en avoir perdu une | pas avant 350 à 550 m | `dismount` |
 | Ami de la nature | ces distances divisées par 1,25 / 1,5 / 1,75 | `friend` |
 | Laquelle | 1 chance sur 3 chacune | `spawnPattern` |
+| Comment elles attendent | gorille suspendu à une liane, pieds à 6 m du sol, avance à 45 % de ta vitesse : il faut un saut maintenu ; rhino immobile qui broute : il faut le toucher au sol, un saut le fait rater ; libellule qui zigzague entre 1,75 et 5,75 m (un aller en 1,6 s) et avance à 50 % de ta vitesse | `MOUNTS.ahead`, `PERCH`, `ZIG` |
+| Vitesse sur une monture | la sienne : départ à 7,5 m/s (libellule 8 m/s), puis + 0,3 m/s par seconde (gorille), + 0,55 (rhino), + 0,35 (libellule). Ta propre vitesse continue de monter en parallèle et reprend quand la monture part ; le passage de l'une à l'autre se fait en 1 s environ | `MOUNTS.speed` |
 | Gorille | saut 3,5 m (5,6 m maintenu), second saut jusqu'aux lianes | `MOUNTS.gorilla` |
-| Rhino | saut 1,6 m (2,6 m maintenu) ; +0,5 m/s chaque seconde, jusqu'à +10,5 m/s ; ramasse sur 3,9 m de large et 3,75 m de haut | `MOUNTS.rhino` |
+| Rhino | saut 1,6 m (2,6 m maintenu) ; ramasse sur 3,9 m de large et 3,75 m de haut | `MOUNTS.rhino` |
 | Libellule | monte à 12 m/s, descend à 11 m/s | `update` |
 | Zigzag de la Libellule | chaque pente dure 1,2 s | `spawnRide` |
 | Formes de la Libellule | 6 fois sur 10 un dessin de `assets/patterns.txt`, sinon losange, carré, triangle ou cercle | `spawnRide` |
+
+## 6 bis. Boss : la plante carnivore
+
+| Valeur | Aujourd'hui | Où |
+|---|---|---|
+| Apparition | à 4000 m, une fois par course (sauf sur une monture : elle attend que tu en descendes) | `BOSS.at` |
+| Vitesse pendant le combat | 14 m/s ; ta propre vitesse continue de monter en parallèle et reprend après | `BOSS.speed` |
+| Durée | 22 s d'attaques, puis elle tombe | `BOSS.fight` |
+| Attaques | une toutes les 1,8 s au début, jusqu'à 1,15 s ; la gueule s'ouvre et l'acide brille 0,45 s avant | `boss` |
+| Flaque | crachée devant toi, retombe en 0,9 s, 3 m de large ; à sauter (2 fois sur 5) | `ACID.puddle` |
+| Boule basse / haute | arrive en 1,2 s environ ; basse : sauter (2 fois sur 5), haute : rester au sol (1 fois sur 5) | `ACID` |
+| Le trou | 6,75 m de large, une arche de pièces au-dessus ; tomber dedans coûte un cœur et te repose de l'autre côté | `BOSS.hole` |
+| Récompense | 24 pièces projetées après le trou | `boss` |
 
 ## 7. Moustiques (monstres suiveurs)
 

@@ -3,6 +3,7 @@
 #   araignee.png: the spider, legs out and legs curled in
 #   libellule.png: the dragonfly mount, four frames (it replaced the Moskito)
 #   brouilleur.png: the shop icon of the Brouilleur
+#   boss.png    : the giant carnivorous plant, jaws shut and jaws open
 #   gravats.png : four ways of blocking the temple's doorway, for mockups/gravats.html
 # Run it AFTER import_gen.py, which still writes the old ruins and city crates.
 import os
@@ -150,3 +151,29 @@ for y in range(im.height):
         if not magenta(px[x, y]): mpx[x, y] = 255
 icon = im.crop(mask.getbbox())
 save(shrink(icon, 54 / max(icon.size)), 'ico-jammer')
+
+# the boss: both drawings cut with the same box (they were drawn at the same place), drips included,
+# side by side in one sheet of two frames
+im = Image.open(os.path.join(SRC, 'boss.png')).convert('RGBA'); half = im.width // 2
+boxes = []
+for k in range(2):
+    h = im.crop((k * half, 0, (k + 1) * half, im.height)); px = h.load()
+    mask = Image.new('L', h.size, 0); mp = mask.load()
+    for y in range(h.height):
+        for x in range(h.width):
+            if not magenta(px[x, y]): mp[x, y] = 255
+    boxes.append(mask.getbbox())
+box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+k = 290 / (box[3] - box[1])
+frames = []
+for i in range(2):
+    f = im.crop((i * half + box[0], box[1], i * half + box[2], box[3]))
+    sm = f.resize((round(f.width * k), round(f.height * k)), Image.BOX); spx = sm.load()
+    for y in range(sm.height):
+        for x in range(sm.width):
+            q = spx[x, y]
+            spx[x, y] = (0, 0, 0, 0) if magenta(q) or q[3] < 128 else ((26, 16, 36, 255) if q[0] > 90 and q[2] > 90 and q[1] < 0.6 * min(q[0], q[2]) and q[1] < 100 else (q[0], q[1], q[2], 255))
+    frames.append(sm)
+sheet = Image.new('RGBA', (frames[0].width * 2, frames[0].height), (0, 0, 0, 0))
+for i, f in enumerate(frames): sheet.alpha_composite(f, (i * frames[0].width, 0))
+save(sheet, 'boss-plant')

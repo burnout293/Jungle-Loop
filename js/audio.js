@@ -192,6 +192,12 @@ export const audio = {
       case 'unmount': tone(o, 420, 0.3, 'square', 0.2, 0, 110); break;
       case 'bye': tone(o, 700, 0.12, 'triangle', 0.14, 0, 500); tone(o, 500, 0.16, 'triangle', 0.14, 0.12, 350); break;
       case 'spider': tone(o, 1500, 0.16, 'sawtooth', 0.07, 0, 320); break;
+      case 'boss': tone(o, 60, 1.2, 'sawtooth', 0.4, 0, 30); tone(o, 220, 0.9, 'square', 0.18, 0.1, 70); noise(o, 1, 0.4, 300); break;
+      case 'spit': tone(o, 300, 0.2, 'triangle', 0.2, 0, 900); noise(o, 0.15, 0.25, 2000); break;
+      case 'acid': tone(o, 180, 0.25, 'sawtooth', 0.16, 0, 600); break;
+      case 'splash': noise(o, 0.3, 0.35, 900); break;
+      case 'bossfall': tone(o, 400, 1.4, 'sawtooth', 0.3, 0, 40); noise(o, 1.2, 0.5, 250, 0.2); break;
+      case 'bossdown': [0, 4, 7, 12, 16, 19].forEach((s, k) => tone(o, hz(s + 12), 0.3, 'triangle', 0.2, k * 0.09)); break;
       case 'thud': tone(o, 110, 0.22, 'sine', 0.4, 0, 40); noise(o, 0.2, 0.4, 500); break;
       case 'geyser': noise(o, 0.45, 0.3, 2600); break;
       case 'bat': tone(o, 2200, 0.07, 'square', 0.06, 0, 3000); tone(o, 2400, 0.07, 'square', 0.06, 0.09, 3200); break;

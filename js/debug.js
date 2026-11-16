@@ -2,20 +2,20 @@
 // Plain on purpose. It changes the save (coins, level, purchases), what the next runs start with,
 // and a few of the game's numbers. Its own settings are kept on this device only.
 
-import { SPEED, FROM, PPM, BIOME_LEN, MOUNTS, GROUND, PX } from './game.js';
+import { SPEED, FROM, BOSS, PPM, BIOME_LEN, MOUNTS, GROUND, PX } from './game.js';
 import { BIOMES } from './render.js';
 import * as S from './save.js';
 import * as P from './progress.js';
 
 const KEY = 'jungle-loop-debug';
 // The game's own numbers as they are written in game.js, before anything here changes them.
-const ORIGIN = { base: SPEED.base, gain: SPEED.gain, sprint: SPEED.sprint, ...Object.fromEntries(Object.entries(FROM).map(([k, v]) => ['from_' + k, v])) };
+const ORIGIN = { base: SPEED.base, gain: SPEED.gain, sprint: SPEED.sprint, boss: BOSS.at, ...Object.fromEntries(Object.entries(FROM).map(([k, v]) => ['from_' + k, v])) };
 const BLANK = { fps: false, god: false, start: 0, biome: 0, mount: '', fm: false, ...ORIGIN };
 export const dbg = { ...BLANK };
 try { Object.assign(dbg, JSON.parse(localStorage.getItem(KEY)) || {}); } catch { /* nothing kept */ }
 
 function apply() {
-  SPEED.base = dbg.base; SPEED.gain = dbg.gain; SPEED.sprint = dbg.sprint;
+  SPEED.base = dbg.base; SPEED.gain = dbg.gain; SPEED.sprint = dbg.sprint; BOSS.at = dbg.boss;
   for (const k of Object.keys(FROM)) FROM[k] = dbg['from_' + k];
   try { localStorage.setItem(KEY, JSON.stringify(dbg)); } catch { /* not kept */ }
 }
@@ -92,6 +92,7 @@ function build() {
     tune('Araignée rouge dès', 'from_mid', 'm'),
     tune('Ronces dès', 'from_brambles', 'm'),
     tune('Geyser dès', 'from_geyser', 'm'),
+    tune('Boss à', 'boss', 'm'),
     row('', btn('Valeurs d\'origine', () => { Object.assign(dbg, ORIGIN); apply(); open(host); say.textContent = 'Valeurs d\'origine remises.'; })),
   );
   return panel;

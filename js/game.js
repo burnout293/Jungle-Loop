@@ -32,12 +32,14 @@ const MAGNET = [0, 110, 170, 240];
 const DRUNK = [0, 0.06, 0.1, 0.15];     // Faune alcoolisée: share of the creatures that are harmless
 const FLAP = 430;                       // how fast the leaf rotor climbs
 export const SPEED = { base: 280, gain: 5, sprint: 160 };   // units per second: at the door, gained each second (for ever), added by Sprint
-const SPIDER = { w: 60, h: 56, ahead: 0.9 };   // it drops when the hero is `ahead` seconds away
+const SPIDER = { w: 60, h: 56, ahead: 1.4 };   // it drops when the hero is `ahead` seconds away: it has settled well before he arrives
 // What only some sceneries have (see spawnPattern): the spider in the jungle; in the ruins a block of
 // a pillar that falls the same way, and a geyser; in the dungeon a bat that swoops down. Brambles, a
 // long carpet of thorns, only ever lie in front of someone who need not touch the ground.
 export const GEYSER = { w: 34, ahead: 1.1, top: [70, 120, 300] };   // how high it spouts: on foot, with the double jump, flying
-const BAT = { w: 60, h: 44, ahead: 1.0, speed: 160 };
+// The bat wakes up (it shivers, its eyes light up) `wake` seconds before it dives, dives `ahead` seconds
+// before the hero gets there, and only drifts towards him slowly: there is time to see it coming.
+const BAT = { w: 60, h: 44, wake: 0.5, ahead: 1.6, speed: 40 };
 export const BRAMBLE = { h: 26 };
 // Not before this many metres: the spider that drops to the floor (yellow) and its kin, the one that
 // stops halfway (red), brambles, the geyser.
@@ -50,12 +52,27 @@ export const FROM = { low: 500, mid: 1500, brambles: 1000, geyser: 250 };   // (
 //   the top of the screen, where it swings on until a press lets go. Floor and vines, nothing between.
 // - the rhino barely hops, runs faster and faster, and smashes crates. Everything on the floor.
 // - the dragonfly flies: held, it climbs; let go, it sinks. The whole sky.
-// `half` and `tall` are the hitbox with the hero on its back.
+// `half` and `tall` are the hitbox with the hero on its back. `speed`: each animal has its own pace,
+// which starts low when it is caught (`base`, units per second) and keeps rising (`gain` each second).
+// The hero's own speed goes on rising meanwhile, and takes over again once the animal is gone.
+// `wait` is how it waits to be caught, and can be missed: the gorilla swings along the vines high up
+// (a high jump reaches it), the rhino grazes on the path (run into it, do not jump over it), the
+// dragonfly zigzags ahead in the air (be where it is). `ahead` is how fast they move on, as a share of
+// the hero's speed.
 export const MOUNTS = {
-  gorilla: { name: 'Gorille', jump: -820, half: 34, tall: 118 },
-  rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, grab: { w: 78, h: 150 } },   // grab: it sweeps up coins well above its back
-  dragonfly: { name: 'Libellule', fly: true, half: 28, tall: 92 },
+  gorilla: { name: 'Gorille', jump: -820, half: 34, tall: 118, speed: { base: 300, gain: 12 }, ahead: 0.45 },
+  rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, grab: { w: 78, h: 150 }, speed: { base: 300, gain: 22 }, ahead: 0 },   // grab: it sweeps up coins well above its back
+  dragonfly: { name: 'Libellule', fly: true, half: 28, tall: 92, speed: { base: 320, gain: 14 }, ahead: 0.5 },
 };
+// The boss: at BOSS.at metres a giant carnivorous plant comes in on the right and keeps pace with the
+// hero, who runs at BOSS.speed meanwhile. It spits acid: blobs that land on the path and stay there as
+// puddles (jump them), and balls fired low (jump) or high (stay down). After BOSS.fight seconds the
+// floor gives way under it: it topples head first into a huge hole, which the hero has to jump.
+// BOSS.w is how wide it is on screen, the mouth where its acid comes from (both in units).
+export const BOSS = { at: 4000, speed: 560, fight: 22, w: 420, mouthX: 100, mouthY: 170, hole: 270, holeX: 120 };
+const ACID = { ball: 36, puddle: 120, closing: 650 };
+export const PERCH = 240;               // how high above the floor the waiting gorilla's feet hang
+const ZIG = { low: 70, high: 230, period: 1.6 };   // the waiting dragonfly's zigzag: heights of its body, seconds per zig and zag
 export const HANG_Y = 190;              // where the gorilla's feet are when it hangs from the vines
 const friend = (up) => 1 + 0.25 * (up.nature || 0);      // Ami de la nature: mounts come that much sooner
 
@@ -128,6 +145,7 @@ export function newRun(upgrades) {
     nextMount: rnd(300, 480) / friend(upgrades),  // in metres: mounts are a rare treat
     fm: null, fmDue: false, nextFM: rnd(150, 230), blockEnd: 0,   // follower monster; where the last blocking pattern ends
     leap: null,                                  // Dernier élan: the bounces after the last heart
+    boss: null, bossDone: false, pits: [],       // the giant plant, and the hole it falls into
   };
 }
 
@@ -257,7 +275,7 @@ function scatter(run, from) {
 
 function spawnPattern(run) {
   const laid = run.coins.length;
-  if (run.mount && !run.fm && !run.fmDue) { spawnRide(run); scatter(run, laid); return; }
+  if (run.mount && !run.fm && !run.fmDue && !run.boss) { spawnRide(run); scatter(run, laid); return; }
   const up = run.up, x = run.nextX, G = GROUND;
   const tier = up.flight ? 2 : up.doubleJump ? 1 : 0;
   const riding = run.mount || run.items.length;                       // a mount in play: nothing with a roof
@@ -273,7 +291,7 @@ function spawnPattern(run) {
   const shapes = SHAPES.filter((s) => s.top <= REACH[tier]);
   if (shapes.length && x >= 70 * PPM) opts.push('shape', 'shape');
   if (riding) opts = opts.filter((k) => k !== 'cave');
-  if (run.fm || run.fmDue) opts = ['coins'];                          // a follower monster needs a clear road
+  if (run.fm || run.fmDue || run.boss) opts = ['coins'];             // a follower monster, or the boss, needs a clear road
   else if (!riding && x > 70 * PPM && x / PPM >= run.nextMount) opts = ['mount'];
   const kind = pick(opts);
   let len = 0;
@@ -360,7 +378,7 @@ function spawnPattern(run) {
     }
     case 'mount': {                                                    // an animal waiting: a trail of coins leads to it
       coinLine(run, x, G - 40, 5);
-      run.items.push({ x: x + 330, kind: pick(Object.keys(MOUNTS)), ph: rnd(0, 6) });
+      run.items.push({ x: x + 330, kind: pick(Object.keys(MOUNTS)), ph: rnd(0, ZIG.period * 2), y: G - ZIG.low });
       run.nextMount = x / PPM + rnd(650, 950) / friend(up);
       len = 460; break;
     }
@@ -478,6 +496,63 @@ function spawnRide(run) {
   for (let i = from; i < run.obs.length; i++) run.obs[i].ride = true;
   run.blockEnd = x + len;
   run.nextX = x + len + (v * 0.7 + 220) * rnd(0.9, 1.3);
+}
+
+// ---------- the boss ----------
+
+function boss(run, d) {
+  if (!run.boss) {
+    if (run.bossDone || run.dist < BOSS.at || run.mount) return;
+    run.boss = { phase: 'enter', t: 0, sx: run.viewW + 60, next: 1.2, wind: 0, attack: '', open: 0 };
+    run.items.length = 0;                                                  // no mount waiting during the fight
+    run.shake = Math.max(run.shake, 0.6); run.events.push('boss');
+    return;
+  }
+  const b = run.boss, mouth = { x: run.cam + b.sx + BOSS.mouthX, y: BOSS.mouthY };
+  b.t += d; b.open = Math.max(0, b.open - d);
+  if (b.phase === 'enter') {                                             // it slides in from the right edge
+    b.sx += (run.viewW - BOSS.w - b.sx) * Math.min(1, d * 2.5);
+    if (b.t > 1.6) { b.phase = 'fight'; b.t = 0; }
+    return;
+  }
+  if (b.phase === 'fight') {
+    if (b.wind > 0) {                                                    // its jaws open, acid glows: then it fires
+      if ((b.wind -= d) <= 0) {
+        b.open = 0.35;
+        if (b.attack === 'puddle') {                                     // a blob lobbed onto the path ahead
+          const T = 0.9, land = run.cam + run.sx + rnd(380, 640) + run.speed * T, g = 1600;
+          const o = addObs(run, mouth.x, mouth.y, ACID.ball, ACID.ball, 'acid', false);
+          o.ghost = false; o.lob = true; o.vx = (land - mouth.x) / T; o.vy = (GROUND - ACID.ball - mouth.y - 0.5 * g * T * T) / T; o.g = g;
+          run.events.push('spit');
+        } else {                                                         // a ball fired along a low or a high lane
+          const low = b.attack === 'low', o = addObs(run, mouth.x, mouth.y, ACID.ball, ACID.ball, 'acid', false);
+          o.ghost = false; o.ball = true; o.lane = GROUND - (low ? 22 : 150) - ACID.ball; o.vx = run.speed - ACID.closing;
+          run.events.push('acid');
+        }
+      }
+    } else if ((b.next -= d) <= 0) {
+      b.attack = pick(['puddle', 'puddle', 'low', 'high', 'low']);
+      b.wind = 0.45; b.next = Math.max(1.15, 1.8 - b.t * 0.025);
+    }
+    if (b.t > BOSS.fight && b.wind <= 0) {                               // the floor gives way under it
+      b.phase = 'fall'; b.t = 0; b.wx = run.cam + b.sx;
+      const x0 = b.wx + BOSS.holeX, x1 = x0 + BOSS.hole;            // right under its roots
+      run.terrain.push({ x: x0, y: GROUND }, { x: x0 + 1, y: GROUND + 900 }, { x: x1 - 1, y: GROUND + 900 }, { x: x1, y: GROUND });
+      run.terrain.sort((a, c) => a.x - c.x);
+      run.pits.push({ x0, x1 });
+      coinArc(run, x0 - 120, 150, 9, BOSS.hole + 240);                  // the way over, in gold
+      run.nextX = Math.max(run.nextX, x1 + 600);
+      run.shake = 1; run.events.push('bossfall');
+    }
+    return;
+  }
+  // falling: it stays where the floor opened, the hero runs on to the hole
+  b.sx = b.wx - run.cam;
+  if (run.cam + run.sx > run.pits[run.pits.length - 1].x1 + 40) {        // over the hole: the fight is won
+    run.boss = null; run.bossDone = true;
+    for (let i = 0; i < 24; i++) loot(run, run.cam + run.sx + rnd(40, 400), GROUND - rnd(80, 300));
+    run.events.push('bossdown');
+  }
 }
 
 // ---------- update ----------
@@ -599,6 +674,7 @@ function wave(run) {
 
 function followers(run, d, box, dashing) {
   const p = run.p, px = run.cam + run.sx;
+  if (!run.fm && run.boss) { run.fmDue = false; run.nextFM = Math.max(run.nextFM, run.dist + 150); return; }
   if (!run.fm) {
     if (run.mount) { run.fmDue = false; run.nextFM = Math.max(run.nextFM, run.dist + 100); return; }   // never on top of a ride
     if (!run.fmDue && run.dist >= run.nextFM) run.fmDue = true;          // from now on only coins are laid ahead
@@ -682,8 +758,10 @@ export function update(run, dt, input) {
 
   // --- scrolling: the hero first runs out of the temple, then the camera follows him ---
   run.t += d;
-  run.speed = run.base + run.t * SPEED.gain
-    + (run.mount && run.mount.kind === 'rhino' ? Math.min(420, run.mount.t * 20) : 0);   // the rhino only ever gathers speed
+  // The hero's own speed grows for ever; a mount, then the boss, impose theirs while they last.
+  const own = run.base + run.t * SPEED.gain, R = run.mount && MOUNTS[run.mount.kind].speed;
+  const pace = run.boss ? BOSS.speed : R ? R.base + R.gain * run.mount.t : own;
+  run.speed += (pace - run.speed) * Math.min(1, dt * 3);                 // one pace slides into the other
   run.vine = Math.max(0, Math.min(1, run.vine + (run.mount && run.mount.kind === 'gorilla' ? 1 : -1) * dt * 2.5));
   if (run.leap) run.leap.v = Math.max(160, run.leap.v - 170 * d);       // knocked out: he only slows down
   // he is thrown out of the temple faster than he runs
@@ -751,7 +829,9 @@ export function update(run, dt, input) {
       if (p.ground && p.plat && (px < p.plat.x - HERO_HALF || px > p.plat.x + p.plat.w + HERO_HALF)) {
         p.ground = false; p.plat = null; p.jumps = 1;          // ran off the end of a ledge
       }
-      if (p.ground && !p.plat) p.y = fl;             // on a slope he simply follows it
+      if (p.ground && !p.plat) {                     // on a slope he simply follows it; where the floor gives way, he falls
+        if (fl - p.y > 40) { p.ground = false; p.jumps = Math.max(p.jumps, 1); } else p.y = fl;
+      }
       if (!p.ground) {
         const before = p.y;
         if (p.rotor) p.vy = Math.min(-FLAP, p.vy + 2400 * d);    // the leaf rotor: a steady climb for as long as it is held
@@ -786,13 +866,21 @@ export function update(run, dt, input) {
     }
     if (dashing && Math.random() < 0.8) run.parts.push({ x: px - 20, y: p.y - rnd(5, 75), vx: -300, vy: 0, life: 0, max: 0.25, c: '#ffd35c', s: rnd(4, 8), g: 0 });
 
-    // --- mounts: the ones ahead wait to be touched ---
+    // --- mounts: the ones ahead wait to be touched, and may be missed ---
     if (run.mount) run.mount.t += dt;
     for (const it of run.items) {
-      if (run.mount || Math.abs(px - it.x) > 75 || p.y < floorAt(run, it.x) - (MOUNTS[it.kind].fly ? 300 : 170)) continue;   // close enough to touch it
+      it.x += run.speed * MOUNTS[it.kind].ahead * d;
+      const f = floorAt(run, it.x);
+      if (it.kind === 'dragonfly') { const k = ((run.t + it.ph) / ZIG.period) % 2; it.y = f - ZIG.low - (ZIG.high - ZIG.low) * (k < 1 ? k : 2 - k); }
+      if (run.mount || Math.abs(px - it.x) > 70) continue;
+      const reach = it.kind === 'gorilla' ? p.y - HERO_H < f - PERCH + 24              // up to the gorilla: a high jump
+        : it.kind === 'rhino' ? p.y > f - 50                                        // the rhino: at its level, not over it
+          : Math.abs(p.y - HERO_H / 2 - it.y) < 64;                                 // the dragonfly: where it flies
+      if (!reach) continue;
       run.mount = { kind: it.kind, t: 0 };
       it.gone = true; p.rotor = false; p.hang = false; p.vineLeap = false; p.inv = Math.max(p.inv, 0.5);
       if (MOUNTS[it.kind].fly) { p.ground = false; p.plat = null; p.vy = -200; p.y = Math.min(p.y, floorAt(run, it.x) - 60); }
+      else if (!p.ground) { p.vy = Math.max(p.vy, 0); p.jumps = 1; }      // caught in the air: they come down together
       burst(run, it.x, p.y - 70, '#ffd35c', 16, 260);
       run.events.push('mount');
     }
@@ -814,14 +902,27 @@ export function update(run, dt, input) {
           }
         }
       }
+      if (o.kind === 'acid') {
+        o.x += o.vx * d;
+        if (o.lob) {                                 // a blob in the air: where it lands, a puddle of acid stays
+          o.vy += o.g * d; o.y += o.vy * d;
+          const f = floorAt(run, o.x + o.w / 2);
+          if (o.y + o.h >= f) {
+            o.lob = false; o.vx = 0; o.x -= (ACID.puddle - o.w) / 2; o.w = ACID.puddle; o.h = 22; o.y = f - o.h; o.puddle = true;
+            for (let i = 0; i < 10; i++) run.parts.push({ x: o.x + rnd(10, o.w - 10), y: f - 6, vx: rnd(-160, 160), vy: rnd(-320, -80), life: 0, max: rnd(0.3, 0.6), c: pick(['#a8ff3c', '#5cf25c', '#e8ffb0']), s: rnd(5, 10), g: 1200 });
+            run.events.push('splash');
+          }
+        } else if (o.ball) o.y += (o.lane - o.y) * Math.min(1, d * 4);
+      }
       if (o.kind === 'geyser') {                   // it spouts once, and keeps spouting
         if (!o.rise && o.x - px < run.speed * GEYSER.ahead) run.events.push('geyser');
         if (o.rise || o.x - px < run.speed * GEYSER.ahead) o.rise = Math.min(1, o.rise + d * 4);
         o.h = Math.max(4, o.top * o.rise); o.y = o.floor - o.h;
       }
       if (o.kind === 'bat') {
-        if (!o.dive && o.x - px < run.speed * BAT.ahead) { o.dive = true; run.events.push('bat'); }
-        if (o.dive) { o.x -= BAT.speed * d; o.y += (o.low - o.y) * Math.min(1, d * 5); }
+        if (!o.wake && o.x - px < run.speed * (BAT.ahead + BAT.wake)) { o.wake = true; run.events.push('bat'); }
+        if (!o.dive && o.x - px < run.speed * BAT.ahead) o.dive = true;
+        if (o.dive) { o.x -= BAT.speed * d; o.y += (o.low - o.y) * Math.min(1, d * 3.5); }
       }
       if (o.gone || o.x + 6 > box.R || o.x + o.w - 6 < box.L || o.y + 6 > box.B || o.y + o.h - 6 < box.T) continue;
       if (dashing) destroy(run, o);
@@ -832,6 +933,15 @@ export function update(run, dt, input) {
     }
     if (!run.leap) followers(run, d, box, dashing);
     if (run.dead) return;
+    if (!run.leap) boss(run, d);
+    // fallen into a hole: a heart goes, and he is put back on the far side
+    if (p.y > GROUND + 150) {
+      const pit = run.pits.find((h) => px > h.x0 - 60 && px < h.x1 + 60);
+      if (pit) { run.cam = pit.x1 + 40 - run.sx; p.y = GROUND; p.vy = 0; p.ground = true; p.jumps = 0; p.inv = 0; }
+      else p.y = floorAt(run, run.cam + run.sx);
+      p.inv = 0; hit(run, {}); if (run.god) p.inv = 0.5;
+      if (run.dead) return;
+    }
   }
   run.items = run.items.filter((it) => !it.gone && it.x > run.cam - 200);
   run.zones = run.zones.filter((z) => z.x + z.w > run.cam - 200 || z === p.ball);

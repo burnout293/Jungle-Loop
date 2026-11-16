@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jungle Loop — repérer les dangers</title>
+<style>
+  body { margin: 0; padding: 20px; background: #0a0f14; color: #e8ecf4; font: 15px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: #ffd35c; }
+  p { margin: 0 0 16px; color: #9fb0c4; max-width: 80ch; }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 18px; }
+  figure { margin: 0; background: #151b2c; border: 2px solid #2a3350; padding: 10px; }
+  canvas { width: 100%; display: block; image-rendering: pixelated; background: #000; }
+  figcaption { margin-top: 8px; } figcaption b { color: #5cf2e0; } figcaption span { display: block; color: #9fb0c4; font-size: 13px; }
+  figcaption i { color: #ffd35c; font-style: normal; }
+</style>
+</head>
+<body>
+<h1>Repérer les dangers — 7 variantes</h1>
+<p>La même scène, avec ce qui fait mal : une pile de caisses, un hérisson, un coléoptère volant, une araignée, une chauve-souris, des ronces. Et ce qui fait du bien : les pièces et le rhino. Chaque variante reprend une recette des grands jeux 2D vus de côté. Elles se combinent : donne-moi les numéros retenus.</p>
+<main id="grid"></main>
+<script>
+const W = 569, H = 320, GN = 280, DIR = '../assets/img/';
+const IMG = {};
+const load = (n) => new Promise((ok) => { const im = new Image(); im.onload = () => { IMG[n] = im; ok(); }; im.onerror = ok; im.src = DIR + n + '.png'; });
+const canvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+function tinted(im, colour) { const c = canvas(im.width, im.height), x = c.getContext('2d'); x.drawImage(im, 0, 0); x.globalCompositeOperation = 'source-atop'; x.fillStyle = colour; x.fillRect(0, 0, c.width, c.height); return c; }
+// an outline of `colour` around a sprite (one frame), `thick` pixels wide, with the dark line of the game outside it
+function rim(im, colour, thick = 1, sx = 0, sw = im.width) {
+  const pad = thick + 1, c = canvas(sw + pad * 2, im.height + pad * 2), x = c.getContext('2d');
+  for (let r = pad; r >= 1; r--) {
+    const one = canvas(c.width, c.height), o = one.getContext('2d');
+    for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) if (Math.abs(dx) + Math.abs(dy) <= r) o.drawImage(im, sx, 0, sw, im.height, pad + dx, pad + dy, sw, im.height);
+    o.globalCompositeOperation = 'source-in'; o.fillStyle = r === pad ? '#1a1024' : colour; o.fillRect(0, 0, c.width, c.height);
+    x.drawImage(one, 0, 0);
+  }
+  x.drawImage(im, sx, 0, sw, im.height, pad, pad, sw, im.height);
+  return c;
+}
+function stackOf(im, n) { const c = canvas(im.width, n * (im.height - 1) + 1), x = c.getContext('2d'); for (let k = 0; k < n; k++) x.drawImage(im, 0, k * (im.height - 1)); return c; }
+function spikedCrate(im, n) {                          // a crate with iron spikes on its top and hazard stripes on its sides
+  const s = stackOf(im, n), c = canvas(s.width, s.height + 7), x = c.getContext('2d');
+  x.drawImage(s, 0, 7);
+  for (let k = 0; k < 5; k++) { const px = 2 + k * 6; x.fillStyle = '#1a1024'; x.beginPath(); x.moveTo(px - 1, 8); x.lineTo(px + 2, 0); x.lineTo(px + 5, 8); x.fill(); x.fillStyle = '#c9cfe0'; x.beginPath(); x.moveTo(px, 8); x.lineTo(px + 2, 2); x.lineTo(px + 4, 8); x.fill(); }
+  for (let y = 9; y < c.height - 2; y += 6) { x.fillStyle = '#ffd35c'; x.fillRect(0, y, 3, 3); x.fillRect(c.width - 3, y, 3, 3); x.fillStyle = '#1a1024'; x.fillRect(0, y + 3, 3, 3); x.fillRect(c.width - 3, y + 3, 3, 3); }
+  return c;
+}
+
+// The scene: where each thing stands. `hurt` marks what is dangerous.
+const THINGS = [
+  { name: 'crate', x: 150, foot: GN, hurt: true },
+  { name: 'spiky', x: 228, foot: GN, hurt: true },
+  { name: 'fly', x: 285, y: 196, hurt: true, frames: 4 },
+  { name: 'spider-low', x: 352, foot: GN - 4, hurt: true, frames: 2, thread: true },
+  { name: 'bat', x: 420, y: 202, hurt: true, frames: 3, frame: 1 },
+  { name: 'bramble', x: 455, foot: GN, hurt: true },
+];
+
+function scene(c, v, t) {
+  const bgFilter = v.back ? 'saturate(.5) brightness(.72)' : 'none';
+  c.save(); c.filter = bgFilter;
+  c.drawImage(IMG['bg-far'], 0, 0, W, H, 0, 0, W, H);
+  c.drawImage(IMG.mid, 0, GN + 20 - IMG.mid.height);
+  for (const [n, x] of [['prop-0', 18], ['prop-3', 300], ['prop-6', 505], ['prop-4', 190]]) c.drawImage(tinted(IMG[n], 'rgba(16,12,40,.3)'), x, GN - IMG[n].height + 3);
+  c.restore();
+  for (let x = 0; x < W; x += IMG['ground-1'].width) c.drawImage(IMG['ground-1'], x, GN - 4);
+  // friendly: coins, and the rhino grazing
+  for (let k = 0; k < 6; k++) c.drawImage(IMG.coin, 0, 0, 15, 16, 70 + k * 12, GN - 52 - Math.round(Math.sin(k * 0.6) * 8), 15, 16);
+  const rh = IMG['mount-rhino'], rw = rh.width / 4;
+  const g = c.createRadialGradient(540, GN - 26, 4, 540, GN - 26, 55); g.addColorStop(0, 'rgba(255,224,120,.45)'); g.addColorStop(1, 'rgba(255,224,120,0)');
+  c.fillStyle = g; c.fillRect(480, GN - 90, 120, 100);
+  c.drawImage(rh, rw, 0, rw, rh.height, 515, GN - rh.height + 1, rw, rh.height);
+  c.drawImage(IMG['hero-body'], 40, GN - 48);
+  for (const th of THINGS) drawThing(c, th, v, t);
+}
+
+const cache = new Map();
+function sprite(th, v) {
+  const key = th.name + JSON.stringify(v.rim) + v.spikes;
+  if (cache.has(key)) return cache.get(key);
+  let im = th.name === 'crate' ? (v.spikes ? spikedCrate(IMG.crate, 2) : stackOf(IMG.crate, 2)) : th.name === 'bramble' ? brambles() : IMG[th.name];
+  const frames = th.frames || 1, fw = im.width / frames, f = th.frame || 0;
+  const out = v.rim ? rim(im, v.rim[0], v.rim[1], f * fw, fw) : rim(im, '#fff2c8', 1, f * fw, fw);
+  cache.set(key, out); return out;
+}
+function brambles() {
+  const c = canvas(90, 14), x = c.getContext('2d');
+  for (let k = 0; k < 7; k++) { const x0 = k * 13, span = 24; for (let u = 0; u <= span; u++) { const px = (x0 + u) % 90, py = Math.round(12 - Math.sin(u / span * Math.PI) * 10); x.fillStyle = '#3a2416'; x.fillRect(px, py, 2, 2); if (u % 4 === 1) { x.fillStyle = '#e8d9b0'; x.fillRect(px + 1, py - 2, 1, 2); } } }
+  return c;
+}
+
+function drawThing(c, th, v, t) {
+  const im = sprite(th, v), x = th.x, y = th.y !== undefined ? th.y : th.foot - im.height + 1;
+  const cx = x + im.width / 2, floor = GN;
+  if (v.halo) {                                        // a red glow that breathes behind it
+    const r = Math.max(im.width, im.height) * 0.9, g = c.createRadialGradient(cx, y + im.height / 2, 2, cx, y + im.height / 2, r);
+    g.addColorStop(0, `rgba(255,50,60,${0.35 + 0.2 * Math.sin(t * 5 + x)})`); g.addColorStop(1, 'rgba(255,50,60,0)');
+    c.fillStyle = g; c.fillRect(cx - r, y + im.height / 2 - r, r * 2, r * 2);
+  }
+  if (v.mark) {                                        // where it will hurt, marked on the floor; a sign above what comes from the sky
+    c.fillStyle = 'rgba(255,60,70,.55)'; c.fillRect(x - 2, floor - 1, im.width + 4, 3);
+    if (th.y !== undefined || th.thread) {
+      c.fillStyle = 'rgba(20,6,20,.45)'; c.beginPath(); c.ellipse(cx, floor, im.width * 0.45, 3, 0, 0, Math.PI * 2); c.fill();
+    }
+    if (th.thread || th.name === 'bat') {
+      const by = (th.thread ? 6 : y - 18) + Math.round(Math.abs(Math.sin(t * 6)) * 3);
+      c.fillStyle = '#1a1024'; c.fillRect(cx - 3, by - 1, 7, 13); c.fillStyle = '#ff3b4e'; c.fillRect(cx - 2, by, 5, 8); c.fillRect(cx - 2, by + 9, 5, 2);
+      c.fillStyle = '#fff'; c.fillRect(cx - 1, by + 1, 3, 6); c.fillRect(cx - 1, by + 9, 3, 1);
+    }
+  }
+  if (th.thread) { c.fillStyle = 'rgba(235,240,255,.8)'; c.fillRect(Math.round(cx), 0, 1, y + 4); }
+  if (th.name === 'bramble') { for (let k = 0; k < 2; k++) c.drawImage(im, x + k * (im.width - 4), th.foot - im.height + 2); return; }
+  c.drawImage(im, Math.round(x), Math.round(y));
+}
+
+const V = [
+  { name: '0 · Actuel', ref: '', text: 'Liseré pâle autour des dangers, décor posé dessus un peu assombri. Les caisses ressemblent au décor en bois de la jungle.' },
+  { name: '1 · Code couleur rouge', ref: 'Celeste, Super Meat Boy', text: 'Tout ce qui fait mal porte le même liseré rouge, et rien d\'autre ne l\'a. Le joueur apprend une seule règle : rouge = éviter.', rim: ['#ff3b4e', 1] },
+  { name: '2 · Décor en retrait', ref: 'Hollow Knight, Rayman Legends', text: 'Le fond est désaturé et assombri ; le premier plan jouable garde toutes ses couleurs. Les dangers ressortent par le contraste, sans rien ajouter dessus.', back: true },
+  { name: '3 · Marques et préavis', ref: 'Cuphead, Dead Cells', text: 'Une ligne rouge au sol sous chaque danger, une ombre sous ce qui vole, un « ! » au-dessus de ce qui va tomber ou plonger. On sait où ça frappera avant que ça arrive.', mark: true },
+  { name: '4 · Halo pulsant', ref: 'Ori, Hades', text: 'Une lueur rouge qui respire derrière chaque danger. Très visible même du coin de l\'œil, mais charge l\'image quand il y en a beaucoup.', halo: true },
+  { name: '5 · Caisses hérissées', ref: 'Donkey Kong Country, Mario (Spiny)', text: 'La caisse devient visiblement dangereuse : pointes de fer sur le dessus, bandes jaune et noir sur les côtés. Les formes pointues disent « ça pique » sans mot.', spikes: true, rim: ['#ff3b4e', 1] },
+  { name: '6 · Combinaison recommandée', ref: '1 + 2 + 3 + 5', text: 'Liseré rouge, décor en retrait, marques au sol et préavis, caisses hérissées. Le plus lisible des sept, sans halo pour ne pas charger l\'écran.', rim: ['#ff3b4e', 1], back: true, mark: true, spikes: true },
+];
+
+(async () => {
+  await Promise.all(['bg-far', 'mid', 'ground-1', 'prop-0', 'prop-3', 'prop-4', 'prop-6', 'coin', 'mount-rhino', 'hero-body', 'crate', 'spiky', 'fly', 'spider-low', 'bat'].map(load));
+  const views = V.map((v) => {
+    const f = document.createElement('figure'), cv = canvas(W, H), cap = document.createElement('figcaption');
+    cap.innerHTML = `<b>${v.name}</b>${v.ref ? ` <i>· ${v.ref}</i>` : ''}<span>${v.text}</span>`;
+    f.append(cv, cap); document.getElementById('grid').append(f);
+    const c = cv.getContext('2d'); c.imageSmoothingEnabled = false; return [v, c];
+  });
+  const t0 = performance.now();
+  (function frame(now) { const t = (now - t0) / 1000; for (const [v, c] of views) scene(c, v, t); requestAnimationFrame(frame); })(t0);
+})();
+</script>
+</body>
+</html>
