@@ -41,7 +41,7 @@ const BAT = { w: 60, h: 44, ahead: 1.0, speed: 160 };
 export const BRAMBLE = { h: 26 };
 // Not before this many metres: the spider that drops to the floor (yellow) and its kin, the one that
 // stops halfway (red), brambles, the geyser.
-const FROM = { low: 500, mid: 1500, brambles: 1000, geyser: 250 };
+export const FROM = { low: 500, mid: 1500, brambles: 1000, geyser: 250 };   // (the debug menu may change these)
 
 // Mounts: rare friendly animals waiting on the path. Running into one puts the hero on its back until
 // something hits them: the animal takes the blow and vanishes. Each one plays its own game, and the
@@ -530,6 +530,7 @@ function dismount(run) {
 // Losing a heart leaves a moment of invincibility; the last one ends the run (or triggers the rewind).
 // On a mount nothing is lost: the animal vanishes instead.
 function hit(run, o) {
+  if (run.god) return;                          // the debug menu's invincibility: nothing happens at all
   o.gone = true;
   if (run.mount) { dismount(run); return; }
   run.hearts--;

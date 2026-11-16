@@ -6,12 +6,15 @@ import { showDemo, drawDemo, DEMO_W, DEMO_H } from './demo.js';
 import { audio } from './audio.js';
 import * as S from './save.js';
 import * as P from './progress.js';
+import { open as openDebug, debugRun, dbg } from './debug.js';
 
 // The game's version, shown on the home screen. sw.js names its cache after it: both move together.
-const VERSION = '0.15.1';
+const VERSION = '0.16.0';
 
 const $ = (id) => document.getElementById(id);
-const cv = $('c'), ctx = cv.getContext('2d', { alpha: false });   // nothing shows through it: one layer less to blend
+// (A canvas without transparency, { alpha: false }, is a little lighter, but some Firefox builds on
+// phones then draw noise instead of the picture: it is left transparent.)
+const cv = $('c'), ctx = cv.getContext('2d');
 const demoCv = $('demo'), demoCtx = demoCv.getContext('2d');
 const SCREENS = ['menu', 'intro', 'shop', 'settings', 'over', 'pause'];
 
@@ -118,14 +121,15 @@ function watch(ms) {
 }
 
 // Full screen, where the browser has it (not on iPhone, where the game must be added to the home
-// screen instead). A phone turns to landscape with it. Installed as an app it already fills the screen.
+// screen instead). Installed as an app it already fills the screen. On a phone it follows the way
+// the phone is held: full screen in landscape, back to normal in portrait (see the end of the file).
+const phone = window.matchMedia('(pointer: coarse)').matches, landscape = window.matchMedia('(orientation: landscape)');
 const canFull = !!document.documentElement.requestFullscreen && document.fullscreenEnabled !== false
   && !window.matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
 async function fullscreen(on) {
   try {
     if (on && !document.fullscreenElement) {
       await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      try { await screen.orientation.lock('landscape'); } catch { /* desktop, or not allowed: no matter */ }
     } else if (!on && document.fullscreenElement) await document.exitFullscreen();
   } catch { /* refused: the game stays as it is */ }
 }
@@ -382,11 +386,12 @@ function go(name) {
   audio.duck(false);
   if (name === 'settings' && state === 'pause') inRun = true;
   if (name === 'play') {
-    if (canFull && save.full && window.matchMedia('(pointer: coarse)').matches) fullscreen(true);   // a phone plays full screen
+    if (canFull && save.full && phone && landscape.matches) fullscreen(true);   // a phone held sideways plays full screen
     if (!save.seenIntro) { save.seenIntro = true; S.store(save); state = 'intro'; show('intro'); return; }
     run = newRun(S.loadout(save));                      // only the three equipped upgrades come along
     run.viewW = view.logicalW;
     launch(run);                                        // rumble, then the doorway blows out
+    debugRun(run);                                      // what the debug menu asks for, if anything
     deadFor = 0; hudState.dist = hudState.gold = hudState.hearts = -1;
     $('hud-hearts').replaceChildren(...Array.from({ length: run.hearts }, () => icon('heart')));
     $('hud-hearts').style.visibility = run.maxHearts > 1 ? '' : 'hidden';   // a single life needs no counter
@@ -513,7 +518,7 @@ document.addEventListener('pointerdown', () => { audio.unlock(); if (state !== '
 document.addEventListener('click', (e) => { if (e.target.closest('button')) audio.sfx('click'); }, true);
 
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'TEXTAREA') return;
+  if (['TEXTAREA', 'INPUT', 'SELECT'].includes(e.target.tagName)) return;
   const k = e.key.toLowerCase();
   if (e.code === 'Space' || k === 'arrowup' || k === 'z' || k === 'w') {
     e.preventDefault();
@@ -563,15 +568,19 @@ function hud() {
 
 // ---------- loop ----------
 
-let last = performance.now(), fpsTick = 0;
-// "?fps" in the address shows the frame rate and the canvas in a corner: for checking a phone
-const fpsBox = new URLSearchParams(location.search).has('fps') ? $('stage').appendChild(el('div')) : null;
-if (fpsBox) fpsBox.id = 'fps';
+let last = performance.now(), fpsTick = 0, fpsCount = 0, fpsFrom = last, fpsNow = 0;
+// The frame rate and the canvas in a corner: "?fps" in the address, or the debug menu
+const fpsBox = $('stage').appendChild(el('div'));
+fpsBox.id = 'fps';
+const showFps = (on) => { fpsBox.hidden = !on; };
+showFps(new URLSearchParams(location.search).has('fps') || dbg.fps);
 function frame(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   watch(now - last);
   last = now;
-  if (fpsBox && (fpsTick = (fpsTick + 1) % 30) === 0) fpsBox.textContent = `${perf.fps || '…'} i/s · x${quality()} · ${cv.width}x${cv.height} · ${save.quality}`;
+  fpsCount++;
+  if (now - fpsFrom >= 500) { fpsNow = Math.round(fpsCount * 1000 / (now - fpsFrom)); fpsCount = 0; fpsFrom = now; }
+  if (!fpsBox.hidden && (fpsTick = (fpsTick + 1) % 15) === 0) fpsBox.textContent = `${fpsNow} i/s · x${quality()} · ${cv.width}x${cv.height} · ${save.quality}`;
 
   if (state === 'play' || state === 'over') {
     run.viewW = view.logicalW;
@@ -618,6 +627,22 @@ function frame(now) {
 fetch('assets/patterns.txt', { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : '')).then(setShapes).catch(() => {});
 
 $('menu-version').textContent = 'v' + VERSION;
+
+// Touching the level badge five times in a row opens the debug menu.
+let taps = [];
+$('menu-level').addEventListener('click', () => {
+  const now = performance.now();
+  taps = taps.filter((t) => now - t < 2000); taps.push(now);
+  if (taps.length < 5) return;
+  taps = [];
+  openDebug({ save: () => save, store: () => S.store(save), changed: () => { refreshMenu(); if (state === 'shop') refreshShop(); }, fps: showFps });
+});
+
+// On a phone, full screen follows the way it is held. Turning the phone is not a gesture the browser
+// accepts for going full screen, so in landscape it happens at the next touch; going back to normal
+// in portrait needs none.
+landscape.addEventListener('change', () => { if (canFull && phone && save.full && !landscape.matches && document.fullscreenElement) fullscreen(false); });
+document.addEventListener('pointerup', () => { if (canFull && phone && save.full && landscape.matches && !document.fullscreenElement) fullscreen(true); }, true);
 refreshMenu();
 aimFlyers();           // before the first show(): every block is still at its resting place
 loadAssets();

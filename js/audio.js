@@ -1,17 +1,17 @@
 // Music and sound effects.
-// Two pieces of music, each looping without a seam: one behind the menus, one for the run (always
-// the same). They are the files named in assets/music/tracks.json; if the run's file is missing,
+// Two pieces of music, each looping: one behind the menus, one for the run (always the same). They are the files named in assets/music/tracks.json; if the run's file is missing,
 // a built-in theme generated note by note takes over.
 
 const MUSIC_DIR = 'assets/music/';
 
-// Two audio contexts: effects want the shortest delay, music wants the largest buffer the device
-// offers (latencyHint 'playback'), which is what stops it crackling when a phone is busy drawing.
-let ac = null, acM = null, sfxOut = null, musicOut = null;
+// Effects (and the built-in theme) go through Web Audio, which plays them at once. The music files
+// are played by an <audio> element instead: the browser decodes and plays those on its own, away from
+// the page, so a phone busy drawing the game cannot make them crackle. (The price: a loop restarts
+// with the file's own few milliseconds of silence, and on iPhone the music volume cannot be set.)
+let ac = null, sfxOut = null, musicOut = null;
 let timer = null, step = 0, nextT = 0, root = 0;
-let tracks = {}, listLoading = null;          // { menu: { file, loopStart?, loopEnd? }, run: { ... } }
-const buffers = new Map();
-let source = null, wanted = '', current = 0;  // wanted: '' (silence), 'menu' or 'run'
+let tracks = {}, listLoading = null;          // { menu: { file }, run: { file } }
+let player = null, wanted = '', current = 0;  // the <audio> playing; wanted: '' (silence), 'menu' or 'run'
 
 const hz = (semi) => 220 * Math.pow(2, semi / 12);
 
@@ -52,7 +52,6 @@ function noise(out, dur, vol, freq, when = 0) {
 }
 
 function schedule() {
-  const ac = acM;
   const th = THEMES[current % THEMES.length];
   const beat = 60 / th.bpm / 2;                        // eighth notes
   while (nextT < ac.currentTime + 0.3) {
@@ -82,38 +81,32 @@ function loadList() {
   })();
 }
 
-// MP3 encoders pad both ends with silence, which would be heard at each loop: find the real sound.
-function soundBounds(buf) {
-  const d = buf.getChannelData(0), th = 0.004;
-  let a = 0, b = d.length - 1;
-  while (a < b && Math.abs(d[a]) < th) a++;
-  while (b > a && Math.abs(d[b]) < th) b--;
-  return [a / buf.sampleRate, (b + 1) / buf.sampleRate];
-}
-
-async function playFile(which, delay = 0) {
-  const t = tracks[which];
-  let buf = buffers.get(which);
-  if (!buf) {
-    const r = await fetch(MUSIC_DIR + t.file);
-    buf = await acM.decodeAudioData(await r.arrayBuffer());
-    buffers.set(which, buf);
-  }
-  if (wanted !== which || source) return;              // stopped or changed while loading
-  const [a, b] = soundBounds(buf);
-  const src = source = acM.createBufferSource();
-  src.buffer = buf; src.loop = !t.once;
-  src.loopStart = t.loopStart ?? a; src.loopEnd = t.loopEnd ?? b;
-  src.g = acM.createGain();                              // its own volume: one piece can fade while the next begins
-  src.connect(src.g).connect(musicOut);
-  src.start(acM.currentTime + delay, src.loopStart);
-  // a piece played once (the end-of-run jingle) hands over to the menu's music when it is done
-  if (t.once) src.onended = () => { if (source === src) { source = null; if (wanted === which) { wanted = ''; audio.music('menu'); } } };
+// A piece of music in its own <audio> element, started after `delay` seconds.
+function playFile(which, delay = 0) {
+  const t = tracks[which], el = new Audio(MUSIC_DIR + t.file);
+  el.loop = true; el.preload = 'auto';
+  player = el; level();
+  el.onerror = () => { if (player !== el) return; player = null; delete tracks[which]; wanted = ''; audio.music(which); };   // missing: the built-in theme, or nothing
+  const start = () => { if (player === el) el.play().catch(() => {}); };
+  if (delay) setTimeout(start, delay * 1000); else start();
 }
 
 function silence() {
-  if (source) { try { source.stop(); } catch { /* already stopped */ } source = null; }
+  if (player) { player.pause(); player.removeAttribute('src'); player.load(); player = null; }
   if (timer) { clearInterval(timer); timer = null; }
+}
+
+// The end of a run: the piece winds down like a record under a thumb, speed and pitch dropping
+// together, and fades out. A slowing record has no key and no beat left: anything can follow it.
+function windDown(el) {
+  el.preservesPitch = el.mozPreservesPitch = el.webkitPreservesPitch = false;
+  const t0 = performance.now(), v0 = el.volume;
+  const tick = setInterval(() => {
+    const k = Math.min(1, (performance.now() - t0) / 850);
+    try { el.playbackRate = Math.max(0.25, Math.pow(0.12, k)); } catch { /* this browser keeps its speed */ }
+    el.volume = v0 * Math.min(1, Math.max(0, 2 - 2 * k));
+    if (k >= 1) { clearInterval(tick); el.pause(); el.removeAttribute('src'); el.load(); }
+  }, 30);
 }
 
 loadList();   // a plain fetch: no need to wait for the first gesture
@@ -123,24 +116,33 @@ const gainOf = (v) => 0.5 * v / 7;
 let vols = [7, 7], ducked = false;
 const DUCK = 0.3;                             // how much of the music is left on the pause screen
 
+// The music's loudness now: its volume setting, turned down on the pause screen.
+function level() {
+  const g = gainOf(vols[0]) * (ducked ? DUCK : 1);
+  if (player) player.volume = Math.min(1, g);
+  if (musicOut) musicOut.gain.value = g;
+}
+
 export const audio = {
   musicOn: true,
   sfxOn: true,
 
   setVolumes(music, sfx) {
     vols = [music, sfx]; this.musicOn = music > 0; this.sfxOn = sfx > 0;
-    if (ac) { musicOut.gain.value = gainOf(music) * (ducked ? DUCK : 1); sfxOut.gain.value = gainOf(sfx); }
+    level();
+    if (sfxOut) sfxOut.gain.value = gainOf(sfx);
   },
 
   // On the pause screen the music keeps playing, turned down.
-  duck(on) {
-    if (ducked === on) return;
-    ducked = on;
-    if (ac) musicOut.gain.setTargetAtTime(gainOf(vols[0]) * (on ? DUCK : 1), acM.currentTime, 0.12);
-  },
+  duck(on) { if (ducked !== on) { ducked = on; level(); } },
 
   // The page is hidden (another tab, the phone locked): everything stops, and picks up where it was.
-  sleep(on) { if (ac) for (const c of new Set([ac, acM])) { if (on) c.suspend(); else c.resume(); } },
+  sleep(on) {
+    if (ac) { if (on) ac.suspend(); else ac.resume(); }
+    if (!player) return;
+    if (on && !player.paused) { player.pause(); player.asleep = true; }
+    else if (!on && player.asleep) { player.asleep = false; player.play().catch(() => {}); }
+  },
 
   // Browsers only allow sound after a user gesture: call this from one.
   unlock() {
@@ -148,39 +150,31 @@ export const audio = {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       ac = new AC({ latencyHint: 'interactive' });
-      try { acM = new AC({ latencyHint: 'playback' }); } catch { acM = ac; }
       sfxOut = ac.createGain(); sfxOut.gain.value = gainOf(vols[1]); sfxOut.connect(ac.destination);
-      musicOut = acM.createGain(); musicOut.gain.value = gainOf(vols[0]) * (ducked ? DUCK : 1); musicOut.connect(acM.destination);
+      musicOut = ac.createGain(); musicOut.connect(ac.destination); level();
       loadList();
     }
     if (ac.state === 'suspended') ac.resume();
-    if (acM.state === 'suspended') acM.resume();
+    if (player && player.paused && !player.asleep && wanted) player.play().catch(() => {});
   },
 
   // Plays 'menu' or 'run' music, or nothing (''). Asking again for what already plays changes nothing,
-  // so moving between the menu's screens never restarts the tune.
+  // so moving between the menu's screens never restarts the tune. 'over' (the end of a run) winds the
+  // run's music down, and the menu's comes in over its last breath.
   async music(which) {
     if (!ac || !this.musicOn) which = '';
-    if (which === wanted && (source || timer || !which)) return;
-    if (which === 'menu' && wanted === 'over' && source) return;   // the jingle finishes first, then leads to the menu's music by itself
-    // 'over', the end of a run: whatever bar the run's music is in, it winds down like a record under
-    // a thumb (pitch and speed dropping together), and the jingle comes in over its last breath. A
-    // slowing record has no key and no beat left to clash with: it joins up from any point.
     let delay = 0;
-    if (which === 'over' && wanted === 'run' && source) {
-      const old = source, t = acM.currentTime; source = null; delay = 0.6;
-      old.playbackRate.setValueAtTime(1, t); old.playbackRate.exponentialRampToValueAtTime(0.12, t + 0.85);
-      old.g.gain.setValueAtTime(1, t + 0.45); old.g.gain.linearRampToValueAtTime(0, t + 0.85);
-      try { old.stop(t + 0.9); } catch { /* already stopped */ }
-      if (!tracks.over) which = 'menu';                    // no jingle on file: the menu's music comes in over the last breath
-      wanted = which;
-    } else { wanted = which; silence(); }
+    if (which === 'over') {
+      which = 'menu';
+      if (wanted === 'run' && player) { windDown(player); player = null; delay = 0.6; wanted = ''; }
+    }
+    if (which === wanted && (player || timer || !which)) return;
+    wanted = which; silence();
     if (!which) return;
     await loadList();
-    if (wanted !== which || source || timer) return;
-    if (tracks[which]) { playFile(which, delay).catch(() => { delete tracks[which]; wanted = ''; this.music(which === 'over' ? 'menu' : which); }); return; }
-    if (which === 'over') { wanted = ''; this.music('menu'); return; }   // no jingle on file: straight to the menu's music
-    if (which === 'run') { step = 0; nextT = acM.currentTime + 0.05; timer = setInterval(schedule, 100); }
+    if (wanted !== which || player || timer) return;
+    if (tracks[which]) { playFile(which, delay); return; }
+    if (which === 'run') { step = 0; nextT = ac.currentTime + 0.05; timer = setInterval(schedule, 100); }
   },
 
   // Built-in themes change key with the scenery.
