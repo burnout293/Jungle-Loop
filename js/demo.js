@@ -2,7 +2,7 @@
 // Not a video: a real, tiny run of the game with only that upgrade on, a hand-placed stretch of
 // jungle and a scripted player, restarted every five seconds. It always shows the real behaviour.
 
-import { newRun, update, addCrates, addSpiky, addFlyer, coinLine, GROUND, PX, PIXEL, PPM, HANG_Y, LOG } from './game.js';
+import { newRun, update, addCrates, addSpiky, addHover, LOW, HEAD, coinLine, GROUND, PX, PIXEL, PPM, HANG_Y, LOG } from './game.js';
 import { draw, quality } from './render.js';
 
 const LOOP = 5;                                  // seconds
@@ -33,7 +33,7 @@ const SCENES = {
     play: (run, ahead, t, inp) => { if (ahead < 130) inp.dash = true; },
   },
   slow: {
-    build(run, x) { addSpiky(run, x + 800); addSpiky(run, x + 1250); addFlyer(run, x + 1900, 290); },
+    build(run, x) { addSpiky(run, x + 800); addSpiky(run, x + 1250); addHover(run, x + 1900, HEAD); },
     play: (run, ahead, t, inp) => {
       if (t > 0.7 && t < 0.8) inp.slow = true;
       const next = run.obs.find((o) => o.kind === 'spiky' && o.x + o.w > run.cam + run.sx);
@@ -77,7 +77,7 @@ const SCENES = {
     play: () => {},
   },
   drunk: {
-    build(run, x) { addSpiky(run, x + 600); addSpiky(run, x + 1000); addFlyer(run, x + 1700, 60); for (const o of run.obs) o.ghost = true; },
+    build(run, x) { addSpiky(run, x + 600); addSpiky(run, x + 1000); addHover(run, x + 1700, LOW); for (const o of run.obs) o.ghost = true; },
     play: () => {},
   },
   nature: {

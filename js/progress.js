@@ -40,7 +40,7 @@ export const KINDS = {
   monkeys: { stat: 'monkeys', single: true, base: 2, step: 1, text: (n) => `Salue ${n} singes en une seule course` },
   breaks: { stat: 'breaks', base: 4, step: 3, needs: ['breaker', 'dash'], text: (n) => `Casse ${n} obstacles` },
   mounts: { stat: 'mounts', base: 1, step: 1, text: (n) => (n > 1 ? `Chevauche ${n} montures` : 'Chevauche une monture') },
-  dodges: { stat: 'dodges', base: 2, step: 1, text: (n) => `Esquive ${n} nuées de moustiques` },
+  dodges: { stat: 'dodges', base: 2, step: 1, text: (n) => `Esquive ${n} nuées` },
 };
 
 export const MAX_ACTIVE = 3;

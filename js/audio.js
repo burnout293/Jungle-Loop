@@ -201,8 +201,9 @@ export const audio = {
       case 'bossfall': tone(o, 400, 1.4, 'sawtooth', 0.3, 0, 40); noise(o, 1.2, 0.5, 250, 0.2); break;
       case 'bossdown': [0, 4, 7, 12, 16, 19].forEach((s, k) => tone(o, hz(s + 12), 0.3, 'triangle', 0.2, k * 0.09)); break;
       case 'thud': tone(o, 110, 0.22, 'sine', 0.4, 0, 40); noise(o, 0.2, 0.4, 500); break;
-      case 'geyser': noise(o, 0.45, 0.3, 2600); break;
-      case 'bat': tone(o, 2200, 0.07, 'square', 0.06, 0, 3000); tone(o, 2400, 0.07, 'square', 0.06, 0.09, 3200); break;
+      case 'warn': tone(o, 1200, 0.07, 'square', 0.1); tone(o, 1200, 0.07, 'square', 0.1, 0.14); break;
+      case 'dart': tone(o, 700, 0.3, 'sawtooth', 0.1, 0, 200); noise(o, 0.25, 0.25, 3000); break;
+      case 'laser': tone(o, 1800, 0.5, 'sawtooth', 0.14, 0.2, 400); break;
       case 'roll': tone(o, 240, 0.22, 'triangle', 0.16, 0, 520); break;
       case 'unroll': tone(o, 520, 0.18, 'triangle', 0.14, 0, 260); break;
       case 'heart': [12, 16, 19, 24].forEach((s, k) => tone(o, hz(s + 12), 0.22, 'triangle', 0.2, k * 0.07)); break;

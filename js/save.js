@@ -36,7 +36,7 @@ export const MAX_EQUIPPED = 3;   // owning is not enough: only three upgrades go
 export const isPower = (id) => !!UPGRADES.find((u) => u.id === id && u.power);
 
 function blank() {
-  return { v: 1, coins: 0, best: 0, loops: 0, upgrades: {}, musicVol: 7, sfxVol: 7, pixelFont: true, quality: 'auto', full: true, seenIntro: false,
+  return { v: 1, coins: 0, best: 0, loops: 0, upgrades: {}, musicVol: 7, sfxVol: 7, pixelFont: true, dangerRim: false, quality: 'auto', full: true, seenIntro: false,
     equipped: [], powersOff: [], xp: 0, quests: [], questsDone: 0, lastQuest: '' };
 }
 
@@ -53,6 +53,7 @@ function sanitize(raw) {
   s.musicVol = vol(raw.musicVol, raw.music);
   s.sfxVol = vol(raw.sfxVol, raw.sfx);
   s.pixelFont = raw.pixelFont !== false;
+  s.dangerRim = raw.dangerRim === true;
   s.quality = QUALITIES.includes(raw.quality) ? raw.quality : 'auto';
   s.full = raw.full !== false;
   s.seenIntro = !!raw.seenIntro;

@@ -227,7 +227,7 @@ h1 span:nth-child(odd) { color: #ffe9a0; }
 
 /* ---------- Réglages ---------- */
 #settings-back { left: var(--m); top: calc(var(--ui) * 6); width: calc(var(--ui) * 152); }
-#screen-settings .pane { height: calc(var(--ui) * 256); }   /* no buttons under these two: they may run lower */
+#screen-settings .pane { height: calc(var(--ui) * 262); }   /* no buttons under these two: they may run lower */
 .toggle { display: flex; align-items: center; justify-content: space-between; }
 .toggle > button { width: calc(var(--ui) * 130); }
 /* volume : moins, dix crans, plus */

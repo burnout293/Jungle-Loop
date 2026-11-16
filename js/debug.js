@@ -122,10 +122,8 @@ function build() {
     tune('Vitesse de départ', 'base', 'm/s', PPM, 0.5),
     tune('Accélération', 'gain', 'm/s par seconde', PPM, 0.025),
     tune('Bonus du Sprint', 'sprint', 'm/s', PPM, 0.5),
-    tune('Araignée jaune dès', 'from_low', 'm'),
-    tune('Araignée rouge dès', 'from_mid', 'm'),
-    tune('Ronces dès', 'from_brambles', 'm'),
-    tune('Geyser dès', 'from_geyser', 'm'),
+    tune('Suspendus bas dès', 'from_low', 'm'),
+    tune('Suspendus hauts dès', 'from_mid', 'm'),
     tune('Boss à', 'boss', 'm'),
     row('', btn('Valeurs d\'origine', () => { Object.assign(dbg, ORIGIN); changed.clear(); apply(); open(host); say.textContent = 'Valeurs d\'origine remises.'; })),
   );

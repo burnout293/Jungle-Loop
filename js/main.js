@@ -1,7 +1,7 @@
 // Glue: screens, input, HUD and the frame loop.
 
 import { newRun, update, launch, setShapes, PIXEL, VIEW_H, MOUNTS } from './game.js';
-import { draw, loadAssets, setQuality, quality, BIOMES } from './render.js';
+import { draw, loadAssets, setQuality, quality, setDangerRim, BIOMES } from './render.js';
 import { showDemo, drawDemo, DEMO_W, DEMO_H } from './demo.js';
 import { audio } from './audio.js';
 import * as S from './save.js';
@@ -9,7 +9,7 @@ import * as P from './progress.js';
 import { open as openDebug, debugRun, dbg } from './debug.js';
 
 // The game's version, shown on the home screen. sw.js names its cache after it: both move together.
-const VERSION = '0.18.0';
+const VERSION = '0.19.0';
 
 const $ = (id) => document.getElementById(id);
 // (A canvas without transparency, { alpha: false }, is a little lighter, but some Firefox builds on
@@ -288,7 +288,7 @@ function slotInfo(id, slot) {
 document.addEventListener('click', () => { $('menu-info').hidden = true; for (const s of document.querySelectorAll('#menu-loadout .slot')) s.classList.remove('sel'); });
 
 function refreshSettings() {
-  for (const [id, on] of [['tg-font', save.pixelFont], ['tg-full', !!document.fullscreenElement]]) {
+  for (const [id, on] of [['tg-font', save.pixelFont], ['tg-full', !!document.fullscreenElement], ['tg-rim', save.dangerRim]]) {
     $(id).textContent = on ? 'Oui' : 'Non';
     $(id).className = (on ? 'on' : 'plain') + ' small';
   }
@@ -467,6 +467,7 @@ $('tg-smooth').addEventListener('click', () => {      // choosing again also for
   try { localStorage.removeItem(CAP_KEY); } catch { /* nothing kept */ }
   S.store(save); resize(); refreshSettings();
 });
+$('tg-rim').addEventListener('click', () => { save.dangerRim = !save.dangerRim; S.store(save); setDangerRim(save.dangerRim); refreshSettings(); });
 $('tg-full').addEventListener('click', () => { save.full = !document.fullscreenElement; S.store(save); fullscreen(save.full); });
 const msg = (t) => { $('save-msg').textContent = t; };
 
@@ -609,7 +610,7 @@ function frame(now) {
       if (ev === 'monkey') stats.monkeys++;
       if (ev === 'mount') { stats.mounts++; banner(MOUNTS[run.mount.kind].name + ' !'); }
       if (ev === 'dodge') stats.dodges++;
-      if (ev === 'fm' && run.fm && !run.fm.seen) { run.fm.seen = true; banner('Moustiques !'); }
+      if (ev === 'fm' && run.fm && !run.fm.seen) { run.fm.seen = true; banner(['Moustiques !', 'Guêpes !', 'Drones !', 'Feux follets !'][run.fm.biome || 0]); }
       if (ev === 'boom') { audio.music('run'); banner('Cours !'); }
       if (ev === 'debug') banner('Debug actif');
       if (ev === 'boss') banner('Vorace !');
@@ -659,6 +660,7 @@ landscape.addEventListener('change', () => { if (canFull && phone && save.full &
 document.addEventListener('pointerup', () => { if (canFull && phone && save.full && landscape.matches && !document.fullscreenElement) fullscreen(true); }, true);
 refreshMenu();
 aimFlyers();           // before the first show(): every block is still at its resting place
+setDangerRim(save.dangerRim);
 loadAssets();
 requestAnimationFrame(frame);
 requestAnimationFrame(() => show('menu'));   // one frame later, so the menu slides in rather than pops

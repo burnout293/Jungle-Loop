@@ -5,6 +5,8 @@
 #   brouilleur.png: the shop icon of the Brouilleur
 #   boss.png    : the giant carnivorous plant, jaws shut and jaws open
 #   pepito.png  : Pépito's body with his backpack and the relic, the same under his leaf rotor, the backpack icon
+#   dangers1/2/3.png: the dangers of the other sceneries (vulture, wasp, ball of brambles; stone idol,
+#                 bear trap, mine; missile, arrow, combat drone, little drone)
 #   gravats.png : four ways of blocking the temple's doorway, for mockups/gravats.html
 # Run it AFTER import_gen.py, which still writes the old ruins and city crates.
 import os
@@ -200,3 +202,47 @@ rig['rotor']['blade'] = round(next(y for y in range(int(rotor.height * 0.15), ro
 save(shrink(bag, 54 / max(bag.size)), 'ico-jammer')                 # the Gros sac à dos
 mp = os.path.join(OUT, 'meta.json'); meta = json.load(open(mp)); meta['rig'] = rig
 json.dump(meta, open(mp, 'w'), indent=1); print('rig', rig)
+
+# ---------- the dangers of each scenery ----------
+# Cut by columns: every drawing with whatever bits float around it (sparks, crumbs), side by side.
+def columns(name, gap=14):
+    im = Image.open(os.path.join(SRC, name + '.png')).convert('RGBA'); px = im.load()
+    used = [any(not magenta(px[x, y]) for y in range(0, im.height, 2)) for x in range(im.width)]
+    spans, x = [], 0
+    while x < im.width:
+        if not used[x]: x += 1; continue
+        a = x
+        while x < im.width and (used[x] or any(used[x:x + gap])): x += 1
+        spans.append((a, x))
+    out = []
+    for a, b in spans:
+        part = im.crop((a, 0, b, im.height)); mp = part.load()
+        mask = Image.new('L', part.size, 0); mm = mask.load()
+        for y in range(part.height):
+            for x2 in range(part.width):
+                if not magenta(mp[x2, y]): mm[x2, y] = 255
+        box = mask.getbbox()
+        if box and (box[2] - box[0]) * (box[3] - box[1]) > 1500: out.append(part.crop(box))
+    return out
+
+def frames_sheet(frames, k, name):
+    """Frames at the same scale, bottoms and middles lined up, in one strip."""
+    sm = [shrink(f, k) for f in frames]
+    cw, ch = max(f.width for f in sm), max(f.height for f in sm)
+    sheet = Image.new('RGBA', (cw * len(sm), ch), (0, 0, 0, 0))
+    for i, f in enumerate(sm): sheet.alpha_composite(f, (i * cw + (cw - f.width) // 2, ch - f.height))
+    save(sheet, name)
+
+vul1, vul2, wasp, thorns = columns('dangers1')
+frames_sheet([vul1, vul2], 46 / max(vul1.width, vul2.width), 'vulture')
+save(shrink(wasp, 40 / wasp.width), 'wasp')
+save(shrink(thorns, 30 / thorns.width), 'thornball')
+idol, trap1, trap2, mine = columns('dangers2')
+save(shrink(idol, 30 / idol.height), 'idol')
+frames_sheet([trap1, trap2], 38 / max(trap1.width, trap2.width), 'beartrap')
+save(shrink(mine, 34 / mine.width), 'mine')
+missile, arrow, drone, minidrone = columns('dangers3')
+save(shrink(missile, 46 / missile.width), 'missile')
+save(shrink(arrow, 46 / arrow.width), 'arrow')
+save(shrink(drone, 46 / drone.width), 'drone-big')
+save(shrink(minidrone, 32 / minidrone.width), 'drone')

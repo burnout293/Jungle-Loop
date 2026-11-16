@@ -4,7 +4,7 @@
 // but they can stand and scroll at any Q-th of a pixel, which is what keeps a fast run steady,
 // and the browser smooths the picture's edges when it fits the canvas to the screen.
 
-import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, MOUNTS, LOG, GALLERY, BRAMBLE, PERCH, BOSS, propAt, floorAt, flatAt, biomeAt } from './game.js';
+import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, propAt, floorAt, flatAt, biomeAt } from './game.js';
 import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js';
 
 // Each scenery has its own far background, middle distance, floor, props, and its own version of
@@ -24,7 +24,7 @@ export const BIOMES = [
 ];
 
 const DIR = 'assets/img/';
-const NAMES = ['fore', 'temple', 'temple-rubble', 'boss-plant', 'spider', 'spider-low', 'spider-mid', 'bat', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'temple-rubble', 'boss-plant', 'spider-low', 'spider-mid', 'bat', 'thornball', 'beartrap', 'mine', 'vulture', 'arrow', 'missile', 'idol', 'drone', 'wasp', 'drone-big', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -74,12 +74,8 @@ export async function loadAssets() {
   }
   await Promise.all(names.map(load));
   SCENE = BIOMES.map(buildScene);
-  for (const [k, frames] of [['spiky', 1], ['fly', meta.fly.frames], ['mosquito', meta.mosquito.frames], ['spider', 2], ['spider-low', 2], ['spider-mid', 2], ['bat', 3]])
-    if (IMG[k]) HAZ[k] = { im: rim(IMG[k], frames), ghost: rim(tinted(IMG[k], 'rgba(110,215,255,.55)'), frames, '#d8f6ff'), frames };
+  buildHaz();
   FAR = { fist: tinted(IMG['hero-fist'], 'rgba(16,12,40,.38)'), shoe: tinted(IMG['hero-shoe'], 'rgba(16,12,40,.38)') };
-  // a block of the ruins' pillar (its capital), and a stretch of brambles drawn here
-  if (IMG['ruins-pillar']) { const c = canvasOf(IMG['ruins-pillar'].width, 26); c.getContext('2d').drawImage(IMG['ruins-pillar'], 0, 0); HAZ.stone = { im: rim(c), frames: 1 }; }
-  HAZ.bramble = { im: rim(brambles()), frames: 1 };
   // the hero's pieces, redrawn four times finer with their stair-steps rounded off (see rounded)
   for (const k of ['hero-body', 'hero-rotor', 'hero-fist', 'hero-shoe', 'hero-ball']) if (IMG[k]) HI.set(IMG[k], rounded(rounded(IMG[k])));
   for (const k of ['fist', 'shoe']) HI.set(FAR[k], tinted(HI.get(IMG['hero-' + k]), 'rgba(16,12,40,.38)'));
@@ -177,7 +173,43 @@ function rowColour(im, row, fallback) {
   return fallback;
 }
 
-const DIM = 'rgba(16,12,40,.3)';                       // the veil over scenery that stands where obstacles do
+const DIM = 'rgba(16,12,40,.38)';                      // the veil over scenery that stands where obstacles do
+
+// Each role of danger looks different in each scenery (jungle, ruins, city, dungeon: the order of
+// BIOMES). The hanging one of the jungle is a spider, yellow when low, red at head height.
+const ROLE = {
+  spiky: ['spiky', 'thornball', 'mine', 'beartrap'],
+  dart: ['fly', 'vulture', 'missile', 'arrow'],
+  hover: ['spider', 'idol', 'drone', 'bat'],
+  swarm: ['mosquito', 'wasp', 'drone-big', 'wisp'],
+};
+const HAZ_FRAMES = { spiky: 1, thornball: 1, beartrap: 2, mine: 1, fly: 4, vulture: 2, arrow: 1, missile: 1, 'spider-low': 2, 'spider-mid': 2, idol: 1, bat: 3, drone: 1, mosquito: 4, wasp: 1, 'drone-big': 1 };
+const RED = '#ff3b4e';
+let RIM = false;                                       // the red outline around everything that hurts (a setting)
+// The dangers as drawn: plain, or outlined in red (then one pixel larger all round: `pad`). Their
+// harmless ghost (Faune alcoolisée) always keeps its pale outline.
+function buildHaz() {
+  for (const [k, n0] of Object.entries(HAZ_FRAMES)) {
+    const frames = k === 'fly' ? meta.fly.frames : k === 'mosquito' ? meta.mosquito.frames : n0;
+    if (IMG[k]) HAZ[k] = { im: RIM ? rim(IMG[k], frames, RED) : IMG[k], ghost: rim(tinted(IMG[k], 'rgba(110,215,255,.55)'), frames, '#d8f6ff'), frames, pad: RIM ? 1 : 0 };
+  }
+  for (const S of SCENE) S.stacks = [];
+}
+export function setDangerRim(on) { RIM = !!on; if (ready) buildHaz(); }
+
+// The far scenery pushed back: less colour, a little darker, so that what is in play stands out.
+function recede(im, grey, dark) {
+  if (!im) return im;
+  const c = canvasOf(im.width, im.height), x = c.getContext('2d');
+  x.drawImage(im, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height), a = d.data;
+  for (let i = 0; i < a.length; i += 4) {
+    const l = 0.3 * a[i] + 0.59 * a[i + 1] + 0.11 * a[i + 2];
+    for (let k = 0; k < 3; k++) a[i + k] = (a[i + k] + (l - a[i + k]) * grey) * dark;
+  }
+  x.putImageData(d, 0, 0);
+  return c;
+}
 
 // The same the other way: `cut` rows taken out around row `at`, top and bottom whole.
 const LOG_CUT = 12;
@@ -220,25 +252,21 @@ function buildScene(b) {
     platform: IMG[b.platform], pillar: tinted(IMG[b.pillar], DIM), crate: IMG[b.crate], stacks: [], slab: IMG[b.slab], tunnel: tinted(lowered(shortened(IMG[b.tunnel], Math.round(LOG.w / PIXEL)), LOG_CUT, 49), DIM),
     platTop: b.platTop, slabTop: b.slabTop, hollow: b.hollow,
     // `top`: how far above the floor line a piece is drawn, so that its solid surface is what feet stand on
-    bg: IMG[b.bg], mid: IMG[b.mid], ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c'), top: kinds.length > 1 ? 4 : surface(kinds[0]) + 1 }, props, fore,
+    bg: recede(IMG[b.bg], 0.35, 0.82), mid: recede(IMG[b.mid], 0.3, 0.86), ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c'), top: kinds.length > 1 ? 4 : surface(kinds[0]) + 1 }, props, fore,
     sky: rowColour(IMG[b.bg], 0, '#7fb9ec'), base: rowColour(IMG[b.mid], -1, '#1c2c3a'),
   };
 }
 
-// A stretch of brambles, 64 pixels long, that repeats: arching stems, thorns, a few dark leaves.
-function brambles() {
-  const W = 64, H = Math.round(BRAMBLE.h / PIXEL) + 3, c = canvasOf(W, H), x = c.getContext('2d');
-  for (let k = 0; k < 5; k++) {
-    const x0 = k * 13 + 2, span = 22 + Math.round(h01(k, 61) * 10), top = 1 + Math.round(h01(k, 63) * 3);
-    for (let u = 0; u <= span; u++) {
-      const px = (x0 + u) % W, py = Math.round(H - 2 - Math.sin(u / span * Math.PI) * (H - 3 - top));
-      x.fillStyle = '#3a2416'; x.fillRect(px, py, 2, 2);
-      x.fillStyle = '#6b4526'; x.fillRect(px, py, 1, 1);
-      if (u % 4 === 1) { x.fillStyle = '#e8d9b0'; x.fillRect(px + (u & 4 ? 1 : -1), py - 2, 1, 2); }       // a thorn
-      if (u % 7 === 3) { x.fillStyle = '#2f5a2a'; x.fillRect(px - 1, py + 1, 3, 2); }                     // a leaf
-    }
-  }
-  return c;
+// The warning of a flyer about to cross: a red "!" at the right edge, blinking, an arrow pointing in.
+function warnMark(ctx, x, y, t) {
+  if (Math.floor(t * 8) % 2) return;
+  ctx.fillStyle = '#1a1024'; ctx.fillRect(x - 5, y - 10, 11, 21);
+  ctx.fillStyle = RED; ctx.fillRect(x - 4, y - 9, 9, 19);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 1, y - 7, 3, 9); ctx.fillRect(x - 1, y + 4, 3, 3);
+  chevronLeft(ctx, x - 9, y);
+}
+function chevronLeft(ctx, x, y) {
+  for (const [c, g] of [['#1a1024', 1], [RED, 0]]) { ctx.fillStyle = c; for (let k = 0; k < 4; k++) ctx.fillRect(x + k - g, y - k - g, 1 + 2 * g, 2 * k + 1 + 2 * g); }
 }
 
 // A pile of `count` crates as one outlined picture, made the first time it is needed.
@@ -246,7 +274,7 @@ function stack(S, count) {
   if (!S.stacks[count]) {
     const im = S.crate, c = canvasOf(im.width, count * (im.height - 1) + 1), x = c.getContext('2d');
     for (let k = 0; k < count; k++) x.drawImage(im, 0, k * (im.height - 1));
-    S.stacks[count] = rim(c);
+    S.stacks[count] = RIM ? rim(c, 1, RED) : c;
   }
   return S.stacks[count];
 }
@@ -816,9 +844,9 @@ export function draw(ctx, run, v, t) {
     const x = sx(o.x), y = n(o.y), foot = n(o.y + o.h);
     if (x > v.w + 10 || x < -80) continue;
     if (o.kind === 'crate') {
-      const S = SCENE[biomeAt(run, o.x)], im = stack(S, o.n);
-      shadow(ctx, x + im.width / 2 - 1, foot - 1, im.width + 2);
-      ctx.drawImage(im, x - 1, foot - im.height + 1);
+      const S = SCENE[biomeAt(run, o.x)], im = stack(S, o.n), pad = RIM ? 1 : 0;
+      shadow(ctx, x + im.width / 2 - pad, foot - 1, im.width);
+      ctx.drawImage(im, x - pad, foot - im.height + pad);
       continue;
     }
     if (o.kind === 'acid') {                           // the plant's acid: a glowing ball in the air, a bubbling puddle on the floor
@@ -857,68 +885,50 @@ export function draw(ctx, run, v, t) {
       }
       continue;
     }
-    if (o.kind === 'bramble') {                        // a carpet of thorns, its picture laid end to end
-      const im = HAZ.bramble.im, w = n(o.w);
-      for (let k = 0; k < w; k += im.width - 2) { const part = Math.min(im.width, w - k + 2); ctx.drawImage(im, 0, 0, part, im.height, x + k - 1, foot - im.height + 2, part, im.height); }
-      continue;
-    }
-    if (o.kind === 'geyser') {                         // a ring of stones round a dark hole; steam before, the jet after
-      const cx = x + n(o.w) / 2, f = n(o.floor), h = n(o.h);
-      ctx.fillStyle = '#1a1024'; ctx.fillRect(snap(cx - 9), f - 3, 18, 5); ctx.fillStyle = '#0b0814'; ctx.fillRect(snap(cx - 7), f - 2, 14, 3);
-      ctx.fillStyle = '#8a7a6a'; ctx.fillRect(snap(cx - 11), f - 4, 4, 3); ctx.fillRect(snap(cx + 7), f - 4, 4, 3); ctx.fillStyle = '#b9a890'; ctx.fillRect(snap(cx - 11), f - 4, 4, 1); ctx.fillRect(snap(cx + 7), f - 4, 4, 1);
-      if (o.rise < 1) for (let k = 0; k < 3; k++) { const up = (t * 16 + k * 7 + o.x) % 20; ctx.globalAlpha = 0.75 * (1 - up / 20); ctx.fillStyle = '#eafcff'; ctx.fillRect(snap(cx - 3 + k * 3 + Math.sin(up * 0.5 + k) * 2), f - 5 - up, 2, 2); }
-      ctx.globalAlpha = 1;
-      if (h > 4) for (let yy = 0; yy < h; yy += 3) {     // the jet: pale outline, white heart, narrower and shakier towards the top
-        const k = yy / h, wob = Math.round(Math.sin(t * 22 + yy * 0.5) * (1 + 2 * k)), half = 5 - 2 * k;
-        ctx.fillStyle = '#fff2c8'; ctx.fillRect(snap(cx - half - 1 + wob), f - yy - 3, half * 2 + 2, 3);
-        ctx.fillStyle = k > 0.8 ? '#ffffff' : '#9fe8ff'; ctx.fillRect(snap(cx - half + wob), f - yy - 3, half * 2, 3);
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(snap(cx - 1 + wob), f - yy - 3, 2, 3);
+    const role = ROLE[o.kind];
+    if (!role) continue;
+    const name = o.kind === 'hover' && !o.biome ? (o.mid ? 'spider-mid' : 'spider-low') : role[o.biome || 0], H = HAZ[name];
+    if (!H) continue;
+    const im = o.ghost ? H.ghost : H.im, pad = o.ghost ? 1 : H.pad, fw = im.width / H.frames, cx = x + n(o.w) / 2, cy = y + n(o.h) / 2;
+    if (o.ghost) ctx.globalAlpha = 0.78 + 0.1 * Math.sin(t * 6 + o.x);
+    if (o.kind === 'spiky') {                          // on the floor
+      const shut = name === 'beartrap' && Math.abs(cx - n(run.sx)) < 30;          // the trap snaps as he goes over it
+      const hop = name === 'spiky' && Math.sin(t * 6 + o.x) > 0.6 ? -1 : 0;
+      shadow(ctx, cx, foot - 1, fw - 2 * pad);
+      sheet(ctx, im, H.frames, shut ? 1 : 0, snap(cx - fw / 2), foot - im.height + pad + hop);
+      if (name === 'mine' && Math.sin(t * 8 + o.x) > 0) {                         // its red light, blinking
+        const g = ctx.createRadialGradient(cx, foot - im.height + 3, 1, cx, foot - im.height + 3, 9);
+        g.addColorStop(0, 'rgba(255,60,60,.9)'); g.addColorStop(1, 'rgba(255,60,60,0)');
+        ctx.fillStyle = g; ctx.fillRect(cx - 9, foot - im.height - 6, 18, 18);
       }
-      continue;
+    } else if (o.kind === 'dart') {                    // a "!" at the edge, at its height; then across in one go
+      if (o.state === 'warn') warnMark(ctx, v.w - 12, cy, t);
+      else if (o.state === 'go') {
+        const frame = H.frames > 1 ? Math.floor(t * (name === 'fly' ? 14 : 9) + o.ph) % H.frames : 0, x0 = snap(cx - fw / 2);
+        ctx.fillStyle = 'rgba(255,255,255,.45)';
+        for (let k = 0; k < 3; k++) ctx.fillRect(x0 + fw - 4 + k * 6, snap(cy - 6 + k * 6), 14 + k * 4, 1);       // the wind it leaves behind
+        if (name === 'missile') { ctx.fillStyle = Math.floor(t * 30) % 2 ? '#ffd35c' : '#ff7a2a'; ctx.fillRect(x0 + fw - 2, snap(cy - 2), 4 + Math.round(Math.random() * 4), 4); }
+        sheet(ctx, im, H.frames, frame, x0, snap(cy - im.height / 2));
+      }
+    } else {                                           // hanging still in mid-air, alive all the same
+      const bob = Math.sin(t * 3 + o.ph) * 2, top = snap(cy - im.height / 2 + bob);
+      let frame = 0;
+      if (name.startsWith('spider')) { ctx.fillStyle = 'rgba(235,240,255,.8)'; ctx.fillRect(snap(cx), -8, 1, top + 10); frame = Math.floor(t * 3 + o.ph) % 2; }
+      if (name === 'bat') frame = 1 + (Math.floor(t * 12 + o.ph) & 1);
+      if (name === 'idol') {                           // the glow of its eyes and runes
+        const g = ctx.createRadialGradient(cx, top + im.height * 0.4, 2, cx, top + im.height * 0.4, 20);
+        g.addColorStop(0, `rgba(255,150,40,${0.35 + 0.15 * Math.sin(t * 4 + o.ph)})`); g.addColorStop(1, 'rgba(255,150,40,0)');
+        ctx.fillStyle = g; ctx.fillRect(cx - 20, top - 10, 40, im.height + 20);
+      }
+      shadow(ctx, cx, floorPx(cx) - 1, Math.max(8, 20 - ((floorPx(cx) - top) >> 4)));
+      sheet(ctx, im, H.frames, frame, snap(cx - fw / 2), top);
+      if (name === 'drone') { ctx.fillStyle = 'rgba(220,240,255,.5)'; const w = 6 + Math.round(Math.abs(Math.sin(t * 40)) * 5); ctx.fillRect(snap(cx - fw / 2 + 2), top + 1, w, 1); ctx.fillRect(snap(cx + fw / 2 - 2 - w), top + 1, w, 1); }
     }
-    if (o.kind === 'bat') {                            // asleep under the ceiling, then wings beating
-      const H = HAZ.bat; if (!H) continue;
-      const fw = H.im.width / 3, frame = o.dive ? 1 + (Math.floor(t * 12 + o.ph) & 1) : 0;
-      const shiver = o.wake && !o.dive ? Math.round(Math.sin(t * 60)) : 0;            // awake: it shivers before it drops
-      if (o.dive) shadow(ctx, x + n(o.w) / 2, floorPx(x + 14) - 1, 20);
-      if (o.ghost) ctx.globalAlpha = 0.7;
-      sheet(ctx, o.ghost ? H.ghost : H.im, 3, frame, snap(x + n(o.w) / 2 - fw / 2) + shiver, o.dive ? y - 4 : -2);
-      if (o.wake && !o.dive) { ctx.fillStyle = '#ff4040'; ctx.fillRect(snap(x + n(o.w) / 2) - 4, 16, 2, 2); ctx.fillRect(snap(x + n(o.w) / 2) + 2, 16, 2, 2); }
-      ctx.globalAlpha = 1;
-      continue;
-    }
-    if (o.kind === 'spider' && o.stone) {              // the ruins' falling block: its shadow grows on the path as it comes
-      const im = HAZ.stone.im, cx = x + n(o.w) / 2, f = floorPx(cx), k = Math.max(0, Math.min(1, (y + 30) / (f - 30)));
-      if (o.dropped) shadow(ctx, cx, f - 1, 10 + 22 * k);
-      ctx.drawImage(im, snap(cx - im.width / 2), foot - im.height + 1);
-      continue;
-    }
-    if (o.kind === 'spider') {                         // on its thread: curled up under the leaves, legs out once it has dropped
-      const H = HAZ[o.mid ? 'spider-mid' : 'spider-low'] || HAZ.spider; if (!H) continue;   // yellow drops to the floor, red stops halfway
-      const fw = H.im.width / 2, cx = x + n(o.w) / 2, sway = o.dropped ? Math.sin(t * 5 + o.x) * 1.5 : 0;
-      ctx.fillStyle = 'rgba(235,240,255,.8)'; ctx.fillRect(snap(cx), -8, 1, y + 12);
-      if (o.dropped) shadow(ctx, cx, floorPx(cx) - 1, Math.max(8, 26 - ((floorPx(cx) - foot) >> 3)));
-      if (o.ghost) ctx.globalAlpha = 0.7;
-      sheet(ctx, o.ghost ? H.ghost : H.im, 2, o.dropped ? 0 : 1, snap(cx - fw / 2 + sway), y - 2);
-      ctx.globalAlpha = 1;
-      continue;
-    }
-    const H = HAZ[o.kind], frame = o.kind === 'fly' ? Math.floor(t * 14 + o.ph) % H.frames : 0;
-    if (o.ghost) {                                     // tipsy and harmless: pale, see-through, swaying, hiccuping bubbles
-      const sway = Math.sin(t * 4 + o.x) * 2;
-      ctx.globalAlpha = 0.78 + 0.1 * Math.sin(t * 6 + o.x);
-      sheet(ctx, H.ghost, H.frames, frame, snap(x - 1 + sway), o.kind === 'fly' ? y - 1 : foot - H.ghost.height + 1);
+    if (o.ghost) {                                     // tipsy and harmless: hiccuping bubbles
       ctx.fillStyle = '#eafcff';
-      for (let k = 0; k < 3; k++) { const up = (t * 14 + k * 9 + o.x) % 22; ctx.globalAlpha = 0.7 * (1 - up / 22); ctx.fillRect(x + 8 + k * 7 + Math.round(Math.sin(up * 0.6 + k) * 2), y - 2 - up, 2, 2); }
-      ctx.globalAlpha = 1;
-    } else if (o.kind === 'spiky') {
-      shadow(ctx, x + IMG.spiky.width / 2, foot - 1, IMG.spiky.width);
-      ctx.drawImage(H.im, x - 1, foot - IMG.spiky.height - 1 + (Math.sin(t * 6 + o.x) > 0.6 ? -1 : 0));
-    } else {
-      const f = floorPx(x + 16);
-      shadow(ctx, x + 16, f - 1, Math.max(8, 22 - ((f - y) >> 4)));
-      sheet(ctx, H.im, H.frames, frame, x - 1, y - 1);
+      for (let k = 0; k < 3; k++) { const up = (t * 14 + k * 9 + o.x) % 22; ctx.globalAlpha = 0.7 * (1 - up / 22); ctx.fillRect(snap(cx - 8 + k * 7 + Math.sin(up * 0.6 + k) * 2), y - 2 - up, 2, 2); }
     }
+    ctx.globalAlpha = 1;
   }
 
   if (!run.dead) {
@@ -954,22 +964,43 @@ export function draw(ctx, run, v, t) {
 
   if (run.p.ball && run.p.ball.kind === 'log' && !run.dead) ribs(run.p.ball, true);     // he rolls inside the trunk, not in front of it
 
-  // the follower monsters: one mosquito per lane taken, a flashing band along each of those lanes, then the rush
+  // the follower monsters: one per lane taken, a flashing band along each of those lanes, then the
+  // rush; in the city, drones that stay put and fire a laser along their lanes
   if (run.fm) {
-    const f = run.fm, H = HAZ.mosquito, cx = n(f.sx), aiming = f.phase === 'aim';
-    const fw = H.im.width / H.frames, step = n(FM.step), pulse = Math.sin(t * 12) ** 2;
+    const f = run.fm, name = ROLE.swarm[f.biome || 0], H = HAZ[name], cx = n(f.sx), aiming = f.phase === 'aim';
+    const step = n(FM.step), pulse = Math.sin(t * 12) ** 2;
     f.act.forEach((on, k) => {
-      if (!on) return;
+      if (!on || cx < -60) return;
       const top = GN - (k + 1) * step, cy = top + step / 2;
       if (aiming && f.t > 0.3 && !f.ghost) {
         ctx.fillStyle = `rgba(255,70,70,${0.12 + 0.1 * pulse})`; ctx.fillRect(0, top + 3, cx - 24, step - 6);
         ctx.fillStyle = `rgba(255,96,96,${0.55 + 0.35 * pulse})`;
         for (let x = -((t * 60) % 16); x < cx - 24; x += 16) { ctx.fillRect(snap(x), top + 3, 9, 2); ctx.fillRect(snap(x), top + step - 5, 9, 2); }
       }
+      if (f.phase === 'fire' && !f.ghost) {           // the laser: a flicker while it charges, then the beam
+        const h = n(LASER.h), x1 = cx - 18;
+        if (f.t < LASER.on) { if (Math.floor(t * 40) % 2) { ctx.fillStyle = 'rgba(255,90,120,.8)'; ctx.fillRect(0, snap(cy), x1, 1); } }
+        else if (f.t < LASER.end) {
+          const k2 = f.t < LASER.off ? 1 : 1 - (f.t - LASER.off) / (LASER.end - LASER.off), hh = h * k2;
+          ctx.fillStyle = `rgba(255,40,90,${0.45 * k2})`; ctx.fillRect(0, snap(cy - hh / 2 - 2), x1, hh + 4);
+          ctx.fillStyle = `rgba(255,140,170,${0.9 * k2})`; ctx.fillRect(0, snap(cy - hh / 4), x1, hh / 2);
+          ctx.fillStyle = `rgba(255,255,255,${k2})`; ctx.fillRect(0, snap(cy - 1), x1, 2);
+        }
+      }
       if (f.ghost) ctx.globalAlpha = 0.78;
       const jx = Math.sin(t * 9 + k * 2.1) * 2.5, jy = Math.cos(t * 11 + k * 1.7) * 2.5;
-      const frame = aiming ? [0, 1, 2, 1][Math.floor(t * 22 + k) % 4] : Math.floor(t * 24 + k) % 2 ? 3 : 1;
-      sheet(ctx, f.ghost ? H.ghost : H.im, H.frames, frame, snap(cx + jx - fw / 2), snap(cy + jy - H.im.height / 2));
+      if (name === 'wisp' || !H) {                     // a will-o'-the-wisp: a flame of pale light
+        const r = 9 + Math.sin(t * 9 + k) * 1.5, g = ctx.createRadialGradient(cx + jx, cy + jy, 1, cx + jx, cy + jy, r * 2);
+        g.addColorStop(0, f.ghost ? 'rgba(220,250,255,.9)' : 'rgba(230,255,250,.95)'); g.addColorStop(0.35, 'rgba(120,255,220,.7)'); g.addColorStop(1, 'rgba(60,200,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(cx + jx - r * 2, cy + jy - r * 2, r * 4, r * 4);
+        ctx.fillStyle = '#1a1024'; ctx.fillRect(snap(cx + jx - 4), snap(cy + jy - 2), 2, 3); ctx.fillRect(snap(cx + jx + 2), snap(cy + jy - 2), 2, 3);   // two dark eyes
+      } else {
+        const im = f.ghost ? H.ghost : H.im, fw = im.width / H.frames;
+        const frame = H.frames > 1 ? (aiming ? [0, 1, 2, 1][Math.floor(t * 22 + k) % 4] : Math.floor(t * 24 + k) % 2 ? 3 : 1) : 0;
+        const still = name === 'drone-big' ? 0.4 : 1;
+        sheet(ctx, im, H.frames, frame, snap(cx + jx * still - fw / 2), snap(cy + jy * still - im.height / 2));
+        if (name === 'wasp') { ctx.fillStyle = 'rgba(235,245,255,.55)'; ctx.fillRect(snap(cx + jx - 4), snap(cy + jy - im.height / 2 - 2 + (Math.floor(t * 30) % 2) * 2), 10, 2); }
+      }
       ctx.globalAlpha = 1;
     });
   }

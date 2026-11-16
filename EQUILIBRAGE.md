@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 16/11/2026, version 0.18.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 16/11/2026, version 0.19.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -50,8 +50,6 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 |---|---|---|
 | 70 premiers mètres | caisse, hérisson, pièces, plateforme | 25 % |
 | Ensuite | caisse, hérisson ×2, doublé, volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux | 14 entrées, plus celles du décor (ligne suivante) |
-| Propre au décor | jungle : araignée ×3 (dès 500 m) · ruines : bloc de pilier ×2 (dès 500 m), geyser ×2 (dès 250 m) · cité : rien · donjon : chauve-souris ×3 | jungle 17,6 % d'araignées, ruines 11 % de chaque, donjon 17,6 % de chauves-souris |
-| Avec Vol | + ronces dès 1000 m (tapis de 10,5 à 17,5 m, pièces au-dessus) | 1 entrée |
 | Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | 18 entrées : 5,6 %, dessin 11 % |
 | Avec Double saut | + pile de 2 caisses, + volant | 20 entrées : 5 % |
 | Avec Vol | + mur de 4 caisses, + essaim ×2 | 23 entrées : 4,3 % |
@@ -61,15 +59,14 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
 | Écart entre deux motifs | (vitesse × 0,7 s + 3,75 m) × hasard de 0,85 à 1,4 ; × 1,3 après des pièces | `spawnPattern` |
+| Dangers (rôles) | chacun a son dessin dans chaque décor (forêt / ruines / cité / donjon) | `ROLE`, js/render.js |
+| Au sol, à sauter | hérisson / boule de ronces / mine à lumière rouge / piège à loup ; 1,7 m × 1,35 m | `SPIKY` |
+| Volant | coléoptère / vautour / missile / flèche : un « ! » au bord droit à sa hauteur pendant 1 s, puis il traverse l'écran à 20 m/s de plus que toi | `DART` |
+| Hauteur des volants | 1,15 m (sauter) ou 4,25 m (rester au sol) ; avec Double saut aussi 7,25 m ; avec Vol aussi 10 et 12,75 m | `DART_ALTS` |
+| Suspendu | araignée / idole de pierre / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 500 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
+| Caisse | caisse / amphore / bidon / caisse ferrée | `CRATE` |
+| Contour des dangers | aucun par défaut ; liseré rouge en option (Réglages, Affichage) | `setDangerRim` |
 | Caisse | 1,6 m × 1,3 m | `CRATE` |
-| Hérisson | 1,7 m × 1,35 m | `SPIKY` |
-| Bloc de pilier (ruines) | comme l'araignée basse : tombe quand tu es à 0,9 s, reste au sol, à sauter | `addBlock` |
-| Geyser (ruines) | dès 250 m ; jaillit quand tu es à 1,1 s ; jet de 1,75 m à pied, 3 m avec Double saut, 7,5 m avec Vol | `GEYSER` |
-| Chauve-souris (donjon) | se réveille (frisson, yeux rouges) quand tu es à 2,1 s, plonge à 1,6 s, rase le sol et avance vers toi à 1 m/s, à sauter | `BAT` |
-| Ronces | 0,65 m de haut ; dès 1000 m ; seulement avec Vol ou sur la Libellule ; le rhino les écrase ; si la monture est perdue, tout ce qui avait été posé pour elle disparaît | `BRAMBLE`, `FROM`, `dismount` |
-| Araignée (jungle) | 1,5 m × 1,4 m ; tombe quand tu es à 1,4 s d'elle. Jaune : s'arrête au ras du sol (à sauter), dès 500 m. Rouge : s'arrête à 5,35 m (ne pas sauter, 5 pièces dessous), dès 1500 m, 4 fois sur 10 | `SPIDER`, `FROM`, `addSpider` |
-| Volant | 1,6 m × 1,35 m, avance vers toi à 3 m/s | `FLY` |
-| Hauteur des volants | 4,4 m ; 4,4 ou 7,25 m avec Double saut ; 4,4 / 7,25 / 10 / 12,75 m avec Vol | `spawnPattern` |
 | Plateforme | 6,35 m de long, à 3,4 m du sol | `PLAT_W` |
 | Corniche | +3,4 m pendant 17,5 à 27,5 m, hérisson dessus 6 fois sur 10 | `STEP` |
 | Creux | −1,65 m pendant 15 à 24 m | `HOLLOW` |
@@ -119,7 +116,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Apparition | vers 2000 m (± 100 m), une fois par course, seulement dans la forêt ; aussi sur une monture ; la relique du sac de Pépito s'illumine | `BOSS.at`, `bossAt` |
+| Apparition | vers 2000 m (± 100 m), une fois par course, seulement dans la forêt ; aussi sur une monture ; la relique du sac de Pépito s'illumine ; tous les autres dangers disparaissent pendant le combat | `BOSS.at`, `bossAt` |
 | Vitesse pendant le combat | 14 m/s ; ta propre vitesse continue de monter en parallèle | `BOSS.speed` |
 | Après le combat | la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne (de 14 à 29 m/s : environ 9 s) | `RAMP` |
 | Durée | 26 s d'attaques, puis un arbre l'écrase | `BOSS.fight` |
@@ -131,7 +128,9 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Le trou | 6,75 m de large, une arche de 10 gemmes bleues sur la trajectoire d'un saut simple, la première au point d'appel ; tomber dedans coûte un cœur et te repose de l'autre côté | `BOSS.hole` |
 | Récompense | 24 pièces et une gemme de chaque couleur, puis le décor change | `boss` |
 
-## 7. Moustiques (monstres suiveurs)
+## 7. Nuées (monstres suiveurs)
+
+Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils visent puis foncent. Dans la cité, de gros drones visent puis tirent un laser le long de leur couloir (de 0,25 à 0,7 s après la visée), sans foncer.
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
@@ -145,6 +144,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Niveau 0 / 1 / 2 / 3 | 1 couloir pris / 2 / tous sauf 2 voisins / tous sauf 1 | `wave` |
 | Couloir toujours libre | parmi les 2 du bas à pied, 3 avec Double saut, 5 avec Vol | `wave` |
 | Faune alcoolisée | 6 % / 10 % / 15 % des créatures et des nuées sont inoffensives | `DRUNK` |
+| Laser des drones | 1 m d'épaisseur, allumé de 0,25 à 0,7 s | `LASER` |
 
 ## 8. Boutique
 
