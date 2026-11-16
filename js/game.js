@@ -11,6 +11,9 @@ export const PPM = 40;          // logical units per metre
 export const PIXEL = 2.25;      // logical units per art pixel (720 units = 320 art pixels)
 export const BIOME_LEN = 400;   // metres between two changes of scenery
 export const BIOME_COUNT = 4;
+// The order of the sceneries (index in render.js's BIOMES: jungle, ruins, city, dungeon): forest, ruins,
+// dungeon, city, and back to the forest.
+const NEXT_BIOME = [1, 3, 0, 2];
 export const HEARTS = 1;         // one life: the first blow ends the run (Cœur en plus gives a second)
 
 const HERO_H = 80, HERO_HALF = 14;      // hitbox, smaller than the sprite: forgiving
@@ -44,7 +47,11 @@ export const JUMP = { v: 760, double: 700, gravity: 2400, held: 1500 };   // uni
 // - the hanging one stays still in mid-air, never touching floor or ceiling (spider, stone idol, bat,
 //   drone): low, it is jumped; at head height (from HOVER.from.mid metres), the hero stays down;
 // - the swarm, the follower monster (see FM).
-const DART = { w: 64, h: 40, warn: 1.0, speed: 800 };   // `speed`: how fast it flies, on top of the hero's own
+const DART = { w: 64, h: 40, warn: 1.0, speed: 800 };
+// Spacing of the patterns (units): at least `dist`; at speed, at least what a jump needs to land (speed
+// × time + margin). Past `fill`, the gap gets a filler. DECOR_RATE: share of gaps with breakable scenery.
+const GAP = { dist: 420, time: 0.72, margin: 110, fill: 640 };
+const DECOR_RATE = 0.3;   // `speed`: how fast it flies, on top of the hero's own
 const HOVER = { w: 60, h: 56 };
 // Not before this many metres: the hanging dangers, low then at head height.
 export const FROM = { low: 500, mid: 1500 };   // (the debug menu may change these)
@@ -78,7 +85,7 @@ export const MOUNTS = {
 // BOSS.fight seconds a tree falls on it and crushes it into the ground; the hero runs straight on over a
 // line of blue gems. It stands behind the floor and crawls on its root-legs (see render.js): BOSS.w is how
 // wide it is on screen, the mouth where its acid comes from (from its left edge, and from the top).
-export const BOSS = { at: 2000, speed: 560, fight: 26, w: 420, mouthX: 40, mouthY: 310 };
+export const BOSS = { at: 2000, speed: 560, fight: 26, w: 420, mouthX: 120, mouthY: 220 };
 const LANE = { low: 28, mid: 115, high: 250, vine: 470 };
 // The heights a flyer may come at (its middle, above the floor), by what the hero owns: on foot, double jump, flight.
 const DART_ALTS = [[46, 170], [46, 170, 290], [46, 170, 290, 400, 510]];   // height of a ball's centre above the floor
@@ -163,6 +170,7 @@ export function newRun(upgrades) {
     nextMount: rnd(700, 1000) / friend(upgrades), // in metres: mounts are a rare treat
     fm: null, fmDue: false, nextFM: rnd(150, 230), blockEnd: 0,   // follower monster; where the last blocking pattern ends
     leap: null,                                  // Dernier élan: the bounces after the last heart
+    decor: [],                                   // scenery that can be smashed
     boss: null, bossDone: false, pits: [],       // Vorace, the giant plant, and the hole it falls into
     bossAt: BOSS.at + rnd(-100, 100),            // where it comes, in metres
     relic: 0,                                    // how bright the relic in his backpack shines (1: flaring)
@@ -217,7 +225,10 @@ function addObs(run, x, y, w, h, kind, fragile) {
   return o;
 }
 
-export function addCrates(run, x, n) { addObs(run, x, floorAt(run, x) - CRATE.h * n, CRATE.w, CRATE.h * n, 'crate', true).n = n; }
+// Scenery that can be smashed (big crate, jar, barrel, stack of crates: one per scenery). It never blocks
+// the way: with Brise-tout, on the rhino or in a Ruée, running past it bursts it and coins fly out.
+export function addDecor(run, x) { run.decor.push({ x, biome: biomeAt(run, x), broken: false }); }
+export const DECOR_W = 70;
 export function addSpiky(run, x) { addObs(run, x, floorAt(run, x) - SPIKY.h, SPIKY.w, SPIKY.h, 'spiky', false).biome = biomeAt(run, x); }
 
 // A hanging danger, still in mid-air: low (`h` above the floor of its middle: jump it) or at head height.
@@ -282,11 +293,11 @@ function spawnPattern(run) {
   const tier = up.flight ? 2 : up.doubleJump ? 1 : 0;
   const riding = run.mount || run.items.length;                       // a mount in play: nothing with a roof
   // The first metres are a warm-up: one obstacle at a time, nothing in the air.
-  let opts = x < 70 * PPM ? ['crate', 'spiky', 'coins', 'plat']
-    : ['crate', 'spiky', 'spiky', 'double', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
+  let opts = x < 70 * PPM ? ['spiky', 'spiky', 'coins', 'plat']
+    : ['spiky', 'spiky', 'spiky', 'double', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
   if (x / PPM >= FROM.low) opts.push('hover', 'hover', 'hover');       // the hanging ones
-  if (tier >= 1 && x >= 70 * PPM) opts.push('stack', 'fly');
-  if (tier >= 2 && x >= 70 * PPM) opts.push('wall', 'swarm', 'swarm');
+  if (tier >= 1 && x >= 70 * PPM) opts.push('fly');
+  if (tier >= 2 && x >= 70 * PPM) opts.push('swarm', 'swarm');
   const shapes = SHAPES.filter((s) => s.top <= REACH[tier]);
   if (shapes.length && x >= 70 * PPM) opts.push('shape', 'shape');
   if (riding) opts = opts.filter((k) => k !== 'cave');
@@ -296,7 +307,6 @@ function spawnPattern(run) {
   let len = 0;
 
   switch (kind) {
-    case 'crate': addCrates(run, x, 1); len = CRATE.w; break;
     case 'spiky': addSpiky(run, x); len = SPIKY.w; break;
     case 'shape': len = layShape(run, pick(shapes), x); break;         // a drawing made of coins
     case 'hover':
@@ -305,12 +315,10 @@ function spawnPattern(run) {
       len = 220; break;
     case 'double': {
       const d = run.speed + 90;
-      if (Math.random() < 0.5) addCrates(run, x, 1); else addSpiky(run, x);
+      addSpiky(run, x);
       addSpiky(run, x + d);
       len = d + SPIKY.w; break;
     }
-    case 'stack': addCrates(run, x, 2); len = CRATE.w; break;          // needs a held jump or the double jump
-    case 'wall': addCrates(run, x, 4); coinLine(run, x - 30, G - 290, 3); len = CRATE.w; break;   // fly over it
     case 'fly': addDart(run, x, pick(DART_ALTS[tier])); len = 120; break;          // low: jump; higher: stay down
     case 'swarm': {                                                    // two flyers, one after the other, at different heights
       const [a, b] = DART_ALTS[2].slice().sort(() => Math.random() - 0.5);
@@ -338,7 +346,7 @@ function spawnPattern(run) {
       const R = 70, w = Math.round(rnd(600, 950));
       relief(run, x, [[0, 0], [R, -HOLLOW], [R + w, -HOLLOW], [2 * R + w, 0]]);
       coinLine(run, x + R + 30, G + HOLLOW - 40, Math.floor((w * 0.4) / 44));
-      if (x > 70 * PPM) addCrates(run, x + R + w * 0.7, 1);
+      if (x > 70 * PPM) addSpiky(run, x + R + w * 0.7);
       len = 2 * R + w; break;
     }
     case 'ledge': {                                                    // one level up for a while
@@ -378,7 +386,13 @@ function spawnPattern(run) {
     if (o.x + o.w > pl.x - 30 && o.x < pl.x + pl.w + 30 && o.y + o.h > pl.y + pl.t) o.gone = true;
   if (kind !== 'coins' && kind !== 'mount') run.blockEnd = x + len;
 
-  const gap = (run.speed * 0.7 + 150) * rnd(0.85, 1.4) * (kind === 'coins' ? 1.3 : 1);
+  // The gap to the next pattern is set in distance (GAP.dist), so the road keeps its density as the
+  // speed grows; only where a jump would no longer have room to land does it widen with the speed.
+  const gap = Math.max(GAP.dist, run.speed * GAP.time + GAP.margin) * rnd(0.85, 1.3) * (kind === 'coins' ? 1.3 : 1);
+  // A wide gap gets something that asks no jump: a danger at head height, or a fonceur.
+  if (gap > GAP.fill && x / PPM >= FROM.mid && !run.fm && !run.fmDue && !run.boss && Math.random() < 0.5) addHover(run, x + len + gap * 0.5, HEAD);
+  else if (gap > GAP.fill && x / PPM > 300 && !run.fm && !run.fmDue && !run.boss && Math.random() < 0.35) addDart(run, x + len + gap * 0.5, 170);
+  if (x / PPM > 70 && !run.boss && Math.random() < DECOR_RATE) addDecor(run, x + len + gap * rnd(0.3, 0.6));   // something to smash
   if (kind === 'coins' || Math.random() < 0.55) {
     const n = Math.min(8, Math.floor((gap - 200) / 44));
     const cx = x + len + 100;
@@ -412,7 +426,7 @@ function shape(run, cx, cy, r, sides, each, turn) {
 // everywhere, with zigzags and shapes. Flat ground throughout, and creatures that keep their place.
 function spawnRide(run) {
   const x = run.nextX, G = GROUND, v = run.speed, kind = run.mount.kind;
-  const onFloor = (at) => (Math.random() < 0.5 ? addSpiky(run, at) : addCrates(run, at, 1));
+  const onFloor = (at) => addSpiky(run, at);
   const still = (at, alt) => { addHover(run, at, alt); };
   let len = 0;
   const from = run.obs.length;
@@ -435,14 +449,14 @@ function spawnRide(run) {
     }
   } else if (kind === 'rhino') {
     switch (pick(['crates', 'crates', 'spiky', 'spiky', 'mix', 'line', 'heap', 'heap'])) {
-      case 'crates': {                                                 // piles to charge through, coins inside
+      case 'crates': {                                                 // scenery to charge through, coins along it
         const count = 1 + Math.floor(Math.random() * 3);
-        for (let k = 0; k < count; k++) addCrates(run, x + k * 170, 1 + Math.floor(Math.random() * 3));
+        for (let k = 0; k < count; k++) addDecor(run, x + k * 170);
         coinLine(run, x + 30, G - 40, count * 4 - 1);
         len = count * 170; break;
       }
       case 'spiky': addSpiky(run, x); len = SPIKY.w; break;
-      case 'mix': addCrates(run, x, 2); addSpiky(run, x + v * 0.7 + 260); len = v * 0.7 + 260 + SPIKY.w; break;
+      case 'mix': addDecor(run, x); addSpiky(run, x + v * 0.7 + 260); len = v * 0.7 + 260 + SPIKY.w; break;
       case 'line': coinLine(run, x, G - 40, 12); len = 500; break;
       case 'heap':                                                     // a heap of coins: two rows at a run, the third for a hop
         coinLine(run, x, G - 40, 5); coinLine(run, x + 22, G - 78, 4); coinLine(run, x + 44, G - 116, 3);
@@ -462,9 +476,10 @@ function spawnRide(run) {
         coinLine(run, x, G - (lanes[open] + lanes[open + 1]) / 2, 8);
         len = 360; break;
       }
-      case 'tower': {
-        const count = 3 + Math.floor(Math.random() * 3);
-        addCrates(run, x + 110, count); coinLine(run, x, G - count * CRATE.h - 100, 6);
+      case 'tower': {                                                  // a column of creatures from the floor up: over the top
+        const count = 2 + Math.floor(Math.random() * 3);
+        for (let k = 0; k < count; k++) still(x + 110, 60 + k * 110);
+        coinLine(run, x, G - 60 - count * 110 - 30, 6);
         len = 260; break;
       }
       case 'zigzag': {                                                 // each slope lasts over a second, whatever the speed: the dragonfly keeps up
@@ -581,27 +596,26 @@ function boss(run, d) {
 // A coin thrown out of something broken: it pops up ahead of the hero, then flies to him (see update).
 function loot(run, x, y) { run.coins.push({ x: x + rnd(-10, 10), y, vx: rnd(40, 360), vy: rnd(-560, -260), loot: 0 }); }
 
-// Breaking an obstacle. A crate bursts into four spinning pieces of itself (the renderer cuts them out
-// of its picture), splinters and dust, and lets go two coins; a pile does so crate by crate.
+// Breaking a creature (in a Ruée): a burst, and a coin.
 function destroy(run, o) {
   o.gone = true;
   const cx = o.x + o.w / 2;
-  if (o.kind !== 'crate') {
-    burst(run, cx, o.y + o.h / 2, '#b04a8f', 14, 320);
-    loot(run, cx, o.y + o.h / 2);
-    run.shake = Math.max(run.shake, 0.25);
-    run.events.push('break');
-    return;
-  }
-  const biome = biomeAt(run, o.x), count = o.n || 1;
-  for (let k = 0; k < count; k++) {
-    const cy = o.y + o.h - (k + 0.5) * CRATE.h;
-    for (let q = 0; q < 4; q++) run.parts.push({ x: cx + (q % 2 ? 14 : -14), y: cy + (q < 2 ? -12 : 12), vx: run.speed * rnd(0.45, 1.25), vy: rnd(-560, -140), life: 0, max: rnd(0.6, 0.95), g: 1700, shard: q, biome, rot: 0, vr: rnd(-13, 13) });
-    for (let i = 0; i < 5; i++) run.parts.push({ x: cx + rnd(-24, 24), y: cy + rnd(-20, 20), vx: run.speed * rnd(0.3, 0.9), vy: rnd(-90, 30), life: 0, max: rnd(0.3, 0.55), c: pick(['#e9dcc0', '#cbb894', '#fff6dc']), s: rnd(10, 20), g: -80 });   // dust
-    loot(run, cx, cy); loot(run, cx, cy);
-  }
-  burst(run, cx, o.y + o.h / 2, '#e8c890', 8 + 3 * count, 420);      // splinters
-  run.shake = Math.max(run.shake, 0.26 + 0.06 * count);
+  burst(run, cx, o.y + o.h / 2, '#b04a8f', 14, 320);
+  loot(run, cx, o.y + o.h / 2);
+  run.shake = Math.max(run.shake, 0.25);
+  run.events.push('break');
+}
+
+// Smashing scenery: it bursts into four spinning pieces of its own picture (render.js cuts them out),
+// dust, and four coins thrown out ahead of the hero.
+function smash(run, dc) {
+  dc.broken = true;
+  const cx = dc.x + DECOR_W / 2, cy = floorAt(run, cx) - 50;
+  for (let q = 0; q < 4; q++) run.parts.push({ x: cx + (q % 2 ? 16 : -16), y: cy + (q < 2 ? -16 : 16), vx: run.speed * rnd(0.45, 1.25), vy: rnd(-560, -140), life: 0, max: rnd(0.6, 0.95), g: 1700, shard: q, biome: dc.biome, rot: 0, vr: rnd(-13, 13) });
+  for (let i = 0; i < 6; i++) run.parts.push({ x: cx + rnd(-24, 24), y: cy + rnd(-20, 20), vx: run.speed * rnd(0.3, 0.9), vy: rnd(-90, 30), life: 0, max: rnd(0.3, 0.55), c: pick(['#e9dcc0', '#cbb894', '#fff6dc']), s: rnd(10, 20), g: -80 });   // dust
+  for (let i = 0; i < 4; i++) loot(run, cx, cy);
+  burst(run, cx, cy, '#e8c890', 12, 420);                               // splinters
+  run.shake = Math.max(run.shake, 0.3);
   run.events.push('crate');
 }
 
@@ -949,10 +963,11 @@ export function update(run, dt, input) {
       if (o.gone || o.x + 6 > box.R || o.x + o.w - 6 < box.L || o.y + 6 > box.B || o.y + o.h - 6 < box.T) continue;
       if (dashing) destroy(run, o);
       else if (o.ghost) { if (!o.passed) { o.passed = true; burst(run, o.x + o.w / 2, o.y + o.h / 2, '#c9f3ff', 6, 120); } }
-      else if (M && M.smash && o.kind === 'crate') destroy(run, o);
-      else if (o.fragile && up.breaker) destroy(run, o);
       else if (p.inv === 0) { hit(run, o); if (run.dead) return; break; }
     }
+    // scenery that can be smashed, run past with Brise-tout, on the rhino, or in a Ruée
+    if (up.breaker || dashing || (M && M.smash)) for (const dc of run.decor)
+      if (!dc.broken && Math.abs(px - (dc.x + DECOR_W / 2)) < 50 && p.y > floorAt(run, dc.x) - 160) smash(run, dc);
     if (!run.leap) followers(run, d, box, dashing);
     if (run.dead) return;
     if (!run.leap) boss(run, d);
@@ -966,6 +981,7 @@ export function update(run, dt, input) {
     }
   }
   run.items = run.items.filter((it) => !it.gone && it.x > run.cam - 200);
+  run.decor = run.decor.filter((dc) => dc.x > run.cam - 200);
   run.zones = run.zones.filter((z) => z.x + z.w > run.cam - 200 || z === p.ball);
   run.obs = run.obs.filter((o) => !o.gone && o.x + o.w > run.cam - 120);
   run.plats = run.plats.filter((pl) => pl.x + pl.w > run.cam - 120);
@@ -979,7 +995,7 @@ export function update(run, dt, input) {
   // --- scenery change ---
   if (run.dist >= run.nextBiomeAt) {
     run.prevBiome = run.biome;
-    run.biome = (run.biome + 1 + Math.floor(Math.random() * (BIOME_COUNT - 1))) % BIOME_COUNT;
+    run.biome = NEXT_BIOME[run.biome];
     run.biomeX = run.cam + run.viewW + 400;       // the new scenery starts ahead, off screen, and scrolls in
     run.nextBiomeAt = Infinity;                                        // until the next boss
     run.relic = 1; run.glitch = Math.max(run.glitch, 0.5);             // the relic flares: it is what moves the world

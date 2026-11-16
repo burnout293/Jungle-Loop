@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jungle Loop — dangers en avant</title>
+<style>
+  body { margin: 0; padding: 20px; background: #0a0f14; color: #e8ecf4; font: 15px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: #ffd35c; }
+  p { margin: 0 0 16px; color: #9fb0c4; max-width: 85ch; }
+  section { background: #151b2c; border: 2px solid #2a3350; padding: 10px; margin-bottom: 18px; }
+  section b { color: #5cf2e0; font-size: 16px; } section span { display: block; color: #9fb0c4; font-size: 13px; margin-bottom: 8px; }
+  .row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  @media (min-width: 1300px) { .row { grid-template-columns: repeat(4, 1fr); } }
+  canvas { width: 100%; display: block; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<h1>Mettre les dangers en avant — 6 façons</h1>
+<p>Chaque ligne montre les quatre décors avec le vrai moteur du jeu : un danger au sol, deux suspendus (bas et à hauteur de tête), un fonceur en vol, son « ! » d'alerte au bord droit, une nuée qui vise, et du décor à casser. Donne-moi le numéro retenu (on peut en combiner).</p>
+<main id="out"></main>
+<script type="module">
+import * as G from '../js/game.js';
+import * as R from '../js/render.js';
+const LOOKS = [
+  ['0 · Actuel', 'Sans contour, décor un peu en retrait.'],
+  ['1 · Contour sombre épais', 'Un contour noir de deux pixels détache chaque danger du décor, comme une découpe.'],
+  ['2 · Bord éclairé', 'Un contour sombre et une lumière franche sur les bords en haut à gauche : les dangers semblent éclairés de plus près que le décor.'],
+  ['3 · Halo chaud', 'Une lueur orangée derrière chaque danger : visible du coin de l\'œil, mais l\'image se charge quand ils sont nombreux.'],
+  ['4 · Décor assombri', 'Les dangers ne changent pas, le fond et le décor posé sur le chemin passent nettement dans l\'ombre.'],
+  ['5 · Bord éclairé + décor assombri', 'La combinaison 2 + 4 : le plus lisible des six, que je recommande.'],
+];
+function scene(biome) {
+  const r = G.newRun({ breaker: 1 }); r.viewW = 1280; r.wait = 0; r.exploded = true; r.cam = 40000; r.sx = 200; r.dist = 1000; r.nextX = 1e9; r.nextFM = 1e9; r.bossAt = 1e9;
+  r.prevBiome = r.biome = biome; r.biomeX = -1e9; const b = r.cam + r.sx;
+  const set = (o) => { o.biome = biome; o.ghost = false; return o; };
+  G.addSpiky(r, b + 170); set(r.obs[r.obs.length - 1]);
+  set(G.addHover(r, b + 300, G.LOW)); set(G.addHover(r, b + 470, G.HEAD));
+  const d1 = set(G.addDart(r, b + 640, 46)); d1.state = 'go';
+  const d2 = set(G.addDart(r, b + 3000, 170)); d2.state = 'warn'; d2.x = r.cam + 1280 + 60; d2.y = 630 - 170 - 20;
+  G.addDecor(r, b + 760); r.decor[r.decor.length - 1].biome = biome;
+  r.fm = { biome, act: [false, false, false, true, false], phase: 'aim', t: 0.8, sx: 1150, hit: false, ghost: false, level: 1, waves: 1, aim: 1.7 };
+  return r;
+}
+await R.loadAssets();
+const q = 2;
+for (let look = 0; look < LOOKS.length; look++) {
+  R.setLook(look);
+  const sec = document.createElement('section'); sec.innerHTML = `<b>${LOOKS[look][0]}</b><span>${LOOKS[look][1]}</span>`;
+  const row = document.createElement('div'); row.className = 'row'; sec.append(row);
+  for (const biome of [0, 1, 3, 2]) {                  // forest, ruins, dungeon, city
+    const c = document.createElement('canvas'); c.width = 569 * q; c.height = 320 * q; const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+    R.setQuality(q); x.setTransform(q, 0, 0, q, 0, 0); R.draw(x, scene(biome), { w: 569, logicalW: 1280 }, 2.0);
+    row.append(c);
+  }
+  document.getElementById('out').append(sec);
+}
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@
 // but they can stand and scroll at any Q-th of a pixel, which is what keeps a fast run steady,
 // and the browser smooths the picture's edges when it fits the canvas to the screen.
 
-import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, propAt, floorAt, flatAt, biomeAt } from './game.js';
+import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, propAt, floorAt, flatAt, biomeAt } from './game.js';
 import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js';
 
 // Each scenery has its own far background, middle distance, floor, props, and its own version of
@@ -23,8 +23,8 @@ export const BIOMES = [
     ...built('dungeon', 2, 2, ['#4a3026', '#140d0d', '#5c4636', '#0a0707']) },
 ];
 
-const DIR = 'assets/img/';
-const NAMES = ['fore', 'temple', 'temple-rubble', 'vorace-head', 'vorace-collar', 'vorace-stem', 'vorace-leg', 'vorace-leg2', 'spider-low', 'spider-mid', 'bat', 'thornball', 'beartrap', 'mine', 'vulture', 'arrow', 'missile', 'idol', 'drone', 'wasp', 'drone-big', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const DIR = new URL('../assets/img/', import.meta.url).href;   // from this file: pages in mockups/ load the same pictures
+const NAMES = ['fore', 'temple', 'temple-rubble', 'vorace-top', 'vorace-bottom', 'vorace-stem', 'vorace-leg2', 'spikebot', 'spider-low', 'spider-mid', 'bat', 'thornball', 'beartrap', 'vulture', 'arrow', 'missile', 'idol', 'drone', 'wasp', 'drone-big', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -35,6 +35,7 @@ let meta = {
 let SCENE = [];                                        // per scenery, what is ready to draw (see buildScene)
 let HAZ = {};                                          // what hurts, outlined so it stands out, and its harmless ghost
 let FAR = {};                                          // the hero's far fist and shoe, in the shade of his body
+let DECOR = [];                                        // per scenery, the picture of what can be smashed
 let ready = false;
 let scratch = null;                                    // spare canvas: one scenery is faded in over another on it
 
@@ -75,6 +76,8 @@ export async function loadAssets() {
   await Promise.all(names.map(load));
   SCENE = BIOMES.map(buildScene);
   buildHaz();
+  // the big crate of the forest (its crate, larger), the ruins' jar, the city's crates, the dungeon's barrel
+  DECOR = [scaled(IMG.crate, 1.8), IMG['ruins-prop-1'], IMG['city-prop-3'], IMG['dungeon-prop-1']];
   FAR = { fist: tinted(IMG['hero-fist'], 'rgba(16,12,40,.38)'), shoe: tinted(IMG['hero-shoe'], 'rgba(16,12,40,.38)') };
   // the hero's pieces, redrawn four times finer with their stair-steps rounded off (see rounded)
   for (const k of ['hero-body', 'hero-rotor', 'hero-fist', 'hero-shoe', 'hero-ball']) if (IMG[k]) HI.set(IMG[k], rounded(rounded(IMG[k])));
@@ -96,6 +99,7 @@ export async function loadAssets() {
 // Deterministic pseudo-random in [0,1): the same index always gives the same result.
 const h01 = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
 
+function scaled(im, k) { if (!im) return im; const c = canvasOf(Math.round(im.width * k), Math.round(im.height * k)), x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(im, 0, 0, c.width, c.height); return c; }
 function canvasOf(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 
 // A drawing twice as fine, its diagonals smoothed the way pixel artists do it by hand (the "Scale2x"
@@ -178,20 +182,41 @@ const DIM = 'rgba(16,12,40,.38)';                      // the veil over scenery 
 // Each role of danger looks different in each scenery (jungle, ruins, city, dungeon: the order of
 // BIOMES). The hanging one of the jungle is a spider, yellow when low, red at head height.
 const ROLE = {
-  spiky: ['spiky', 'thornball', 'mine', 'beartrap'],
+  spiky: ['spiky', 'thornball', 'spikebot', 'beartrap'],
   dart: ['fly', 'vulture', 'missile', 'arrow'],
   hover: ['spider', 'idol', 'drone', 'bat'],
   swarm: ['mosquito', 'wasp', 'drone-big', 'wisp'],
 };
-const HAZ_FRAMES = { spiky: 1, thornball: 1, beartrap: 2, mine: 1, fly: 4, vulture: 2, arrow: 1, missile: 1, 'spider-low': 2, 'spider-mid': 2, idol: 1, bat: 3, drone: 1, mosquito: 4, wasp: 1, 'drone-big': 1 };
+const HAZ_FRAMES = { spiky: 1, thornball: 1, beartrap: 2, spikebot: 1, fly: 4, vulture: 2, arrow: 1, missile: 1, 'spider-low': 2, 'spider-mid': 2, idol: 1, bat: 3, drone: 1, mosquito: 4, wasp: 1, 'drone-big': 1 };
 const RED = '#ff3b4e';
 let RIM = false;                                       // the red outline around everything that hurts (a setting)
+// Ways of making the dangers stand out from the scenery, shown side by side in mockups/lisibilite.html:
+// 0 as it is; 1 a thick dark outline; 2 a lit edge (light from the top left) inside a dark outline;
+// 3 a warm glow behind; 4 the scenery much darker; 5 = 2 + 4.
+let LOOK = 0;
+export const LOOKS = 6;
+export function setLook(n) { LOOK = n; if (ready) { SCENE = BIOMES.map(buildScene); buildHaz(); } }
+const DARK = '#0d0614';
+// A sprite sheet with its top-left edges lit and a dark outline round it (frames 2 pixels larger).
+function litEdge(im, frames) {
+  const out = rim(im, frames, DARK), fw = im.width / frames, x = out.getContext('2d');
+  const e = canvasOf(im.width, im.height), ex = e.getContext('2d');
+  ex.drawImage(im, 0, 0); ex.globalCompositeOperation = 'destination-out'; ex.drawImage(im, 1, 1);
+  ex.globalCompositeOperation = 'source-in'; ex.fillStyle = 'rgba(255,246,216,.9)'; ex.fillRect(0, 0, e.width, e.height);
+  for (let f = 0; f < frames; f++) x.drawImage(e, f * fw, 0, fw, im.height, f * (fw + 2) + 1, 1, fw, im.height);
+  return out;
+}
 // The dangers as drawn: plain, or outlined in red (then one pixel larger all round: `pad`). Their
 // harmless ghost (Faune alcoolisée) always keeps its pale outline.
 function buildHaz() {
   for (const [k, n0] of Object.entries(HAZ_FRAMES)) {
     const frames = k === 'fly' ? meta.fly.frames : k === 'mosquito' ? meta.mosquito.frames : n0;
-    if (IMG[k]) HAZ[k] = { im: RIM ? rim(IMG[k], frames, RED) : IMG[k], ghost: rim(tinted(IMG[k], 'rgba(110,215,255,.55)'), frames, '#d8f6ff'), frames, pad: RIM ? 1 : 0 };
+    if (!IMG[k]) continue;
+    let im = IMG[k], pad = 0;
+    if (LOOK === 1) { im = rim(rim(im, frames, DARK), frames, DARK); pad = 2; }
+    else if (LOOK === 2 || LOOK === 5) { im = litEdge(im, frames); pad = 1; }
+    if (RIM) { im = rim(im, frames, RED); pad++; }
+    HAZ[k] = { im, ghost: rim(tinted(IMG[k], 'rgba(110,215,255,.55)'), frames, '#d8f6ff'), frames, pad };
   }
   for (const S of SCENE) S.stacks = [];
 }
@@ -247,75 +272,50 @@ function buildScene(b) {
   // Props and pillars stand on the path, right where crates and creatures do, but are only there to
   // be looked at: they are darkened a little so the eye does not take them for something to dodge.
   const props = [];
-  for (let i = 0; i < b.props; i++) props.push(tinted(IMG[b.prop + i], DIM));
+  const veil = LOOK >= 4 ? 'rgba(10,8,30,.55)' : DIM;
+  for (let i = 0; i < b.props; i++) props.push(tinted(IMG[b.prop + i], veil));
   return {
     platform: IMG[b.platform], pillar: tinted(IMG[b.pillar], DIM), crate: IMG[b.crate], stacks: [], slab: IMG[b.slab], tunnel: tinted(lowered(shortened(IMG[b.tunnel], Math.round(LOG.w / PIXEL)), LOG_CUT, 49), DIM),
     platTop: b.platTop, slabTop: b.slabTop, hollow: b.hollow,
     // `top`: how far above the floor line a piece is drawn, so that its solid surface is what feet stand on
-    bg: recede(IMG[b.bg], 0.35, 0.82), mid: recede(IMG[b.mid], 0.3, 0.86), ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c'), top: kinds.length > 1 ? 4 : surface(kinds[0]) + 1 }, props, fore,
+    bg: recede(IMG[b.bg], LOOK >= 4 ? 0.6 : 0.35, LOOK >= 4 ? 0.58 : 0.82), mid: recede(IMG[b.mid], LOOK >= 4 ? 0.55 : 0.3, LOOK >= 4 ? 0.62 : 0.86), ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c'), top: kinds.length > 1 ? 4 : surface(kinds[0]) + 1 }, props, fore,
     sky: rowColour(IMG[b.bg], 0, '#7fb9ec'), base: rowColour(IMG[b.mid], -1, '#1c2c3a'),
   };
 }
 
 // ---------- Vorace ----------
-// She is put together from pieces: a head (three faces: shut, open, dazed), a leaf collar, a stem that
-// bends from the head down to a root ball under the floor, and six thorny root-legs. The legs step in
-// turn, their points plunging into the floor and coming out again behind, throwing up earth: that is
-// how she keeps pace with the hero. She stands behind the floor, so only what rises above it shows.
-const LEGS = [-2, -1, 0, 1, 2, 3];                      // where each leg leaves the root ball, from front to back
+// The queen flower, in two parts held together at the urn's rim (meta.vorace gives, for every frame,
+// where they meet). The bottom walks: the urn on its thorny legs, four steps. The top attacks: crown
+// shut, opening, open with the acid boiling, spitting. Its end: a trunk drops on the crown, the urn
+// cracks, everything collapses, and goes down behind the floor. She stands behind the floor: her feet
+// sink into it.
 let dirt = [], dirtT = 0;
 function drawVorace(ctx, run, t) {
-  const b = run.boss, head = IMG['vorace-head'], stem = IMG['vorace-stem'], collar = IMG['vorace-collar'], leg = IMG['vorace-leg'];
-  if (!head || !stem || !leg) return;
-  const left = n(b.sx), fall = b.phase === 'fall', crushed = fall && b.t >= 0.9;
-  const sink = crushed ? Math.max(0, b.t - 1.0) ** 2 * 300 : 0;
-  const walk = crushed ? 0 : t * 8, bob = crushed ? 0 : Math.sin(walk * 2) * 2.5, sway = Math.sin(t * 1.6) * 4;
-  const hw = head.width / 3, hh = head.height;
-  const hx = left + 6 + sway, hy = GN - 200 + bob + sink;               // the head's top left corner
-  const N = { x: hx + hw * 0.86, y: hy + hh * 0.52 }, B = { x: left + 132, y: GN + 34 + sink };
-  const C = { x: left + 168 - sway * 0.5, y: GN - 108 + sink };
-  ctx.save();
-  // the legs: each swings on its own beat; its point goes down into the floor, comes up further back
-  const legAt = (k, i) => {
-    // each leg rises from the root ball in an arch above the floor and plunges its point into it
-    const front = k < 1, ph = walk + i * 1.05, swing = crushed ? 0.8 : Math.sin(ph) * 0.42, lift = crushed ? 0 : Math.max(0, Math.cos(ph)) * 9;
-    const ax = B.x + k * 15, ay = GN - 40 - lift + sink, a = -0.32 + swing, sc = 1.15;
-    ctx.save(); ctx.translate(ax, ay); ctx.scale(front ? -sc : sc, sc); ctx.rotate(a); soft(ctx);
-    ctx.drawImage(leg, -6, -20); ctx.restore();
-    if (!crushed) {                                    // where its point meets the floor, earth flies
-      const r = sc * Math.hypot(leg.width * 0.6 - 6, leg.height - 20), base = Math.atan2(leg.height - 20, leg.width * 0.6 - 6) + a;
-      const tipY = ay + Math.sin(base) * r, tipX = ax + (front ? -1 : 1) * Math.cos(base) * r;
-      b.tips = b.tips || []; const was = b.tips[i];
-      if (was !== undefined && was < GN - 2 && tipY >= GN - 2) for (let q = 0; q < 5; q++) dirt.push({ x: tipX + n(run.cam), y: GN - 3, vx: (Math.random() - 0.5) * 60, vy: -40 - Math.random() * 60, life: 0.5 });
-      b.tips[i] = tipY;
-    }
-  };
-  LEGS.forEach((k, i) => { if (k >= 1) legAt(k, i); });                       // the back legs, behind the stem
-  // the stem: thin bands of its picture laid along a curve from the head down to the root ball
-  for (let i = 0, steps = 26; i <= steps; i++) {
-    const u = i / steps, x = (1 - u) ** 2 * N.x + 2 * (1 - u) * u * C.x + u * u * B.x, y = (1 - u) ** 2 * N.y + 2 * (1 - u) * u * C.y + u * u * B.y;
-    const dx = 2 * (1 - u) * (C.x - N.x) + 2 * u * (B.x - C.x), dy = 2 * (1 - u) * (C.y - N.y) + 2 * u * (B.y - C.y);
-    ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(dy, dx) - Math.PI / 2); soft(ctx);
-    ctx.drawImage(stem, 0, (i * 9) % (stem.height - 10), stem.width, 10, -stem.width * 0.4, -5, stem.width * 0.8, 10); ctx.restore();
+  const b = run.boss, top = IMG['vorace-top'], bot = IMG['vorace-bottom'], V = meta.vorace;
+  if (!top || !bot || !V) return;
+  const fall = b.phase === 'fall', crushed = fall && b.t >= 0.9;
+  const sink = fall && b.t > 1.6 ? (b.t - 1.6) ** 2 * 320 : 0;
+  const step = Math.floor(t * 7) % 4;                  // the walk, four frames
+  const bf = crushed ? (b.t < 1.5 ? 4 : 5) : step;
+  const tf = crushed ? (b.t < 1.5 ? 4 : 5) : b.open > 0 ? 3 : b.wind > 0 ? (b.wind > 0.25 ? 1 : 2) : fall ? 1 : 0;
+  const B = V.bottom, T = V.top, left = n(b.sx), bx = snap(left), by = GN + 16 - B.h + sink;
+  const tx = bx + B.at[bf][0] - T.at[tf][0], ty = by + B.at[bf][1] - T.at[tf][1] + 2;
+  if (!crushed && b.lastStep !== step && (step === 0 || step === 2)) {          // a foot comes down: earth flies
+    for (const fx of [bx + 40, bx + B.w - 50]) for (let q = 0; q < 4; q++) dirt.push({ x: fx + Math.random() * 20 + n(run.cam), y: GN - 3, vx: (Math.random() - 0.5) * 60, vy: -40 - Math.random() * 60, life: 0.5 });
   }
-  if (collar) ctx.drawImage(collar, snap(N.x - collar.width * 0.35), snap(N.y - collar.height / 2));
-  // the head: shut, open while it spits, dazed once the tree has hit it
-  const face = crushed ? 2 : (b.wind > 0 || b.open > 0 || fall) ? 1 : 0, nod = crushed ? 0.35 : Math.sin(walk) * 0.04;
+  b.lastStep = step;
   if (b.wind > 0) {                                    // the acid glowing in its throat: something is coming
-    const mx = left + n(BOSS.mouthX), my = n(BOSS.mouthY), g = ctx.createRadialGradient(mx, my, 2, mx, my, 40);
+    const mx = left + n(BOSS.mouthX), my = n(BOSS.mouthY), g = ctx.createRadialGradient(mx, my, 2, mx, my, 44);
     g.addColorStop(0, `rgba(168,255,60,${0.55 + 0.3 * Math.sin(t * 30)})`); g.addColorStop(1, 'rgba(168,255,60,0)');
-    ctx.fillStyle = g; ctx.fillRect(mx - 40, my - 40, 80, 80);
+    ctx.fillStyle = g; ctx.fillRect(mx - 44, my - 44, 88, 88);
   }
-  ctx.save(); ctx.translate(N.x, N.y); ctx.rotate(nod); soft(ctx);
-  ctx.drawImage(head, face * hw, 0, hw, hh, hx - N.x, hy - N.y, hw, hh); ctx.restore();
-  LEGS.forEach((k, i) => { if (k < 1) legAt(k, i); });                        // the front legs, in front of the stem
-  // its end: a tree tips over from the left, lands across it, and down it all goes into the floor
-  if (fall && IMG['prop-0']) {
-    const tree = IMG['prop-0'], sc = 2.3, a = Math.PI / 2 * Math.min(1, (b.t / 0.9) ** 2), down = crushed ? Math.max(0, b.t - 1.2) ** 2 * 260 : 0;
-    ctx.save(); ctx.translate(left - 10, GN + 4 + down); ctx.rotate(a); ctx.scale(sc, sc); soft(ctx);
-    ctx.drawImage(tree, -tree.width / 2, -tree.height + 2); ctx.restore();
+  ctx.drawImage(bot, bf * B.w, 0, B.w, B.h, bx, by, B.w, B.h);
+  ctx.drawImage(top, tf * T.w, 0, T.w, T.h, tx, ty, T.w, T.h);
+  if (fall && !crushed && IMG.log) {                   // the trunk, dropping onto the crown
+    const log = IMG.log, k = (b.t / 0.9) ** 2, land = ty + T.at[tf][1] - 70, y = land * k;                    // its lower end enters at the top of the screen and comes down
+    ctx.save(); ctx.translate(tx + T.at[tf][0], y); ctx.rotate(Math.PI / 2); ctx.scale(0.6, 0.6); soft(ctx);
+    ctx.drawImage(log, -log.width, -log.height / 2); ctx.restore();
   }
-  ctx.restore();
 }
 // The earth thrown up by Vorace's legs: in front of the floor.
 function drawDirt(ctx, cam, t) {
@@ -401,13 +401,14 @@ function drawGround(ctx, run, G, cam, x0, x1, bottom) {
 // cell number alone, so the same stretch always looks the same within a run.
 const SWAYING = [PROP.FERN, PROP.FLOWER];              // jungle props that bend in the wind
 
+const SMASH = [-1, 1, 3, 1];                          // in each scenery, the prop that is now the one to smash (never mere scenery)
 function drawProps(ctx, run, cam, width, t) {
   const first = Math.floor(cam / PROP_CELL) - 1, last = Math.floor((cam + width) / PROP_CELL) + 1;
   for (let i = first; i <= last; i++) {
     const pr = propAt(i);
     if (!pr || !flatAt(run, pr.x, CELL_UNITS * 0.6)) continue;        // nothing grows on a slope
     const biome = biomeAt(run, pr.x), set = SCENE[biome].props, im = set[pr.kind % set.length];
-    if (!im) continue;
+    if (!im || pr.kind % set.length === SMASH[biome]) continue;
     const x = snap(pr.x / PIXEL - cam), y = n(floorAt(run, pr.x)) - im.height + 3;
     if (biome) { blit(ctx, im, x, y, pr.flip); continue; }
     // brushed by the hero a moment ago: it shakes hard, then settles
@@ -726,6 +727,13 @@ export function draw(ctx, run, v, t) {
 
   if (run.boss) drawVorace(ctx, run, t);           // behind the floor: its legs plunge into it
   drawProps(ctx, run, cam, v.w, t);
+  for (const dc of run.decor || []) {               // the scenery that can be smashed; with Brise-tout it glints
+    const im = DECOR[dc.biome]; if (dc.broken || !im) continue;
+    const x = snap(sx(dc.x + DECOR_W / 2) - im.width / 2), y = floorPx(x + im.width / 2) - im.height + 3;
+    if (x > v.w || x + im.width < 0) continue;
+    ctx.drawImage(im, x, y);
+    if (run.up.breaker && Math.sin(t * 4 + dc.x) > 0.7) { ctx.fillStyle = '#fff8d8'; const gx = x + im.width * 0.7, gy = y + 4; ctx.fillRect(snap(gx), gy - 2, 1, 5); ctx.fillRect(snap(gx) - 2, gy, 5, 1); }
+  }
   const cut = Math.max(0, Math.min(v.w, edge));        // the floor changes exactly where the new place begins
   if (run.prevBiome !== run.biome) drawGround(ctx, run, SCENE[run.prevBiome].ground, cam, 0, cut, VH + 8);
   drawGround(ctx, run, now.ground, cam, run.prevBiome !== run.biome ? cut : 0, v.w, VH + 8);
@@ -871,13 +879,7 @@ export function draw(ctx, run, v, t) {
 
   for (const o of run.obs) {
     const x = sx(o.x), y = n(o.y), foot = n(o.y + o.h);
-    if (x > v.w + 10 || x < -80) continue;
-    if (o.kind === 'crate') {
-      const S = SCENE[biomeAt(run, o.x)], im = stack(S, o.n), pad = RIM ? 1 : 0;
-      shadow(ctx, x + im.width / 2 - pad, foot - 1, im.width);
-      ctx.drawImage(im, x - pad, foot - im.height + pad);
-      continue;
-    }
+    if ((x > v.w + 10 && !(o.kind === 'dart' && o.state === 'warn')) || x < -80) continue;   // a fonceur waiting off screen still shows its warning
     if (o.kind === 'acid') {                           // the plant's acid: a glowing ball in the air, a bubbling puddle on the floor
       const w = n(o.w), cx = x + w / 2;
       if (o.tentacle) {                                // a root of Vorace slithering along the floor, its pointed end first
@@ -919,15 +921,20 @@ export function draw(ctx, run, v, t) {
     const name = o.kind === 'hover' && !o.biome ? (o.mid ? 'spider-mid' : 'spider-low') : role[o.biome || 0], H = HAZ[name];
     if (!H) continue;
     const im = o.ghost ? H.ghost : H.im, pad = o.ghost ? 1 : H.pad, fw = im.width / H.frames, cx = x + n(o.w) / 2, cy = y + n(o.h) / 2;
+    if (LOOK === 3 && !o.ghost && !(o.kind === 'dart' && o.state !== 'go')) {   // a warm glow behind what hurts
+      const r = Math.max(fw, im.height) * 0.95, g = ctx.createRadialGradient(cx, cy, 2, cx, cy, r);
+      g.addColorStop(0, 'rgba(255,190,90,.5)'); g.addColorStop(1, 'rgba(255,190,90,0)');
+      ctx.fillStyle = g; ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
     if (o.ghost) ctx.globalAlpha = 0.78 + 0.1 * Math.sin(t * 6 + o.x);
     if (o.kind === 'spiky') {                          // on the floor
       const shut = name === 'beartrap' && Math.abs(cx - n(run.sx)) < 30;          // the trap snaps as he goes over it
       const hop = name === 'spiky' && Math.sin(t * 6 + o.x) > 0.6 ? -1 : 0;
       shadow(ctx, cx, foot - 1, fw - 2 * pad);
       sheet(ctx, im, H.frames, shut ? 1 : 0, snap(cx - fw / 2), foot - im.height + pad + hop);
-      if (name === 'mine' && Math.sin(t * 8 + o.x) > 0) {                         // its red light, blinking
+      if (name === 'spikebot' && Math.sin(t * 8 + o.x) > 0) {                     // its eye, blinking
         const g = ctx.createRadialGradient(cx, foot - im.height + 3, 1, cx, foot - im.height + 3, 9);
-        g.addColorStop(0, 'rgba(255,60,60,.9)'); g.addColorStop(1, 'rgba(255,60,60,0)');
+        g.addColorStop(0, 'rgba(90,240,255,.8)'); g.addColorStop(1, 'rgba(90,240,255,0)');
         ctx.fillStyle = g; ctx.fillRect(cx - 9, foot - im.height - 6, 18, 18);
       }
     } else if (o.kind === 'dart') {                    // a "!" at the edge, at its height; then across in one go
@@ -1001,10 +1008,15 @@ export function draw(ctx, run, v, t) {
     f.act.forEach((on, k) => {
       if (!on || cx < -60) return;
       const top = GN - (k + 1) * step, cy = top + step / 2;
-      if (aiming && f.t > 0.3 && !f.ghost) {
-        ctx.fillStyle = `rgba(255,70,70,${0.12 + 0.1 * pulse})`; ctx.fillRect(0, top + 3, cx - 24, step - 6);
-        ctx.fillStyle = `rgba(255,96,96,${0.55 + 0.35 * pulse})`;
-        for (let x = -((t * 60) % 16); x < cx - 24; x += 16) { ctx.fillRect(snap(x), top + 3, 9, 2); ctx.fillRect(snap(x), top + step - 5, 9, 2); }
+      if (aiming && f.t > 0.3 && !f.ghost) {           // a band that fades in from the left, runs under them, and fades out behind
+        const end = cx + 40, fade = (x) => Math.max(0, Math.min(1, x / (end * 0.5), (end - x) / 60));
+        const a = 0.12 + 0.1 * pulse, g = ctx.createLinearGradient(0, 0, end, 0);
+        g.addColorStop(0, 'rgba(255,70,70,0)'); g.addColorStop(0.5, `rgba(255,70,70,${a})`); g.addColorStop(Math.max(0.5, 1 - 60 / end), `rgba(255,70,70,${a})`); g.addColorStop(1, 'rgba(255,70,70,0)');
+        ctx.fillStyle = g; ctx.fillRect(0, top + 3, end, step - 6);
+        for (let x = -((t * 60) % 16); x < end; x += 16) {
+          ctx.fillStyle = `rgba(255,96,96,${(0.55 + 0.35 * pulse) * fade(x)})`;
+          ctx.fillRect(snap(x), top + 3, 9, 2); ctx.fillRect(snap(x), top + step - 5, 9, 2);
+        }
       }
       if (f.phase === 'fire' && !f.ghost) {           // the laser: a flicker while it charges, then the beam
         const h = n(LASER.h), x1 = cx - 18;
@@ -1041,8 +1053,8 @@ export function draw(ctx, run, v, t) {
       sheet(ctx, IMG.coin, f, Math.floor(t * 16 + q.coin) % f, sx(q.x) - (fw >> 1), n(q.y) - (IMG.coin.height >> 1));
       continue;
     }
-    if (q.shard !== undefined) {                       // a quarter of a crate's own picture, spinning
-      const im = SCENE[q.biome].crate, hw = im.width / 2, hh = im.height / 2;
+    if (q.shard !== undefined) {                       // a quarter of the smashed scenery's own picture, spinning
+      const im = DECOR[q.biome], hw = im.width / 2, hh = im.height / 2;
       ctx.globalAlpha = Math.min(1, 3 * (1 - q.life / q.max));
       ctx.save(); ctx.translate(sx(q.x), n(q.y)); ctx.rotate(q.rot); soft(ctx);
       ctx.drawImage(im, (q.shard % 2) * hw, (q.shard >> 1) * hh, hw, hh, -hw / 2, -hh / 2, hw, hh);

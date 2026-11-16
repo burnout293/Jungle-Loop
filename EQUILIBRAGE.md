@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 16/11/2026, version 0.20.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 16/11/2026, version 0.21.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -18,6 +18,7 @@ L'écran fait 720 unités de haut (18 m), le sol est à 630. Les vitesses sont d
 | Ruée | vitesse × 1,7 pendant 0,55 s | `update` |
 | Sablier | le monde tourne à 45 % | `update` |
 | Changement de décor | seulement après avoir vaincu un boss (aujourd'hui Vorace, une fois) ; avec le Gros sac à dos, 1 fois sur 2 le décor reste | `boss` |
+| Ordre des décors | toujours forêt → ruines → donjon → cité, puis on reboucle sur la forêt | `NEXT_BIOME` |
 
 ## 2. Saut et vol
 
@@ -48,25 +49,26 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Moment | Liste | Chance de chacun |
 |---|---|---|
-| 70 premiers mètres | caisse, hérisson, pièces, plateforme | 25 % |
-| Ensuite | caisse, hérisson ×2, doublé, volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux | 14 entrées, plus celles du décor (ligne suivante) |
-| Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | 18 entrées : 5,6 %, dessin 11 % |
-| Avec Double saut | + pile de 2 caisses, + volant | 20 entrées : 5 % |
-| Avec Vol | + mur de 4 caisses, + essaim ×2 | 23 entrées : 4,3 % |
+| 70 premiers mètres | hérisson ×2, pièces, plateforme | 25 % (hérisson 50 %) |
+| Ensuite | hérisson ×3, doublé (deux hérissons), volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux (un hérisson au fond) | 14 entrées |
+| Dès 500 m | + suspendu ×3 | 17 entrées |
+| Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | +2 entrées |
+| Avec Double saut | + volant | +1 entrée |
+| Avec Vol | + deux volants à la suite ×2 | +2 entrées |
 | Monture en vue | jamais de grotte | |
-| Moustiques annoncés | pièces seulement | |
+| Nuée annoncée, ou Vorace | pièces seulement | |
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Écart entre deux motifs | (vitesse × 0,7 s + 3,75 m) × hasard de 0,85 à 1,4 ; × 1,3 après des pièces | `spawnPattern` |
+| Écart entre deux motifs | le plus grand de 10,5 m et (vitesse × 0,72 s + 2,75 m), × hasard de 0,85 à 1,3 ; × 1,3 après des pièces. Compté en distance : la route garde sa densité quand la vitesse monte (2 dangers par 100 m vers 13-21 m/s, 3 à 4 au-delà) | `GAP` |
+| Remplissage des grands écarts | écart de plus de 16 m : au milieu, un suspendu à hauteur de tête (dès 1500 m, 1 fois sur 2), sinon un volant bas (dès 300 m, 35 %) | `GAP.fill` |
 | Dangers (rôles) | chacun a son dessin dans chaque décor (forêt / ruines / cité / donjon) | `ROLE`, js/render.js |
-| Au sol, à sauter | hérisson / boule de ronces / mine à lumière rouge / piège à loup ; 1,7 m × 1,35 m | `SPIKY` |
+| Au sol, à sauter | hérisson / boule de ronces / robot à pointes à l'œil bleu clignotant (cité) / piège à loup ; 1,7 m × 1,35 m | `SPIKY` |
 | Volant | coléoptère / vautour / missile / flèche : un « ! » au bord droit à sa hauteur pendant 1 s, puis il traverse l'écran à 20 m/s de plus que toi | `DART` |
 | Hauteur des volants | 1,15 m (sauter) ou 4,25 m (rester au sol) ; avec Double saut aussi 7,25 m ; avec Vol aussi 10 et 12,75 m | `DART_ALTS` |
 | Suspendu | araignée / idole de pierre / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 500 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
-| Caisse | caisse / amphore / bidon / caisse ferrée | `CRATE` |
-| Contour des dangers | aucun par défaut ; liseré rouge en option (Réglages, Affichage) | `setDangerRim` |
-| Caisse | 1,6 m × 1,3 m | `CRATE` |
+| Contour des dangers | aucun par défaut ; liseré rouge en option (Réglages, Affichage) ; 6 façons de les mettre en avant à comparer dans `mockups/lisibilite.html` | `setDangerRim`, `setLook` |
+| Décor à casser | grosse caisse (forêt) / jarre (ruines) / tonneau (donjon) / caisses (cité) ; posé derrière 30 % des motifs dès 70 m ; inoffensif, il ne se casse qu'avec Brise-tout, la Ruée ou le rhino | `addDecor`, `DECOR_RATE` |
 | Plateforme | 6,35 m de long, à 3,4 m du sol | `PLAT_W` |
 | Corniche | +3,4 m pendant 17,5 à 27,5 m, hérisson dessus 6 fois sur 10 | `STEP` |
 | Creux | −1,65 m pendant 15 à 24 m | `HOLLOW` |
@@ -87,7 +89,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Gemme jaune / rouge / bleue | 5 / 10 / 20 pièces | `GEMS` |
 | Couleur d'une gemme | jaune 60 %, rouge 30 %, bleue 10 % | `gemKind` |
 | Gemmes dispersées | 1,2 % / 2,2 % / 3,5 % des pièces deviennent des gemmes | `SCATTER` |
-| Caisse détruite | 2 pièces par caisse | `destroy` |
+| Décor cassé | 4 pièces projetées devant Pépito | `smash` |
 | Créature détruite (Ruée) | 1 pièce ; nuée de moustiques : 3 | `destroy`, `followers` |
 | Endroit exigu | une pièce tous les mètres ; avec Gemmes dispersées, 1 sur 6 est une gemme ; cœur 3 % | `tight` |
 | Cœur ramassé sans vie à rendre | 25 pièces | `HEART_GOLD` |
@@ -116,12 +118,13 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Allure | derrière le sol, en pièces : tête, tige, collerette, six pattes-racines qui plongent dans le sol à tour de rôle | js/render.js |
+| Allure | derrière le sol, en deux parties tenues ensemble au bord de l'urne : le bas (l'urne sur ses pattes épineuses) marche en 4 images, le haut (la couronne) s'ouvre, bout et crache ; à sa mort le haut est écrasé par le tronc et l'urne s'effondre | `drawVorace`, js/render.js |
 | Apparition | vers 2000 m (± 100 m), une fois par course, seulement dans la forêt ; aussi sur une monture ; la relique du sac de Pépito s'illumine ; tous les autres dangers disparaissent pendant le combat | `BOSS.at`, `bossAt` |
 | Vitesse pendant le combat | 14 m/s ; ta propre vitesse continue de monter en parallèle | `BOSS.speed` |
 | Après le combat | la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne (de 14 à 29 m/s : environ 9 s) | `RAMP` |
 | Durée | 26 s d'attaques, puis un arbre l'écrase | `BOSS.fight` |
 | Rythme | une attaque toutes les 1,65 s au début, jusqu'à 1,15 s ; la gueule s'ouvre et l'acide brille 0,45 s avant | `boss` |
+| Gueule (départ des tirs) | 2,7 m après son bord gauche, 4,9 m du haut de l'écran | `BOSS.mouthX`, `BOSS.mouthY` |
 | À pied (et gorille) | flaque, double flaque, boule basse (sauter), moyenne (rester au sol), haute (pas de grand saut), deux boules (haute + basse ou moyenne), pluie de 2 gouttes (ombre au sol avant), tentacule rampante (sauter) ; suspendu aux lianes : boules à hauteur des lianes | `boss` |
 | Sur le rhino | flaques, boules basses et hautes, pluie, tentacule (pas de boule moyenne) | `boss` |
 | Sur la libellule | éventail sur 5 couloirs avec 2 couloirs voisins libres, pluie, boules isolées | `boss` |
@@ -131,7 +134,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 ## 7. Nuées (monstres suiveurs)
 
-Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils visent puis foncent. Dans la cité, de gros drones visent puis tirent un laser le long de leur couloir (de 0,25 à 0,7 s après la visée), sans foncer.
+Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils visent puis foncent. Dans la cité, de gros drones visent puis tirent un laser le long de leur couloir (de 0,25 à 0,7 s après la visée), sans foncer. La bande rouge d'alerte apparaît en fondu depuis la gauche, passe sous eux et s'efface juste derrière.
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
@@ -156,7 +159,7 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 | Aimant | 2 | 600 / 1600 / 3600 | 2,75 / 4,25 / 6 m |
 | Trèfle | 4 | 1200 / 3200 | voir § 5 |
 | Gemmes dispersées | 6 | 2000 / 4800 / 10000 | 1,2 / 2,2 / 3,5 % |
-| Brise-obstacle | 3 | 1400 | traverse les caisses |
+| Brise-tout | 3 | 1400 | casse le décor (caisses, jarres, tonneaux) : 4 pièces chacun |
 | Cœur en plus | 7 | 3600 | 2 cœurs |
 | Faune alcoolisée | 5 | 1600 / 3600 / 7200 | 6 / 10 / 15 % |
 | Ami de la nature | 4 | 1200 / 2800 / 6000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
@@ -194,7 +197,7 @@ Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans 
 | Courses lancées | 3 | +1 |
 | Champignons frôlés | 5 | +3 |
 | Singes salués en une course | 2 | +1 |
-| Obstacles cassés | 4 | +3 |
+| Décors ou créatures cassés | 4 | +3 |
 | Montures | 1 | +1 |
 | Nuées esquivées | 2 | +1 |
 

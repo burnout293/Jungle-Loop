@@ -2,7 +2,7 @@
 // Not a video: a real, tiny run of the game with only that upgrade on, a hand-placed stretch of
 // jungle and a scripted player, restarted every five seconds. It always shows the real behaviour.
 
-import { newRun, update, addCrates, addSpiky, addHover, LOW, HEAD, coinLine, GROUND, PX, PIXEL, PPM, HANG_Y, LOG } from './game.js';
+import { newRun, update, addDecor, addSpiky, addHover, LOW, HEAD, coinLine, GROUND, PX, PIXEL, PPM, HANG_Y, LOG } from './game.js';
 import { draw, quality } from './render.js';
 
 const LOOP = 5;                                  // seconds
@@ -13,7 +13,7 @@ export const DEMO_W = 284, DEMO_H = 170;         // art pixels shown: the bottom
 // `play` decides the input from the distance to the next obstacle (`ahead`) and the time `t`.
 const SCENES = {
   doubleJump: {
-    build(run, x) { addCrates(run, x + 760, 3); coinLine(run, x + 700, GROUND - 215, 5); addCrates(run, x + 1500, 3); },
+    build(run, x) { addHover(run, x + 760, HEAD); addHover(run, x + 760, LOW); coinLine(run, x + 700, GROUND - 215, 5); addHover(run, x + 1500, HEAD); addHover(run, x + 1500, LOW); },
     play: (run, ahead, t, inp) => {
       const p = run.p;
       if (p.ground && ahead < 200) inp.pressed = true;                      // short hops, so it stays in frame
@@ -25,11 +25,11 @@ const SCENES = {
     play: () => {},
   },
   breaker: {
-    build(run, x) { addCrates(run, x + 600, 1); addCrates(run, x + 950, 2); addCrates(run, x + 1400, 1); },
+    build(run, x) { addDecor(run, x + 600); addDecor(run, x + 950); addDecor(run, x + 1400); },
     play: () => {},
   },
   dash: {
-    build(run, x) { addSpiky(run, x + 760); addCrates(run, x + 860, 2); addSpiky(run, x + 960); },
+    build(run, x) { addSpiky(run, x + 760); addSpiky(run, x + 860); addSpiky(run, x + 960); },
     play: (run, ahead, t, inp) => { if (ahead < 130) inp.dash = true; },
   },
   slow: {
@@ -41,7 +41,7 @@ const SCENES = {
     },
   },
   flight: {
-    build(run, x) { addCrates(run, x + 900, 3); coinLine(run, x + 840, GROUND - 215, 5); },
+    build(run, x) { addHover(run, x + 900, LOW); addHover(run, x + 900, HEAD); coinLine(run, x + 840, GROUND - 215, 5); },
     play: (run, ahead, t, inp) => {
       const p = run.p, near = ahead < 330 && ahead > -90;
       if (p.ground && near) inp.pressed = true;                             // one press on foot: a jump
@@ -50,7 +50,7 @@ const SCENES = {
     },
   },
   spring: {
-    build(run, x) { addCrates(run, x + 760, 3); coinLine(run, x + 700, GROUND - 235, 5); addCrates(run, x + 1500, 3); },
+    build(run, x) { addSpiky(run, x + 760); coinLine(run, x + 700, GROUND - 235, 5); addSpiky(run, x + 1500); },
     play: (run, ahead, t, inp) => { if (run.p.ground && ahead < 190) inp.pressed = true; inp.hold = true; },
   },
   sprint: {
@@ -81,7 +81,7 @@ const SCENES = {
     play: () => {},
   },
   nature: {
-    build(run, x) { run.items.push({ x: x + 520, kind: 'rhino', ph: 0 }); addCrates(run, x + 1000, 2); addCrates(run, x + 1500, 3); coinLine(run, x + 1000, GROUND - 40, 14); for (const o of run.obs) o.ghost = false; },
+    build(run, x) { run.items.push({ x: x + 520, kind: 'rhino', ph: 0 }); addDecor(run, x + 1000); addDecor(run, x + 1500); coinLine(run, x + 1000, GROUND - 40, 14); for (const o of run.obs) o.ghost = false; },
     play: () => {},
   },
   lastLeap: {
@@ -96,7 +96,7 @@ const SCENES = {
     },
   },
   'm-rhino': {
-    build(run, x) { run.items.push({ x: x + 300, kind: 'rhino', ph: 0 }); addCrates(run, x + 900, 2); addCrates(run, x + 1400, 3); coinLine(run, x + 800, GROUND - 40, 18); for (const o of run.obs) o.ghost = false; },
+    build(run, x) { run.items.push({ x: x + 300, kind: 'rhino', ph: 0 }); addDecor(run, x + 900); addDecor(run, x + 1400); coinLine(run, x + 800, GROUND - 40, 18); for (const o of run.obs) o.ghost = false; },
     play: () => {},
   },
   'm-dragonfly': {

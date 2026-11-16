@@ -8,6 +8,8 @@
 #   dangers1/2/3.png: the dangers of the other sceneries (vulture, wasp, ball of brambles; stone idol,
 #                 bear trap, mine; missile, arrow, combat drone, little drone)
 #   vorace-parts.png: Vorace in pieces (three heads, a leaf collar, a stem segment, two root-legs), put together by render.js
+#   vorace-top.png, vorace-bottom.png: Vorace (the queen flower) in two parts, six frames each
+#   dangers4.png: the city's own ground dangers
 #   gravats.png : four ways of blocking the temple's doorway, for mockups/gravats.html
 # Run it AFTER import_gen.py, which still writes the old ruins and city crates.
 import os
@@ -217,7 +219,7 @@ save(shrink(thorns, 30 / thorns.width), 'thornball')
 idol, trap1, trap2, mine = columns('dangers2')
 save(shrink(idol, 30 / idol.height), 'idol')
 frames_sheet([trap1, trap2], 38 / max(trap1.width, trap2.width), 'beartrap')
-save(shrink(mine, 34 / mine.width), 'mine')
+# (the mine gave way to the city's spiky robot: see dangers4 below)
 missile, arrow, drone, minidrone = columns('dangers3')
 save(shrink(missile, 46 / missile.width), 'missile')
 save(shrink(arrow, 46 / arrow.width), 'arrow')
@@ -268,8 +270,60 @@ def same_box(frames):
     sheet = Image.new('RGBA', (cw * len(sm), ch), (0, 0, 0, 0))
     for i, f in enumerate(sm): sheet.alpha_composite(f, (i * cw + cw - f.width, (ch - f.height) // 2))
     return sheet
-save(same_box([head1, head2, head3]), 'vorace-head')
-save(shrink(collar, K), 'vorace-collar')
+# (the dionée's head, collar and legs gave way to the queen flower: only its stem and short leg stay, for the tentacle)
 save(shrink(stem, K), 'vorace-stem')
-save(shrink(leg, K), 'vorace-leg')
 save(shrink(leg2, K), 'vorace-leg2')
+
+# ---------- Vorace, the queen flower, in two parts ----------
+# Top: the crown on the urn's rim (shut, opening, open, spitting, crushed by the trunk, broken).
+# Bottom: the urn with its eye and its legs (four steps of a walk, cracked, collapsed).
+# Each sheet is a grid of 3 x 2 frames drawn at the same place: cut with the same box. For every frame,
+# where the parts meet: the middle of the rim's lowest row (top), the middle of the urn's highest row (bottom).
+def grid(name, cols=3, rows=2):
+    im = Image.open(os.path.join(SRC, name + '.png')).convert('RGBA'); W, H = im.size
+    cells = [im.crop((c * W // cols, r * H // rows, (c + 1) * W // cols, (r + 1) * H // rows)) for r in range(rows) for c in range(cols)]
+    boxes = []
+    for cell in cells:
+        px = cell.load(); m = Image.new('L', cell.size, 0); mp = m.load()
+        for y in range(cell.height):
+            for x in range(cell.width):
+                if not magenta(px[x, y]): mp[x, y] = 255
+        boxes.append(m.getbbox())
+    box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+    return [c.crop(box) for c in cells]
+def rowspan(im, y):
+    px = im.load(); xs = [x for x in range(im.width) if px[x, y][3] > 128]
+    return (min(xs), max(xs)) if xs else None
+KV = 0.5
+tops = [shrink_keep(f, KV) for f in grid('vorace-top')] if False else None
+def shrink_keep(im, k):
+    """Like shrink, without cropping: every frame keeps the same box."""
+    sm = im.resize((round(im.width * k), round(im.height * k)), Image.BOX); px = sm.load()
+    for y in range(sm.height):
+        for x in range(sm.width):
+            q = px[x, y]
+            px[x, y] = (0, 0, 0, 0) if magenta(q) or q[3] < 128 else ((26, 16, 36, 255) if q[0] > 90 and q[2] > 90 and q[1] < 0.6 * min(q[0], q[2]) and q[1] < 100 else (q[0], q[1], q[2], 255))
+    return sm
+anchors = {}
+for part in ('top', 'bottom'):
+    frames = [shrink_keep(f, KV) for f in grid('vorace-' + part)]
+    fw, fh = frames[0].size
+    sheet = Image.new('RGBA', (fw * len(frames), fh), (0, 0, 0, 0)); an = []
+    for i, f in enumerate(frames):
+        sheet.alpha_composite(f, (i * fw, 0))
+        bb = f.getbbox()
+        if part == 'top':                                # the rim: its lowest row
+            y = bb[3] - 1; span = rowspan(f, y)
+            while span and span[1] - span[0] < fw * 0.25 and y > bb[1]: y -= 1; span = rowspan(f, y)
+        else:                                            # the urn's mouth: its highest row
+            y = bb[1]; span = rowspan(f, y)
+            while span and span[1] - span[0] < fw * 0.25 and y < bb[3]: y += 1; span = rowspan(f, y)
+        an.append([round((span[0] + span[1]) / 2), y])
+    save(sheet, 'vorace-' + part)
+    anchors[part] = {'frames': len(frames), 'w': fw, 'h': fh, 'at': an}
+mp = os.path.join(OUT, 'meta.json'); meta = json.load(open(mp)); meta['vorace'] = anchors
+json.dump(meta, open(mp, 'w'), indent=1); print('vorace', json.dumps(anchors))
+
+# ---------- the city's ground danger ----------
+robot = columns('dangers4')[0]
+save(shrink(robot, 34 / robot.width), 'spikebot')

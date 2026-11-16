@@ -17,7 +17,7 @@ export const UPGRADES = [
   { id: 'magnet', unlock: 2, icon: 'magnet', kind: 'passif', name: 'Aimant', desc: 'Attire les pièces proches.', costs: [600, 1600, 3600] },
   { id: 'lucky', unlock: 4, icon: 'lucky', kind: 'passif', name: 'Trèfle', desc: 'Avec Gemmes dispersées, les gemmes apparaissent plus souvent.', costs: [1200, 3200] },
   { id: 'scatter', unlock: 6, icon: 'gems', kind: 'passif', name: 'Gemmes dispersées', desc: 'De temps en temps, une gemme prend la place d\'une pièce. Jaune : 5 pièces, rouge : 10, bleue : 20.', costs: [2000, 4800, 10000] },
-  { id: 'breaker', unlock: 3, icon: 'break', kind: 'passif', name: 'Brise-obstacle', desc: 'Fonce à travers les caisses : elles volent en éclats et lâchent 2 pièces chacune.', costs: [1400] },
+  { id: 'breaker', unlock: 3, icon: 'break', kind: 'passif', name: 'Brise-tout', desc: 'Les caisses, jarres et tonneaux du décor volent en éclats sur ton passage et lâchent 4 pièces.', costs: [1400] },
   { id: 'heart', unlock: 7, icon: 'heart', kind: 'passif', name: 'Cœur en plus', desc: 'Un second cœur : le premier coup ne t\'arrête plus.', costs: [3600] },
   { id: 'drunk', unlock: 5, icon: 'drunk', kind: 'passif', name: 'Faune alcoolisée', desc: 'De rares créatures deviennent éthérées : pâles et titubantes, elles ne font aucun dégât.', costs: [1600, 3600, 7200] },
   { id: 'nature', unlock: 4, icon: 'nature', kind: 'passif', name: 'Ami de la nature', desc: 'Les montures, rares, se montrent un peu plus souvent.', costs: [1200, 2800, 6000] },
