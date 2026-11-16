@@ -8,7 +8,7 @@ import * as S from './save.js';
 import * as P from './progress.js';
 
 // The game's version, shown on the home screen. sw.js names its cache after it: both move together.
-const VERSION = '0.15.0';
+const VERSION = '0.15.1';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d', { alpha: false });   // nothing shows through it: one layer less to blend

@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 16/11/2026, version 0.15. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 16/11/2026, version 0.15.1. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -50,7 +50,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 |---|---|---|
 | 70 premiers mètres | caisse, hérisson, pièces, plateforme | 25 % |
 | Ensuite | caisse, hérisson ×2, doublé, volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux | 14 entrées, plus celles du décor (ligne suivante) |
-| Propre au décor | jungle : araignée ×3 (dès 500 m) · ruines : bloc de pilier ×2 (dès 500 m), geyser ×2 · cité : rien · donjon : chauve-souris ×3 | jungle 17,6 % d'araignées, ruines 11 % de chaque, donjon 17,6 % de chauves-souris |
+| Propre au décor | jungle : araignée ×3 (dès 500 m) · ruines : bloc de pilier ×2 (dès 500 m), geyser ×2 (dès 250 m) · cité : rien · donjon : chauve-souris ×3 | jungle 17,6 % d'araignées, ruines 11 % de chaque, donjon 17,6 % de chauves-souris |
 | Avec Vol | + ronces dès 1000 m (tapis de 10,5 à 17,5 m, pièces au-dessus) | 1 entrée |
 | Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | 18 entrées : 5,6 %, dessin 11 % |
 | Avec Double saut | + pile de 2 caisses, + volant | 20 entrées : 5 % |
@@ -64,7 +64,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Caisse | 1,6 m × 1,3 m | `CRATE` |
 | Hérisson | 1,7 m × 1,35 m | `SPIKY` |
 | Bloc de pilier (ruines) | comme l'araignée basse : tombe quand tu es à 0,9 s, reste au sol, à sauter | `addBlock` |
-| Geyser (ruines) | jaillit quand tu es à 1,1 s ; jet de 1,75 m à pied, 3 m avec Double saut, 7,5 m avec Vol | `GEYSER` |
+| Geyser (ruines) | dès 250 m ; jaillit quand tu es à 1,1 s ; jet de 1,75 m à pied, 3 m avec Double saut, 7,5 m avec Vol | `GEYSER` |
 | Chauve-souris (donjon) | plonge quand tu es à 1 s, rase le sol et vient vers toi à 4 m/s, à sauter | `BAT` |
 | Ronces | 0,65 m de haut ; dès 1000 m ; seulement avec Vol ou sur la Libellule ; le rhino les écrase ; si la monture est perdue, tout ce qui avait été posé pour elle disparaît | `BRAMBLE`, `FROM`, `dismount` |
 | Araignée (jungle) | 1,5 m × 1,4 m ; tombe quand tu es à 0,9 s d'elle. Jaune : s'arrête au ras du sol (à sauter), dès 500 m. Rouge : s'arrête à 5,35 m (ne pas sauter, 5 pièces dessous), dès 1500 m, 4 fois sur 10 | `SPIDER`, `FROM`, `addSpider` |
@@ -131,23 +131,23 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Objet | Prix par niveau | Effet chiffré |
 |---|---|---|
-| Double saut | 120 | |
-| Ressort | 250 / 600 | +10 % d'élan par niveau |
-| Aimant | 150 / 400 / 900 | 2,75 / 4,25 / 6 m |
-| Trèfle | 300 / 800 | voir § 5 |
-| Gemmes dispersées | 500 / 1200 / 2500 | 1,2 / 2,2 / 3,5 % |
-| Brise-obstacle | 350 | traverse les caisses |
-| Cœur en plus | 900 | 2 cœurs |
-| Faune alcoolisée | 400 / 900 / 1800 | 6 / 10 / 15 % |
-| Ami de la nature | 300 / 700 / 1500 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
-| Brouilleur | 600 | le décor ne change qu'une fois |
-| Ruée | 300 / 700 / 1400 | recharge 14 / 10 / 7 s |
-| Sablier | 450 / 1000 | 3 / 4,5 s, recharge 20 s |
-| Dernier élan | 400 / 900 / 1800 | 1 / 2 / 3 rebonds |
-| Rembobinage | 2500 | 1 fois par course |
-| Vol (pouvoir) | 1200 | |
-| Sprint (pouvoir) | 1000 | +4 m/s |
-| Sphère (pouvoir) | 1500 | |
+| Double saut | 480 | |
+| Ressort | 1000 / 2400 | +10 % d'élan par niveau |
+| Aimant | 600 / 1600 / 3600 | 2,75 / 4,25 / 6 m |
+| Trèfle | 1200 / 3200 | voir § 5 |
+| Gemmes dispersées | 2000 / 4800 / 10000 | 1,2 / 2,2 / 3,5 % |
+| Brise-obstacle | 1400 | traverse les caisses |
+| Cœur en plus | 3600 | 2 cœurs |
+| Faune alcoolisée | 1600 / 3600 / 7200 | 6 / 10 / 15 % |
+| Ami de la nature | 1200 / 2800 / 6000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
+| Brouilleur | 2400 | le décor ne change qu'une fois |
+| Ruée | 1200 / 2800 / 5600 | recharge 14 / 10 / 7 s |
+| Sablier | 1800 / 4000 | 3 / 4,5 s, recharge 20 s |
+| Dernier élan | 1600 / 3600 / 7200 | 1 / 2 / 3 rebonds |
+| Rembobinage | 10000 | 1 fois par course |
+| Vol (pouvoir) | 4800 | |
+| Sprint (pouvoir) | 4000 | +4 m/s |
+| Sphère (pouvoir) | 6000 | |
 
 Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans `UPGRADES`.
 
@@ -186,6 +186,7 @@ Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans 
 | Lissage « Auto » | finesse de départ ×4 sur PC, ×3 sur téléphone ; baisse d'un cran sous 54 images/s | `watch` |
 | Lissage « Net » | finesse ×2 au plus, pixels francs | `resize` |
 | Volumes | 0 à 10, 7 au départ | js/save.js |
+| Musique d'accueil | « Mystère » (menu-mystere.mp3) | assets/music/tracks.json |
 | Musique en pause | 30 % du volume | `DUCK`, js/audio.js |
 | Fin de course | la musique ralentit et s'éteint en 0,85 s ; la musique du menu entre à 0,6 s | `music('over')`, js/audio.js |
 | Avant-plan | deux rangées d'ombres fixes ; au plus 22 et 30 pixels en bas, 24 et 30 en haut (sur 320) | `silhouettes`, js/render.js |

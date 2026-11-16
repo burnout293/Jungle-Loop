@@ -40,8 +40,8 @@ export const GEYSER = { w: 34, ahead: 1.1, top: [70, 120, 300] };   // how high 
 const BAT = { w: 60, h: 44, ahead: 1.0, speed: 160 };
 export const BRAMBLE = { h: 26 };
 // Not before this many metres: the spider that drops to the floor (yellow) and its kin, the one that
-// stops halfway (red), brambles.
-const FROM = { low: 500, mid: 1500, brambles: 1000 };
+// stops halfway (red), brambles, the geyser.
+const FROM = { low: 500, mid: 1500, brambles: 1000, geyser: 250 };
 
 // Mounts: rare friendly animals waiting on the path. Running into one puts the hero on its back until
 // something hits them: the animal takes the blow and vanishes. Each one plays its own game, and the
@@ -266,7 +266,7 @@ function spawnPattern(run) {
     : ['crate', 'spiky', 'spiky', 'double', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
   const where = biomeAt(run, x);                                      // each scenery has its own dangers
   const m = x / PPM, low = m >= FROM.low;
-  if (m >= 70) opts.push(...[low ? ['spider', 'spider', 'spider'] : [], [...(low ? ['block', 'block'] : []), 'geyser', 'geyser'], [], ['bat', 'bat', 'bat']][where]);
+  if (m >= 70) opts.push(...[low ? ['spider', 'spider', 'spider'] : [], [...(low ? ['block', 'block'] : []), ...(m >= FROM.geyser ? ['geyser', 'geyser'] : [])], [], ['bat', 'bat', 'bat']][where]);
   if (tier >= 2 && m >= FROM.brambles) opts.push('brambles');
   if (tier >= 1 && x >= 70 * PPM) opts.push('stack', 'fly');
   if (tier >= 2 && x >= 70 * PPM) opts.push('wall', 'swarm', 'swarm');
