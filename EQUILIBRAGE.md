@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 16/11/2026, version 0.19.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 16/11/2026, version 0.20.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -105,7 +105,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Ami de la nature | ces distances divisées par 1,25 / 1,5 / 1,75 | `friend` |
 | Laquelle | 1 chance sur 3 chacune | `spawnPattern` |
 | Comment elles attendent | gorille tout en haut des lianes, pieds à 10 m du sol, avance à 45 % de ta vitesse : il faut le Vol (ou Double saut + Ressort) ; rhino immobile qui broute : il faut le toucher au sol, un saut le fait rater ; libellule qui zigzague entre 1,75 et 5,75 m (un aller en 1,6 s) et avance à 50 % de ta vitesse | `MOUNTS.ahead`, `PERCH`, `ZIG` |
-| Vitesse sur une monture | la sienne : départ à 7,5 m/s (libellule 8 m/s), puis + 0,3 m/s par seconde (gorille), + 0,55 (rhino), + 0,35 (libellule). Ta propre vitesse continue de monter en parallèle ; quand la monture part, la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne | `MOUNTS.speed`, `RAMP` |
+| Vitesse sur une monture | la sienne : départ à 7,5 m/s (libellule 8 m/s), puis + 0,6 m/s par seconde (gorille), + 1,1 (rhino), + 0,7 (libellule). Ta propre vitesse continue de monter en parallèle ; quand la monture part, la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne | `MOUNTS.speed`, `RAMP` |
 | Gorille | saut 3,5 m (5,6 m maintenu), second saut jusqu'aux lianes | `MOUNTS.gorilla` |
 | Rhino | saut 1,6 m (2,6 m maintenu) ; ramasse sur 3,9 m de large et 3,75 m de haut | `MOUNTS.rhino` |
 | Libellule | monte à 12 m/s, descend à 11 m/s | `update` |
@@ -116,6 +116,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
+| Allure | derrière le sol, en pièces : tête, tige, collerette, six pattes-racines qui plongent dans le sol à tour de rôle | js/render.js |
 | Apparition | vers 2000 m (± 100 m), une fois par course, seulement dans la forêt ; aussi sur une monture ; la relique du sac de Pépito s'illumine ; tous les autres dangers disparaissent pendant le combat | `BOSS.at`, `bossAt` |
 | Vitesse pendant le combat | 14 m/s ; ta propre vitesse continue de monter en parallèle | `BOSS.speed` |
 | Après le combat | la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne (de 14 à 29 m/s : environ 9 s) | `RAMP` |
@@ -125,7 +126,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Sur le rhino | flaques, boules basses et hautes, pluie, tentacule (pas de boule moyenne) | `boss` |
 | Sur la libellule | éventail sur 5 couloirs avec 2 couloirs voisins libres, pluie, boules isolées | `boss` |
 | Pièces | des traînées continuent d'apparaître pendant le combat | `spawnPattern` |
-| Le trou | 6,75 m de large, une arche de 10 gemmes bleues sur la trajectoire d'un saut simple, la première au point d'appel ; tomber dedans coûte un cœur et te repose de l'autre côté | `BOSS.hole` |
+| Fin | un arbre bascule sur elle et l'enfonce dans le sol, sans trou : une ligne de 16 gemmes bleues à hauteur de course, il suffit de continuer tout droit | `boss` |
 | Récompense | 24 pièces et une gemme de chaque couleur, puis le décor change | `boss` |
 
 ## 7. Nuées (monstres suiveurs)

@@ -9,7 +9,7 @@ import * as P from './progress.js';
 import { open as openDebug, debugRun, dbg } from './debug.js';
 
 // The game's version, shown on the home screen. sw.js names its cache after it: both move together.
-const VERSION = '0.19.0';
+const VERSION = '0.20.0';
 
 const $ = (id) => document.getElementById(id);
 // (A canvas without transparency, { alpha: false }, is a little lighter, but some Firefox builds on
@@ -615,7 +615,7 @@ function frame(now) {
       if (ev === 'debug') banner('Debug actif');
       if (ev === 'boss') banner('Vorace !');
       if (ev === 'timber') banner('Ça tombe !');
-      if (ev === 'bossfall') banner('Saute le trou !');
+      if (ev === 'bossfall') banner('Écrasée !');
       if (ev === 'bossdown') banner('Vorace est vaincue !');
       if (ev === 'hurt' || ev === 'rewind' || ev === 'hit') stats.hurt = true;
     }

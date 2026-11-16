@@ -64,9 +64,9 @@ export const FROM = { low: 500, mid: 1500 };   // (the debug menu may change the
 // dragonfly zigzags ahead in the air (be where it is). `ahead` is how fast they move on, as a share of
 // the hero's speed.
 export const MOUNTS = {
-  gorilla: { name: 'Gorille', jump: -820, half: 34, tall: 118, speed: { base: 300, gain: 12 }, ahead: 0.45 },
-  rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, grab: { w: 78, h: 150 }, speed: { base: 300, gain: 22 }, ahead: 0 },   // grab: it sweeps up coins well above its back
-  dragonfly: { name: 'Libellule', fly: true, half: 28, tall: 92, speed: { base: 320, gain: 14 }, ahead: 0.5 },
+  gorilla: { name: 'Gorille', jump: -820, half: 34, tall: 118, speed: { base: 300, gain: 24 }, ahead: 0.45 },
+  rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, grab: { w: 78, h: 150 }, speed: { base: 300, gain: 44 }, ahead: 0 },   // grab: it sweeps up coins well above its back
+  dragonfly: { name: 'Libellule', fly: true, half: 28, tall: 92, speed: { base: 320, gain: 28 }, ahead: 0.5 },
 };
 // The boss, Vorace: a giant carnivorous plant. Around BOSS.at metres, in the forest only, it comes in on
 // the right and keeps pace with the hero, who runs at BOSS.speed meanwhile; the relic in his backpack
@@ -75,9 +75,10 @@ export const MOUNTS = {
 // down) or a high one (no big jump), two balls at once, a rain of drops from the sky (their shadows show
 // where), a tentacle slithering along the floor (jump). Every attack is announced (jaws open and glow,
 // shadows) and every pair leaves a way through. What it throws depends on what the hero rides. After
-// BOSS.fight seconds a tree falls on it and crushes it into a hole the hero must jump: a line of blue gems
-// shows where to take off. BOSS.w is how wide it stands on screen, the mouth where its acid comes from.
-export const BOSS = { at: 2000, speed: 560, fight: 26, w: 420, mouthX: 100, mouthY: 170, hole: 270, holeX: 120 };
+// BOSS.fight seconds a tree falls on it and crushes it into the ground; the hero runs straight on over a
+// line of blue gems. It stands behind the floor and crawls on its root-legs (see render.js): BOSS.w is how
+// wide it is on screen, the mouth where its acid comes from (from its left edge, and from the top).
+export const BOSS = { at: 2000, speed: 560, fight: 26, w: 420, mouthX: 40, mouthY: 310 };
 const LANE = { low: 28, mid: 115, high: 250, vine: 470 };
 // The heights a flyer may come at (its middle, above the floor), by what the hero owns: on foot, double jump, flight.
 const DART_ALTS = [[46, 170], [46, 170, 290], [46, 170, 290, 400, 510]];   // height of a ball's centre above the floor
@@ -555,30 +556,17 @@ function boss(run, d) {
     }
     if (b.t > BOSS.fight && b.wind <= 0) {                               // a tree comes down on it
       b.phase = 'fall'; b.t = 0; b.wx = run.cam + b.sx; b.crushed = false;
-      const x0 = b.wx + BOSS.holeX, x1 = x0 + BOSS.hole, take = x0 - 50, v = BOSS.speed;
-      // blue gems along the very path of a plain jump taken at the right spot: the first one says "now"
-      for (let k = 0; k <= 9; k++) {
-        const tau = k * 0.07, h = JUMP.v * tau - JUMP.gravity * tau * tau / 2;
-        run.coins.push({ x: take + v * tau, y: GROUND - Math.max(0, h) - 40, gem: 'b' });
-      }
-      run.nextX = Math.max(run.nextX, x1 + 600);
+      // the reward: blue gems all along the path, at running height: nothing to do but run on
+      for (let k = 0; k < 16; k++) run.coins.push({ x: run.cam + run.sx + 320 + k * 48, y: GROUND - 40, gem: 'b' });
+      run.nextX = Math.max(run.nextX, run.cam + run.viewW + 900);
       run.events.push('timber');
     }
     return;
   }
-  // falling: it stays where it stood; the tree lands at 0.9 s, the floor gives way, the hero jumps the hole
+  // falling: it stays where it stood; the tree lands at 0.9 s and drives it into the ground
   b.sx = b.wx - run.cam;
-  if (!b.crushed && b.t >= 0.9) {
-    b.crushed = true;
-    const x0 = b.wx + BOSS.holeX, x1 = x0 + BOSS.hole;
-    run.terrain.push({ x: x0, y: GROUND }, { x: x0 + 1, y: GROUND + 900 }, { x: x1 - 1, y: GROUND + 900 }, { x: x1, y: GROUND });
-    run.terrain.sort((a, c) => a.x - c.x);
-    run.pits.push({ x0, x1 });
-    for (let i = 0; i < 30; i++) run.parts.push({ x: x0 + rnd(-80, BOSS.hole + 80), y: GROUND - rnd(0, 40), vx: rnd(-260, 260), vy: rnd(-420, -60), life: 0, max: rnd(0.5, 1), c: pick(['#5d8a2c', '#3b2014', '#cbb894', '#7bd13c']), s: rnd(8, 18), g: 900 });
-    run.shake = 1; run.events.push('bossfall');
-  }
-  const pit = run.pits[run.pits.length - 1];
-  if (b.crushed && run.cam + run.sx > pit.x1 + 40) {                     // over the hole: the fight is won
+  if (!b.crushed && b.t >= 0.9) { b.crushed = true; run.shake = 1; run.events.push('bossfall'); }
+  if (b.t > 2.6) {                                                       // gone under the ground: the fight is won
     run.boss = null; run.bossDone = true;
     for (let i = 0; i < 24; i++) loot(run, run.cam + run.sx + rnd(40, 400), GROUND - rnd(80, 300));
     for (const g of 'yrb') { loot(run, run.cam + run.sx + rnd(100, 300), GROUND - 200); run.coins[run.coins.length - 1].gem = g; }   // and a gem of each colour
@@ -638,12 +626,11 @@ function dismount(run) {
 // Losing a heart leaves a moment of invincibility; the last one ends the run (or triggers the rewind).
 // On a mount nothing is lost: the animal vanishes instead.
 function hit(run, o) {
-  if (run.god) return;                          // the debug menu's invincibility: nothing happens at all
   o.gone = true;
   if (run.mount) { dismount(run); return; }
-  run.hearts--;
+  if (!run.god) run.hearts--;                   // the debug menu's invincibility: the blow is felt, no heart goes
   run.shake = 0.6; run.flash = 1;
-  if (run.hearts > 0) {
+  if (run.hearts > 0 || run.god) {
     run.p.inv = 1.6;
     burst(run, run.cam + run.sx, run.p.y - 40, '#ff4d6d', 12, 300);
     run.events.push('hurt');

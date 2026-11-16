@@ -7,6 +7,7 @@
 #   pepito.png  : Pépito's body with his backpack and the relic, the same under his leaf rotor, the backpack icon
 #   dangers1/2/3.png: the dangers of the other sceneries (vulture, wasp, ball of brambles; stone idol,
 #                 bear trap, mine; missile, arrow, combat drone, little drone)
+#   vorace-parts.png: Vorace in pieces (three heads, a leaf collar, a stem segment, two root-legs), put together by render.js
 #   gravats.png : four ways of blocking the temple's doorway, for mockups/gravats.html
 # Run it AFTER import_gen.py, which still writes the old ruins and city crates.
 import os
@@ -145,31 +146,7 @@ json.dump(meta, open(mp, 'w'), indent=1); print('dragonfly seat', meta['mounts']
 
 # (the Brouilleur's icon, brouilleur.png, gave way to the Gros sac à dos: see Pépito below)
 
-# the boss: both drawings cut with the same box (they were drawn at the same place), drips included,
-# side by side in one sheet of two frames
-im = Image.open(os.path.join(SRC, 'boss.png')).convert('RGBA'); half = im.width // 2
-boxes = []
-for k in range(2):
-    h = im.crop((k * half, 0, (k + 1) * half, im.height)); px = h.load()
-    mask = Image.new('L', h.size, 0); mp = mask.load()
-    for y in range(h.height):
-        for x in range(h.width):
-            if not magenta(px[x, y]): mp[x, y] = 255
-    boxes.append(mask.getbbox())
-box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
-k = 290 / (box[3] - box[1])
-frames = []
-for i in range(2):
-    f = im.crop((i * half + box[0], box[1], i * half + box[2], box[3]))
-    sm = f.resize((round(f.width * k), round(f.height * k)), Image.BOX); spx = sm.load()
-    for y in range(sm.height):
-        for x in range(sm.width):
-            q = spx[x, y]
-            spx[x, y] = (0, 0, 0, 0) if magenta(q) or q[3] < 128 else ((26, 16, 36, 255) if q[0] > 90 and q[2] > 90 and q[1] < 0.6 * min(q[0], q[2]) and q[1] < 100 else (q[0], q[1], q[2], 255))
-    frames.append(sm)
-sheet = Image.new('RGBA', (frames[0].width * 2, frames[0].height), (0, 0, 0, 0))
-for i, f in enumerate(frames): sheet.alpha_composite(f, (i * frames[0].width, 0))
-save(sheet, 'boss-plant')
+# (the one-piece boss of boss.png gave way to Vorace in pieces: see the end of this file)
 
 # Pépito: his body (head, leaf hair, trunk, the backpack with the relic sticking out) and the same under
 # his leaf rotor, at the size of the body they replace, with the points render.js needs: the middle of
@@ -246,3 +223,53 @@ save(shrink(missile, 46 / missile.width), 'missile')
 save(shrink(arrow, 46 / arrow.width), 'arrow')
 save(shrink(drone, 46 / drone.width), 'drone-big')
 save(shrink(minidrone, 32 / minidrone.width), 'drone')
+
+# ---------- Vorace in pieces ----------
+# Every big drawing of the sheet, with the drips and crumbs that float next to it, in reading order.
+def parts(name, big=3000, reach=24):
+    im = Image.open(os.path.join(SRC, name + '.png')).convert('RGBA'); px = im.load(); w, h = im.size
+    seen = bytearray(w * h); comps = []
+    for y in range(0, h, 2):
+        for x in range(0, w, 2):
+            if seen[y * w + x] or magenta(px[x, y]): continue
+            q = deque([(x, y)]); seen[y * w + x] = 1; pts = []
+            while q:
+                cx, cy = q.popleft(); pts.append((cx, cy))
+                for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx] and not magenta(px[nx, ny]):
+                        seen[ny * w + nx] = 1; q.append((nx, ny))
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            comps.append({'box': [min(xs), min(ys), max(xs) + 1, max(ys) + 1], 'pts': pts})
+    bigs = [c for c in comps if len(c['pts']) >= big]
+    for c in comps:
+        if len(c['pts']) >= big or len(c['pts']) < 6: continue
+        x0, y0, x1, y1 = c['box']
+        for b in bigs:
+            X0, Y0, X1, Y1 = b['box']
+            if x0 < X1 + reach and x1 > X0 - reach and y0 < Y1 + reach and y1 > Y0 - reach:
+                b['pts'] += c['pts']; b['box'] = [min(X0, x0), min(Y0, y0), max(X1, x1), max(Y1, y1)]; break
+    bigs.sort(key=lambda b: ((b['box'][1] + b['box'][3]) // 2 // (h // 2), b['box'][0]))
+    out = []
+    for b in bigs:
+        x0, y0, x1, y1 = b['box']
+        one = Image.new('RGBA', (x1 - x0, y1 - y0), (255, 0, 255, 255)); o = one.load()
+        for x, y in b['pts']: o[x - x0, y - y0] = px[x, y]
+        out.append(one)
+    return out
+
+vp = parts('vorace-parts')
+assert len(vp) == 7, len(vp)
+head1, head2, head3, collar, stem, leg, leg2 = vp
+K = 96 / head1.width
+def same_box(frames):
+    """The heads in canvases of one size, lined up on their right edge (the leaves, where the neck joins) and middle."""
+    sm = [shrink(f, K) for f in frames]
+    cw, ch = max(f.width for f in sm), max(f.height for f in sm)
+    sheet = Image.new('RGBA', (cw * len(sm), ch), (0, 0, 0, 0))
+    for i, f in enumerate(sm): sheet.alpha_composite(f, (i * cw + cw - f.width, (ch - f.height) // 2))
+    return sheet
+save(same_box([head1, head2, head3]), 'vorace-head')
+save(shrink(collar, K), 'vorace-collar')
+save(shrink(stem, K), 'vorace-stem')
+save(shrink(leg, K), 'vorace-leg')
+save(shrink(leg2, K), 'vorace-leg2')

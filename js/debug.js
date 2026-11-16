@@ -94,7 +94,7 @@ function build() {
   const say = tag('p', { className: 'say' });
   const done = (text) => { host.store(); host.changed(); say.textContent = text; };
   const panel = tag('div', { id: 'debug' },
-    tag('div', { className: 'head' }, tag('b', { textContent: 'Debug' }), btn('Fermer', close)),
+    tag('div', { className: 'head' }, btn('Fermer', close), tag('b', { textContent: 'Debug' })),
     say,
     tag('h3', { textContent: 'Partie' }),
     row('Pièces', coins, btn('Appliquer', () => { host.save().coins = Math.max(0, Math.floor(Number(coins.value) || 0)); done('Pièces changées.'); })),
