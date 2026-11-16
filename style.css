@@ -185,6 +185,7 @@ h1 span:nth-child(odd) { color: #ffe9a0; }
 .slot.full { background: radial-gradient(circle at 50% 38%, #46528a, #1b2138 78%); border: calc(var(--ui) * 2) solid var(--gold);
   box-shadow: 0 0 0 calc(var(--ui) * 1.5) var(--line), inset 0 0 0 calc(var(--ui) * 1.5) var(--line), 0 calc(var(--ui) * 3) 0 calc(var(--ui) * 1.5) rgba(10, 6, 24, .5); }
 /* what an equipped item is, shown above the three slots when one is touched */
+#menu-version { right: var(--m); bottom: calc(var(--ui) * 5); font-size: calc(var(--ui) * 7); color: var(--dim); opacity: .75; text-shadow: 0 calc(var(--ui) * 1) 0 var(--line); pointer-events: none !important; }
 #menu-info { position: absolute; left: 50%; bottom: calc(var(--m) + var(--ui) * 50); transform: translateX(-50%); width: calc(var(--ui) * 300); height: auto; z-index: 4; text-align: center; }
 #menu-info b { color: var(--gold); font-size: var(--t-m); }
 #menu-info span { font-size: var(--t-s); line-height: 1.35; }

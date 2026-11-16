@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 15/11/2026, version 0.14. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 16/11/2026, version 0.15. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -17,7 +17,7 @@ L'écran fait 720 unités de haut (18 m), le sol est à 630. Les vitesses sont d
 | Sortie du temple | vitesse × 1,8 jusqu'à sa place à l'écran | `update` |
 | Ruée | vitesse × 1,7 pendant 0,55 s | `update` |
 | Sablier | le monde tourne à 45 % | `update` |
-| Changement de décor | tous les 400 m, tiré au sort parmi les 3 autres | `BIOME_LEN` |
+| Changement de décor | tous les 400 m, tiré au sort parmi les 3 autres ; avec le Brouilleur, une seule fois (à 400 m) | `BIOME_LEN` |
 
 ## 2. Saut et vol
 
@@ -50,8 +50,8 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 |---|---|---|
 | 70 premiers mètres | caisse, hérisson, pièces, plateforme | 25 % |
 | Ensuite | caisse, hérisson ×2, doublé, volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux | 14 entrées, plus celles du décor (ligne suivante) |
-| Propre au décor | jungle : araignée ×3 · ruines : bloc de pilier ×2, geyser ×2 · cité : rien · donjon : chauve-souris ×3 | jungle 17,6 % d'araignées, ruines 11 % de chaque, donjon 17,6 % de chauves-souris |
-| Avec Vol | + ronces (tapis de 10,5 à 17,5 m, pièces au-dessus) | 1 entrée |
+| Propre au décor | jungle : araignée ×3 (dès 500 m) · ruines : bloc de pilier ×2 (dès 500 m), geyser ×2 · cité : rien · donjon : chauve-souris ×3 | jungle 17,6 % d'araignées, ruines 11 % de chaque, donjon 17,6 % de chauves-souris |
+| Avec Vol | + ronces dès 1000 m (tapis de 10,5 à 17,5 m, pièces au-dessus) | 1 entrée |
 | Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | 18 entrées : 5,6 %, dessin 11 % |
 | Avec Double saut | + pile de 2 caisses, + volant | 20 entrées : 5 % |
 | Avec Vol | + mur de 4 caisses, + essaim ×2 | 23 entrées : 4,3 % |
@@ -66,8 +66,8 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Bloc de pilier (ruines) | comme l'araignée basse : tombe quand tu es à 0,9 s, reste au sol, à sauter | `addBlock` |
 | Geyser (ruines) | jaillit quand tu es à 1,1 s ; jet de 1,75 m à pied, 3 m avec Double saut, 7,5 m avec Vol | `GEYSER` |
 | Chauve-souris (donjon) | plonge quand tu es à 1 s, rase le sol et vient vers toi à 4 m/s, à sauter | `BAT` |
-| Ronces | 0,65 m de haut ; seulement avec Vol ou sur le Moskito ; le rhino les écrase | `BRAMBLE` |
-| Araignée (jungle) | 1,5 m × 1,4 m ; tombe quand tu es à 0,9 s d'elle ; 6 fois sur 10 elle s'arrête au ras du sol (à sauter), sinon à 5,35 m (ne pas sauter, 5 pièces dessous) | `SPIDER`, `addSpider` |
+| Ronces | 0,65 m de haut ; dès 1000 m ; seulement avec Vol ou sur la Libellule ; le rhino les écrase ; si la monture est perdue, tout ce qui avait été posé pour elle disparaît | `BRAMBLE`, `FROM`, `dismount` |
+| Araignée (jungle) | 1,5 m × 1,4 m ; tombe quand tu es à 0,9 s d'elle. Jaune : s'arrête au ras du sol (à sauter), dès 500 m. Rouge : s'arrête à 5,35 m (ne pas sauter, 5 pièces dessous), dès 1500 m, 4 fois sur 10 | `SPIDER`, `FROM`, `addSpider` |
 | Volant | 1,6 m × 1,35 m, avance vers toi à 3 m/s | `FLY` |
 | Hauteur des volants | 4,4 m ; 4,4 ou 7,25 m avec Double saut ; 4,4 / 7,25 / 10 / 12,75 m avec Vol | `spawnPattern` |
 | Plateforme | 6,35 m de long, à 3,4 m du sol | `PLAT_W` |
@@ -108,9 +108,9 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Laquelle | 1 chance sur 3 chacune | `spawnPattern` |
 | Gorille | saut 3,5 m (5,6 m maintenu), second saut jusqu'aux lianes | `MOUNTS.gorilla` |
 | Rhino | saut 1,6 m (2,6 m maintenu) ; +0,5 m/s chaque seconde, jusqu'à +10,5 m/s ; ramasse sur 3,9 m de large et 3,75 m de haut | `MOUNTS.rhino` |
-| Moskito | monte à 12 m/s, descend à 11 m/s | `update` |
-| Zigzag du Moskito | chaque pente dure 1,2 s | `spawnRide` |
-| Formes du Moskito | 6 fois sur 10 un dessin de `assets/patterns.txt`, sinon losange, carré, triangle ou cercle | `spawnRide` |
+| Libellule | monte à 12 m/s, descend à 11 m/s | `update` |
+| Zigzag de la Libellule | chaque pente dure 1,2 s | `spawnRide` |
+| Formes de la Libellule | 6 fois sur 10 un dessin de `assets/patterns.txt`, sinon losange, carré, triangle ou cercle | `spawnRide` |
 
 ## 7. Moustiques (monstres suiveurs)
 
@@ -140,6 +140,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Cœur en plus | 900 | 2 cœurs |
 | Faune alcoolisée | 400 / 900 / 1800 | 6 / 10 / 15 % |
 | Ami de la nature | 300 / 700 / 1500 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
+| Brouilleur | 600 | le décor ne change qu'une fois |
 | Ruée | 300 / 700 / 1400 | recharge 14 / 10 / 7 s |
 | Sablier | 450 / 1000 | 3 / 4,5 s, recharge 20 s |
 | Dernier élan | 400 / 900 / 1800 | 1 / 2 / 3 rebonds |

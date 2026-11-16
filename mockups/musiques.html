@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jungle Loop — musique d'accueil</title>
+<style>
+  body { margin: 0; padding: 20px; background: #0a0f14; color: #e8ecf4; font: 15px/1.45 system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: #ffd35c; }
+  p { margin: 0 0 16px; color: #9fb0c4; max-width: 70ch; }
+  main { display: grid; gap: 14px; max-width: 720px; }
+  section { background: #151b2c; border: 2px solid #2a3350; padding: 12px 14px; }
+  section.now { border-color: #ffd35c; }
+  b { color: #5cf2e0; font-size: 16px; }
+  span { display: block; color: #9fb0c4; font-size: 13px; margin: 2px 0 8px; }
+  audio { width: 100%; }
+  a { color: #ffd35c; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>Musique d'accueil — 3 alternatives</h1>
+<p>Écoute chacune ici, puis « Essayer dans le jeu » la fait jouer derrière les menus pour cette visite seulement (rien n'est changé). Donne-moi le nom retenu, ou garde l'actuelle.</p>
+<main>
+  <section class="now"><b>Actuelle · Cuivres</b><span>La musique d'accueil d'aujourd'hui, pour comparer.</span><audio controls preload="none" src="../assets/music/menu-brass.mp3"></audio><a href="../">Essayer dans le jeu</a></section>
+  <section><b>1 · Aventure</b><span>Cuivres héroïques, marimba, percussions à main, contre-chant chiptune. Même famille que la musique de course, en plus posé.</span><audio controls preload="none" src="../assets/music/menu-aventure.mp3"></audio><a href="../?menu=menu-aventure.mp3">Essayer dans le jeu</a></section>
+  <section><b>2 · Mystère</b><span>Ocarina, kalimba, nappes chaudes, tambours lointains et ambiance de jungle la nuit. Calme, le temple avant la fuite.</span><audio controls preload="none" src="../assets/music/menu-mystere.mp3"></audio><a href="../?menu=menu-mystere.mp3">Essayer dans le jeu</a></section>
+  <section><b>3 · Entrain</b><span>Mélodie chiptune accrocheuse, cuivres funky, basse slap, batterie et bongos. Donne envie d'appuyer sur Jouer.</span><audio controls preload="none" src="../assets/music/menu-entrain.mp3"></audio><a href="../?menu=menu-entrain.mp3">Essayer dans le jeu</a></section>
+</main>
+</body>
+</html>

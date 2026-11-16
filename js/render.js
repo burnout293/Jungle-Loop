@@ -24,12 +24,12 @@ export const BIOMES = [
 ];
 
 const DIR = 'assets/img/';
-const NAMES = ['fore', 'temple', 'temple-rubble', 'spider', 'bat', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-moskito', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'temple-rubble', 'spider', 'spider-low', 'spider-mid', 'bat', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
   rig: { body: { w: 39, h: 40, hx: 30, hy: 24, tx: 26 }, rotor: { w: 58, h: 34, hx: 28, hy: 16, tx: 29, blade: 12 }, fist: { w: 8, h: 8 }, shoe: { w: 12, h: 9 } },
-  mounts: { gorilla: { frames: 4, seatX: 41, seatY: 21 }, rhino: { frames: 4, seatX: 41, seatY: 20 }, moskito: { frames: 4, seatX: 33, seatY: 39 },
+  mounts: { gorilla: { frames: 4, seatX: 41, seatY: 21 }, rhino: { frames: 4, seatX: 41, seatY: 20 }, dragonfly: { frames: 4, seatX: 40, seatY: 30 },
     'gorilla-hang': { frames: 4, seatX: 46, seats: [[28, 54], [32, 59], [33, 56], [32, 52]] } },
 };
 let SCENE = [];                                        // per scenery, what is ready to draw (see buildScene)
@@ -69,7 +69,7 @@ export async function loadAssets() {
   }
   await Promise.all(names.map(load));
   SCENE = BIOMES.map(buildScene);
-  for (const [k, frames] of [['spiky', 1], ['fly', meta.fly.frames], ['mosquito', meta.mosquito.frames], ['spider', 2], ['bat', 3]])
+  for (const [k, frames] of [['spiky', 1], ['fly', meta.fly.frames], ['mosquito', meta.mosquito.frames], ['spider', 2], ['spider-low', 2], ['spider-mid', 2], ['bat', 3]])
     if (IMG[k]) HAZ[k] = { im: rim(IMG[k], frames), ghost: rim(tinted(IMG[k], 'rgba(110,215,255,.55)'), frames, '#d8f6ff'), frames };
   FAR = { fist: tinted(IMG['hero-fist'], 'rgba(16,12,40,.38)'), shoe: tinted(IMG['hero-shoe'], 'rgba(16,12,40,.38)') };
   // a block of the ruins' pillar (its capital), and a stretch of brambles drawn here
@@ -535,6 +535,10 @@ function drawMount(ctx, kind, frame, x, floor, bob) {
   return { x, y: top + M.seatY - 3 };
 }
 
+// A flying mount is placed by its saddle, whatever the size of its drawing (wings up and down make
+// a tall picture): the floor to give drawMount so that the saddle is at `seat`.
+const seatFloor = (kind, seat) => { const im = IMG['mount-' + kind], M = meta.mounts[kind]; return im ? seat - M.seatY + 2 + im.height : seat; };
+
 // The gorilla hanging from the vines: its gripping fist stays put at the top, the body swings under it.
 function drawHang(ctx, frame, x) {
   const im = IMG['mount-gorilla-hang'], M = meta.mounts['gorilla-hang'];
@@ -708,7 +712,7 @@ export function draw(ctx, run, v, t) {
   for (const it of run.items) {
     const x = sx(it.x), f = floorPx(x), fly = MOUNTS[it.kind].fly, im = IMG['mount-' + it.kind];
     if (x > v.w + 60 || x < -80 || !im) continue;
-    const foot = fly ? f - 34 + Math.round(Math.sin(t * 3 + it.ph) * 4) : f;             // the Moskito hovers
+    const foot = fly ? seatFloor(it.kind, f - 70 + Math.round(Math.sin(t * 3 + it.ph) * 4)) : f;   // the dragonfly hovers
     const g = ctx.createRadialGradient(x + 10, foot - 28, 4, x + 10, foot - 28, 62);
     g.addColorStop(0, `rgba(255,224,120,${0.42 + 0.14 * Math.sin(t * 5)})`); g.addColorStop(1, 'rgba(255,224,120,0)');
     ctx.fillStyle = g; ctx.fillRect(x - 54, foot - 92, 128, 100);
@@ -761,7 +765,7 @@ export function draw(ctx, run, v, t) {
       continue;
     }
     if (o.kind === 'spider') {                         // on its thread: curled up under the leaves, legs out once it has dropped
-      const H = HAZ.spider; if (!H) continue;
+      const H = HAZ[o.mid ? 'spider-mid' : 'spider-low'] || HAZ.spider; if (!H) continue;   // yellow drops to the floor, red stops halfway
       const fw = H.im.width / 2, cx = x + n(o.w) / 2, sway = o.dropped ? Math.sin(t * 5 + o.x) * 1.5 : 0;
       ctx.fillStyle = 'rgba(235,240,255,.8)'; ctx.fillRect(snap(cx), -8, 1, y + 12);
       if (o.dropped) shadow(ctx, cx, floorPx(cx) - 1, Math.max(8, 26 - ((floorPx(cx) - foot) >> 3)));
@@ -806,7 +810,7 @@ export function draw(ctx, run, v, t) {
     if (M) {
       let s;
       if (p.hang) s = drawHang(ctx, Math.floor(p.phase / (Math.PI * 2) * 4) % 4, hx);          // hand over hand under the vines
-      else if (MOUNTS[M.kind].fly) s = drawMount(ctx, M.kind, Math.floor(t * 18) % 4, hx, n(p.y) + 8, 0);
+      else if (MOUNTS[M.kind].fly) s = drawMount(ctx, M.kind, Math.floor(t * 18) % 4, hx, seatFloor(M.kind, n(p.y) - 34), 0);
       else {                                           // it gallops under him; in the air it stretches out
         const frame = !p.ground ? (M.kind === 'gorilla' ? 3 : 0) : Math.floor(p.phase / (Math.PI * 2) * 4) % 4;
         s = drawMount(ctx, M.kind, frame, hx, n(p.y), p.ground ? -Math.abs(Math.sin(p.phase * 2)) * 1.5 : 0);

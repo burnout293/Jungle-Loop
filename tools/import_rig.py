@@ -106,9 +106,10 @@ def rows(name, count):
     assert len(found) == count, (name, len(found))
     return [cut(im, c) for c in found]
 
-meta['mounts'] = {}
+meta['mounts'] = json.load(open(os.path.join(OUT, 'meta.json'))).get('mounts', {})   # keeps the dragonfly, cut by import_objets.py
+meta['mounts'].pop('moskito', None)
 g = rows('gorilla2', 8); old = rows('mounts', 8)
-for name, frames, k in (('gorilla', g[:4], 0.3), ('rhino', old[4:], 0.3), ('moskito', rows('moskito', 4), 0.25)):
+for name, frames, k in (('gorilla', g[:4], 0.3), ('rhino', old[4:], 0.3)):    # (the Moskito is gone: the dragonfly is in import_objets.py)
     out, sx, sy, _ = strip(frames, [centre(f, saddle) for f in frames], k)
     save(out, 'mount-' + name)
     meta['mounts'][name] = { 'frames': len(frames), 'seatX': sx, 'seatY': sy }

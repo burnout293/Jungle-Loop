@@ -39,6 +39,9 @@ const SPIDER = { w: 60, h: 56, ahead: 0.9 };   // it drops when the hero is `ahe
 export const GEYSER = { w: 34, ahead: 1.1, top: [70, 120, 300] };   // how high it spouts: on foot, with the double jump, flying
 const BAT = { w: 60, h: 44, ahead: 1.0, speed: 160 };
 export const BRAMBLE = { h: 26 };
+// Not before this many metres: the spider that drops to the floor (yellow) and its kin, the one that
+// stops halfway (red), brambles.
+const FROM = { low: 500, mid: 1500, brambles: 1000 };
 
 // Mounts: rare friendly animals waiting on the path. Running into one puts the hero on its back until
 // something hits them: the animal takes the blow and vanishes. Each one plays its own game, and the
@@ -46,12 +49,12 @@ export const BRAMBLE = { h: 26 };
 // - the gorilla jumps a little higher, and its second jump always carries it up to the vines along
 //   the top of the screen, where it swings on until a press lets go. Floor and vines, nothing between.
 // - the rhino barely hops, runs faster and faster, and smashes crates. Everything on the floor.
-// - the Moskito flies: held, it climbs; let go, it sinks. The whole sky.
+// - the dragonfly flies: held, it climbs; let go, it sinks. The whole sky.
 // `half` and `tall` are the hitbox with the hero on its back.
 export const MOUNTS = {
   gorilla: { name: 'Gorille', jump: -820, half: 34, tall: 118 },
   rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, grab: { w: 78, h: 150 } },   // grab: it sweeps up coins well above its back
-  moskito: { name: 'Moskito', fly: true, half: 28, tall: 92 },
+  dragonfly: { name: 'Libellule', fly: true, half: 28, tall: 92 },
 };
 export const HANG_Y = 190;              // where the gorilla's feet are when it hangs from the vines
 const friend = (up) => 1 + 0.25 * (up.nature || 0);      // Ami de la nature: mounts come that much sooner
@@ -183,7 +186,7 @@ export function addSpiky(run, x) { addObs(run, x, floorAt(run, x) - SPIKY.h, SPI
 // head height of a jump: the thing to do is to stay down.
 export function addSpider(run, x, low) {
   const o = addObs(run, x, 14, SPIDER.w, SPIDER.h, 'spider', false);
-  o.rest = floorAt(run, x) - (low ? SPIDER.h + 8 : 270); o.vy = 0;
+  o.rest = floorAt(run, x) - (low ? SPIDER.h + 8 : 270); o.vy = 0; o.mid = !low;
   return o;
 }
 
@@ -262,8 +265,9 @@ function spawnPattern(run) {
   let opts = x < 70 * PPM ? ['crate', 'spiky', 'coins', 'plat']
     : ['crate', 'spiky', 'spiky', 'double', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
   const where = biomeAt(run, x);                                      // each scenery has its own dangers
-  if (x >= 70 * PPM) opts.push(...[['spider', 'spider', 'spider'], ['block', 'block', 'geyser', 'geyser'], [], ['bat', 'bat', 'bat']][where]);
-  if (tier >= 2 && x >= 70 * PPM) opts.push('brambles');
+  const m = x / PPM, low = m >= FROM.low;
+  if (m >= 70) opts.push(...[low ? ['spider', 'spider', 'spider'] : [], [...(low ? ['block', 'block'] : []), 'geyser', 'geyser'], [], ['bat', 'bat', 'bat']][where]);
+  if (tier >= 2 && m >= FROM.brambles) opts.push('brambles');
   if (tier >= 1 && x >= 70 * PPM) opts.push('stack', 'fly');
   if (tier >= 2 && x >= 70 * PPM) opts.push('wall', 'swarm', 'swarm');
   const shapes = SHAPES.filter((s) => s.top <= REACH[tier]);
@@ -287,7 +291,7 @@ function spawnPattern(run) {
       len = w; break;
     }
     case 'spider':
-      if (Math.random() < 0.6) addSpider(run, x, true);
+      if (x / PPM < FROM.mid || Math.random() < 0.6) addSpider(run, x, true);
       else { addSpider(run, x + 88, false); coinLine(run, x, floorAt(run, x) - 40, 5); }   // high: coins underneath, for whoever stays down
       len = 220; break;
     case 'double': {
@@ -396,13 +400,14 @@ function shape(run, cx, cy, r, sides, each, turn) {
 }
 
 // What comes while a mount is ridden. The gorilla plays on the floor and under the vines, with coins
-// in straight lines and diagonals; the rhino on the floor only, with lines and heaps; the Moskito
+// in straight lines and diagonals; the rhino on the floor only, with lines and heaps; the dragonfly
 // everywhere, with zigzags and shapes. Flat ground throughout, and creatures that keep their place.
 function spawnRide(run) {
   const x = run.nextX, G = GROUND, v = run.speed, kind = run.mount.kind;
   const onFloor = (at) => (Math.random() < 0.5 ? addSpiky(run, at) : addCrates(run, at, 1));
   const still = (at, alt) => { addFlyer(run, at, alt).still = true; };
   let len = 0;
+  const from = run.obs.length;
 
   if (kind === 'gorilla') {
     const top = HANG_Y - 50, vines = G - HANG_Y + 62;                  // coins and creatures along the vines
@@ -437,7 +442,7 @@ function spawnRide(run) {
     }
   } else {
     const lanes = [70, 180, 290, 400, 510];                            // heights above the floor
-    switch (pick(['flyers', 'flyers', 'gate', 'gate', 'tower', 'zigzag', 'zigzag', 'shape', 'shape', 'brambles'])) {
+    switch (pick(['flyers', 'flyers', 'gate', 'gate', 'tower', 'zigzag', 'zigzag', 'shape', 'shape', ...(x / PPM >= FROM.brambles ? ['brambles'] : [])])) {
       case 'brambles': { const w = Math.round(rnd(500, 900)); addBrambles(run, x, w); coinLine(run, x + 20, G - 150, Math.floor(w / 44)); len = w; break; }
       case 'flyers': {
         const mixed = lanes.slice().sort(() => Math.random() - 0.5).slice(0, Math.random() < 0.4 ? 3 : 2);
@@ -455,7 +460,7 @@ function spawnRide(run) {
         addCrates(run, x + 110, count); coinLine(run, x, G - count * CRATE.h - 100, 6);
         len = 260; break;
       }
-      case 'zigzag': {                                                 // each slope lasts over a second, whatever the speed: the Moskito keeps up
+      case 'zigzag': {                                                 // each slope lasts over a second, whatever the speed: the dragonfly keeps up
         const half = Math.max(7, Math.ceil(v * 1.2 / 44)), count = half * 3;
         for (let i = 0; i < count; i++) { const k = i % (2 * half); run.coins.push({ x: x + i * 44, y: 150 + (G - 250) * (k < half ? k / half : (2 * half - k) / half) }); }
         len = count * 44; break;
@@ -469,6 +474,8 @@ function spawnRide(run) {
       }
     }
   }
+  // laid for the ride: if the animal is lost, what was laid for it goes too (see dismount)
+  for (let i = from; i < run.obs.length; i++) run.obs[i].ride = true;
   run.blockEnd = x + len;
   run.nextX = x + len + (v * 0.7 + 220) * rnd(0.9, 1.3);
 }
@@ -507,6 +514,12 @@ function dismount(run) {
   const p = run.p, px = run.cam + run.sx;
   for (let i = 0; i < 24; i++) run.parts.push({ x: px + rnd(-60, 60), y: p.y - rnd(0, 110), vx: rnd(-160, 160), vy: rnd(-220, -20), life: 0, max: rnd(0.4, 0.9), c: pick(['#f4f0e0', '#cfd3e6', '#9aa0b8']), s: rnd(9, 20), g: -120 });
   run.gone = { kind: run.mount.kind, hang: p.hang, x: px, y: p.y, t: 0 };   // drawn for a moment more: it tumbles away and fades
+  // What was laid ahead for the ride (brambles for the dragonfly, towers of crates, creatures up in the
+  // sky) may be out of reach on foot: it vanishes in a puff. The coins stay.
+  for (const o of run.obs) if (o.ride && !o.gone && o.x + o.w > px) {
+    o.gone = true;
+    for (let i = 0; i < 8; i++) run.parts.push({ x: o.x + rnd(0, o.w), y: o.y + rnd(0, o.h), vx: rnd(-80, 80), vy: rnd(-160, -20), life: 0, max: rnd(0.3, 0.6), c: pick(['#f4f0e0', '#cfd3e6']), s: rnd(6, 14), g: -60 });
+  }
   run.mount = null;
   p.hang = false; p.vineLeap = false; p.jumps = 1;
   p.inv = 1.5; run.shake = 0.5; run.flash = 0.6;
@@ -710,7 +723,7 @@ export function update(run, dt, input) {
       p.y = fl + (z.kind === 'gallery' ? GALLERY * Math.max(0, k) : 0);
       p.roll += run.speed * d / 26; p.balled += dt;
     } else if (M && M.fly) {
-      // the Moskito: held, it climbs; let go, it sinks. It turns round at once, no run-up either way.
+      // the dragonfly: held, it climbs; let go, it sinks. It turns round at once, no run-up either way.
       p.ground = false; p.plat = null; p.rotor = false;
       p.vy += ((input.hold ? -480 : 440) - p.vy) * Math.min(1, d * 16);
       p.y += p.vy * d;
@@ -835,7 +848,8 @@ export function update(run, dt, input) {
     run.prevBiome = run.biome;
     run.biome = (run.biome + 1 + Math.floor(Math.random() * (BIOME_COUNT - 1))) % BIOME_COUNT;
     run.biomeX = run.cam + run.viewW + 400;       // the new scenery starts ahead, off screen, and scrolls in
-    run.nextBiomeAt += BIOME_LEN;
+    run.nextBiomeAt += run.up.jammer ? Infinity : BIOME_LEN;          // Brouilleur: the relic is jammed, it only manages once
+    if (run.up.jammer) run.glitch = Math.max(run.glitch, 0.7);
     run.events.push('biome');
   }
 

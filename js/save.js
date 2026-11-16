@@ -20,6 +20,7 @@ export const UPGRADES = [
   { id: 'heart', icon: 'heart', kind: 'passif', name: 'Cœur en plus', desc: 'Un second cœur : le premier coup ne t\'arrête plus.', costs: [900] },
   { id: 'drunk', icon: 'drunk', kind: 'passif', name: 'Faune alcoolisée', desc: 'De rares créatures deviennent éthérées : pâles et titubantes, elles ne font aucun dégât.', costs: [400, 900, 1800] },
   { id: 'nature', icon: 'nature', kind: 'passif', name: 'Ami de la nature', desc: 'Les montures, rares, se montrent un peu plus souvent.', costs: [300, 700, 1500] },
+  { id: 'jammer', icon: 'jammer', kind: 'passif', name: 'Brouilleur', desc: 'La relique est perturbée : le décor ne change plus qu\'une seule fois.', costs: [600] },
   { id: 'dash', icon: 'dash', kind: 'actif', name: 'Ruée', desc: 'Fonce, invincible, en pulvérisant tout. Recharge plus vite à chaque niveau.', costs: [300, 700, 1400] },
   { id: 'slow', icon: 'slow', kind: 'actif', name: 'Sablier', desc: 'Ralentit le temps quelques secondes.', costs: [450, 1000] },
   { id: 'lastLeap', icon: 'leap', kind: 'passif', name: 'Dernier élan', desc: 'Au dernier cœur perdu, tu rebondis encore pour gagner quelques mètres.', costs: [400, 900, 1800] },

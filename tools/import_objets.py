@@ -1,6 +1,8 @@
 # Cuts the later generated sheets of tools/raw/gen into game sprites. python tools/import_objets.py
 #   objets3.png : amphora, drum, heart, the hero as a ball, a jungle tree, a trunk used as a pillar
 #   araignee.png: the spider, legs out and legs curled in
+#   libellule.png: the dragonfly mount, four frames (it replaced the Moskito)
+#   brouilleur.png: the shop icon of the Brouilleur
 #   gravats.png : four ways of blocking the temple's doorway, for mockups/gravats.html
 # Run it AFTER import_gen.py, which still writes the old ruins and city crates.
 import os
@@ -92,3 +94,59 @@ frames = [shrink(im, k) for im in b]
 cw, ch = max(f.width for f in frames), max(f.height for f in frames); sheet = Image.new('RGBA', (cw * 3, ch), (0, 0, 0, 0))
 for i, f in enumerate(frames): sheet.alpha_composite(f, (i * cw + (cw - f.width) // 2, 0 if i == 0 else (ch - f.height) // 2))
 save(sheet, 'bat')
+
+# the spider in two colours: yellow drops to the floor, red stops halfway. Its orange stripes are
+# turned, the rest (violet body, yellow eyes) stays.
+import colorsys, json
+def recolour(im, hue, light=1.0):
+    out = im.copy(); px = out.load()
+    for y in range(out.height):
+        for x in range(out.width):
+            r, g, b, a = px[x, y]
+            if not a: continue
+            h, l, sat = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+            if 0.03 < h < 0.12 and sat > 0.45:              # the orange of the stripes
+                r2, g2, b2 = colorsys.hls_to_rgb(hue, min(0.78, l * light), sat)
+                px[x, y] = (round(r2 * 255), round(g2 * 255), round(b2 * 255), a)
+    return out
+spider = Image.open(os.path.join(OUT, 'spider.png')).convert('RGBA')
+save(recolour(spider, 0.15, 1.35), 'spider-low')     # a bright yellow: it is the one seen at floor level
+save(recolour(spider, 0.99), 'spider-mid')
+
+# the dragonfly: four frames lined up on its leaf saddle, like the other mounts (see import_rig.py)
+saddle = lambda p: p[1] > p[0] + 30 and p[1] > p[2] + 80
+def centre(im, test):
+    px = im.load(); pts = [(x, y) for y in range(im.height) for x in range(im.width) if not magenta(px[x, y]) and test(px[x, y])]
+    return sum(q[0] for q in pts) / len(pts), sum(q[1] for q in pts) / len(pts)
+frames = pieces('libellule')
+assert len(frames) == 4, len(frames)
+anchors = [centre(f, saddle) for f in frames]
+k = 92 / max(f.width for f in frames)
+left = max(a[0] for a in anchors); up = max(a[1] for a in anchors)
+cw = round(max(left - a[0] + f.width for f, a in zip(frames, anchors)) * k) + 2
+ch = round(max(up - a[1] + f.height for f, a in zip(frames, anchors)) * k) + 1
+sheet = Image.new('RGBA', (cw * 4, ch), (0, 0, 0, 0))
+for i, (f, a) in enumerate(zip(frames, anchors)):
+    sm = f.resize((max(1, round(f.width * k)), max(1, round(f.height * k))), Image.BOX); spx = sm.load()
+    for y in range(sm.height):
+        for x in range(sm.width):
+            q = spx[x, y]
+            spx[x, y] = (0, 0, 0, 0) if magenta(q) or q[3] < 128 else ((26, 16, 36, 255) if q[0] > 90 and q[2] > 90 and q[1] < 0.6 * min(q[0], q[2]) and q[1] < 100 else (q[0], q[1], q[2], 255))
+    sheet.alpha_composite(sm, (i * cw + round((left - a[0]) * k), round((up - a[1]) * k)))
+save(sheet, 'mount-dragonfly')
+mp = os.path.join(OUT, 'meta.json'); meta = json.load(open(mp))
+meta['mounts'].pop('moskito', None)
+meta['mounts']['dragonfly'] = {'frames': 4, 'seatX': round(left * k), 'seatY': round(up * k)}
+json.dump(meta, open(mp, 'w'), indent=1); print('dragonfly seat', meta['mounts']['dragonfly'])
+
+# the Brouilleur's icon: everything on the sheet (sparks included), 54 pixels at most like the others
+im = Image.open(os.path.join(SRC, 'brouilleur.png')).convert('RGBA'); px = im.load()
+for y in range(im.height):
+    for x in range(im.width):
+        if magenta(px[x, y]): px[x, y] = (255, 0, 255, 255)
+mask = Image.new('L', im.size, 0); mpx = mask.load()
+for y in range(im.height):
+    for x in range(im.width):
+        if not magenta(px[x, y]): mpx[x, y] = 255
+icon = im.crop(mask.getbbox())
+save(shrink(icon, 54 / max(icon.size)), 'ico-jammer')

@@ -5,5 +5,9 @@ assets/essais-pixellab/
 assets/music/*.mp3
 !assets/music/menu-brass.mp3
 !assets/music/run-brass.mp3
+# candidates for the home screen music, until one is chosen (mockups/musiques.html)
+!assets/music/menu-aventure.mp3
+!assets/music/menu-mystere.mp3
+!assets/music/menu-entrain.mp3
 .claude/
 __pycache__/

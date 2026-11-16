@@ -2,7 +2,7 @@
 // Not a video: a real, tiny run of the game with only that upgrade on, a hand-placed stretch of
 // jungle and a scripted player, restarted every five seconds. It always shows the real behaviour.
 
-import { newRun, update, addCrates, addSpiky, addFlyer, coinLine, GROUND, PX, PIXEL, HANG_Y, LOG } from './game.js';
+import { newRun, update, addCrates, addSpiky, addFlyer, coinLine, GROUND, PX, PIXEL, PPM, HANG_Y, LOG } from './game.js';
 import { draw, quality } from './render.js';
 
 const LOOP = 5;                                  // seconds
@@ -99,9 +99,13 @@ const SCENES = {
     build(run, x) { run.items.push({ x: x + 300, kind: 'rhino', ph: 0 }); addCrates(run, x + 900, 2); addCrates(run, x + 1400, 3); coinLine(run, x + 800, GROUND - 40, 18); for (const o of run.obs) o.ghost = false; },
     play: () => {},
   },
-  'm-moskito': {
-    build(run, x) { run.items.push({ x: x + 300, kind: 'moskito', ph: 0 }); for (let i = 0; i < 24; i++) run.coins.push({ x: x + 700 + i * 44, y: GROUND - 160 - Math.sin(i * 0.45) * 90 }); },
+  'm-dragonfly': {
+    build(run, x) { run.items.push({ x: x + 300, kind: 'dragonfly', ph: 0 }); for (let i = 0; i < 24; i++) run.coins.push({ x: x + 700 + i * 44, y: GROUND - 160 - Math.sin(i * 0.45) * 90 }); },
     play: (run, ahead, t, inp) => { inp.hold = Math.sin(t * 3.2 - 1.4) > 0; },
+  },
+  jammer: {                                    // the one change of scenery, the relic flickering
+    build(run, x) { run.nextBiomeAt = START / PPM + 1; coinLine(run, x + 450, GROUND - 40, 10); coinLine(run, x + 1300, GROUND - 40, 10); },
+    play: () => {},
   },
   rewind: {
     build(run, x) { run.hearts = 1; addSpiky(run, x + 760); addSpiky(run, x + 1500); },

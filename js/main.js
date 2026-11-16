@@ -7,6 +7,9 @@ import { audio } from './audio.js';
 import * as S from './save.js';
 import * as P from './progress.js';
 
+// The game's version, shown on the home screen. sw.js names its cache after it: both move together.
+const VERSION = '0.15.0';
+
 const $ = (id) => document.getElementById(id);
 const cv = $('c'), ctx = cv.getContext('2d', { alpha: false });   // nothing shows through it: one layer less to blend
 const demoCv = $('demo'), demoCtx = demoCv.getContext('2d');
@@ -293,7 +296,7 @@ const TABS = { up: 'Équipements', power: 'Pouvoirs', mount: 'Montures', skin: '
 const MOUNT_TEXT = {
   gorilla: 'Il saute plus haut, et son second saut l\'emmène jusqu\'aux lianes du haut de l\'écran. Appuie pour en redescendre.',
   rhino: 'Il saute peu mais court de plus en plus vite, pulvérise les caisses et les ronces, et ramasse large.',
-  moskito: 'Il vole : appuie pour monter, relâche pour descendre.',
+  dragonfly: 'Il vole : appuie pour monter, relâche pour descendre.',
 };
 let pickedMount = 'gorilla';
 
@@ -614,6 +617,7 @@ function frame(now) {
 // The groups of coins drawn in assets/patterns.txt: anyone can add theirs there.
 fetch('assets/patterns.txt', { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : '')).then(setShapes).catch(() => {});
 
+$('menu-version').textContent = 'v' + VERSION;
 refreshMenu();
 aimFlyers();           // before the first show(): every block is still at its resting place
 loadAssets();

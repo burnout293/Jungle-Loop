@@ -75,6 +75,9 @@ function loadList() {
     try {
       const r = await fetch(MUSIC_DIR + 'tracks.json', { cache: 'no-cache' });
       if (r.ok) tracks = await r.json();
+      // "?menu=some-file.mp3" plays another piece behind the menus, for this visit: for comparing candidates
+      const trial = new URLSearchParams(location.search).get('menu');
+      if (trial && /^[\w-]+\.mp3$/.test(trial)) tracks.menu = { file: trial };
     } catch { /* no list: the built-in theme */ }
   })();
 }
