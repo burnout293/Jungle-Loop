@@ -79,7 +79,9 @@ export const FROM = { low: 150, mid: 1500 };   // (the debug menu may change the
 // the hero's speed.
 export const MOUNTS = {
   gorilla: { name: 'Gorille', jump: -820, half: 34, tall: 118, speed: { base: 300, gain: 24 }, ahead: 0.45 },
-  rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, tough: true, time: 8, grab: { w: 78, h: 150 }, speed: { base: 300, gain: 44 }, ahead: 0 },   // grab: it sweeps up coins well above its back; tough: nothing hurts it; time: it goes off after that many seconds
+  // grab: it sweeps up coins well above its back; tough: nothing hurts it; time: it goes off after that many
+  // seconds; speed.mul: it runs at twice the hero's own speed, reached within a second or two (speed.ramp, units per second each second)
+  rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, tough: true, time: 8, grab: { w: 78, h: 150 }, speed: { mul: 2, ramp: 420 }, ahead: 0 },
   dragonfly: { name: 'Libellule', fly: true, half: 28, tall: 92, speed: { base: 320, gain: 28 }, ahead: 0.5 },
 };
 // The boss, Vorace: a giant carnivorous plant. Around BOSS.at metres, in the forest only, it comes in on
@@ -517,7 +519,7 @@ function spawnPattern(run) {
               : style === 'sky' ? 400 + Math.sin(i * 0.9) * 30                   // out of reach without the Vol
                 : 40;
         run.coins.push({ x: wx, y: f - h });
-        if (style === 'double') run.coins.push({ x: wx, y: f - 124 });             // two rows: the top one for a hop (out of reach of the leaves on his head)
+        if (style === 'double') run.coins.push({ x: wx, y: f - 84 });              // two rows, both caught at a run (the top one by the leaves on his head)
       }
       if (up.lucky && up.scatter && Math.random() < 0.12 * up.lucky) run.coins.push({ x: cx + n * 44 + 30, y: floorAt(run, cx + n * 44 + 30) - 110, gem: gem(run) });
     }
@@ -887,6 +889,28 @@ function followers(run, d, box, dashing) {
   run.nextX = Math.max(run.nextX, run.cam + run.viewW + 150);            // obstacles come back from beyond the screen
 }
 
+// For the debug menu: the boxes the rules test, in world units. kind: hero, danger, ghost (harmless),
+// waiting (not dangerous yet: a fonceur behind its warning, a swarm taking aim), coins (what he picks up),
+// ledge (where a falling hero lands). `coin`: the circle that also picks up coins.
+export function hitboxes(run) {
+  const p = run.p, px = run.cam + run.sx, M = run.mount && MOUNTS[run.mount.kind];
+  const half = M ? M.half : HERO_HALF, tall = M ? M.tall : HERO_H, out = [];
+  const box = (L, R, T, B, kind) => out.push({ L, R, T, B, kind });
+  box(px - half, px + half, p.y - tall + 6, p.y - 2, 'hero');
+  for (const o of run.obs) if (!o.gone) box(o.x + 6, o.x + o.w - 6, o.y + 6, o.y + o.h - 6, o.ghost ? 'ghost' : o.kind === 'dart' && o.state !== 'go' ? 'waiting' : 'danger');
+  const grab = M && M.grab;
+  if (grab) box(px - grab.w, px + grab.w, p.y - grab.h, p.y + 10, 'coins');
+  else if (!p.ball) box(px - COIN.half, px + COIN.half, p.y - tall - COIN.top, p.y, 'coins');
+  for (const pl of run.plats) box(pl.x - HERO_HALF, pl.x + pl.w + HERO_HALF, pl.y, pl.y, 'ledge');
+  const f = run.fm;
+  if (f && !f.ghost && !f.hit) for (let k = 0; k < FM.lanes; k++) {
+    if (!f.act[k]) continue;
+    if (f.phase === 'fire') { const y0 = GROUND - (k + 0.5) * FM.step - LASER.h / 2; box(run.cam - 200, run.cam + f.sx, y0 + 4, y0 + LASER.h - 4, f.t > LASER.on && f.t < LASER.off ? 'danger' : 'waiting'); }
+    else { const x0 = run.cam + f.sx - FM.w / 2, y0 = GROUND - (k + 0.5) * FM.step - FM.h / 2; box(x0 + 8, x0 + FM.w - 8, y0 + 6, y0 + FM.h - 6, f.phase === 'rush' ? 'danger' : 'waiting'); }
+  }
+  return { boxes: out, coin: grab ? null : { x: px, y: p.y - (p.ball ? 20 : 40), r: COIN.r } };
+}
+
 export function update(run, dt, input) {
   // Particles and screen effects keep living after death.
   run.shake = Math.max(0, run.shake - dt * 2.5);
@@ -947,10 +971,10 @@ export function update(run, dt, input) {
   run.t += d;
   // The hero's own speed grows for ever; a mount, then the boss, impose theirs while they last.
   const own = run.base + run.t * SPEED.gain, R = run.mount && MOUNTS[run.mount.kind].speed;
-  const pace = run.boss ? BOSS.speed * (run.boss.phase === 'fall' ? DEATH.pace : 1) : R ? R.base + R.gain * run.mount.t : own;
+  const pace = run.boss ? BOSS.speed * (run.boss.phase === 'fall' ? DEATH.pace : 1) : R ? (R.mul ? own * R.mul : R.base + R.gain * run.mount.t) : own;
   // Slowing down is quick; speeding back up (after a mount or the boss) is gradual: RAMP units per
   // second each second, so a big gap takes a few seconds to close.
-  run.speed = pace > run.speed ? Math.min(pace, run.speed + RAMP * dt) : run.speed + (pace - run.speed) * Math.min(1, dt * 3);
+  run.speed = pace > run.speed ? Math.min(pace, run.speed + ((!run.boss && R && R.ramp) || RAMP) * dt) : run.speed + (pace - run.speed) * Math.min(1, dt * 3);
   run.own = own; run.relic = Math.max(0, run.relic - dt * 0.6);
   run.vine = Math.max(0, Math.min(1, run.vine + (run.mount && run.mount.kind === 'gorilla' ? 1 : -1) * dt * 2.5));
   if (run.leap) run.leap.v = Math.max(160, run.leap.v - 170 * d);       // knocked out: he only slows down

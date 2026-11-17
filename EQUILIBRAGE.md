@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 17/11/2026, version 0.27.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 17/11/2026, version 0.28.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -98,7 +98,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Traînée de pièces après un motif | 55 % des fois (toujours après « pièces ») ; formes : ligne, arche, zigzag (sauts), petite colline, double rangée (la seconde à 3,1 m : un petit saut) ; avec le Vol aussi la vague haute ; sans le Vol, parfois une ligne à 10 m de haut (dès 300 m) | `spawnPattern` |
+| Traînée de pièces après un motif | 55 % des fois (toujours après « pièces ») ; formes : ligne, arche, zigzag (sauts), petite colline, double rangée (la seconde à 2,1 m, attrapée en courant) ; avec le Vol aussi la vague haute ; sans le Vol, parfois une ligne à 10 m de haut (dès 300 m) | `spawnPattern` |
 | Longueur d'une traînée | 3 à 8 pièces, une tous les 1,1 m | `spawnPattern` |
 | Plateforme seule | 4 pièces ; avec Gemmes dispersées, gemme 35 % (+20 % par niveau de Trèfle) | `spawnPattern` |
 | Trèfle | avec Gemmes dispersées : gemme après une traînée, 12 % par niveau | `spawnPattern` |
@@ -124,7 +124,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Ami de la nature | ces distances divisées par 1,25 / 1,5 / 1,75 | `friend` |
 | Laquelle | 1 chance sur 3 chacune | `spawnPattern` |
 | Comment elles attendent | gorille tout en haut des lianes, pieds à 10 m du sol, avance à 45 % de ta vitesse : il faut le Vol (ou Double saut + Ressort) ; rhino immobile qui broute : il faut le toucher au sol, un saut le fait rater ; libellule qui zigzague entre 1,75 et 5,75 m (un aller en 1,6 s) et avance à 50 % de ta vitesse | `MOUNTS.ahead`, `PERCH`, `ZIG` |
-| Vitesse sur une monture | la sienne : départ à 7,5 m/s (libellule 8 m/s), puis + 0,6 m/s par seconde (gorille), + 1,1 (rhino), + 0,7 (libellule). Ta propre vitesse continue de monter en parallèle ; quand la monture part, la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne | `MOUNTS.speed`, `RAMP` |
+| Vitesse sur une monture | gorille et libellule : la leur, départ à 7,5 m/s (libellule 8 m/s), puis + 0,6 m/s par seconde (gorille), + 0,7 (libellule) ; **rhino : le double de ta vitesse**, atteint en 1 à 2 secondes. Ta propre vitesse continue de monter en parallèle ; quand la monture part, la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne | `MOUNTS.speed` (`mul`, `ramp` pour le rhino), `RAMP` |
 | Gorille | saut 3,5 m (5,6 m maintenu), second saut jusqu'aux lianes | `MOUNTS.gorilla` |
 | Route du Gorille | au sol, dans les lianes, les deux à la suite, enchaînement sol / lianes / sol, volants le long des lianes et au ras du sol, deux hérissons (on monte), pièces en balancier au-dessus d'un hérisson, diagonales, lignes : environ 4,5 dangers par 100 m (hérissons, suspendus, volants) | `spawnRide` |
 | Rhino | saut 1,6 m (2,6 m maintenu) ; ramasse sur 3,9 m de large et 3,75 m de haut ; **invulnérable** : ce qui le touche est écrasé (créatures) ou rebondit ; il s'en va tout seul au bout de **8 s** (il clignote les 1,5 dernières secondes), sans rien te coûter | `MOUNTS.rhino` (`tough`, `time`) |

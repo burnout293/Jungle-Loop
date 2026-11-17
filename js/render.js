@@ -4,7 +4,7 @@
 // but they can stand and scroll at any Q-th of a pixel, which is what keeps a fast run steady,
 // and the browser smooths the picture's edges when it fits the canvas to the screen.
 
-import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, SLOW_WARN, ISLE_W, PLAT_KIND, propAt, floorAt, flatAt, biomeAt } from './game.js';
+import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, SLOW_WARN, ISLE_W, PLAT_KIND, propAt, floorAt, flatAt, biomeAt, hitboxes } from './game.js';
 import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js';
 
 // Each scenery has its own far background, middle distance, floor, props, and its own version of
@@ -193,6 +193,26 @@ let RIM = false;                                       // the red outline around
 // right edge, where a thumb does not cover them.
 let SHIFT = false;
 export function setAlertShift(on) { SHIFT = !!on; }
+// Debug: the hitboxes drawn over everything (the debug menu's « Hitbox »).
+let HITBOX = false;
+export function setHitboxes(on) { HITBOX = !!on; }
+const HIT_COLOURS = { hero: '#ff3b4e', danger: '#ff9f1a', ghost: '#7fd8ff', waiting: 'rgba(255,159,26,.45)', coins: '#ffe36a', ledge: '#7bd13c' };
+function drawHitboxes(ctx, run, cam, width) {
+  const H = hitboxes(run), X = (x) => x / PIXEL - cam, Y = (y) => y / PIXEL;
+  ctx.save(); ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(92,242,224,.7)'; ctx.beginPath();                 // the floor
+  for (let x = 0; x <= width; x += 4) { const y = Y(floorAt(run, (cam + x) * PIXEL)); if (x) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+  ctx.stroke();
+  for (const b of H.boxes) {
+    ctx.strokeStyle = HIT_COLOURS[b.kind];
+    ctx.setLineDash(b.kind === 'waiting' ? [3, 2] : []);
+    if (b.kind === 'ledge') { ctx.beginPath(); ctx.moveTo(X(b.L), Y(b.T)); ctx.lineTo(X(b.R), Y(b.T)); ctx.stroke(); continue; }
+    ctx.strokeRect(X(b.L), Y(b.T), (b.R - b.L) / PIXEL, (b.B - b.T) / PIXEL);
+  }
+  ctx.setLineDash([]);
+  if (H.coin) { ctx.strokeStyle = HIT_COLOURS.coins; ctx.beginPath(); ctx.arc(X(H.coin.x), Y(H.coin.y), H.coin.r / PIXEL, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.restore();
+}
 // Ways of making the dangers stand out from the scenery, shown side by side in mockups/lisibilite.html:
 // 0 as it is; 1 a thick dark outline; 2 a lit edge (light from the top left) inside a dark outline;
 // 3 a warm glow behind; 4 the scenery much darker; 5 = 2 + 4, the one chosen for the game (16/11).
@@ -1317,6 +1337,7 @@ export function draw(ctx, run, v, t) {
     ctx.save(); ctx.beginPath(); ctx.rect(edge, -8, v.w, VH + 16); ctx.clip(); edges(ctx, now.fore, cam, t, v.w); ctx.restore();
   } else edges(ctx, (edge >= v.w ? SCENE[run.prevBiome] : now).fore, cam, t, v.w);
   ctx.globalAlpha = 1;
+  if (HITBOX && !run.dead) drawHitboxes(ctx, run, cam, v.w);
   ctx.restore();
 
   if (run.boom > 0) { ctx.fillStyle = `rgba(255,244,214,${run.boom * 0.8})`; ctx.fillRect(0, 0, v.w, VH); }

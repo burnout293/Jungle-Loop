@@ -14,7 +14,7 @@ const KEY = 'jungle-loop-debug';
 // The game's own numbers as they are written in game.js, before anything here changes them.
 const ORIGIN = { base: SPEED.base, gain: SPEED.gain, sprint: SPEED.sprint, boss: BOSS.at, ...Object.fromEntries(Object.entries(FROM).map(([k, v]) => ['from_' + k, v])) };
 // `edits`: what was changed in the save from here (coins, level, purchases, objectives).
-const BLANK = { info: false, god: false, start: 0, biome: 0, mount: '', fm: false, edits: [], ...ORIGIN };
+const BLANK = { info: false, hitbox: false, god: false, start: 0, biome: 0, mount: '', fm: false, edits: [], ...ORIGIN };
 export const dbg = { ...BLANK, edits: [] };
 // Only the game numbers changed by hand here are kept and applied: the others always follow game.js,
 // even when a new version of the game changes them.
@@ -27,7 +27,7 @@ try {
 } catch { /* nothing kept */ }
 
 // Is a field away from the game's own value?
-const SETTINGS = ['info', 'god', 'start', 'biome', 'mount', 'fm'];
+const SETTINGS = ['info', 'hitbox', 'god', 'start', 'biome', 'mount', 'fm'];
 const differs = (k) => (k in ORIGIN ? changed.has(k) : dbg[k] !== BLANK[k]);
 export function debugOn() { return dbg.edits.length > 0 || changed.size > 0 || SETTINGS.some(differs); }
 
@@ -64,7 +64,7 @@ export function debugRun(run) {
 
 // ---------- the panel ----------
 
-let host = null;      // { save, store, changed, info } given by main.js
+let host = null;      // { save, store, changed, info, hitbox } given by main.js
 
 const tag = (name, props = {}, ...kids) => { const e = Object.assign(document.createElement(name), props); e.append(...kids); return e; };
 // A row, shown in red while `test` says it is changed.
@@ -133,6 +133,7 @@ function build() {
     row('Défis', edited('quests'), btn('Nouveaux défis', () => { const s = host.save(); s.quests = []; P.fill(s); done('quests', 'Trois nouveaux défis.'); })),
     tag('h3', { textContent: 'Affichage' }),
     row('Mesures en jeu', () => differs('info'), box('info', () => host.info(dbg.info)), tag('small', { textContent: 'vitesse, vitesse propre, distance, hauteur, hauteur max' })),
+    row('Hitbox', () => differs('hitbox'), box('hitbox', () => host.hitbox(dbg.hitbox)), tag('small', { textContent: 'rouge : Pépito ; orange : dangers (pointillés : pas encore) ; bleu : inoffensifs ; jaune : ramassage des pièces ; vert : bords des plateformes ; cyan : le sol' })),
     tag('small', { textContent: 'Les images par seconde sont dans les Réglages (Affichage).' }),
     tag('h3', { textContent: 'Calculs' }),
     calc(),
@@ -162,6 +163,7 @@ function stop() {
   changed.clear();
   apply();
   host.info(false);
+  host.hitbox(false);
   open(host);
   document.querySelector('#debug .say').textContent = 'Débogage arrêté : tous les champs sont revenus à l\'origine.';
 }

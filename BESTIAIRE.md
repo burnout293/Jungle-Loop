@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 17/11/2026, version 0.27.0. Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 17/11/2026, version 0.28.0. Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -37,7 +37,7 @@ Seuls les boss ont du texte à l'écran.
 | Monture | Où elle attend | Ce qu'elle fait |
 |---|---|---|
 | Gorille | tout en haut, suspendu à la liane | saute haut, second saut jusqu'à la liane tressée où il se balance ; sa route : dangers au sol, dans les lianes, Fonceurs aux deux hauteurs |
-| Rhino | broute au sol | court de plus en plus vite, casse le décor, rien ne le blesse ; il repart tout seul au bout de 8 s |
+| Rhino | broute au sol | court deux fois plus vite que Pépito, casse le décor, rien ne le blesse ; il repart tout seul au bout de 8 s |
 | Libellule | zigzague en l'air | vole : appuyé elle monte, relâché elle descend |
 
 ## Décor à casser

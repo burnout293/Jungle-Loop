@@ -1,7 +1,7 @@
 // Glue: screens, input, HUD and the frame loop.
 
 import { newRun, update, launch, setShapes, PIXEL, VIEW_H, MOUNTS } from './game.js';
-import { draw, loadAssets, setQuality, quality, setDangerRim, setAlertShift, BIOMES } from './render.js';
+import { draw, loadAssets, setQuality, quality, setDangerRim, setAlertShift, setHitboxes, BIOMES } from './render.js';
 import { showDemo, drawDemo, DEMO_W, DEMO_H } from './demo.js';
 import { audio } from './audio.js';
 import * as S from './save.js';
@@ -9,7 +9,7 @@ import * as P from './progress.js';
 import { open as openDebug, debugRun, dbg } from './debug.js';
 
 // The game's version, shown on the home screen. sw.js names its cache after it: both move together.
-const VERSION = '0.27.0';
+const VERSION = '0.28.0';
 
 const $ = (id) => document.getElementById(id);
 // (A canvas without transparency, { alpha: false }, is a little lighter, but some Firefox builds on
@@ -660,7 +660,7 @@ $('menu-level').addEventListener('click', () => {
   taps = taps.filter((t) => now - t < 2000); taps.push(now);
   if (taps.length < 5) return;
   taps = [];
-  openDebug({ save: () => save, store: () => S.store(save), changed: () => { refreshMenu(); if (state === 'shop') refreshShop(); }, info: showInfo });
+  openDebug({ save: () => save, store: () => S.store(save), changed: () => { refreshMenu(); if (state === 'shop') refreshShop(); }, info: showInfo, hitbox: setHitboxes });
 });
 
 // On a phone, full screen follows the way it is held. Turning the phone is not a gesture the browser
@@ -672,6 +672,7 @@ refreshMenu();
 aimFlyers();           // before the first show(): every block is still at its resting place
 setDangerRim(save.dangerRim);
 setAlertShift(save.alertShift);
+setHitboxes(dbg.hitbox);
 loadAssets();
 requestAnimationFrame(frame);
 requestAnimationFrame(() => show('menu'));   // one frame later, so the menu slides in rather than pops
