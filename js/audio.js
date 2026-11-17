@@ -3,32 +3,10 @@
 // a built-in theme generated note by note takes over.
 
 const MUSIC_DIR = 'assets/music/';
-// Recorded voices (assets/sfx), decoded once into Web Audio. "Danger ! Danger !" warns of a fonceur:
-// it goes through a robot's radio (band-pass, a little drive, ring modulation) over a two-tone klaxon,
-// and never twice within DANGER_GAP seconds (two fonceurs in a row get one warning).
-const VOICES = { danger: 'assets/sfx/danger.mp3' }, DANGER_GAP = 1.6;
-let voices = {}, voicesLoading = null, lastDanger = -9;
-function loadVoices() {
-  if (!voicesLoading) voicesLoading = Promise.all(Object.entries(VOICES).map(async ([k, f]) => {
-    try { voices[k] = await ac.decodeAudioData(await (await fetch(f)).arrayBuffer()); } catch (e) { /* the beeps stand in */ }
-  }));
-  return voicesLoading;
-}
-function robotVoice(out, buf, vol) {
-  const t = ac.currentTime, src = ac.createBufferSource(); src.buffer = buf;
-  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 0.7;
-  const drive = ac.createWaveShaper(), curve = new Float32Array(256);
-  for (let i = 0; i < 256; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(2.2 * x); }
-  drive.curve = curve;
-  const ring = ac.createGain(); ring.gain.value = 0;                   // multiplied by a low sine: the robot's metal
-  const lfo = ac.createOscillator(); lfo.frequency.value = 62; lfo.connect(ring.gain);
-  const dry = ac.createGain(); dry.gain.value = vol * 0.55;
-  const wet = ac.createGain(); wet.gain.value = vol * 0.9;
-  src.connect(bp).connect(drive);
-  drive.connect(dry).connect(out);
-  drive.connect(ring).connect(wet).connect(out);
-  lfo.start(t); src.start(t); lfo.stop(t + buf.duration + 0.05);
-}
+// A fonceur's warning is a klaxon (no voice in the game), never twice within DANGER_GAP seconds:
+// two fonceurs in a row get one warning.
+const DANGER_GAP = 1.6;
+let lastDanger = -9;
 
 // Effects (and the built-in theme) go through Web Audio, which plays them at once. The music files
 // are played by an <audio> element instead: the browser decodes and plays those on its own, away from
@@ -178,7 +156,7 @@ export const audio = {
       ac = new AC({ latencyHint: 'interactive' });
       sfxOut = ac.createGain(); sfxOut.gain.value = gainOf(vols[1]); sfxOut.connect(ac.destination);
       musicOut = ac.createGain(); musicOut.connect(ac.destination); level();
-      loadList(); loadVoices();
+      loadList();
     }
     if (ac.state === 'suspended') ac.resume();
     if (player && player.paused && !player.asleep && wanted) player.play().catch(() => {});
@@ -227,13 +205,13 @@ export const audio = {
       case 'bossfall': tone(o, 400, 1.4, 'sawtooth', 0.3, 0, 40); noise(o, 1.2, 0.5, 250, 0.2); break;
       case 'bossdown': [0, 4, 7, 12, 16, 19].forEach((s, k) => tone(o, hz(s + 12), 0.3, 'triangle', 0.2, k * 0.09)); break;
       case 'thud': tone(o, 110, 0.22, 'sine', 0.4, 0, 40); noise(o, 0.2, 0.4, 500); break;
-      case 'warn':                                     // a fonceur coming: "Danger ! Danger !" over a klaxon
+      case 'warn':                                     // a fonceur coming: a two-tone klaxon, twice ("dan-ger, dan-ger")
         if (ac.currentTime - lastDanger < DANGER_GAP) break;
         lastDanger = ac.currentTime;
-        if (voices.danger) {
-          robotVoice(o, voices.danger, 0.9);
-          for (const at of [0.06, 0.64]) { tone(o, 880, 0.16, 'square', 0.05, at); tone(o, 660, 0.18, 'square', 0.05, at + 0.17); }
-        } else { tone(o, 1200, 0.07, 'square', 0.1); tone(o, 1200, 0.07, 'square', 0.1, 0.14); }
+        for (const at of [0, 0.42]) {
+          tone(o, 988, 0.16, 'square', 0.11, at); tone(o, 988, 0.16, 'sawtooth', 0.05, at);
+          tone(o, 740, 0.21, 'square', 0.11, at + 0.17); tone(o, 740, 0.21, 'sawtooth', 0.05, at + 0.17);
+        }
         break;
       case 'slowtick': tone(o, 1900, 0.04, 'square', 0.09); tone(o, 1250, 0.05, 'square', 0.07, 0.07); break;   // tick-tock: time running out
       case 'slowend': tone(o, 150, 0.45, 'sine', 0.24, 0, 900); noise(o, 0.3, 0.14, 2600, 0.05); break;      // the world rushing back

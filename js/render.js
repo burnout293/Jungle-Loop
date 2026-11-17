@@ -4,7 +4,7 @@
 // but they can stand and scroll at any Q-th of a pixel, which is what keeps a fast run steady,
 // and the browser smooths the picture's edges when it fits the canvas to the screen.
 
-import { TENTACLE, GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, SLOW_WARN, propAt, floorAt, flatAt, biomeAt } from './game.js';
+import { TENTACLE, GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, SLOW_WARN, ISLE_W, propAt, floorAt, flatAt, biomeAt } from './game.js';
 import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js';
 
 // Each scenery has its own far background, middle distance, floor, props, and its own version of
@@ -24,7 +24,7 @@ export const BIOMES = [
 ];
 
 const DIR = new URL('../assets/img/', import.meta.url).href;   // from this file: pages in mockups/ load the same pictures
-const NAMES = ['fore', 'temple', 'temple-rubble', 'vorace-legs', 'vorace-head', 'vorace-body', 'vorace-log', 'crate-big', 'spikebot', 'spider-low', 'spider-mid', 'bat', 'thornball', 'beartrap', 'vulture', 'arrow', 'missile', 'idol', 'drone', 'wasp', 'drone-big', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'temple-rubble', 'vorace-legs', 'vorace-head', 'vorace-body', 'vorace-log', 'crate-big', 'lilypad', 'spikebot', 'spider-low', 'spider-mid', 'bat', 'thornball', 'beartrap', 'vulture', 'arrow', 'missile', 'idol', 'drone', 'wasp', 'drone-big', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -77,7 +77,7 @@ export async function loadAssets() {
   SCENE = BIOMES.map(buildScene);
   buildHaz();
   // the forest's big crate, the ruins' jar, the city's crates, the dungeon's barrel
-  DECOR = [IMG['crate-big'], IMG['ruins-prop-1'], IMG['city-prop-3'], IMG['dungeon-prop-1']];
+  DECOR = [IMG['crate-big'], IMG['ruins-prop-1'], IMG['city-prop-3'], IMG['dungeon-prop-1']].map((im) => tinted(im, 'rgba(14,8,26,.26)'));   // a little darker: it is scenery
   FAR = { fist: tinted(IMG['hero-fist'], 'rgba(16,12,40,.38)'), shoe: tinted(IMG['hero-shoe'], 'rgba(16,12,40,.38)') };
   // the hero's pieces, redrawn four times finer with their stair-steps rounded off (see rounded)
   for (const k of ['hero-body', 'hero-rotor', 'hero-fist', 'hero-shoe', 'hero-ball']) if (IMG[k]) HI.set(IMG[k], rounded(rounded(IMG[k])));
@@ -276,6 +276,8 @@ function buildScene(b) {
   return {
     platform: IMG[b.platform], pillar: tinted(IMG[b.pillar], DIM), crate: IMG[b.crate], stacks: [], slab: IMG[b.slab], tunnel: tinted(lowered(shortened(IMG[b.tunnel], Math.round(LOG.w / PIXEL)), LOG_CUT, 49), DIM),
     platTop: b.platTop, slabTop: b.slabTop, hollow: b.hollow,
+    isles: kinds.length ? ISLE_W.map((w) => isle(kinds[0], kinds.length > 1 ? 4 : surface(kinds[0]) + 1, Math.round(w / PIXEL))) : [],
+    gtop: kinds.length > 1 ? 4 : surface(kinds[0]) + 1,
     // `top`: how far above the floor line a piece is drawn, so that its solid surface is what feet stand on
     bg: recede(IMG[b.bg], LOOK >= 4 ? 0.6 : 0.35, LOOK >= 4 ? 0.58 : 0.82), mid: recede(IMG[b.mid], LOOK >= 4 ? 0.55 : 0.3, LOOK >= 4 ? 0.62 : 0.86), ground: { pieces, len, soil: rowColour(kinds[0], -2, '#2a1c2c'), top: kinds.length > 1 ? 4 : surface(kinds[0]) + 1 }, props, fore,
     sky: rowColour(IMG[b.bg], 0, '#7fb9ec'), base: rowColour(IMG[b.mid], -1, '#1c2c3a'),
@@ -415,6 +417,57 @@ const GN = Math.round(GROUND / PIXEL);                 // floor line where the p
 const TEMPLE_X = -64, DOOR_X = 29;                     // temple's left edge and doorway, at camera 0
 const PROP_CELL = CELL_UNITS / PIXEL;                  // one possible prop per cell, see propAt in game.js
 const EARTH = 24;                                      // rows of a ground piece reused as plain earth below it
+// A block of the scenery's ground floating in the air: the top rows of a ground piece as they are (its
+// walkable surface `top` rows down), and below them the earth narrowing to a ragged point, darker the
+// deeper it goes, outlined, a few roots hanging. Built once per scenery and width.
+function isle(g, top, w) {
+  const deck = Math.min(g.height, top + 10), depth = Math.round(w * 0.42) + 14, H = deck + depth + 8;
+  const c = canvasOf(w, H), x = c.getContext('2d'), gw = g.width, ey = g.height - EARTH - 2;
+  for (let k = 0; k < w; k += gw) x.drawImage(g, 0, 0, Math.min(gw, w - k), deck, k, 0, Math.min(gw, w - k), deck);
+  const prof = [];
+  for (let u = 0; u < w; u++) {
+    const e = (u + 0.5 - w / 2) / (w / 2), d = Math.round(depth * Math.pow(Math.max(0, 1 - Math.abs(e)), 1.15) * (0.7 + 0.3 * h01(u >> 2, 7)));   // narrowing to a ragged point
+    prof.push(d);
+    for (let y = 0; y < d; y += EARTH) x.drawImage(g, u % gw, ey, 1, Math.min(EARTH, d - y), u, deck + y, 1, Math.min(EARTH, d - y));
+  }
+  x.globalCompositeOperation = 'source-atop';
+  const sh = x.createLinearGradient(0, deck, 0, deck + depth);
+  sh.addColorStop(0, 'rgba(12,8,26,.15)'); sh.addColorStop(1, 'rgba(12,8,26,.7)');
+  x.fillStyle = sh; x.fillRect(0, deck, w, depth);
+  x.globalCompositeOperation = 'source-over'; x.fillStyle = '#1a1024';
+  prof.forEach((d, u) => { if (d > 0) x.fillRect(u, deck + d, 1, 1); });
+  for (let k = 0; k < Math.floor(w / 18); k++) {                // roots hanging from the bottom
+    const u = Math.round(w * (0.2 + 0.6 * h01(k, 3))), d = prof[u] || 0, len = 3 + Math.round(6 * h01(k, 5));
+    x.fillStyle = '#2a1a22'; x.fillRect(u, deck + d, 1, len);
+  }
+  return c;
+}
+// A dark hill rising behind the path: scenery only, kept dark so it never draws the eye. The earth of
+// the scenery's ground, under a heavy veil, a rounded crest with a few bumps and tufts.
+const HILLS = new Map();
+function hill(g, w, h, seed) {
+  const key = `${g.width}-${w}-${h}-${seed}`; if (HILLS.has(key)) return HILLS.get(key);
+  const c = canvasOf(w, h + 2), x = c.getContext('2d'), gw = g.width, ey = g.height - EARTH - 2, tops = [];
+  for (let u = 0; u < w; u++) {
+    const e = (u + 0.5 - w / 2) / (w / 2), bump = 0.9 + 0.1 * Math.sin(u * 0.09 + seed) + 0.05 * h01((u >> 3) + seed, 9);
+    const t = Math.round(h - h * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(e), 2.2)), 0.55) * bump);
+    tops.push(t);
+    for (let y = t; y < h + 2; y += EARTH) x.drawImage(g, (u + seed) % gw, ey, 1, Math.min(EARTH, h + 2 - y), u, y, 1, Math.min(EARTH, h + 2 - y));
+  }
+  x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(10,8,28,.76)'; x.fillRect(0, 0, w, h + 2);
+  x.globalCompositeOperation = 'source-over'; x.fillStyle = 'rgba(8,6,20,.85)';
+  tops.forEach((t, u) => { if (t < h) { x.fillRect(u, t, 1, 2); if (h01(u + seed, 11) > 0.86) x.fillRect(u, t - 2, 1, 2); } });   // its crest and a few tufts
+  HILLS.set(key, c); if (HILLS.size > 40) HILLS.delete(HILLS.keys().next().value);
+  return c;
+}
+function drawHills(ctx, run, cam, width) {
+  for (const hl of run.hills) {
+    const x = snap(hl.x / PIXEL - cam), w = Math.round(hl.w / PIXEL), h = Math.round(hl.h / PIXEL);
+    if (x > width || x + w < 0) continue;
+    const g = SCENE[hl.biome].ground.pieces[0].im;
+    ctx.drawImage(hill(g, w, h, hl.seed % 997), x, GN + 6 - h);
+  }
+}
 const SLICE = 4;                                       // the floor is drawn in columns this wide, each at its own height
 
 // The floor follows the path's relief: every column of every piece sits at the height floorAt gives,
@@ -778,6 +831,7 @@ export function draw(ctx, run, v, t) {
   });
   drawSky(ctx, t, v.w);
 
+  drawHills(ctx, run, cam, v.w);                   // dark hills behind the path
   if (run.boss) drawVorace(ctx, run, t);           // behind the floor: its legs plunge into it
   drawProps(ctx, run, cam, v.w, t);
   for (const dc of run.decor || []) {               // the scenery that can be smashed; with Brise-tout it glints
@@ -882,7 +936,15 @@ export function draw(ctx, run, v, t) {
         ctx.drawImage(im, cap, 0, part, im.height, x + k, top, part, im.height);
       }
       ctx.drawImage(im, im.width - cap, 0, cap, im.height, x + w - cap, top, cap, im.height);
-    } else ctx.drawImage(S.platform, x, y - S.platTop);
+    } else if (pl.kind === 'isle') ctx.drawImage(S.isles[pl.size], x, y - S.gtop);
+    else {                                             // a giant lily pad flying on its own: wings beating, a blink now and then
+      const L = meta.lilypad, im = IMG.lilypad;
+      if (!im || !L) { ctx.drawImage(S.platform, x, y - S.platTop); continue; }
+      const ph = pl.ph || 0, blink = (t * 0.9 + ph) % 3.4 < 0.13, frame = blink ? 2 : Math.floor(t * 9 + ph * 3) % 2;
+      const cx = x + w / 2, f = floorPx(cx);
+      if (f - y > 14) shadow(ctx, cx, f - 1, Math.round(w * 0.55));
+      ctx.drawImage(im, frame * L.w, 0, L.w, L.h, snap(cx - L.w / 2), y - L.top, L.w, L.h);
+    }
   }
 
   for (const c of run.coins) if (c.tight !== 'log') coinAt(c);

@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 17/11/2026, version 0.23.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 17/11/2026, version 0.24.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -16,6 +16,7 @@ L'écran fait 720 unités de haut (18 m), le sol est à 630. Les vitesses sont d
 | **Sprint** | départ à 11 m/s : **+57 %** (+4 m/s, gardés toute la course) | `SPEED.sprint` |
 | Sortie du temple | vitesse × 1,8 jusqu'à sa place à l'écran | `update` |
 | Ruée | vitesse × 1,7 pendant 0,55 s | `update` |
+| Vol à la sortie du temple | avec le Vol, Pépito décolle tout seul à l'explosion et vole à 3,75 m jusqu'au premier appui (4 s au plus) | `CRUISE` |
 | Sablier | le monde tourne à 45 % ; ses 2 dernières secondes sont annoncées (6 tics de plus en plus rapprochés, teinte qui clignote, bords de l'écran qui flashent, « 2 » puis « 1 » au-dessus de Pépito), puis le monde reprend sa vitesse en douceur sur 0,35 s | `SLOW_WARN`, `SLOW_TICKS`, `SLOW_EASE` |
 | Changement de décor | seulement après avoir vaincu un boss (aujourd'hui Vorace, une fois) ; avec le Gros sac à dos, 1 fois sur 2 le décor reste | `boss` |
 | Ordre des décors | toujours forêt → ruines → donjon → cité, puis on reboucle sur la forêt | `NEXT_BIOME` |
@@ -50,9 +51,9 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Moment | Liste | Chance de chacun |
 |---|---|---|
 | 70 premiers mètres | hérisson ×2, pièces, plateforme, corniche, creux (sans danger pendant ces 70 m) | 6 entrées (hérisson 33 %) |
-| Ensuite | hérisson ×2, doublé (deux hérissons), perchoir (plateforme au-dessus d'un hérisson), saut doré (hérisson sous une arche de pièces), volant, pièces, plateforme, grotte, tronc, galerie, escalier, corniche ×2, creux (un hérisson au fond) | 15 entrées |
+| Ensuite | hérisson ×2, doublé (deux hérissons), perchoir (nénuphar au-dessus d'un hérisson), saut doré (hérisson sous une arche de pièces), volant, pièces, nénuphar ×2, grotte, tronc, galerie, escalier de nénuphars, corniche ×2, creux (un hérisson au fond), colline aux blocs flottants ×3, chaîne de nénuphars ×3, montée de nénuphars ×2 | 24 entrées, près de la moitié pour grimper |
 | Dès 150 m | + suspendu ×3 | 18 entrées |
-| Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) | +2 entrées |
+| Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) ; sans le Vol, + dessin dans le ciel ×1 (hors d'atteinte : l'envie du Vol) | +2 ou +3 entrées |
 | Avec Double saut | + volant | +1 entrée |
 | Avec Vol | + deux volants à la suite ×2 | +2 entrées |
 | Monture en vue | jamais de grotte | |
@@ -64,12 +65,14 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Remplissage des grands écarts | écart de plus de 16 m : au milieu, un suspendu à hauteur de tête (dès 1500 m, 1 fois sur 2), sinon un volant bas (dès 150 m, 35 %) | `GAP.fill` |
 | Dangers (rôles) | chacun a son dessin dans chaque décor (forêt / ruines / cité / donjon) | `ROLE`, js/render.js |
 | Au sol, à sauter | hérisson / boule de ronces / robot à pointes à l'œil bleu clignotant (cité) / piège à loup ; 1,7 m × 1,35 m | `SPIKY` |
-| Volant | coléoptère / vautour / missile / flèche : un gros panneau rouge « ! » qui pulse au bord droit, à sa hauteur, avec sa trajectoire en pointillés et la voix « Danger ! Danger ! » (pas deux fois en moins de 1,6 s), pendant 1 s ; puis il traverse l'écran à 20 m/s de plus que toi | `DART`, `warnMark` |
+| Volant | coléoptère / vautour / missile / flèche : un gros panneau rouge « ! » qui pulse au bord droit, à sa hauteur, avec sa trajectoire en pointillés et un klaxon à deux tons joué deux fois (pas deux fois en moins de 1,6 s), pendant 1 s ; puis il traverse l'écran à 20 m/s de plus que toi | `DART`, `warnMark` |
 | Hauteur des volants | 1,15 m (sauter) ou 4,25 m (rester au sol) ; avec Double saut aussi 7,25 m ; avec Vol aussi 10 et 12,75 m | `DART_ALTS` |
 | Suspendu | araignée / idole de pierre / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 150 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
 | Mise en avant des dangers | façon 5 (son choix du 17/11) : contour sombre et bord éclairé en haut à gauche sur tout ce qui fait mal, décor de fond et décor du chemin assombris ; liseré rouge en plus en option (Réglages, Affichage) | `LOOK`, `setDangerRim` |
-| Décor à casser | grosse caisse (forêt) / jarre (ruines) / tonneau (donjon) / caisses (cité) ; posé derrière 30 % des motifs dès 70 m ; inoffensif, il ne se casse qu'avec Brise-tout, la Ruée ou le rhino | `addDecor`, `DECOR_RATE` |
-| Plateforme | 6,35 m de long, à 3,4 m du sol | `PLAT_W` |
+| Décor à casser | grosse caisse (forêt) / jarre (ruines) / tonneau (donjon) / caisses (cité) ; posé derrière 12 % des motifs dès 70 m, un peu assombri ; inoffensif, il ne se casse qu'avec Brise-tout, la Ruée ou le rhino | `addDecor`, `DECOR_RATE` |
+| Nénuphar volant (plateforme) | 6,35 m de long, à 3,4 m du sol (ou plus dans les chaînes et montées) ; il monte et descend de 0,2 m (jusqu'à 0,55 m dans une chaîne), 1,8 radian par seconde, et porte le héros | `PLAT_W`, `PAD` |
+| Colline | décor sombre, jamais un obstacle : 10,5 à 24 m de large, 3,5 à 9 m de haut avec ses blocs ; seule en décor après 22 % des motifs | `addHill` |
+| Bloc de sol flottant | 4,25 / 6 / 8,25 m de large, seulement devant une colline : 2 ou 3 en escalier (2,6 m d'écart à pied, 3,1 m avec le Double saut), pièces dessus, hérisson dessous 65 % des fois, gemme 30 % | `ISLE_W`, `hills` |
 | Corniche | +3,4 m pendant 17,5 à 27,5 m, hérisson dessus 6 fois sur 10 | `STEP` |
 | Creux | −1,65 m pendant 15 à 24 m | `HOLLOW` |
 | Grotte | 20 à 30 m, toit à 2,5 m | `SLAB` |
@@ -81,7 +84,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Traînée de pièces après un motif | 55 % des fois (toujours après « pièces ») | `spawnPattern` |
+| Traînée de pièces après un motif | 55 % des fois (toujours après « pièces ») ; formes : ligne, arche, zigzag (sauts), petite colline, double rangée ; avec le Vol aussi la vague haute ; sans le Vol, parfois une ligne à 10 m de haut (dès 300 m) | `spawnPattern` |
 | Longueur d'une traînée | 3 à 8 pièces, une tous les 1,1 m | `spawnPattern` |
 | Plateforme | 4 pièces ; avec Gemmes dispersées, gemme 35 % (+20 % par niveau de Trèfle) | `spawnPattern` |
 | Trèfle | avec Gemmes dispersées : gemme après une traînée, 12 % par niveau | `spawnPattern` |
@@ -128,7 +131,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | À pied (et gorille) | flaque, double flaque, boule basse (sauter), moyenne (rester au sol), haute (pas de grand saut), deux boules (haute + basse ou moyenne), pluie de 2 gouttes (ombre au sol avant), tentacule rampante (sauter) ; suspendu aux lianes : boules à hauteur des lianes | `boss` |
 | Sur le rhino | flaques, boules basses et hautes, pluie, tentacule (pas de boule moyenne) | `boss` |
 | Sur la libellule | éventail sur 5 couloirs avec 2 couloirs voisins libres, pluie, boules isolées | `boss` |
-| Pendant le combat | aucun autre danger, mais 3 motifs sur 4 sont des plateformes (une seule, ou deux en escalier) pour monter ; des traînées de pièces entre elles | `spawnPattern` |
+| Pendant le combat | aucun autre danger, mais 4 motifs sur 5 sont des nénuphars (un seul, deux en escalier, ou une chaîne) pour monter ; des traînées de pièces entre eux | `spawnPattern` |
 | Tentacule | 1,4 m de long, 0,55 m de haut, violette ; elle s'approche de toi à 6 m/s, moins vite que le décor (avant : 8,25 m/s, et 3,75 m de long) ; un saut court la franchit s'il part quand elle est entre 0,5 et 2 m de toi | `TENTACLE` |
 | Fin | un tronc tombe à plat sur sa couronne (0,9 s), l'urne se fend, les pattes cèdent et elle s'affaisse, puis tout s'enfonce dans le sol avec le tronc, sans trou : une ligne de 16 gemmes bleues à hauteur de course, il suffit de continuer tout droit | `boss`, `voraceFrame` |
 | Récompense | 24 pièces et une gemme de chaque couleur, puis le décor change | `boss` |

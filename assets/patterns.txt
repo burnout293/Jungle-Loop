@@ -7,6 +7,7 @@
 # « = nom, base 3 » remonte tout le dessin de 3 rangées.
 # Le jeu ne pose un dessin que si son sommet est atteignable : 5 rangées à pied,
 # 9 avec le Double saut, 13 avec le Vol. 14 rangées et 40 colonnes au plus.
+# Sans le Vol, un dessin peut aussi apparaître haut dans le ciel, hors d'atteinte : c'est l'envie de l'avoir.
 # Les lignes qui commencent par # sont ignorées. Recharge la page pour voir tes changements.
 
 = coeur
@@ -112,3 +113,96 @@ o.ooo.o
 o.o.b.o
 o.o...o
 o.ooooo
+
+# ---- ajoutés le 17/11 : des formes au sol, et d'autres qui ne s'attrapent qu'en volant ----
+
+= eclair
+...oo
+..oo.
+.oooo
+..oo.
+.oo..
+oo...
+
+= champignon
+.ooooo.
+ooyoyoo
+ooooooo
+..ooo..
+..ooo..
+
+= cle
+.ooo.......
+o...ooooooo
+o...o..o.o.
+.ooo.......
+
+= note
+...oooo
+...o..o
+...o..o
+.ooo.oo
+oooo...
+
+= pyramide
+....o....
+...ooo...
+..ooooo..
+.ooooooo.
+ooooooooo
+
+= vagues basses
+o...o...o...o
+.o.o.o.o.o.o.
+..o...o...o..
+
+= papillon, base 4
+oo.....oo
+ooo...ooo
+oooo.oooo
+.oooroooo
+oooo.oooo
+ooo...ooo
+oo.....oo
+
+= fusee, base 5
+....o....
+...ooo...
+...oyo...
+...ooo...
+..ooooo..
+.oo.o.oo.
+....o....
+...o.o...
+
+= lune, base 5
+..oooo.
+.oo....
+oo.....
+oo.....
+oo.....
+.oo....
+..oooo.
+
+= fantome, base 4
+..ooooo..
+.ooooooo.
+oo.oo.ooo
+ooooooooo
+ooooooooo
+o.o.o.o.o
+
+= nuage, base 7
+...oo.....
+..oooo.oo.
+.ooooooooo
+oooooooooo
+
+= gemme geante, base 6
+..ooooo..
+.oo.b.oo.
+ooooooooo
+.ooooooo.
+..ooooo..
+...ooo...
+....o....

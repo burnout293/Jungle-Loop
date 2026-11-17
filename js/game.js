@@ -55,7 +55,7 @@ const DART = { w: 64, h: 40, warn: 1.0, speed: 800 };
 // Spacing of the patterns (units): at least `dist`; at speed, at least what a jump needs to land (speed
 // × time + margin). Past `fill`, the gap gets a filler. DECOR_RATE: share of gaps with breakable scenery.
 const GAP = { dist: 420, time: 0.72, margin: 110, fill: 640 };
-const DECOR_RATE = 0.3;   // `speed`: how fast it flies, on top of the hero's own
+const DECOR_RATE = 0.12;   // `speed`: how fast it flies, on top of the hero's own
 const HOVER = { w: 60, h: 56 };
 // Not before this many metres: the hanging dangers, low then at head height.
 export const FROM = { low: 150, mid: 1500 };   // (the debug menu may change these)
@@ -96,6 +96,15 @@ const LANE = { low: 28, mid: 115, high: 250, vine: 470 };
 // The tentacle crawling at him: its size (units) and how fast it closes in (on top of the scrolling it is
 // carried by). A short jump clears it with room to spare.
 export const TENTACLE = { w: 56, h: 22, closing: 240 };
+// The platforms. A pad is a giant living lily pad flying on its own: it bobs up and down (bob units,
+// speed radians a second) and carries whoever stands on it. An isle is a block of the scenery's ground
+// floating in the air, which only comes with a dark hill behind it (a hill is scenery: it never
+// blocks). ISLE_W: the widths of the isles (units).
+export const PAD = { bob: 8, speed: 1.8 };
+export const ISLE_W = [170, 240, 330];
+// With the Vol, he takes off on his own coming out of the temple and cruises at CRUISE.h above the
+// floor until the first press (or CRUISE.time seconds).
+const CRUISE = { h: 150, time: 4 };
 // The heights a flyer may come at (its middle, above the floor), by what the hero owns: on foot, double jump, flight.
 const DART_ALTS = [[46, 170], [46, 170, 290], [46, 170, 290, 400, 510]];   // height of a ball's centre above the floor
 const ACID = { ball: 36, puddle: 120, closing: 650 };
@@ -162,7 +171,7 @@ export function newRun(upgrades) {
     up: upgrades, viewW: 960,
     t: 0, cam: 0, sx: 10, base: SPEED.base + (upgrades.sprint ? SPEED.sprint : 0), speed: SPEED.base, dist: 0, gold: 0, gems: 0,
     hearts: HEARTS + (upgrades.heart ? 1 : 0), maxHearts: HEARTS + (upgrades.heart ? 1 : 0),
-    p: { y: GROUND, vy: 0, ground: true, plat: null, jumps: 0, buf: 0, phase: 0, flying: false, rotor: false, spin: 0, roll: 0, inv: 0, squash: 0, hang: false, vineLeap: false, ball: null },
+    p: { y: GROUND, vy: 0, ground: true, plat: null, cruise: 0, jumps: 0, buf: 0, phase: 0, flying: false, rotor: false, spin: 0, roll: 0, inv: 0, squash: 0, hang: false, vineLeap: false, ball: null },
     obs: [], coins: [], plats: [], parts: [], events: [],
     nextX: 1500,
     biome: 0, prevBiome: 0, blend: 1, nextBiomeAt: Infinity, glitch: 0,   // the scenery only changes once a boss is beaten
@@ -180,6 +189,7 @@ export function newRun(upgrades) {
     fm: null, fmDue: false, nextFM: rnd(150, 230), blockEnd: 0,   // follower monster; where the last blocking pattern ends
     leap: null,                                  // Dernier élan: the bounces after the last heart
     decor: [],                                   // scenery that can be smashed
+    hills: [],                                   // dark hills behind the path (scenery)
     boss: null, bossDone: false, pits: [],       // Vorace, the giant plant, and the hole it falls into
     bossAt: BOSS.at + rnd(-100, 100),            // where it comes, in metres
     relic: 0,                                    // how bright the relic in his backpack shines (1: flaring)
@@ -236,6 +246,12 @@ function addObs(run, x, y, w, h, kind, fragile) {
 
 // Scenery that can be smashed (big crate, jar, barrel, stack of crates: one per scenery). It never blocks
 // the way: with Brise-tout, on the rhino or in a Ruée, running past it bursts it and coins fly out.
+export function addPad(run, x, y, bob = PAD.bob) {
+  const pl = { x, y, y0: y, w: PLAT_W, kind: 'pad', ph: rnd(0, 6), bob };
+  run.plats.push(pl); return pl;
+}
+export function addHill(run, x, w, h) { run.hills.push({ x, w, h, biome: biomeAt(run, x), seed: Math.floor(rnd(0, 1e6)) }); }
+export function addIsle(run, x, y, size) { const pl = { x, y, w: ISLE_W[size], kind: 'isle', size }; run.plats.push(pl); return pl; }
 export function addDecor(run, x) { run.decor.push({ x, biome: biomeAt(run, x), broken: false }); }
 export const DECOR_W = 70;
 export function addSpiky(run, x) { addObs(run, x, floorAt(run, x) - SPIKY.h, SPIKY.w, SPIKY.h, 'spiky', false).biome = biomeAt(run, x); }
@@ -304,15 +320,17 @@ function spawnPattern(run) {
   // The first metres are a warm-up: one obstacle at a time, nothing in the air, but already the shapes
   // of the road (a ledge up, a hollow down, a platform). Then everything mixes from the start.
   let opts = x < 70 * PPM ? ['spiky', 'spiky', 'coins', 'plat', 'ledge', 'hollow']
-    : ['spiky', 'spiky', 'double', 'perch', 'hop', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
+    : ['spiky', 'spiky', 'double', 'perch', 'hop', 'fly', 'coins', 'plat', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow',
+      'hills', 'hills', 'hills', 'padchain', 'padchain', 'padchain', 'padzig', 'padzig'];   // nearly half of it is pads and isles to climb
   if (x / PPM >= FROM.low) opts.push('hover', 'hover', 'hover');       // the hanging ones
   if (tier >= 1 && x >= 70 * PPM) opts.push('fly');
   if (tier >= 2 && x >= 70 * PPM) opts.push('swarm', 'swarm');
   const shapes = SHAPES.filter((s) => s.top <= REACH[tier]);
   if (shapes.length && x >= 70 * PPM) opts.push('shape', 'shape');
+  if (tier < 2 && SHAPES.length && x >= 70 * PPM) opts.push('skyshape');   // coins in the sky, for whoever has the Vol: a reason to get it
   if (riding) opts = opts.filter((k) => k !== 'cave');
   if (run.fm || run.fmDue) opts = ['coins'];                          // a follower monster needs a clear road
-  else if (run.boss) opts = ['plat', 'plat', 'steps', 'coins'];        // the boss: no other danger, but ledges to climb onto
+  else if (run.boss) opts = ['plat', 'plat', 'steps', 'padchain', 'coins'];   // the boss: no other danger, but pads to climb onto
   else if (!riding && x > 70 * PPM && x / PPM >= run.nextMount) opts = ['mount'];
   const kind = pick(opts);
   let len = 0;
@@ -336,9 +354,9 @@ function spawnPattern(run) {
       addDart(run, x, a); addDart(run, x + 520, b);
       len = 520; break;
     }
-    case 'perch': {                                                    // a platform over a hedgehog: jump over it, or onto the platform
+    case 'perch': {                                                    // a pad over a hedgehog: jump over it, or onto the pad
       const y = G - 135;
-      run.plats.push({ x, y, w: PLAT_W });
+      addPad(run, x, y);
       coinLine(run, x + 40, y - 40, 4);
       addSpiky(run, x + PLAT_W / 2 - SPIKY.w / 2);
       len = PLAT_W; break;
@@ -350,13 +368,13 @@ function spawnPattern(run) {
     case 'steps':                                                      // two ledges climbing (the boss fight: nothing to jump on them)
       for (let k = 0; k < 2; k++) {
         const px = x + k * 300, py = G - 120 - k * 112;
-        run.plats.push({ x: px, y: py, w: PLAT_W });
+        addPad(run, px, py);
         coinLine(run, px + 60, py - 40, 3);
       }
       len = 300 + PLAT_W; break;
-    case 'plat': {                                                     // a ledge to hop on, with a reward
+    case 'plat': {                                                     // a pad to hop on, with a reward
       const y = G - 135;
-      run.plats.push({ x, y, w: PLAT_W });
+      addPad(run, x, y);
       coinLine(run, x + 40, y - 40, 4);
       if (Math.random() < 0.35 + 0.2 * (up.lucky || 0)) run.coins.push({ x: x + PLAT_W / 2, y: y - 110, gem: gem(run) });
       len = PLAT_W; break;
@@ -395,13 +413,44 @@ function spawnPattern(run) {
     case 'stairs': {                                                   // three ledges climbing to the canopy
       for (let k = 0; k < 3; k++) {
         const px = x + k * 300, py = G - 120 - k * 112;
-        run.plats.push({ x: px, y: py, w: PLAT_W });
+        addPad(run, px, py);
         coinLine(run, px + 60, py - 40, 3);
       }
       run.coins.push({ x: x + 600 + PLAT_W / 2, y: G - 344 - 110, gem: gem(run) });
       run.monkeys.push({ x: x + 600 + PLAT_W * 0.6, ph: rnd(0, 6) });
       addSpiky(run, x + 420);
       len = 600 + PLAT_W; break;
+    }
+    case 'hills': {                                                    // a dark hill, and blocks of ground floating in front of it
+      const w = Math.round(rnd(620, 980)), h = Math.round(rnd(140, 360));
+      addHill(run, x, w, h);
+      const n = tier >= 1 ? pick([2, 3, 3]) : pick([2, 2, 3]), rise = tier >= 1 ? 125 : 105;   // a plain jump reaches 120
+      let ix = x + rnd(20, 80);
+      for (let k = 0; k < n; k++) {
+        const size = pick([0, 1, 1, 2]), iy = G - 130 - (k === n - 1 && n > 2 ? 1 : k) * rise - (k % 2) * 20;
+        const pl = addIsle(run, ix, iy, size);
+        coinLine(run, ix + 30, iy - 40, Math.max(2, Math.floor((pl.w - 60) / 44)));
+        ix += pl.w + rnd(70, 150);
+      }
+      if (Math.random() < 0.3 + 0.2 * (up.lucky || 0)) run.coins.push({ x: ix - 120, y: G - 130 - (n - 1) * rise - 110, gem: gem(run) });
+      if (x > 70 * PPM && Math.random() < 0.65) addSpiky(run, x + rnd(0.3, 0.6) * (ix - x));   // below, a hedgehog: up there is the safe way
+      len = Math.max(w, ix - x); break;
+    }
+    case 'padchain': {                                                 // pads one after the other, up and down, bobbing out of step
+      const hs = pick([[135, 220, 135, 250], [135, 200, 265, 200], [180, 135, 220, 135], [135, 235, 135]]);
+      hs.forEach((h, k) => { const px = x + k * 320; addPad(run, px, G - h, PAD.bob + k * 3); coinLine(run, px + 60, G - h - 40, 3); });
+      if (x > 70 * PPM && !run.boss && Math.random() < 0.5) addSpiky(run, x + 320 + PLAT_W / 2);
+      len = hs.length * 320; break;
+    }
+    case 'padzig': {                                                   // a climb from pad to pad, a gem at the top
+      const n = tier >= 1 ? 4 : 3;
+      for (let k = 0; k < n; k++) { const px = x + k * 260, py = G - 130 - k * 105; addPad(run, px, py, 5); coinLine(run, px + 70, py - 40, 2); }
+      run.coins.push({ x: x + (n - 1) * 260 + PLAT_W / 2, y: G - 130 - (n - 1) * 105 - 110, gem: gem(run) });
+      len = (n - 1) * 260 + PLAT_W; break;
+    }
+    case 'skyshape': {                                                 // a drawing of coins up in the sky: only the Vol gets there
+      const s = pick(SHAPES), lift = Math.max(0, REACH[tier] + 60 - (40 + s.base * CELL));
+      len = layShape(run, s, x, Math.min(lift, REACH[2] - 40 - s.top)); break;
     }
     case 'mount': {                                                    // an animal waiting: a trail of coins leads to it
       coinLine(run, x, G - 40, 5);
@@ -422,15 +471,25 @@ function spawnPattern(run) {
   if (gap > GAP.fill && x / PPM >= FROM.mid && !run.fm && !run.fmDue && !run.boss && Math.random() < 0.5) addHover(run, x + len + gap * 0.5, HEAD);
   else if (gap > GAP.fill && x / PPM > 150 && !run.fm && !run.fmDue && !run.boss && Math.random() < 0.35) addDart(run, x + len + gap * 0.5, 170);
   if (x / PPM > 70 && !run.boss && Math.random() < DECOR_RATE) addDecor(run, x + len + gap * rnd(0.3, 0.6));   // something to smash
+  if (x / PPM > 40 && kind !== 'hills' && Math.random() < 0.22) addHill(run, x + len + gap * rnd(-0.2, 0.3), rnd(420, 900), rnd(90, 300));   // a dark hill now and then: scenery only
   if (kind === 'coins' || Math.random() < 0.55) {
     const n = Math.min(8, Math.floor((gap - 200) / 44));
     const cx = x + len + 100;
     if (n >= 3) {
-      const style = pick(tier === 2 && !run.fm && !run.fmDue ? ['line', 'arc', 'wave', 'wave'] : ['line', 'arc']);
+      const calm = !run.fm && !run.fmDue;
+      const style = pick(tier === 2 && calm ? ['line', 'arc', 'wave', 'wave', 'zig', 'steps', 'double']
+        : ['line', 'line', 'arc', 'zig', 'steps', 'double', ...(calm && x > 300 * PPM ? ['sky'] : [])]);
+      const at = (i) => cx + i * 44;
       if (style === 'arc') coinArc(run, cx, tier ? 200 : 110, n, (n - 1) * 44);
       else for (let i = 0; i < n; i++) {
-        const wx = cx + i * 44;
-        run.coins.push({ x: wx, y: floorAt(run, wx) - (style === 'line' ? 40 : 320 - Math.sin(i * 0.7) * 130) });
+        const wx = at(i), f = floorAt(run, wx);
+        const h = style === 'line' ? 40 : style === 'wave' ? 320 - Math.sin(i * 0.7) * 130
+          : style === 'zig' ? (i % 2 ? 120 : 50)                                 // up and down: hops
+            : style === 'steps' ? 40 + Math.min(i, n - 1 - i) * 30               // a little hill of coins
+              : style === 'sky' ? 400 + Math.sin(i * 0.9) * 30                   // out of reach without the Vol
+                : 40;
+        run.coins.push({ x: wx, y: f - h });
+        if (style === 'double') run.coins.push({ x: wx, y: f - 84 });              // two rows: the top one for a hop
       }
       if (up.lucky && up.scatter && Math.random() < 0.12 * up.lucky) run.coins.push({ x: cx + n * 44 + 30, y: floorAt(run, cx + n * 44 + 30) - 110, gem: gem(run) });
     }
@@ -806,6 +865,7 @@ export function update(run, dt, input) {
     if (Math.random() < 0.6) run.parts.push({ x: rnd(60, 125), y: GROUND - rnd(195, 225), vx: rnd(-20, 40), vy: rnd(20, 120), life: 0, max: 0.5, c: '#cfd3e6', s: rnd(4, 8), g: 500 });
     if (run.wait > 0) return;
     run.exploded = true; run.shake = 1; run.boom = 1;
+    if (run.up.flight) run.p.cruise = CRUISE.time;   // with the Vol, he flies out of the doorway
     for (let i = 0; i < 46; i++) {              // the doorway bursts outward in blocks of stone and moss
       run.parts.push({ x: rnd(60, 130), y: GROUND - rnd(40, 220), vx: rnd(80, 900), vy: rnd(-760, -40), life: 0, max: rnd(0.8, 1.7),
         c: pick(['#8a8fa8', '#6a6f8c', '#4a4f6c', '#7bd13c', '#cfd3e6']), s: rnd(8, 22), g: 1500 });
@@ -817,6 +877,7 @@ export function update(run, dt, input) {
   }
 
   const p = run.p, up = run.up;
+  for (const pl of run.plats) if (pl.y0 !== undefined) pl.y = pl.y0 + Math.sin(run.t * PAD.speed + pl.ph) * pl.bob;   // the pads bob
 
   // --- actives ---
   run.dash.t = Math.max(0, run.dash.t - dt); run.dash.cd = Math.max(0, run.dash.cd - dt);
@@ -889,6 +950,17 @@ export function update(run, dt, input) {
       p.y += p.vy * d;
       if (p.y > fl - 12) { p.y = fl - 12; p.vy = Math.min(p.vy, 0); }
       if (p.y - tall < CEIL) { p.y = CEIL + tall; p.vy = Math.max(p.vy, 0); }
+    } else if (p.cruise > 0 && !M) {
+      // with the Vol, out of the temple: he flies on his own at cruising height until the first press
+      p.cruise -= dt; p.ground = false; p.plat = null; p.jumps = 2; p.rotor = true; p.spin = 0.22; p.flying = true;
+      const target = fl - CRUISE.h;
+      p.vy += ((target - p.y) * 5 - p.vy) * Math.min(1, d * 5);
+      p.y += p.vy * d;
+      if (Math.random() < 0.25) run.parts.push({ x: px + rnd(-40, 40), y: p.y - 105, vx: rnd(-160, -40), vy: rnd(-40, 60), life: 0, max: 0.6, c: pick(['#8fd14a', '#c9e86a', '#5fae3a']), s: rnd(4, 8), g: 300 });
+      if (input.pressed || input.hold || p.cruise <= 0) {        // taken in hand: a press is a flap, as in flight
+        p.cruise = 0; p.rotor = !!(input.pressed || input.hold);
+        if (input.pressed) { p.vy = Math.min(p.vy, -FLAP); run.events.push('flap'); }
+      }
     } else if (p.hang) {
       // the gorilla under the vines: it swings from one to the next until a press lets go
       p.y = HANG_Y; p.vy = 0;
@@ -910,6 +982,7 @@ export function update(run, dt, input) {
       if (p.ground && p.plat && (px < p.plat.x - HERO_HALF || px > p.plat.x + p.plat.w + HERO_HALF)) {
         p.ground = false; p.plat = null; p.jumps = 1;          // ran off the end of a ledge
       }
+      if (p.ground && p.plat) p.y = p.plat.y;                 // a pad carries him up and down
       if (p.ground && !p.plat) {                     // on a slope he simply follows it; where the floor gives way, he falls
         if (fl - p.y > 40) { p.ground = false; p.jumps = Math.max(p.jumps, 1); } else p.y = fl;
       }
@@ -1016,6 +1089,7 @@ export function update(run, dt, input) {
   }
   run.items = run.items.filter((it) => !it.gone && it.x > run.cam - 200);
   run.decor = run.decor.filter((dc) => dc.x > run.cam - 200);
+  run.hills = run.hills.filter((h) => h.x + h.w > run.cam - 200);
   run.zones = run.zones.filter((z) => z.x + z.w > run.cam - 200 || z === p.ball);
   run.obs = run.obs.filter((o) => !o.gone && o.x + o.w > run.cam - 120);
   run.plats = run.plats.filter((pl) => pl.x + pl.w > run.cam - 120);
