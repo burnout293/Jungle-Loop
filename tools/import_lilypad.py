@@ -1,4 +1,5 @@
-# The giant living lily pad that flies (it replaced the platforms on 17/11): three frames from one
+# Vorace's flying lily pad (the platforms of her fight only, since 17/11; drawn in her style: teal flesh,
+# violet veins, ivory thorns, her orange slit eye): three frames from one
 # generated picture and two edits of it (wings up, eyes shut), put on the game's pixels by colour vote
 # with one palette (pixeldown.py), then laid on the first frame by the pad's middle, which the edits
 # kept (the wings and the eyes are what changes).
@@ -15,7 +16,7 @@ from pixeldown import vote_shrink, palette_of
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC, OUT = os.path.join(ROOT, 'tools', 'raw', 'gen'), os.path.join(ROOT, 'assets', 'img')
 WIDTH = 124                   # the whole sprite in the game (the pad itself about 113: PLAT_W, 254 units)
-NAMES = ['lilypad', 'lilypad-up', 'lilypad-blink']
+NAMES = ['vorace-pad', 'vorace-pad-up', 'vorace-pad-blink']   # (the first, cheerful green one: lilypad*.png in tools/raw/gen)
 
 raws = [Image.open(os.path.join(SRC, n + '.png')).convert('RGBA') for n in NAMES]
 bgs = [background_of(np.asarray(r))[1] for r in raws]
@@ -55,7 +56,7 @@ def sparkle(im):
             ys, xs = zip(*pts); gy, gx = min(ys) + 1, min(xs) + 1
             a[gy, gx, :3] = 255
     return Image.fromarray(a, 'RGBA')
-placed = [sparkle(placed[0]), sparkle(placed[1]), placed[2]]
+# (her eye is orange and readable at this size: no glint added, unlike the first, green pad)
 boxes = [f.getbbox() for f in placed]
 box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
 w, h = box[2] - box[0], box[3] - box[1]

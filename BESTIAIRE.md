@@ -1,34 +1,78 @@
 # Jungle Loop — bestiaire par décor
 
-Proposition du 16/11/2026, à valider. Chaque ligne est un **rôle** : il se joue partout de la même
-façon, seul son dessin change d'un décor à l'autre. ✅ = existe déjà dans le jeu, le reste est à dessiner.
+État au 17/11/2026, version 0.25.0. Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
-## Obstacles et créatures
+Ordre des décors : **forêt** jusqu'à la victoire sur Vorace (vers 2000 m), puis **ruines**, **donjon** à
+4000 m, **cité** à 6000 m, **forêt** à 8000 m, et ainsi de suite tous les 2000 m.
 
-| Rôle (comment on l'évite) | Jungle | Ruines | Cité | Donjon |
+## Dangers
+
+Chaque danger est un **rôle** : il s'évite partout de la même façon, seul son dessin change avec le décor.
+Tous ont un contour sombre et un bord éclairé (lisibilité 5) ; le décor de fond est assombri.
+
+| Rôle (comment l'éviter) | Forêt | Ruines | Donjon | Cité |
 |---|---|---|---|---|
-| **Caisse** : à sauter, cassable | caisse ✅ | amphore ✅ | bidon ✅ | caisse ferrée ✅ |
-| **Hérisson** : au sol, à sauter | hérisson violet ✅ | scorpion | mine roulante à pointes | boule de fer à piques |
-| **Volant** : passe en l'air, avance vers toi | coléoptère rouge ✅ | vautour | drone | feu follet |
-| **Nuée** (monstre suiveur) : choisir un couloir | moustiques ✅ | guêpes des sables | nano-drones | âmes errantes |
-| **Chute au sol** (jaune) : à sauter, dès 500 m | araignée jaune ✅ | bloc de pilier ✅ | conteneur largué | stalactite |
-| **Chute à mi-hauteur** (rouge) : rester au sol, dès 1500 m | araignée rouge ✅ | encensoir sur chaîne | drone de surveillance | cage suspendue |
-| **Jet du sol** : sauter au-dessus du trou | bulle de boue | geyser ✅ | bouche de vapeur | dalle à flammes |
-| **Piqué rasant** : sauter quand il arrive | toucan | vautour en piqué | drone kamikaze | chauve-souris ✅ |
-| **Tapis** : survoler, dès 1000 m, Vol ou monture | ronces ✅ | champ de cactus | câbles électriques | herse de piques |
-| **Rocher** (en réserve) : sauter, il roule vers toi | rocher moussu | tête de statue | pneu | boulet de fer |
+| **Au sol** : sauter | hérisson violet | boule de ronces | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
+| **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit, à sa hauteur, puis il traverse l'écran | coléoptère | vautour | flèche | missile |
+| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m, à hauteur de tête (rester au sol) dès 1500 m | araignée jaune (bas), rouge (tête) | idole de pierre | chauve-souris | drone |
+| **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | guêpes | feux follets | gros drones qui tirent un laser au lieu de foncer |
 
-## Déjà adaptés à chaque décor
+Faune alcoolisée (objet) : une partie des créatures et des nuées deviennent inoffensives (pâles, bleutées).
 
-Plateforme, dalle de grotte et ses piliers, tronc creux (tuyau ailleurs), galerie, sol, décor de fond,
-ombres d'avant-plan.
+## Boss
 
-## Restent identiques partout
+**Vorace**, la fleur-reine carnivore : une fois par course, vers 2000 m, seulement dans la forêt.
 
-- **Montures** : gorille, rhino, libellule.
-- **Singes** dans les lianes, **pièces**, **gemmes**, **cœurs**.
+- Elle marche derrière le sol, en trois couches qui ne se décollent jamais (pattes épineuses, urne à l'œil orange, couronne de pétales violets à crocs).
+- Attaques : flaques et boules d'acide, pluie de gouttes, tentacule violette qui rampe au sol (à sauter).
+- Pendant le combat : aucun autre danger ; ses **nénuphars volants** (turquoise aux veines violettes, épines, œil orange, ils battent des ailes et clignent) servent de plateformes.
+- Sa fin, au ralenti : un tronc tombe sur sa couronne, l'urne se fend, les pattes cèdent, elle s'enfonce ; ensuite seulement les récompenses (pièces, trois gemmes, ligne de gemmes bleues), puis le décor change.
 
-## Coût estimé
+Seuls les boss ont du texte à l'écran.
 
-Une planche d'images par décor (5 à 7 dessins chacune) : 3 planches, environ 570 crédits ElevenLabs.
-Ensuite, chaque rôle apparaît dans tous les décors au lieu d'être réservé à l'un d'eux.
+## Montures
+
+| Monture | Où elle attend | Ce qu'elle fait |
+|---|---|---|
+| Gorille | tout en haut, suspendu à la liane | saute haut, second saut jusqu'à la liane tressée où il se balance ; sa route : dangers au sol, dans les lianes, Fonceurs aux deux hauteurs |
+| Rhino | broute au sol | court de plus en plus vite, casse le décor |
+| Libellule | zigzague en l'air | vole : appuyé elle monte, relâché elle descend |
+
+## Décor à casser
+
+Inoffensif ; il se casse avec Brise-tout, la Ruée ou le rhino (4 pièces). Un peu assombri.
+
+| Forêt | Ruines | Donjon | Cité |
+|---|---|---|---|
+| grosse caisse cerclée de fer | jarre | tonneau | caisses |
+
+## Plateformes, collines, lianes
+
+| | Forêt | Ruines | Donjon | Cité |
+|---|---|---|---|---|
+| **Plateforme** | bloc de sol flottant (terre et herbe) | bloc de sol flottant (dalles) | passerelle de planches pendue à deux chaînes | plateforme en lévitation sur 3 réacteurs cyan |
+| **Colline** (décor sombre, jamais un obstacle) | ronde, touffue | colonnes brisées sur la crête | roche | blocs, quelques fenêtres |
+| **Lianes** | pendent du haut de l'écran ici et là | idem | — | — |
+
+Les blocs de sol flottants ne viennent qu'avec une colline derrière eux. Avec le Gorille, une liane
+tressée court tout le long du haut de l'écran.
+
+## Amis et trésors
+
+- **Singes** dans les arbres, à saluer en passant.
+- **Pièces** (et 27 dessins de pièces dans `assets/patterns.txt`, dont certains dans le ciel, à n'attraper qu'avec le Vol), **gemmes** jaune, rouge, bleue, **cœurs**.
+
+## Retirés
+
+Caisses à sauter (devenues décor à casser), mine (remplacée par le robot à pointes), geyser, ronces,
+bloc de pilier, piqué de chauve-souris, plateformes de bois, premiers nénuphars verts (remplacés par ceux
+de Vorace), voix « Danger ! ».
+
+## D'où viennent les images
+
+Générées avec ElevenLabs (qualité max), puis ramenées à la grille du jeu sans flou :
+`tools/import_vorace.py` (Vorace), `tools/import_dangers.py` (dangers), `tools/import_lilypad.py`
+(nénuphars), `tools/import_platforms.py` (passerelle, plateforme de la cité, lianes),
+`tools/import_single.py` (grosse caisse, tronc). Le hérisson et le coléoptère sont du pixel art d'origine
+(PixelLab).

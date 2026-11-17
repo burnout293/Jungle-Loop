@@ -4,7 +4,7 @@
 // but they can stand and scroll at any Q-th of a pixel, which is what keeps a fast run steady,
 // and the browser smooths the picture's edges when it fits the canvas to the screen.
 
-import { TENTACLE, GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, SLOW_WARN, ISLE_W, propAt, floorAt, flatAt, biomeAt } from './game.js';
+import { TENTACLE, GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, SLOW_WARN, ISLE_W, PLAT_KIND, propAt, floorAt, flatAt, biomeAt } from './game.js';
 import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js';
 
 // Each scenery has its own far background, middle distance, floor, props, and its own version of
@@ -24,7 +24,7 @@ export const BIOMES = [
 ];
 
 const DIR = new URL('../assets/img/', import.meta.url).href;   // from this file: pages in mockups/ load the same pictures
-const NAMES = ['fore', 'temple', 'temple-rubble', 'vorace-legs', 'vorace-head', 'vorace-body', 'vorace-log', 'crate-big', 'lilypad', 'spikebot', 'spider-low', 'spider-mid', 'bat', 'thornball', 'beartrap', 'vulture', 'arrow', 'missile', 'idol', 'drone', 'wasp', 'drone-big', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'temple-rubble', 'vorace-legs', 'vorace-head', 'vorace-body', 'vorace-log', 'crate-big', 'lilypad', 'walkway', 'hover-plat', 'vine-garland', 'vine-hang', 'spikebot', 'spider-low', 'spider-mid', 'bat', 'thornball', 'beartrap', 'vulture', 'arrow', 'missile', 'idol', 'drone', 'wasp', 'drone-big', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -422,12 +422,13 @@ const EARTH = 24;                                      // rows of a ground piece
 // deeper it goes, outlined, a few roots hanging. Built once per scenery and width.
 function isle(g, top, w) {
   const deck = Math.min(g.height, top + 10), depth = Math.round(w * 0.42) + 14, H = deck + depth + 8;
-  const c = canvasOf(w, H), x = c.getContext('2d'), gw = g.width, ey = g.height - EARTH - 2;
+  const c = canvasOf(w, H), x = c.getContext('2d'), gw = g.width, ey = g.height - EARTH - 2, soil = rowColour(g, -2, '#2a1c2c');
   for (let k = 0; k < w; k += gw) x.drawImage(g, 0, 0, Math.min(gw, w - k), deck, k, 0, Math.min(gw, w - k), deck);
   const prof = [];
   for (let u = 0; u < w; u++) {
     const e = (u + 0.5 - w / 2) / (w / 2), d = Math.round(depth * Math.pow(Math.max(0, 1 - Math.abs(e)), 1.15) * (0.7 + 0.3 * h01(u >> 2, 7)));   // narrowing to a ragged point
     prof.push(d);
+    x.fillStyle = soil; x.fillRect(u, deck - 2, 1, d + 2);                        // solid first: the ground's own holes never show
     for (let y = 0; y < d; y += EARTH) x.drawImage(g, u % gw, ey, 1, Math.min(EARTH, d - y), u, deck + y, 1, Math.min(EARTH, d - y));
   }
   x.globalCompositeOperation = 'source-atop';
@@ -445,18 +446,29 @@ function isle(g, top, w) {
 // A dark hill rising behind the path: scenery only, kept dark so it never draws the eye. The earth of
 // the scenery's ground, under a heavy veil, a rounded crest with a few bumps and tufts.
 const HILLS = new Map();
-function hill(g, w, h, seed) {
-  const key = `${g.width}-${w}-${h}-${seed}`; if (HILLS.has(key)) return HILLS.get(key);
+function hill(g, w, h, seed, biome) {
+  const key = `${biome}-${w}-${h}-${seed}`; if (HILLS.has(key)) return HILLS.get(key);
   const c = canvasOf(w, h + 2), x = c.getContext('2d'), gw = g.width, ey = g.height - EARTH - 2, tops = [];
+  const soil = rowColour(g, -2, '#2a1c2c');
   for (let u = 0; u < w; u++) {
-    const e = (u + 0.5 - w / 2) / (w / 2), bump = 0.9 + 0.1 * Math.sin(u * 0.09 + seed) + 0.05 * h01((u >> 3) + seed, 9);
-    const t = Math.round(h - h * Math.pow(Math.max(0, 1 - Math.pow(Math.abs(e), 2.2)), 0.55) * bump);
+    const e = (u + 0.5 - w / 2) / (w / 2), n1 = h01((u >> 3) + seed, 9);
+    let k;                                                // how high the crest is here, 0..1
+    if (biome === 2) k = Math.max(0, 1 - Math.abs(e) * 1.05) ** 0.4 * (0.55 + 0.45 * h01((u / 14 | 0) + seed, 4));   // the city: blocks of scrap and buildings
+    else if (biome === 3) k = Math.max(0, 1 - Math.abs(e) ** 1.6) ** 0.7 * (0.86 + 0.1 * Math.abs(Math.sin(u * 0.055 + seed)) + 0.06 * h01((u / 9 | 0) + seed, 5));   // the dungeon: rough rock
+    else k = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(e), 2.2)), 0.55) * (0.9 + 0.1 * Math.sin(u * 0.09 + seed) + 0.05 * n1);
+    const t = Math.round(h - h * Math.min(1, k));
     tops.push(t);
+    x.fillStyle = soil; x.fillRect(u, t, 1, h + 2 - t);                       // solid first: no hole can show
     for (let y = t; y < h + 2; y += EARTH) x.drawImage(g, (u + seed) % gw, ey, 1, Math.min(EARTH, h + 2 - y), u, y, 1, Math.min(EARTH, h + 2 - y));
   }
   x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(10,8,28,.76)'; x.fillRect(0, 0, w, h + 2);
   x.globalCompositeOperation = 'source-over'; x.fillStyle = 'rgba(8,6,20,.85)';
-  tops.forEach((t, u) => { if (t < h) { x.fillRect(u, t, 1, 2); if (h01(u + seed, 11) > 0.86) x.fillRect(u, t - 2, 1, 2); } });   // its crest and a few tufts
+  tops.forEach((t, u) => { if (t < h) { x.fillRect(u, t, 1, 2); if (biome < 2 && h01(u + seed, 11) > 0.86) x.fillRect(u, t - 2, 1, 2); } });   // its crest, tufts in the green places
+  if (biome === 1) for (let k = 0; k < Math.floor(w / 90); k++) {           // the ruins: stumps of broken columns on the crest
+    const u = Math.round(w * (0.15 + 0.7 * h01(k + seed, 2))), ch = 8 + Math.round(16 * h01(k + seed, 6)), t = tops[u];
+    x.fillRect(u - 3, t - ch, 7, ch + 2); x.fillRect(u - 4, t - ch, 9, 2); x.clearRect(u + 1 + (k % 3), t - ch, 3, 2);
+  }
+  if (biome === 2) { x.fillStyle = 'rgba(120,200,255,.18)'; for (let k = 0; k < Math.floor(w / 12); k++) { const u = Math.round(w * h01(k + seed, 8)), y = tops[u] + 6 + Math.round((h - tops[u]) * h01(k + seed, 3) * 0.6); if (y < h - 4) x.fillRect(u, y, 2, 1); } }   // a few dim windows
   HILLS.set(key, c); if (HILLS.size > 40) HILLS.delete(HILLS.keys().next().value);
   return c;
 }
@@ -465,7 +477,7 @@ function drawHills(ctx, run, cam, width) {
     const x = snap(hl.x / PIXEL - cam), w = Math.round(hl.w / PIXEL), h = Math.round(hl.h / PIXEL);
     if (x > width || x + w < 0) continue;
     const g = SCENE[hl.biome].ground.pieces[0].im;
-    ctx.drawImage(hill(g, w, h, hl.seed % 997), x, GN + 6 - h);
+    ctx.drawImage(hill(g, w, h, hl.seed % 997, hl.biome), x, GN + 6 - h);
   }
 }
 const SLICE = 4;                                       // the floor is drawn in columns this wide, each at its own height
@@ -764,33 +776,55 @@ function drawHang(ctx, frame, x) {
   return { x: left + M.seats[frame][0], y: M.seats[frame][1] + 2 };
 }
 
-// The vines the gorilla travels along: one long liana sagging from knot to knot across the top of
-// the frame, a strand hanging from each knot. `k` slides them in from above (0 hidden, 1 down).
-const VINE = 72;                                       // pixels from one knot to the next
-let liana = null;                                      // one sagging stretch of it, drawn once
+// The vines the gorilla travels along: a braided liana across the top of the frame (vine-garland.png,
+// tools/import_platforms.py), short lianas hanging from it. `k` slides them in from above (0 hidden, 1 down).
 function drawVines(ctx, cam, t, width, k) {
-  if (!liana) {
-    liana = canvasOf(VINE, 12); const c = liana.getContext('2d');
-    for (let u = 0; u < VINE; u += 2) {
-      const y = Math.round(Math.sin(u / VINE * Math.PI) * 4);
-      c.fillStyle = '#1a1024'; c.fillRect(u, y, 2, 7);
-      c.fillStyle = '#5d8a2c'; c.fillRect(u, y + 1, 2, 5);
-      c.fillStyle = '#a4d64a'; c.fillRect(u, y + 1, 2, 1);
+  const G = IMG['vine-garland'], Hn = IMG['vine-hang'], M = meta.vines;
+  const dy = Math.round((k - 1) * 50);
+  if (!G || !M) return;
+  // the braided liana, repeated mirrored (its ends always meet), and short lianas hanging from it
+  const gw = G.width, first = Math.floor(cam / gw);
+  for (let i = first - 1; i * gw - cam < width; i++) {
+    const x0 = snap(i * gw - cam);
+    if (i % 2) { ctx.save(); ctx.translate(x0 + gw, 0); ctx.scale(-1, 1); ctx.drawImage(G, 0, dy + 4); ctx.restore(); }
+    else ctx.drawImage(G, x0, dy + 4);
+    if (Hn) for (let q = 0; q < 2; q++) {
+      const which = Math.floor(h01(i * 2 + q, 81) * 2), hx = x0 + Math.round(gw * (0.2 + 0.55 * h01(i * 2 + q, 83)));
+      hang(ctx, Hn, M.hang, which, hx, dy + 14, t, i * 2 + q);
     }
   }
-  const dy = Math.round((k - 1) * 50), first = Math.floor(cam / VINE);
-  for (let i = first - 1; i * VINE - cam < width; i++) {
-    const x0 = snap(i * VINE - cam);
-    ctx.drawImage(liana, x0, dy + 7);
-    const len = 18 + Math.round(h01(i, 81) * 26);      // the strand under the knot, swaying from its top
-    for (let v = 0; v < len; v += 2) {
-      const sway = Math.round(Math.sin(t * 1.6 + i) * 2.5 * v / len);
-      ctx.fillStyle = '#1a1024'; ctx.fillRect(x0 - 2 + sway, dy + 13 + v, 4, 2);
-      ctx.fillStyle = v % 8 < 2 ? '#a4d64a' : '#4f7d2a'; ctx.fillRect(x0 - 1 + sway, dy + 13 + v, 2, 2);
-    }
-    ctx.fillStyle = '#1a1024'; ctx.fillRect(x0 - 5, dy + 5, 10, 9);                      // the knot, with two leaves
-    ctx.fillStyle = '#3f8f3a'; ctx.fillRect(x0 - 4, dy + 6, 8, 7);
-    ctx.fillStyle = '#7bd13c'; ctx.fillRect(x0 - 3, dy + 7, 3, 3); ctx.fillRect(x0 + 1, dy + 9, 2, 2);
+}
+// One of the hanging lianas, swaying a little from its top (drawn in slices).
+function hang(ctx, im, H, which, x, y, t, seed) {
+  const len = H.len[which], sx = which * H.w;
+  for (let r = 0; r < len; r += 4) {
+    const sway = Math.round(Math.sin(t * 1.4 + seed) * 2.2 * r / len);
+    ctx.drawImage(im, sx, r, H.w, Math.min(4, len - r), x - (H.w >> 1) + sway, y + r, H.w, Math.min(4, len - r));
+  }
+}
+// Hanging lianas as scenery, in the forest and the ruins: here and there along the way, from the top of
+// the screen, a little darker than what can be touched.
+const VINE_CELL = 110;
+let HANGS = null;
+function drawHangingVines(ctx, run, cam, width, t) {
+  const im = IMG['vine-hang'], M = meta.vines;
+  if (!im || !M) return;
+  if (!HANGS) HANGS = tinted(im, 'rgba(12,10,30,.32)');
+  const first = Math.floor(cam / VINE_CELL) - 1, last = Math.floor((cam + width) / VINE_CELL) + 1;
+  for (let i = first; i <= last; i++) {
+    if (h01(i, 17) > 0.42) continue;
+    const wx = i * VINE_CELL + Math.round(h01(i, 19) * 70), biome = biomeAt(run, wx * PIXEL);
+    if (biome > 1) continue;
+    hang(ctx, HANGS, M.hang, Math.floor(h01(i, 23) * M.hang.n), snap(wx - cam), -2, t, i);
+  }
+}
+
+// An iron chain from (x, y) up to the top of the screen: links seen flat and edge-on in turn.
+function chain(ctx, x, y) {
+  for (let yy = y, k = 0; yy > -8; yy -= 5, k++) {
+    ctx.fillStyle = '#1a1024';
+    if (k % 2) { ctx.fillRect(x - 1, yy - 6, 3, 7); ctx.fillStyle = '#7c7a8c'; ctx.fillRect(x, yy - 5, 1, 5); }
+    else { ctx.fillRect(x - 3, yy - 6, 7, 7); ctx.fillStyle = '#5c5a6c'; ctx.fillRect(x - 2, yy - 5, 5, 5); ctx.fillStyle = '#1a1024'; ctx.fillRect(x - 1, yy - 4, 3, 3); ctx.fillStyle = '#9a98aa'; ctx.fillRect(x - 2, yy - 5, 2, 1); }
   }
 }
 
@@ -834,6 +868,7 @@ export function draw(ctx, run, v, t) {
   drawHills(ctx, run, cam, v.w);                   // dark hills behind the path
   if (run.boss) drawVorace(ctx, run, t);           // behind the floor: its legs plunge into it
   drawProps(ctx, run, cam, v.w, t);
+  drawHangingVines(ctx, run, cam, v.w, t);
   for (const dc of run.decor || []) {               // the scenery that can be smashed; with Brise-tout it glints
     const im = DECOR[dc.biome]; if (dc.broken || !im) continue;
     const x = snap(sx(dc.x + DECOR_W / 2) - im.width / 2), y = floorPx(x + im.width / 2) - im.height + 3;
@@ -936,8 +971,22 @@ export function draw(ctx, run, v, t) {
         ctx.drawImage(im, cap, 0, part, im.height, x + k, top, part, im.height);
       }
       ctx.drawImage(im, im.width - cap, 0, cap, im.height, x + w - cap, top, cap, im.height);
-    } else if (pl.kind === 'isle') ctx.drawImage(S.isles[pl.size], x, y - S.gtop);
-    else {                                             // a giant lily pad flying on its own: wings beating, a blink now and then
+    } else if ((pl.kind || PLAT_KIND[biomeAt(run, pl.x)]) === 'isle') ctx.drawImage(S.isles[pl.size || 1], x, y - S.gtop);
+    else if ((pl.kind || PLAT_KIND[biomeAt(run, pl.x)]) === 'walk' && IMG.walkway) {      // the dungeon: planks hanging from two chains
+      const M = meta.walkway, im = IMG.walkway, x0 = snap(x + w / 2 - M.w / 2), top = y - M.top;
+      for (const c of M.chains) chain(ctx, x0 + c, top + 1);
+      ctx.drawImage(im, x0, top);
+    } else if ((pl.kind || PLAT_KIND[biomeAt(run, pl.x)]) === 'hover' && IMG['hover-plat']) {   // the city: levitating on its thrusters
+      const M = meta.hoverplat, im = IMG['hover-plat'], x0 = snap(x + w / 2 - M.w / 2), top = y - M.top - 1;
+      let last = -99;
+      for (const j of M.jets) {
+        if (j - last < 10) continue; last = j;
+        const gx = x0 + j, gy = top + M.h + 2, a = 0.35 + 0.2 * Math.sin(t * 9 + j), g = ctx.createRadialGradient(gx, gy, 1, gx, gy, 12);
+        g.addColorStop(0, `rgba(90,240,255,${a})`); g.addColorStop(1, 'rgba(90,240,255,0)');
+        ctx.fillStyle = g; ctx.fillRect(gx - 12, gy - 6, 24, 18);
+      }
+      ctx.drawImage(im, x0, top);
+    } else {                                             // a giant lily pad flying on its own: wings beating, a blink now and then
       const L = meta.lilypad, im = IMG.lilypad;
       if (!im || !L) { ctx.drawImage(S.platform, x, y - S.platTop); continue; }
       const ph = pl.ph || 0, blink = (t * 0.9 + ph) % 3.4 < 0.13, frame = blink ? 2 : Math.floor(t * 9 + ph * 3) % 2;

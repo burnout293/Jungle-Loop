@@ -14,6 +14,9 @@ export const BIOME_COUNT = 4;
 // The order of the sceneries (index in render.js's BIOMES: jungle, ruins, city, dungeon): forest, ruins,
 // dungeon, city, and back to the forest.
 const NEXT_BIOME = [1, 3, 0, 2];
+// The scenery changes after the boss (the ruins), then while there is no other boss every ZONE metres:
+// the dungeon at 4000 m, the city at 6000 m, the forest again at 8000 m, and round again.
+const ZONE = 2000;
 export const HEARTS = 1;         // one life: the first blow ends the run (Cœur en plus gives a second)
 
 const HERO_H = 80, HERO_HALF = 14;      // hitbox, smaller than the sprite: forgiving
@@ -91,6 +94,9 @@ export const MOUNTS = {
 // wide it is on screen, the mouth where its acid comes from (from its left edge, and from the top). They
 // follow its drawing (meta.json "vorace": 198 pixels wide, mouth 22 pixels from its left edge and 99 from
 // the top of the screen; 2.25 units a pixel).
+// Her end, slowed down to be seen: the run drops to DEATH.pace of the fight's speed while she goes down
+// (DEATH.time seconds), then: DEATH.calm units of coins only and DEATH.easy of a gentle road.
+const DEATH = { pace: 0.3, time: 2.9, calm: 900, easy: 2600 };
 export const BOSS = { at: 2000, speed: 560, fight: 26, w: 446, mouthX: 50, mouthY: 223 };
 const LANE = { low: 28, mid: 115, high: 250, vine: 470 };
 // The tentacle crawling at him: its size (units) and how fast it closes in (on top of the scrolling it is
@@ -174,7 +180,8 @@ export function newRun(upgrades) {
     p: { y: GROUND, vy: 0, ground: true, plat: null, cruise: 0, jumps: 0, buf: 0, phase: 0, flying: false, rotor: false, spin: 0, roll: 0, inv: 0, squash: 0, hang: false, vineLeap: false, ball: null },
     obs: [], coins: [], plats: [], parts: [], events: [],
     nextX: 1500,
-    biome: 0, prevBiome: 0, blend: 1, nextBiomeAt: Infinity, glitch: 0,   // the scenery only changes once a boss is beaten
+    biome: 0, prevBiome: 0, blend: 1, nextBiomeAt: Infinity, glitch: 0,   // the first change comes once Vorace is beaten
+    calmUntil: 0, easyUntil: 0,                  // after the boss: only coins, then a gentle road (world x)
     dash: { t: 0, cd: 0, max: DASH_CD[upgrades.dash || 0] },
     slow: { t: 0, cd: 0, max: SLOW_CD },
     rewindLeft: upgrades.rewind ? 1 : 0,
@@ -246,6 +253,21 @@ function addObs(run, x, y, w, h, kind, fragile) {
 
 // Scenery that can be smashed (big crate, jar, barrel, stack of crates: one per scenery). It never blocks
 // the way: with Brise-tout, on the rhino or in a Ruée, running past it bursts it and coins fly out.
+// A platform where the road needs one: during Vorace one of her flying lily pads; otherwise the scenery's
+// own: a block of floating ground with a dark hill behind it (forest, ruins), a walkway hanging from
+// chains (dungeon), a platform levitating on its thrusters (city).
+export const PLAT_KIND = ['isle', 'isle', 'hover', 'walk'];
+export function addPlatform(run, x, y, bob = PAD.bob) {
+  if (run.boss) return addPad(run, x, y, bob);
+  const kind = PLAT_KIND[biomeAt(run, x)];
+  if (kind === 'isle') {
+    if (!run.hills.some((h) => x > h.x + 40 && x + PLAT_W < h.x + h.w - 40)) addHill(run, x - rnd(120, 300), rnd(700, 1200), GROUND - y + rnd(60, 160));
+    return addIsle(run, x, y, 1);
+  }
+  const pl = { x, y, w: PLAT_W, kind };
+  if (kind === 'hover') { pl.y0 = y; pl.ph = rnd(0, 6); pl.bob = 4; }   // it floats: a slow sway
+  run.plats.push(pl); return pl;
+}
 export function addPad(run, x, y, bob = PAD.bob) {
   const pl = { x, y, y0: y, w: PLAT_W, kind: 'pad', ph: rnd(0, 6), bob };
   run.plats.push(pl); return pl;
@@ -329,6 +351,8 @@ function spawnPattern(run) {
   if (shapes.length && x >= 70 * PPM) opts.push('shape', 'shape');
   if (tier < 2 && SHAPES.length && x >= 70 * PPM) opts.push('skyshape');   // coins in the sky, for whoever has the Vol: a reason to get it
   if (riding) opts = opts.filter((k) => k !== 'cave');
+  if (x < run.calmUntil) opts = ['coins'];                             // just after the boss: coins only,
+  else if (x < run.easyUntil) opts = ['spiky', 'coins', 'coins', 'plat', 'ledge', 'hollow'];   // then a gentle road
   if (run.fm || run.fmDue) opts = ['coins'];                          // a follower monster needs a clear road
   else if (run.boss) opts = ['plat', 'plat', 'steps', 'padchain', 'coins'];   // the boss: no other danger, but pads to climb onto
   else if (!riding && x > 70 * PPM && x / PPM >= run.nextMount) opts = ['mount'];
@@ -356,7 +380,7 @@ function spawnPattern(run) {
     }
     case 'perch': {                                                    // a pad over a hedgehog: jump over it, or onto the pad
       const y = G - 135;
-      addPad(run, x, y);
+      addPlatform(run, x, y);
       coinLine(run, x + 40, y - 40, 4);
       addSpiky(run, x + PLAT_W / 2 - SPIKY.w / 2);
       len = PLAT_W; break;
@@ -368,13 +392,13 @@ function spawnPattern(run) {
     case 'steps':                                                      // two ledges climbing (the boss fight: nothing to jump on them)
       for (let k = 0; k < 2; k++) {
         const px = x + k * 300, py = G - 120 - k * 112;
-        addPad(run, px, py);
+        addPlatform(run, px, py);
         coinLine(run, px + 60, py - 40, 3);
       }
       len = 300 + PLAT_W; break;
-    case 'plat': {                                                     // a pad to hop on, with a reward
+    case 'plat': {                                                     // a platform to hop on, with a reward
       const y = G - 135;
-      addPad(run, x, y);
+      addPlatform(run, x, y);
       coinLine(run, x + 40, y - 40, 4);
       if (Math.random() < 0.35 + 0.2 * (up.lucky || 0)) run.coins.push({ x: x + PLAT_W / 2, y: y - 110, gem: gem(run) });
       len = PLAT_W; break;
@@ -413,7 +437,7 @@ function spawnPattern(run) {
     case 'stairs': {                                                   // three ledges climbing to the canopy
       for (let k = 0; k < 3; k++) {
         const px = x + k * 300, py = G - 120 - k * 112;
-        addPad(run, px, py);
+        addPlatform(run, px, py);
         coinLine(run, px + 60, py - 40, 3);
       }
       run.coins.push({ x: x + 600 + PLAT_W / 2, y: G - 344 - 110, gem: gem(run) });
@@ -421,14 +445,14 @@ function spawnPattern(run) {
       addSpiky(run, x + 420);
       len = 600 + PLAT_W; break;
     }
-    case 'hills': {                                                    // a dark hill, and blocks of ground floating in front of it
-      const w = Math.round(rnd(620, 980)), h = Math.round(rnd(140, 360));
+    case 'hills': {                                                    // a dark hill, and its scenery's platforms in front of it
+      const w = Math.round(rnd(700, 1500)), h = Math.round(rnd(160, 520));
       addHill(run, x, w, h);
       const n = tier >= 1 ? pick([2, 3, 3]) : pick([2, 2, 3]), rise = tier >= 1 ? 125 : 105;   // a plain jump reaches 120
       let ix = x + rnd(20, 80);
       for (let k = 0; k < n; k++) {
         const size = pick([0, 1, 1, 2]), iy = G - 130 - (k === n - 1 && n > 2 ? 1 : k) * rise - (k % 2) * 20;
-        const pl = addIsle(run, ix, iy, size);
+        const pl = PLAT_KIND[biomeAt(run, ix)] === 'isle' ? addIsle(run, ix, iy, size) : addPlatform(run, ix, iy);
         coinLine(run, ix + 30, iy - 40, Math.max(2, Math.floor((pl.w - 60) / 44)));
         ix += pl.w + rnd(70, 150);
       }
@@ -438,13 +462,13 @@ function spawnPattern(run) {
     }
     case 'padchain': {                                                 // pads one after the other, up and down, bobbing out of step
       const hs = pick([[135, 220, 135, 250], [135, 200, 265, 200], [180, 135, 220, 135], [135, 235, 135]]);
-      hs.forEach((h, k) => { const px = x + k * 320; addPad(run, px, G - h, PAD.bob + k * 3); coinLine(run, px + 60, G - h - 40, 3); });
+      hs.forEach((h, k) => { const px = x + k * 320; addPlatform(run, px, G - h, PAD.bob + k * 3); coinLine(run, px + 60, G - h - 40, 3); });
       if (x > 70 * PPM && !run.boss && Math.random() < 0.5) addSpiky(run, x + 320 + PLAT_W / 2);
       len = hs.length * 320; break;
     }
     case 'padzig': {                                                   // a climb from pad to pad, a gem at the top
       const n = tier >= 1 ? 4 : 3;
-      for (let k = 0; k < n; k++) { const px = x + k * 260, py = G - 130 - k * 105; addPad(run, px, py, 5); coinLine(run, px + 70, py - 40, 2); }
+      for (let k = 0; k < n; k++) { const px = x + k * 260, py = G - 130 - k * 105; addPlatform(run, px, py, 5); coinLine(run, px + 70, py - 40, 2); }
       run.coins.push({ x: x + (n - 1) * 260 + PLAT_W / 2, y: G - 130 - (n - 1) * 105 - 110, gem: gem(run) });
       len = (n - 1) * 260 + PLAT_W; break;
     }
@@ -471,7 +495,7 @@ function spawnPattern(run) {
   if (gap > GAP.fill && x / PPM >= FROM.mid && !run.fm && !run.fmDue && !run.boss && Math.random() < 0.5) addHover(run, x + len + gap * 0.5, HEAD);
   else if (gap > GAP.fill && x / PPM > 150 && !run.fm && !run.fmDue && !run.boss && Math.random() < 0.35) addDart(run, x + len + gap * 0.5, 170);
   if (x / PPM > 70 && !run.boss && Math.random() < DECOR_RATE) addDecor(run, x + len + gap * rnd(0.3, 0.6));   // something to smash
-  if (x / PPM > 40 && kind !== 'hills' && Math.random() < 0.22) addHill(run, x + len + gap * rnd(-0.2, 0.3), rnd(420, 900), rnd(90, 300));   // a dark hill now and then: scenery only
+  if (x / PPM > 40 && kind !== 'hills' && Math.random() < 0.22) addHill(run, x + len + gap * rnd(-0.2, 0.3), rnd(500, 1400), rnd(100, 480));   // a dark hill now and then: scenery only
   if (kind === 'coins' || Math.random() < 0.55) {
     const n = Math.min(8, Math.floor((gap - 200) / 44));
     const cx = x + len + 100;
@@ -522,7 +546,22 @@ function spawnRide(run) {
   if (kind === 'gorilla') {
     const top = HANG_Y - 50, vines = G - HANG_Y + 62;                  // coins and creatures along the vines
     const reach = v * 0.9 + 280;                                       // room to get from the floor to the vines, or back
-    switch (pick(['low', 'low', 'high', 'high', 'both', 'both', 'diag', 'diag', 'line'])) {
+    switch (pick(['low', 'high', 'both', 'both', 'gauntlet', 'gauntlet', 'darts', 'darts', 'double', 'swing', 'diag', 'line'])) {
+      case 'gauntlet': {                                               // the floor, then the vines, then the floor again: switch and switch
+        const k0 = Math.random() < 0.5;
+        for (let k = 0; k < 3; k++) { const at = x + k * reach; if ((k % 2 === 0) === k0) onFloor(at); else still(at, vines); }
+        len = 2 * reach + 70; break;
+      }
+      case 'darts': {                                                  // fonceurs along the vines and along the floor
+        const order = Math.random() < 0.5 ? [vines - 30, 46] : [46, vines - 30];
+        addDart(run, x, order[0]); addDart(run, x + reach + 200, order[1]);
+        len = reach + 320; break;
+      }
+      case 'double': onFloor(x); onFloor(x + v * 0.5 + 120); coinLine(run, x, top, 10); len = v * 0.5 + 200; break;   // two on the floor: up you go
+      case 'swing': {                                                  // coins swinging from the floor to the vines over a hedgehog
+        for (let i = 0; i < 12; i++) run.coins.push({ x: x + i * 44, y: G - 40 + (top - G + 40) * Math.sin(i / 11 * Math.PI) });
+        onFloor(x + 5.5 * 44 - SPIKY.w / 2); len = 520; break;
+      }
       case 'low': onFloor(x + 120); coinLine(run, x, top, 8); len = 320; break;
       case 'high': still(x + 120, vines); coinLine(run, x, G - 40, 8); len = 320; break;
       case 'both':
@@ -659,9 +698,7 @@ function boss(run, d) {
     }
     if (b.t > BOSS.fight && b.wind <= 0) {                               // a tree comes down on it
       b.phase = 'fall'; b.t = 0; b.wx = run.cam + b.sx; b.crushed = false;
-      // the reward: blue gems all along the path, at running height: nothing to do but run on
-      for (let k = 0; k < 16; k++) run.coins.push({ x: run.cam + run.sx + 320 + k * 48, y: GROUND - 40, gem: 'b' });
-      run.nextX = Math.max(run.nextX, run.cam + run.viewW + 900);
+      run.nextX = Math.max(run.nextX, run.cam + run.viewW + 2600);   // nothing else on the road while she goes down
       run.events.push('timber');
     }
     return;
@@ -669,12 +706,20 @@ function boss(run, d) {
   // falling: it stays where it stood; the tree lands at 0.9 s and drives it into the ground
   b.sx = b.wx - run.cam;
   if (!b.crushed && b.t >= 0.9) { b.crushed = true; run.shake = 1; run.events.push('bossfall'); }
-  if (b.t > 2.6) {                                                       // gone under the ground: the fight is won
+  if (b.t > DEATH.time) {                                                // gone under the ground: the fight is won
     run.boss = null; run.bossDone = true;
+    // the rewards, further on, while the speed comes back: coins thrown from where she sank, then a line
+    // of blue gems at running height off the right edge (nothing to do but run on), then the scenery
+    // changes and the road comes back little by little: coins only, then a gentle road
     for (let i = 0; i < 24; i++) loot(run, run.cam + run.sx + rnd(40, 400), GROUND - rnd(80, 300));
-    for (const g of 'yrb') { loot(run, run.cam + run.sx + rnd(100, 300), GROUND - 200); run.coins[run.coins.length - 1].gem = g; }   // and a gem of each colour
-    // and the world moves on, unless the Gros sac à dos muffles the relic (one time in two)
-    if (!(run.up.jammer && Math.random() < 0.5)) run.nextBiomeAt = run.dist;
+    for (const g of 'yrb') { loot(run, run.cam + run.sx + rnd(100, 300), GROUND - 200); run.coins[run.coins.length - 1].gem = g; }
+    const g0 = run.cam + run.viewW + 200;
+    for (let k = 0; k < 16; k++) run.coins.push({ x: g0 + k * 48, y: floorAt(run, g0 + k * 48) - 40, gem: 'b' });
+    run.calmUntil = g0 + 16 * 48 + DEATH.calm; run.easyUntil = run.calmUntil + DEATH.easy;
+    run.nextX = Math.max(run.nextX, g0);
+    // the world moves on after the gems, unless the Gros sac à dos muffles the relic (one time in two)
+    if (!(run.up.jammer && Math.random() < 0.5)) { run.nextBiomeAt = run.dist + (g0 + 16 * 48 - run.cam - run.sx) / PPM; run.byMark = false; }
+    else { run.nextBiomeAt = Math.max(2 * ZONE, (Math.floor(run.dist / ZONE) + 1) * ZONE); run.byMark = true; }
     run.events.push('bossdown');
   }
 }
@@ -899,7 +944,7 @@ export function update(run, dt, input) {
   run.t += d;
   // The hero's own speed grows for ever; a mount, then the boss, impose theirs while they last.
   const own = run.base + run.t * SPEED.gain, R = run.mount && MOUNTS[run.mount.kind].speed;
-  const pace = run.boss ? BOSS.speed : R ? R.base + R.gain * run.mount.t : own;
+  const pace = run.boss ? BOSS.speed * (run.boss.phase === 'fall' ? DEATH.pace : 1) : R ? R.base + R.gain * run.mount.t : own;
   // Slowing down is quick; speeding back up (after a mount or the boss) is gradual: RAMP units per
   // second each second, so a big gap takes a few seconds to close.
   run.speed = pace > run.speed ? Math.min(pace, run.speed + RAMP * dt) : run.speed + (pace - run.speed) * Math.min(1, dt * 3);
@@ -1046,6 +1091,7 @@ export function update(run, dt, input) {
     for (const o of run.obs) {
       if (p.ball) break;                           // nothing reaches him in there
       if (o.kind === 'dart') {                     // waiting beyond the edge, then the warning, then across in one go
+        if (o.state === 'wait' && (run.fm || run.fmDue)) { o.gone = true; continue; }   // never a fonceur (or a missile) during a swarm
         if (o.state === 'wait' && o.x <= run.cam + run.viewW + 40) { o.state = 'warn'; o.t = 0; run.events.push('warn'); }
         if (o.state === 'warn') { o.x = run.cam + run.viewW + 60; if ((o.t += d) >= DART.warn) { o.state = 'go'; run.events.push('dart'); } }
         if (o.state === 'go') o.x -= DART.speed * d;
@@ -1101,11 +1147,14 @@ export function update(run, dt, input) {
   while (run.nextX < edge) spawnPattern(run);
 
   // --- scenery change ---
-  if (run.dist >= run.nextBiomeAt) {
+  if (run.dist >= run.nextBiomeAt && run.byMark && run.up.jammer && Math.random() < 0.5) {   // the Gros sac à dos muffles the relic: not this time
+    run.nextBiomeAt = Math.max(2 * ZONE, (Math.floor(run.dist / ZONE) + 1) * ZONE);
+  } else if (run.dist >= run.nextBiomeAt) {
+    run.byMark = true;                            // from now on the changes come with the distance marks
     run.prevBiome = run.biome;
     run.biome = NEXT_BIOME[run.biome];
     run.biomeX = run.cam + run.viewW + 400;       // the new scenery starts ahead, off screen, and scrolls in
-    run.nextBiomeAt = Infinity;                                        // until the next boss
+    run.nextBiomeAt = Math.max(2 * ZONE, (Math.floor(run.dist / ZONE) + 1) * ZONE);   // the next mark
     run.relic = 1; run.glitch = Math.max(run.glitch, 0.5);             // the relic flares: it is what moves the world
     run.events.push('biome');
   }

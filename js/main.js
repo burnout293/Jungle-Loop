@@ -9,7 +9,7 @@ import * as P from './progress.js';
 import { open as openDebug, debugRun, dbg } from './debug.js';
 
 // The game's version, shown on the home screen. sw.js names its cache after it: both move together.
-const VERSION = '0.24.0';
+const VERSION = '0.25.0';
 
 const $ = (id) => document.getElementById(id);
 // (A canvas without transparency, { alpha: false }, is a little lighter, but some Firefox builds on
@@ -599,8 +599,7 @@ function frame(now) {
     lastDist = run.dist;
     for (const ev of run.events) {
       audio.sfx(ev);
-      if (ev === 'biome') { banner(BIOMES[run.biome].name); audio.setBiome(run.biome); }
-      if (ev === 'rewind') banner('Rembobinage');
+      if (ev === 'biome') audio.setBiome(run.biome);          // (text on screen only for the bosses)
       if (ev === 'coin') stats.coins++;
       if (ev === 'gem') stats.gems++;
       if (ev === 'jump') stats.jumps++;
@@ -608,10 +607,9 @@ function frame(now) {
       if (ev === 'break' || ev === 'crate') stats.breaks++;
       if (ev === 'shroom') stats.shrooms++;
       if (ev === 'monkey') stats.monkeys++;
-      if (ev === 'mount') { stats.mounts++; banner(MOUNTS[run.mount.kind].name + ' !'); }
+      if (ev === 'mount') stats.mounts++;
       if (ev === 'dodge') stats.dodges++;
-      if (ev === 'fm' && run.fm && !run.fm.seen) { run.fm.seen = true; banner(['Moustiques !', 'Guêpes !', 'Drones !', 'Feux follets !'][run.fm.biome || 0]); }
-      if (ev === 'boom') { audio.music('run'); banner('Cours !'); }
+      if (ev === 'boom') audio.music('run');
       if (ev === 'debug') banner('Debug actif');
       if (ev === 'boss') banner('Vorace !');
       if (ev === 'timber') banner('Ça tombe !');
