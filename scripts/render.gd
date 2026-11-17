@@ -44,6 +44,12 @@ class Layer extends Node2D:
 	func _draw() -> void:
 		paint.call(self)
 
+## What the hero is drawn through: its children only show inside `rect` (he is hidden in the doorway).
+class Clip extends Node2D:
+	var rect := Rect2(-400, -400, 1400, 1200)
+	func _draw() -> void:
+		draw_rect(rect, Color.WHITE)
+
 var run: Game.Run = null
 var view_w := 569.0
 var t := 0.0
@@ -54,22 +60,26 @@ var dirt: Array = []
 var dirt_t := 0.0
 var back: Layer
 var hero_layer: Layer
+var hero_clip: Clip
 var front: Layer
 var over: Layer
 
 func _ready() -> void:
 	scale = Vector2(PIXEL, PIXEL)
-	back = _layer(_draw_back, false)
-	hero_layer = _layer(_draw_hero_layer, true)
-	front = _layer(_draw_front, false)
-	over = _layer(_draw_over, false)
+	back = _layer(_draw_back, false, self)
+	hero_clip = Clip.new()
+	hero_clip.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
+	add_child(hero_clip)
+	hero_layer = _layer(_draw_hero_layer, true, hero_clip)
+	front = _layer(_draw_front, false, self)
+	over = _layer(_draw_over, false, self)
 
-func _layer(fn: Callable, smooth: bool) -> Layer:
+func _layer(fn: Callable, smooth: bool, parent: Node) -> Layer:
 	var l = Layer.new()
 	l.paint = fn
 	if smooth:
 		l.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	add_child(l)
+	parent.add_child(l)
 	return l
 
 ## Called every frame with what to show.
@@ -81,15 +91,15 @@ func show_run(r: Game.Run, time: float, screen_scale: float) -> void:
 	var off = Vector2.ZERO
 	if r.shake > 0:
 		off = Vector2(roundf((randf() - 0.5) * r.shake * 7), roundf((randf() - 0.5) * r.shake * 7))
-	for l in [back, hero_layer, front]:
+	for l in [back, hero_clip, front]:
 		l.position = off
 	seat = _seat()
 	# he steps out of the doorway: hidden while still inside
 	var in_temple = TEMPLE_X - r.cam / PIXEL > -_w("temple")
-	var rid = hero_layer.get_canvas_item()
-	var clip = in_temple and r.cam == 0
-	RenderingServer.canvas_item_set_custom_rect(rid, clip, Rect2(DOOR_X, -400, view_w + 400, 1200))
-	RenderingServer.canvas_item_set_clip(rid, clip)
+	var rect = Rect2(DOOR_X, -400, view_w + 400, 1200) if in_temple and r.cam == 0 else Rect2(-400, -400, view_w + 800, 1200)
+	if rect != hero_clip.rect:
+		hero_clip.rect = rect
+		hero_clip.queue_redraw()
 	for l in [back, hero_layer, front, over]:
 		l.queue_redraw()
 
@@ -400,8 +410,8 @@ func draw_props(c: CanvasItem) -> void:
 			var a = 0.35 * shiver if shroom else 0.16 + 0.12 * pow(sin(t * 5 + i), 2) + 0.3 * shiver
 			rect(c, x + (im.get_width() >> 1) - 12, y + im.get_height() - (66 if shroom else 34), 24, 40 if shroom else 20, Color("#7dfff0", a))
 
-## Hanging lianas as scenery, in the forest and the ruins: here and there along the way, from the top of
-## the screen, a little darker than what can be touched.
+## Hanging lianas as scenery, in the forest and the ruins, here and there along the way from the top of the
+## screen, a little darker than what can be touched; chains in the dungeon, cables in the city.
 func draw_hanging_vines(c: CanvasItem) -> void:
 	if Art.hangs == null or not Art.meta.has("vines"):
 		return
@@ -413,9 +423,18 @@ func draw_hanging_vines(c: CanvasItem) -> void:
 		if h01(i, 17) > 0.42:
 			continue
 		var wx = i * VINE_CELL + roundf(h01(i, 19) * 70)
-		if Game.biome_at(run, wx * PIXEL) > 1:
-			continue
-		hang(c, Art.hangs, H, floori(h01(i, 23) * int(H["n"])), snap(wx - cam), -2, i)
+		var biome = Game.biome_at(run, wx * PIXEL)
+		var which = floori(h01(i, 23) * int(H["n"]))
+		var x = snap(wx - cam)
+		var ln = float(H["len"][which])
+		if biome <= 1:
+			hang(c, Art.hangs, H, which, x, -2, i)
+		elif biome == 3:
+			hang_chain(c, x, -4, roundf(ln * 0.8), i, IRON["dim"])
+		elif h01(i, 31) < 0.45:                      # (they hang low enough to show under the dark foliage along the top)
+			sag_cable(c, x, 60 + roundf(h01(i, 37) * 70), -2, 24 + roundf(h01(i, 41) * 28), CABLE["dim"])
+		else:
+			hang_cable(c, x, -2, maxf(40, ln), i, CABLE["dim"])
 
 ## One of the hanging lianas, swaying a little from its top (drawn in slices).
 func hang(c: CanvasItem, im: Texture2D, H: Dictionary, which: int, x: float, y: float, seed: float) -> void:
@@ -429,26 +448,145 @@ func hang(c: CanvasItem, im: Texture2D, H: Dictionary, which: int, x: float, y: 
 		region(c, im, s_x, r, w, hh, x - floorf(w / 2) + sway, y + r, w, hh)
 		r += 4
 
-## The vines the gorilla travels along: a braided liana across the top of the frame, short lianas
-## hanging from it. `k` slides them in from above (0 hidden, 1 down).
+## The vines the gorilla travels along: a braided liana across the top of the frame, short lianas hanging
+## from it; in the dungeon an iron chain, in the city a power cable. `k` slides them in from above.
 func draw_vines(c: CanvasItem, k: float) -> void:
 	var G: Texture2D = Art.tex.get("vine-garland")
 	var Hn: Texture2D = Art.tex.get("vine-hang")
 	if G == null or not Art.meta.has("vines"):
 		return
+	var H: Dictionary = Art.meta["vines"]["hang"]
 	var cam = run.cam / PIXEL
 	var dy = roundf((k - 1) * 50)
 	var gw = float(G.get_width())
 	var i = floori(cam / gw) - 1
 	while i * gw - cam < view_w:
 		var x0 = snap(i * gw - cam)
-		blit(c, G, x0, dy + 4, i % 2 != 0)
-		if Hn != null:
-			for qq in 2:
-				var which = floori(h01(i * 2 + qq, 81) * 2)
-				var hx = x0 + roundf(gw * (0.2 + 0.55 * h01(i * 2 + qq, 83)))
-				hang(c, Hn, Art.meta["vines"]["hang"], which, hx, dy + 14, i * 2 + qq)
+		var biome = Game.biome_at(run, (i * gw + gw / 2) * PIXEL)
+		if biome == 3:
+			chain_across(c, x0, x0 + gw, dy + 14, IRON["bright"])
+		elif biome == 2:
+			cable_across(c, x0, x0 + gw, dy + 14, i, CABLE["bright"])
+		else:
+			blit(c, G, x0, dy + 4, i % 2 != 0)
+		for qq in 2:
+			var which = floori(h01(i * 2 + qq, 81) * 2)
+			var hx = x0 + roundf(gw * (0.2 + 0.55 * h01(i * 2 + qq, 83)))
+			var ln = float(H["len"][which])
+			if biome == 3:
+				hang_chain(c, hx, dy + 17, roundf(ln * 0.8), i * 2 + qq, IRON["bright"])
+			elif biome == 2:
+				hang_cable(c, hx, dy + 17, roundf(ln * 0.8), i * 2 + qq, CABLE["bright"])
+			elif Hn != null:
+				hang(c, Hn, H, which, hx, dy + 14, i * 2 + qq)
 		i += 1
+
+# What hangs where there are no lianas: iron chains in the dungeon, power cables in the city, drawn pixel by
+# pixel. Two shades of each: bright for what the gorilla holds, darker for mere scenery.
+# IRON: outline, face of a link, its light edge, a link seen edge-on. CABLE: outline, sheath, its sheen, the LED.
+const IRON := {"bright": [Color("#1a1024"), Color("#5c5a6c"), Color("#9a98aa"), Color("#7c7a8c")], "dim": [Color("#0d0a14"), Color("#34323f"), Color("#55536a"), Color("#45435a")]}
+const CABLE := {"bright": [Color("#120c2c"), Color("#2a2f52"), Color("#5866a8"), Color("#5cf2e0")], "dim": [Color("#0a0718"), Color("#262b4a"), Color("#46508a"), Color("#3fd9e6")]}
+
+## A chain hanging from (x, y), `ln` pixels long, swinging a little from its top, a hook or a ring at its end.
+func hang_chain(c: CanvasItem, x: float, y: float, ln: float, seed: float, P: Array) -> void:
+	var r = 0.0
+	var k = 0
+	while r < ln:
+		var cx = x + roundf(sin(t * 1.1 + seed) * 1.8 * r / ln)
+		var yy = y + r
+		if k % 2 == 1:
+			rect(c, cx - 1, yy, 3, 7, P[0])
+			rect(c, cx, yy + 1, 1, 5, P[3])
+		else:
+			rect(c, cx - 3, yy, 7, 7, P[0])
+			rect(c, cx - 2, yy + 1, 5, 5, P[1])
+			rect(c, cx - 1, yy + 2, 3, 3, P[0])
+			rect(c, cx - 2, yy + 1, 2, 1, P[2])
+		r += 5
+		k += 1
+	var ex = x + roundf(sin(t * 1.1 + seed) * 1.8)
+	var ey = y + ln + 4
+	if h01(seed, 29) < 0.5:                          # a hook
+		rect(c, ex - 1, ey, 3, 8, P[0])
+		rect(c, ex, ey + 1, 1, 6, P[1])
+		rect(c, ex - 5, ey + 6, 6, 3, P[0])
+		rect(c, ex - 4, ey + 7, 4, 1, P[1])
+		rect(c, ex - 6, ey + 2, 3, 6, P[0])
+		rect(c, ex - 5, ey + 3, 1, 4, P[1])
+		rect(c, ex - 5, ey + 3, 1, 1, P[2])
+	else:                                            # a heavy ring
+		for q in [[-2, 0, 5, 1], [-3, 1, 7, 1], [-4, 2, 9, 5], [-3, 7, 7, 1], [-2, 8, 5, 1]]:
+			rect(c, ex + q[0], ey + q[1], q[2], q[3], P[0])
+		for q in [[-2, 1, 5, 1], [-3, 2, 7, 5], [-2, 7, 5, 1]]:
+			rect(c, ex + q[0], ey + q[1], q[2], q[3], P[1])
+		rect(c, ex - 1, ey + 3, 3, 3, P[0])
+		rect(c, ex - 2, ey + 1, 2, 1, P[2])
+		rect(c, ex - 3, ey + 2, 1, 2, P[2])
+
+## The chain across the top of the screen: big links lying flat and edge-on in turn.
+func chain_across(c: CanvasItem, x0: float, x1: float, y: float, P: Array) -> void:
+	var x = x0
+	var k = 0
+	while x < x1:
+		if k % 2 == 1:
+			rect(c, x, y - 2, 10, 4, P[0])
+			rect(c, x + 1, y - 1, 8, 2, P[3])
+			rect(c, x + 1, y - 1, 8, 1, P[2])
+		else:
+			rect(c, x + 1, y - 5, 8, 1, P[0])
+			rect(c, x, y - 4, 10, 8, P[0])
+			rect(c, x + 1, y + 4, 8, 1, P[0])
+			rect(c, x + 1, y - 4, 8, 8, P[1])
+			rect(c, x + 3, y - 2, 4, 4, P[0])
+			rect(c, x + 1, y - 4, 4, 1, P[2])
+			rect(c, x + 1, y - 3, 1, 2, P[2])
+		x += 7
+		k += 1
+
+## A cable hanging from (x, y), swinging a little, a plug with a blinking light at its end.
+func hang_cable(c: CanvasItem, x: float, y: float, ln: float, seed: float, P: Array) -> void:
+	var swing = func(r: float) -> float: return roundf(sin(t * 1.3 + seed) * 2 * r / ln)
+	var r = 0.0
+	while r < ln:
+		rect(c, x + swing.call(r) - 1, y + r, 4, 2, P[0])
+		r += 2
+	r = 0.0
+	while r < ln:
+		var cx = x + swing.call(r)
+		rect(c, cx, y + r, 2, 2, P[1])
+		if fposmod(r + seed * 4, 14) < 2:
+			rect(c, cx, y + r, 1, 2, P[2])
+		r += 2
+	var ex = x + swing.call(ln)
+	var ey = y + ln
+	rect(c, ex - 2, ey - 1, 6, 8, P[0])
+	rect(c, ex - 1, ey, 4, 6, P[2])
+	rect(c, ex, ey + 1, 3, 5, P[1])
+	if sin(t * 3 + seed * 1.7) > -0.3:
+		rect(c, ex, ey + 3, 2, 1, P[3])
+
+## A cable sagging between two points along the top of the screen.
+func sag_cable(c: CanvasItem, x: float, span: float, y0: float, sag: float, P: Array) -> void:
+	for k in int(span) + 1:
+		var u = k / span
+		rect(c, x + k, roundf(y0 + 4 * sag * u * (1 - u)) - 1, 1, 4, P[0])
+	for k in int(span) + 1:
+		var u = k / span
+		rect(c, x + k, roundf(y0 + 4 * sag * u * (1 - u)), 1, 2, P[2] if k % 9 == 4 else P[1])
+
+## The power cable across the top of the screen: a thick sheath, a clamp now and then with its light.
+func cable_across(c: CanvasItem, x0: float, x1: float, y: float, seed: float, P: Array) -> void:
+	var w = x1 - x0
+	rect(c, x0, y - 2, w, 6, P[0])
+	rect(c, x0, y - 1, w, 4, P[1])
+	rect(c, x0, y - 1, w, 1, P[2])
+	for at in [40.0, 150.0]:
+		var cx = roundf(x0 + at)
+		rect(c, cx - 3, y - 4, 7, 10, P[0])
+		rect(c, cx - 2, y - 3, 5, 8, Color("#5c6280"))
+		rect(c, cx - 2, y - 3, 5, 1, Color("#8a92b8"))
+		if sin(t * 4 + seed + at) > 0:
+			rect(c, cx, y, 1, 2, P[3])
 
 ## An iron chain from (x, y) up to the top of the screen: links seen flat and edge-on in turn.
 func chain(c: CanvasItem, x: float, y: float) -> void:
@@ -1099,7 +1237,7 @@ func _draw_obstacles(c: CanvasItem) -> void:
 		if not ROLE.has(o.kind):
 			continue
 		var name: String = ROLE[o.kind][o.biome]
-		if o.kind == "hover" and o.biome == 0:
+		if o.kind == "hover" and o.biome <= 1:          # the ruins' hanging dangers are the forest's spiders too
 			name = "spider-mid" if o.mid else "spider-low"
 		if not Art.haz.has(name):
 			continue

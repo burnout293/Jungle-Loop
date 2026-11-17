@@ -120,6 +120,11 @@ const LASER_H := 40.0
 const GEMS := {"y": 5, "r": 10, "b": 20}
 const SCATTER := [0.0, 0.012, 0.022, 0.035]
 const HEART_GOLD := 25
+# Picking up: within COIN_R of his middle, or within COIN_HALF of him sideways from his feet to COIN_TOP above
+# his head (the leaves on his head reach well above his hitbox).
+const COIN_R := 44.0
+const COIN_HALF := 34.0
+const COIN_TOP := 30.0
 const BLAST_COINS := 30
 const CELL := 44.0
 const REACH := [230.0, 400.0, 600.0]
@@ -960,7 +965,7 @@ static func spawn_pattern(run: Run) -> void:
 						"sky": h = 400 + sin(i * 0.9) * 30               # out of reach without the Vol
 					coin(run, wx, f - h)
 					if style == "double":
-						coin(run, wx, f - 84)                           # two rows: the top one for a hop
+						coin(run, wx, f - 124)                          # two rows: the top one for a hop
 			if run.lvl("lucky") > 0 and run.lvl("scatter") > 0 and randf() < 0.12 * run.lvl("lucky"):
 				coin(run, cx + n * 44 + 30, floor_at(run, cx + n * 44 + 30) - 110, gem(run))
 	run.next_x = x + extent + gap
@@ -2023,6 +2028,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	if run.mount != null and MOUNTS[run.mount.kind].has("grab_w"):
 		grab_w = MOUNTS[run.mount.kind]["grab_w"]
 		grab_h = MOUNTS[run.mount.kind]["grab_h"]
+	var tall_now = MOUNTS[run.mount.kind]["tall"] if run.mount != null else HERO_H
 	for c in run.coins:
 		if c.tight != "" and p.ball == null:
 			continue                                 # inside a tight place: for the ball only
@@ -2051,7 +2057,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				c.x += dx / dist * 1000 * d + run.speed * d
 				c.y += dy / dist * 1000 * d
 				continue
-		var caught = (absf(dx) < grab_w and c.y > p.y - grab_h and c.y < p.y + 10) if grab_w > 0 else dist < 44
+		var caught = (absf(dx) < grab_w and c.y > p.y - grab_h and c.y < p.y + 10) if grab_w > 0 else (dist < COIN_R or (p.ball == null and absf(dx) < COIN_HALF and c.y < p.y and c.y > p.y - tall_now - COIN_TOP))
 		if caught:
 			c.gone = true
 			if c.heart:                              # a life back, or its worth in gold when none is missing

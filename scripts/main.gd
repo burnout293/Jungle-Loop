@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.26.0"
+const VERSION := "0.27.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -46,6 +46,7 @@ var in_run := false                    # the settings were opened from the pause
 var set_tab := "main"
 var fk := 0.95                         # evens out the sizes of the typefaces
 var font: Font
+var bold: Font                         # buttons, the HUD and titles: the bold cut
 var ui: Control
 var screens := {}
 var w := {}                            # the widgets that change, by name
@@ -75,6 +76,10 @@ func _ready() -> void:
 	loading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ui.add_child(loading)
 	w["loading"] = loading
+	if "--test" in OS.get_cmdline_user_args():      # the bench: a bot plays (see bench.gd)
+		var bench = load("res://scripts/bench.gd").new()
+		bench.main = self
+		add_child(bench)
 	_load.call_deferred()
 
 func _load() -> void:
@@ -101,15 +106,30 @@ func icon(name: String) -> Texture2D:
 
 # ---------- looks ----------
 
-## The game's own pixel typeface if its file is there (assets/fonts/Silkscreen-Regular.ttf), or Godot's.
+## The game's own pixel typeface, Silkscreen, kept sharp (no smoothing), or the rounded Fredoka for
+## whoever reads it better (a setting); Godot's own if their files are missing (assets/fonts, OFL).
 func _font() -> void:
-	var path = "res://assets/fonts/Silkscreen-Regular.ttf" if save["pixelFont"] else "res://assets/fonts/Fredoka-Medium.ttf"
-	if ResourceLoader.exists(path):
-		font = load(path)
-		fk = 0.82 if save["pixelFont"] else 0.95
-	else:
-		font = ThemeDB.fallback_font
-		fk = 0.95
+	var dir = "res://assets/fonts/"
+	fk = 0.95
+	font = ThemeDB.fallback_font
+	bold = font
+	if save["pixelFont"] and ResourceLoader.exists(dir + "Silkscreen-Regular.ttf"):
+		font = load(dir + "Silkscreen-Regular.ttf")
+		bold = load(dir + "Silkscreen-Bold.ttf") if ResourceLoader.exists(dir + "Silkscreen-Bold.ttf") else font
+		for f in [font, bold]:
+			f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+			f.hinting = TextServer.HINTING_NONE
+			f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+		fk = 0.82
+	elif not save["pixelFont"] and ResourceLoader.exists(dir + "Fredoka-Variable.ttf"):
+		var base = load(dir + "Fredoka-Variable.ttf")
+		var wght = TextServerManager.get_primary_interface().name_to_tag("wght")
+		font = FontVariation.new()
+		font.base_font = base
+		font.variation_opentype = {wght: 500}
+		bold = FontVariation.new()
+		bold.base_font = base
+		bold.variation_opentype = {wght: 700}
 	var th = Theme.new()
 	th.default_font = font
 	th.default_font_size = ts("m")
@@ -131,7 +151,7 @@ func _flat(bg: Color, border: Color = LINE, bw: float = 1.5) -> StyleBoxFlat:
 	return s
 
 ## A plaque of temple stone, its gilded ends kept whole and only its middle stretched (border-image).
-func _plaque(name: String, h: float, cap: float, mod: Color = Color.WHITE) -> StyleBoxTexture:
+func _plaque(name: String, h: float, cap: float, mod: Color = Color.WHITE, inset: float = 0.6) -> StyleBoxTexture:
 	var t: Texture2D = icons.get(name)
 	var s = StyleBoxTexture.new()
 	if t != null:
@@ -143,17 +163,20 @@ func _plaque(name: String, h: float, cap: float, mod: Color = Color.WHITE) -> St
 		s.texture_margin_top = a(h / 2)
 		s.texture_margin_bottom = a(h / 2)
 	s.modulate_color = mod
-	s.content_margin_left = a(cap * 0.6)
-	s.content_margin_right = a(cap * 0.6)
+	s.content_margin_left = a(cap * inset)       # the text keeps off the gilded ends (the small ones are short)
+	s.content_margin_right = a(cap * inset)
+	s.content_margin_top = 0                     # the text lies over the plaque: its ends are not padding
+	s.content_margin_bottom = 0
 	return s
 
 func _styles() -> void:
 	for spec in [["", "ui-btn-slate-38", 38, 41], ["big", "ui-btn-green-50", 50, 54], ["small", "ui-btn-slate-30", 30, 33], ["gold", "ui-btn-gold-38", 38, 41], ["small gold", "ui-btn-gold-30", 30, 33]]:
+		var inset = 0.6 if spec[2] == 50 else 0.85
 		styles[spec[0]] = {
-			"normal": _plaque(spec[1], spec[2], spec[3]),
-			"hover": _plaque(spec[1], spec[2], spec[3], Color(1.12, 1.12, 1.12)),
-			"pressed": _plaque(spec[1], spec[2], spec[3], Color(0.9, 0.9, 0.9)),
-			"disabled": _plaque(spec[1], spec[2], spec[3], Color(0.55, 0.55, 0.6)),
+			"normal": _plaque(spec[1], spec[2], spec[3], Color.WHITE, inset),
+			"hover": _plaque(spec[1], spec[2], spec[3], Color(1.12, 1.12, 1.12), inset),
+			"pressed": _plaque(spec[1], spec[2], spec[3], Color(0.9, 0.9, 0.9), inset),
+			"disabled": _plaque(spec[1], spec[2], spec[3], Color(0.55, 0.55, 0.6), inset),
 			"h": spec[2],
 		}
 	styles["box"] = _flat(BOX)
@@ -169,7 +192,7 @@ func _label(text: String, size: int, colour: Color = INK, shadow: float = 2.0) -
 	var l = Label.new()
 	l.text = text
 	var ls = LabelSettings.new()
-	ls.font = font
+	ls.font = bold if size >= ts("l") else font
 	ls.font_size = size
 	ls.font_color = colour
 	if shadow > 0:
@@ -201,6 +224,7 @@ func _style_button(b: Button, cls: String) -> void:
 	var gold = "gold" in parts or "on" in parts
 	var flat = "square" in parts or "tab" in parts
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_font_override("font", bold)
 	if flat:
 		var sel = "sel" in parts
 		for st in ["normal", "hover", "pressed", "disabled"]:
@@ -336,6 +360,10 @@ func _actions(s: Control, buttons: Array, min_w: float = 190) -> void:
 # ---------- the screens ----------
 
 func _build() -> void:
+	w["fps"] = _label("", roundi(8 * U), Color.WHITE, 0)
+	w["fps"].z_index = 10
+	_place(w["fps"], 4, 320 - 4 - 12, 300, 12)
+	ui.add_child(w["fps"])
 	_build_hud()
 	_build_menu()
 	_build_intro()
@@ -455,7 +483,7 @@ func _build_menu() -> void:
 	_place(letters, 159.5, 4, 250, 63)
 	var i = 0
 	for ch in "Jungle Loop":
-		var l = _label(ch if ch != " " else "  ", roundi(29 * fk * U), Color("#ffe9a0") if i % 2 == 0 else GOLD, 0)
+		var l = _label(ch, roundi(29 * fk * U), Color("#ffe9a0") if i % 2 == 0 else GOLD, 0)
 		l.label_settings.shadow_color = Color("#b8801c")
 		l.label_settings.shadow_offset = Vector2(0, a(2))
 		l.label_settings.outline_size = roundi(a(1.5))
@@ -700,7 +728,7 @@ func _build_settings() -> void:
 		row.add_child(vol)
 		main.add_child(row)
 	main.add_child(_label("AFFICHAGE", ts("s"), RELIC, 0))
-	for spec in [["Police pixel", "tg-font"], ["Lissage", "tg-smooth"], ["Plein écran", "tg-full"]]:
+	for spec in [["Police pixel", "tg-font"], ["Lissage", "tg-smooth"], ["Plein écran", "tg-full"], ["Images par seconde", "tg-fps"]]:
 		var row = _toggle_row(spec[0])
 		var id: String = spec[1]
 		var b = _button("", "small on", func() -> void: _toggle(id))
@@ -726,7 +754,11 @@ func _build_settings() -> void:
 		access.add_child(sub)
 	w["panel-access"] = access
 	col.add_child(access)
-	left.add_child(col)
+	var scroll = ScrollContainer.new()                # more than the pane holds: it scrolls, as in the web version
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(col)
+	left.add_child(scroll)
 	var right = _pane(s, true, 262)
 	w["set-right"] = right
 	var rc = _vbox(6)
@@ -869,7 +901,7 @@ func _slot_info(id: String) -> void:
 	box.visible = true
 
 func refresh_settings() -> void:
-	for pair in [["tg-font", save["pixelFont"]], ["tg-full", _is_full()], ["tg-rim", save["dangerRim"]], ["tg-shift", save["alertShift"]]]:
+	for pair in [["tg-font", save["pixelFont"]], ["tg-full", _is_full()], ["tg-rim", save["dangerRim"]], ["tg-shift", save["alertShift"]], ["tg-fps", save["showFps"]]]:
 		var b: Button = w[pair[0]]
 		b.text = "Oui" if pair[1] else "Non"
 		_style_button(b, "small on" if pair[1] else "small plain")
@@ -907,6 +939,8 @@ func _toggle(id: String) -> void:
 		"tg-shift":
 			save["alertShift"] = not save["alertShift"]
 			render.shift = save["alertShift"]
+		"tg-fps":
+			save["showFps"] = not save["showFps"]
 	SaveData.store(save)
 	refresh_settings()
 
@@ -1422,6 +1456,10 @@ func _process(delta: float) -> void:
 			hop = sin(ph / 0.6 * PI)
 		var l: Label = title_letters[i]
 		l.position.y = (a(63) - l.get_minimum_size().y) / 2 - hop * a(29 * fk) * 0.2
+	if w.has("fps"):                                 # the frame rate in a corner (Réglages, Affichage)
+		w["fps"].visible = save["showFps"]
+		if save["showFps"] and Engine.get_process_frames() % 15 == 0:
+			w["fps"].text = "%d i/s · x%d" % [Engine.get_frames_per_second(), render.q]
 	# Behind the menus: the temple, frozen. The hero only appears once the run starts.
 	var shown: Game.Run = run if (state == "play" or state == "pause" or state == "over" or in_run) and run != null else still
 	var win = get_window().size

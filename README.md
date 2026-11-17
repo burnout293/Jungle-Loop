@@ -1,8 +1,10 @@
 # Jungle Loop — version Godot
 
-Portage du jeu web (dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7**. État au 17/11/2026 : le
-code est entièrement écrit à partir de la version web 0.26.0. **Il n'a encore jamais été lancé** :
-Godot n'était pas installé sur ce PC. Il faut s'attendre à quelques erreurs au premier lancement.
+Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. État au
+17/11/2026 : au niveau de la version web 0.27.0, sauf ce qui est listé plus bas. Le jeu tourne : courses
+automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run illimitée, changements de
+décor), écrans vérifiés en capture (accueil, boutique, réglages, course, boss, donjon, cité). Pas encore
+essayé à la main ni sur téléphone.
 
 ## Ouvrir le projet
 
@@ -14,6 +16,18 @@ Godot n'était pas installé sur ce PC. Il faut s'attendre à quelques erreurs a
 
 Pour essayer sans toucher à sa sauvegarde : lancer avec `-- --bac` (sauvegarde séparée, comme `?bac`
 dans la version web).
+
+Banc d'essai (`scripts/bench.gd`), toujours avec `--bac` : un robot joue, la course s'affiche chaque seconde,
+une capture toutes les 2 s (pas en `--headless`) :
+
+```
+Godot --path . -- --bac --test --seconds=30 --god --start=1950 --shots=captures
+Godot --path . -- --bac --test --biome=3 --ride=gorilla --still --shots=captures
+Godot --path . -- --bac --test --screen=shop --seconds=3 --shots=captures
+```
+
+Options : `--start=<m>`, `--god`, `--up=flight,dash`, `--mode=endless`, `--mount=<monture qui attend>`,
+`--ride=<monture déjà montée>`, `--biome=0..3`, `--still` (le robot n'appuie pas), `--screen=<écran>`.
 
 ## Organisation
 
@@ -34,11 +48,11 @@ Les unités sont celles de la version web : 1 pixel d'art = 2,25 unités, écran
 
 ## Pas encore porté
 
-- Le menu de debug (`js/debug.js`) et les aperçus animés de la boutique (`js/demo.js`) : la boutique
-  montre l'icône à la place.
+- Le menu de debug (`js/debug.js`, avec son bandeau rouge et l'arrêt des records) et les aperçus animés
+  de la boutique (`js/demo.js`) : la boutique montre l'icône à la place.
 - Les confettis, le glissement des écrans, le changement de police sans relancer.
-- Les polices Silkscreen et Fredoka : à déposer dans `assets/fonts/` (`Silkscreen-Regular.ttf`,
-  `Fredoka-Medium.ttf`) ; sans elles, la police de Godot.
+
+Polices : Silkscreen et Fredoka (Google Fonts, licence OFL, dans `assets/fonts/`).
 
 ## Export
 

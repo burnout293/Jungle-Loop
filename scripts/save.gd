@@ -50,7 +50,7 @@ static func is_power(id: String) -> bool:
 static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
-		"dangerRim": false, "alertShift": false, "quality": "auto", "full": true, "seenIntro": false,
+		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "auto", "full": true, "seenIntro": false,
 		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "lastQuest": ""}
 
 static func _int(x) -> int:
@@ -78,6 +78,7 @@ static func sanitize(raw) -> Dictionary:
 	s["pixelFont"] = raw.get("pixelFont") != false
 	s["dangerRim"] = raw.get("dangerRim") == true
 	s["alertShift"] = raw.get("alertShift") == true
+	s["showFps"] = raw.get("showFps") == true
 	s["quality"] = raw.get("quality") if raw.get("quality") in QUALITIES else "auto"
 	s["full"] = raw.get("full") != false
 	s["seenIntro"] = raw.get("seenIntro") == true
