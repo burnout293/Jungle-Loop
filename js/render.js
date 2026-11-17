@@ -24,7 +24,7 @@ export const BIOMES = [
 ];
 
 const DIR = new URL('../assets/img/', import.meta.url).href;   // from this file: pages in mockups/ load the same pictures
-const NAMES = ['fore', 'temple', 'temple-rubble', 'vorace-top', 'vorace-bottom', 'vorace-stem', 'vorace-leg2', 'spikebot', 'spider-low', 'spider-mid', 'bat', 'thornball', 'beartrap', 'vulture', 'arrow', 'missile', 'idol', 'drone', 'wasp', 'drone-big', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
+const NAMES = ['fore', 'temple', 'temple-rubble', 'vorace-legs', 'vorace-head', 'vorace-body', 'vorace-log', 'crate-big', 'spikebot', 'spider-low', 'spider-mid', 'bat', 'thornball', 'beartrap', 'vulture', 'arrow', 'missile', 'idol', 'drone', 'wasp', 'drone-big', 'hero-body', 'hero-ball', 'hero-rotor', 'hero-fist', 'hero-shoe', 'mount-gorilla', 'mount-gorilla-hang', 'mount-rhino', 'mount-dragonfly', 'mosquito', 'fly', 'spiky', 'coin', 'gem', 'gem-y', 'gem-r', 'gem-b', 'heart', 'monkey'];
 const IMG = {};
 let meta = {
   fly: { frames: 1 }, coin: { frames: 1 }, mosquito: { frames: 4 },
@@ -76,8 +76,8 @@ export async function loadAssets() {
   await Promise.all(names.map(load));
   SCENE = BIOMES.map(buildScene);
   buildHaz();
-  // the big crate of the forest (its crate, larger), the ruins' jar, the city's crates, the dungeon's barrel
-  DECOR = [scaled(IMG.crate, 1.8), IMG['ruins-prop-1'], IMG['city-prop-3'], IMG['dungeon-prop-1']];
+  // the forest's big crate, the ruins' jar, the city's crates, the dungeon's barrel
+  DECOR = [IMG['crate-big'], IMG['ruins-prop-1'], IMG['city-prop-3'], IMG['dungeon-prop-1']];
   FAR = { fist: tinted(IMG['hero-fist'], 'rgba(16,12,40,.38)'), shoe: tinted(IMG['hero-shoe'], 'rgba(16,12,40,.38)') };
   // the hero's pieces, redrawn four times finer with their stair-steps rounded off (see rounded)
   for (const k of ['hero-body', 'hero-rotor', 'hero-fist', 'hero-shoe', 'hero-ball']) if (IMG[k]) HI.set(IMG[k], rounded(rounded(IMG[k])));
@@ -99,7 +99,6 @@ export async function loadAssets() {
 // Deterministic pseudo-random in [0,1): the same index always gives the same result.
 const h01 = (i, s) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
 
-function scaled(im, k) { if (!im) return im; const c = canvasOf(Math.round(im.width * k), Math.round(im.height * k)), x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(im, 0, 0, c.width, c.height); return c; }
 function canvasOf(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 
 // A drawing twice as fine, its diagonals smoothed the way pixel artists do it by hand (the "Scale2x"
@@ -192,8 +191,8 @@ const RED = '#ff3b4e';
 let RIM = false;                                       // the red outline around everything that hurts (a setting)
 // Ways of making the dangers stand out from the scenery, shown side by side in mockups/lisibilite.html:
 // 0 as it is; 1 a thick dark outline; 2 a lit edge (light from the top left) inside a dark outline;
-// 3 a warm glow behind; 4 the scenery much darker; 5 = 2 + 4.
-let LOOK = 0;
+// 3 a warm glow behind; 4 the scenery much darker; 5 = 2 + 4, the one chosen for the game (16/11).
+let LOOK = 5;
 export const LOOKS = 6;
 export function setLook(n) { LOOK = n; if (ready) { SCENE = BIOMES.map(buildScene); buildHaz(); } }
 const DARK = '#0d0614';
@@ -284,37 +283,55 @@ function buildScene(b) {
 }
 
 // ---------- Vorace ----------
-// The queen flower, in two parts held together at the urn's rim (meta.vorace gives, for every frame,
-// where they meet). The bottom walks: the urn on its thorny legs, four steps. The top attacks: crown
-// shut, opening, open with the acid boiling, spitting. Its end: a trunk drops on the crown, the urn
-// cracks, everything collapses, and goes down behind the floor. She stands behind the floor: her feet
-// sink into it.
+// The queen flower in three layers cut from one picture (tools/import_vorace.py), drawn back to front:
+// legs, head, body. Each layer is a sheet of poses, all in the frame of that one picture, so a pose
+// never shifts its part: the body's leaf collar covers the stem and its belly covers the top of the
+// legs, and nothing can show between the parts whatever they do.
+// Legs: four steps of a walk, then collapsed. Head: shut, opening, open (acid boiling), spitting,
+// crushed by the trunk, broken. Body: whole, then cracked. She stands behind the floor: her feet sink
+// into it a little. Her end: a trunk drops flat onto her crown (0.9 s), the urn cracks, the legs give
+// way and she slumps onto them, then everything goes down behind the floor, the trunk with her.
 let dirt = [], dirtT = 0;
+const VORACE_SINK = 4;                                   // how far her feet go into the floor (pixels)
+export function voraceFrame(run, t) {                    // which pose of each layer, and the body's offsets
+  const b = run.boss, fall = b.phase === 'fall', bt = b.t;
+  const step = Math.floor(t * 7) % 4;
+  const L = fall && bt >= 1.15 ? 4 : step;
+  const H = fall ? (bt < 0.9 ? 1 : bt < 1.5 ? 4 : 5)
+    : b.open > 0 ? 3 : b.wind > 0 ? (b.wind > 0.22 ? 1 : 2) : 0;
+  const B = fall && bt >= 1.0 ? 1 : 0;
+  // a step lifts her a pixel; when the legs give way she slumps onto them as far as their stump went down
+  const drop = (meta.vorace && meta.vorace.legs.drop[4]) || 40;
+  const bob = fall ? (bt >= 1.15 ? Math.round(drop * Math.min(1, (bt - 1.15) / 0.22) ** 2) : 0) : (step % 2 ? -1 : 0);
+  const breathe = !fall && H === 0 ? Math.round(Math.sin(t * 2.4)) : 0;  // her head rising and falling while she waits
+  const lunge = H === 3 ? -2 : 0;                                         // the spit throws her head a little further
+  const sink = fall && bt > 1.6 ? (bt - 1.6) ** 2 * 320 : 0;
+  return { L, H, B, step, bob, breathe, lunge, sink };
+}
 function drawVorace(ctx, run, t) {
-  const b = run.boss, top = IMG['vorace-top'], bot = IMG['vorace-bottom'], V = meta.vorace;
-  if (!top || !bot || !V) return;
-  const fall = b.phase === 'fall', crushed = fall && b.t >= 0.9;
-  const sink = fall && b.t > 1.6 ? (b.t - 1.6) ** 2 * 320 : 0;
-  const step = Math.floor(t * 7) % 4;                  // the walk, four frames
-  const bf = crushed ? (b.t < 1.5 ? 4 : 5) : step;
-  const tf = crushed ? (b.t < 1.5 ? 4 : 5) : b.open > 0 ? 3 : b.wind > 0 ? (b.wind > 0.25 ? 1 : 2) : fall ? 1 : 0;
-  const B = V.bottom, T = V.top, left = n(b.sx), bx = snap(left), by = GN + 16 - B.h + sink;
-  const tx = bx + B.at[bf][0] - T.at[tf][0], ty = by + B.at[bf][1] - T.at[tf][1] + 2;
-  if (!crushed && b.lastStep !== step && (step === 0 || step === 2)) {          // a foot comes down: earth flies
-    for (const fx of [bx + 40, bx + B.w - 50]) for (let q = 0; q < 4; q++) dirt.push({ x: fx + Math.random() * 20 + n(run.cam), y: GN - 3, vx: (Math.random() - 0.5) * 60, vy: -40 - Math.random() * 60, life: 0.5 });
+  const b = run.boss, V = meta.vorace, legs = IMG['vorace-legs'], head = IMG['vorace-head'], body = IMG['vorace-body'];
+  if (!V || !legs || !head || !body) return;
+  const f = voraceFrame(run, t), fall = b.phase === 'fall';
+  const left = snap(n(b.sx)), top = Math.round(GN + VORACE_SINK - V.ground + f.sink);
+  const layer = (im, P, frame, dx, dy) => ctx.drawImage(im, frame * P.w, 0, P.w, P.h, left + P.x + dx, top + P.y + dy, P.w, P.h);
+  if (!fall && b.lastStep !== f.step && (f.step === 0 || f.step === 2)) {          // a foot comes down: earth flies
+    for (const fx of V.feet[f.step === 0 ? 0 : 1]) for (let q = 0; q < 4; q++) dirt.push({ x: left + fx + Math.random() * 8 - 4 + n(run.cam), y: GN - 2, vx: (Math.random() - 0.5) * 60, vy: -40 - Math.random() * 60, life: 0.5 });
   }
-  b.lastStep = step;
-  if (b.wind > 0) {                                    // the acid glowing in its throat: something is coming
-    const mx = left + n(BOSS.mouthX), my = n(BOSS.mouthY), g = ctx.createRadialGradient(mx, my, 2, mx, my, 44);
-    g.addColorStop(0, `rgba(168,255,60,${0.55 + 0.3 * Math.sin(t * 30)})`); g.addColorStop(1, 'rgba(168,255,60,0)');
-    ctx.fillStyle = g; ctx.fillRect(mx - 44, my - 44, 88, 88);
+  b.lastStep = f.step;
+  layer(legs, V.legs, f.L, 0, f.L === 4 ? 0 : Math.max(0, f.bob));
+  if (b.wind > 0 || b.open > 0) {                    // the acid glowing in its throat: something is coming
+    const mx = left + V.mouth[0] + f.lunge, my = top + V.mouth[1] + f.bob, r = 30 + (b.open > 0 ? 10 : 0), g = ctx.createRadialGradient(mx, my, 2, mx, my, r);
+    g.addColorStop(0, `rgba(168,255,60,${0.5 + 0.3 * Math.sin(t * 30)})`); g.addColorStop(1, 'rgba(168,255,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(mx - r, my - r, r * 2, r * 2);
   }
-  ctx.drawImage(bot, bf * B.w, 0, B.w, B.h, bx, by, B.w, B.h);
-  ctx.drawImage(top, tf * T.w, 0, T.w, T.h, tx, ty, T.w, T.h);
-  if (fall && !crushed && IMG.log) {                   // the trunk, dropping onto the crown
-    const log = IMG.log, k = (b.t / 0.9) ** 2, land = ty + T.at[tf][1] - 70, y = land * k;                    // its lower end enters at the top of the screen and comes down
-    ctx.save(); ctx.translate(tx + T.at[tf][0], y); ctx.rotate(Math.PI / 2); ctx.scale(0.6, 0.6); soft(ctx);
-    ctx.drawImage(log, -log.width, -log.height / 2); ctx.restore();
+  layer(head, V.head, f.H, f.lunge, f.bob + f.breathe);
+  layer(body, V.body, f.B, 0, f.bob);
+  const log = IMG['vorace-log'];
+  if (fall && log) {                                    // the trunk drops flat onto the crown, then goes down with her
+    const rest = f.H === 5 ? V.body.y + 6 : V.head.tops[f.H] + 4;          // on the crushed head, then on the collar
+    const land = top + rest + f.bob, k = Math.min(1, (b.t / 0.9) ** 2);
+    const y = Math.round(-log.height + (land + log.height) * k) - log.height;  // its underside comes down from above the screen
+    ctx.drawImage(log, left + V.crown[0] - (log.width >> 1), b.t >= 0.9 ? land - log.height : y);
   }
 }
 // The earth thrown up by Vorace's legs: in front of the floor.
@@ -409,6 +426,7 @@ function drawProps(ctx, run, cam, width, t) {
     if (!pr || !flatAt(run, pr.x, CELL_UNITS * 0.6)) continue;        // nothing grows on a slope
     const biome = biomeAt(run, pr.x), set = SCENE[biome].props, im = set[pr.kind % set.length];
     if (!im || pr.kind % set.length === SMASH[biome]) continue;
+    if (run.boss && meta.vorace) { const bx = n(run.boss.sx), px = pr.x / PIXEL - cam; if (px + im.width > bx && px < bx + meta.vorace.w) continue; }   // nothing stands in front of Vorace
     const x = snap(pr.x / PIXEL - cam), y = n(floorAt(run, pr.x)) - im.height + 3;
     if (biome) { blit(ctx, im, x, y, pr.flip); continue; }
     // brushed by the hero a moment ago: it shakes hard, then settles
@@ -882,14 +900,17 @@ export function draw(ctx, run, v, t) {
     if ((x > v.w + 10 && !(o.kind === 'dart' && o.state === 'warn')) || x < -80) continue;   // a fonceur waiting off screen still shows its warning
     if (o.kind === 'acid') {                           // the plant's acid: a glowing ball in the air, a bubbling puddle on the floor
       const w = n(o.w), cx = x + w / 2;
-      if (o.tentacle) {                                // a root of Vorace slithering along the floor, its pointed end first
-        const stem = IMG['vorace-stem'], tip = IMG['vorace-leg2'];
-        if (stem) for (let u = 0; u < w; u += 3) {
-          const yy = foot - 7 - Math.sin(t * 12 + u * 0.15 + o.ph) * 2.5;
-          ctx.save(); ctx.translate(x + u, yy); ctx.rotate(Math.PI / 2 + Math.cos(t * 12 + u * 0.15 + o.ph) * 0.3); soft(ctx);
-          ctx.drawImage(stem, 0, (u * 3) % (stem.height - 4), stem.width, 4, -7, -2, 14, 4); ctx.restore();
+      if (o.tentacle) {                                // a root of Vorace slithering along the floor, its pointed end first:
+        // drawn pixel by pixel in the colours of her legs, so it stays sharp (outline, lit top, thorns)
+        const C = ['#1a1024', '#2c4f1c', '#4c8a2c', '#86c048', '#f0e2c0'];
+        for (let u = 0; u < w; u++) {
+          const th = Math.min(5, 2 + (u / 5 | 0)), yy = Math.round(foot - 5 - th - Math.sin(t * 12 + u * 0.18 + o.ph) * 2.5), xx = x + u;
+          ctx.fillStyle = C[0]; ctx.fillRect(xx, yy - 1, 1, th + 2);
+          ctx.fillStyle = C[2]; ctx.fillRect(xx, yy, 1, th);
+          ctx.fillStyle = C[3]; ctx.fillRect(xx, yy, 1, 1);
+          ctx.fillStyle = C[1]; ctx.fillRect(xx, yy + th - 1, 1, 1);
+          if (u % 11 === 6 && th >= 4) { ctx.fillStyle = C[0]; ctx.fillRect(xx - 1, yy - 4, 3, 3); ctx.fillStyle = C[4]; ctx.fillRect(xx, yy - 3, 1, 2); }
         }
-        if (tip) { ctx.save(); ctx.translate(x + 4, foot - 8); ctx.rotate(2.2 + Math.sin(t * 12 + o.ph) * 0.2); ctx.scale(0.4, 0.4); soft(ctx); ctx.drawImage(tip, -6, -20); ctx.restore(); }
         continue;
       }
       if (o.drop) {                                    // its shadow on the floor shows where it will land

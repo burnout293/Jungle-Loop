@@ -7,8 +7,6 @@
 #   pepito.png  : Pépito's body with his backpack and the relic, the same under his leaf rotor, the backpack icon
 #   dangers1/2/3.png: the dangers of the other sceneries (vulture, wasp, ball of brambles; stone idol,
 #                 bear trap, mine; missile, arrow, combat drone, little drone)
-#   vorace-parts.png: Vorace in pieces (three heads, a leaf collar, a stem segment, two root-legs), put together by render.js
-#   vorace-top.png, vorace-bottom.png: Vorace (the queen flower) in two parts, six frames each
 #   dangers4.png: the city's own ground dangers
 #   gravats.png : four ways of blocking the temple's doorway, for mockups/gravats.html
 # Run it AFTER import_gen.py, which still writes the old ruins and city crates.
@@ -148,7 +146,7 @@ json.dump(meta, open(mp, 'w'), indent=1); print('dragonfly seat', meta['mounts']
 
 # (the Brouilleur's icon, brouilleur.png, gave way to the Gros sac à dos: see Pépito below)
 
-# (the one-piece boss of boss.png gave way to Vorace in pieces: see the end of this file)
+# (the one-piece boss of boss.png gave way to Vorace: tools/import_vorace.py)
 
 # Pépito: his body (head, leaf hair, trunk, the backpack with the relic sticking out) and the same under
 # his leaf rotor, at the size of the body they replace, with the points render.js needs: the middle of
@@ -226,103 +224,7 @@ save(shrink(arrow, 46 / arrow.width), 'arrow')
 save(shrink(drone, 46 / drone.width), 'drone-big')
 save(shrink(minidrone, 32 / minidrone.width), 'drone')
 
-# ---------- Vorace in pieces ----------
-# Every big drawing of the sheet, with the drips and crumbs that float next to it, in reading order.
-def parts(name, big=3000, reach=24):
-    im = Image.open(os.path.join(SRC, name + '.png')).convert('RGBA'); px = im.load(); w, h = im.size
-    seen = bytearray(w * h); comps = []
-    for y in range(0, h, 2):
-        for x in range(0, w, 2):
-            if seen[y * w + x] or magenta(px[x, y]): continue
-            q = deque([(x, y)]); seen[y * w + x] = 1; pts = []
-            while q:
-                cx, cy = q.popleft(); pts.append((cx, cy))
-                for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
-                    if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx] and not magenta(px[nx, ny]):
-                        seen[ny * w + nx] = 1; q.append((nx, ny))
-            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
-            comps.append({'box': [min(xs), min(ys), max(xs) + 1, max(ys) + 1], 'pts': pts})
-    bigs = [c for c in comps if len(c['pts']) >= big]
-    for c in comps:
-        if len(c['pts']) >= big or len(c['pts']) < 6: continue
-        x0, y0, x1, y1 = c['box']
-        for b in bigs:
-            X0, Y0, X1, Y1 = b['box']
-            if x0 < X1 + reach and x1 > X0 - reach and y0 < Y1 + reach and y1 > Y0 - reach:
-                b['pts'] += c['pts']; b['box'] = [min(X0, x0), min(Y0, y0), max(X1, x1), max(Y1, y1)]; break
-    bigs.sort(key=lambda b: ((b['box'][1] + b['box'][3]) // 2 // (h // 2), b['box'][0]))
-    out = []
-    for b in bigs:
-        x0, y0, x1, y1 = b['box']
-        one = Image.new('RGBA', (x1 - x0, y1 - y0), (255, 0, 255, 255)); o = one.load()
-        for x, y in b['pts']: o[x - x0, y - y0] = px[x, y]
-        out.append(one)
-    return out
-
-vp = parts('vorace-parts')
-assert len(vp) == 7, len(vp)
-head1, head2, head3, collar, stem, leg, leg2 = vp
-K = 96 / head1.width
-def same_box(frames):
-    """The heads in canvases of one size, lined up on their right edge (the leaves, where the neck joins) and middle."""
-    sm = [shrink(f, K) for f in frames]
-    cw, ch = max(f.width for f in sm), max(f.height for f in sm)
-    sheet = Image.new('RGBA', (cw * len(sm), ch), (0, 0, 0, 0))
-    for i, f in enumerate(sm): sheet.alpha_composite(f, (i * cw + cw - f.width, (ch - f.height) // 2))
-    return sheet
-# (the dionée's head, collar and legs gave way to the queen flower: only its stem and short leg stay, for the tentacle)
-save(shrink(stem, K), 'vorace-stem')
-save(shrink(leg2, K), 'vorace-leg2')
-
-# ---------- Vorace, the queen flower, in two parts ----------
-# Top: the crown on the urn's rim (shut, opening, open, spitting, crushed by the trunk, broken).
-# Bottom: the urn with its eye and its legs (four steps of a walk, cracked, collapsed).
-# Each sheet is a grid of 3 x 2 frames drawn at the same place: cut with the same box. For every frame,
-# where the parts meet: the middle of the rim's lowest row (top), the middle of the urn's highest row (bottom).
-def grid(name, cols=3, rows=2):
-    im = Image.open(os.path.join(SRC, name + '.png')).convert('RGBA'); W, H = im.size
-    cells = [im.crop((c * W // cols, r * H // rows, (c + 1) * W // cols, (r + 1) * H // rows)) for r in range(rows) for c in range(cols)]
-    boxes = []
-    for cell in cells:
-        px = cell.load(); m = Image.new('L', cell.size, 0); mp = m.load()
-        for y in range(cell.height):
-            for x in range(cell.width):
-                if not magenta(px[x, y]): mp[x, y] = 255
-        boxes.append(m.getbbox())
-    box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
-    return [c.crop(box) for c in cells]
-def rowspan(im, y):
-    px = im.load(); xs = [x for x in range(im.width) if px[x, y][3] > 128]
-    return (min(xs), max(xs)) if xs else None
-KV = 0.5
-tops = [shrink_keep(f, KV) for f in grid('vorace-top')] if False else None
-def shrink_keep(im, k):
-    """Like shrink, without cropping: every frame keeps the same box."""
-    sm = im.resize((round(im.width * k), round(im.height * k)), Image.BOX); px = sm.load()
-    for y in range(sm.height):
-        for x in range(sm.width):
-            q = px[x, y]
-            px[x, y] = (0, 0, 0, 0) if magenta(q) or q[3] < 128 else ((26, 16, 36, 255) if q[0] > 90 and q[2] > 90 and q[1] < 0.6 * min(q[0], q[2]) and q[1] < 100 else (q[0], q[1], q[2], 255))
-    return sm
-anchors = {}
-for part in ('top', 'bottom'):
-    frames = [shrink_keep(f, KV) for f in grid('vorace-' + part)]
-    fw, fh = frames[0].size
-    sheet = Image.new('RGBA', (fw * len(frames), fh), (0, 0, 0, 0)); an = []
-    for i, f in enumerate(frames):
-        sheet.alpha_composite(f, (i * fw, 0))
-        bb = f.getbbox()
-        if part == 'top':                                # the rim: its lowest row
-            y = bb[3] - 1; span = rowspan(f, y)
-            while span and span[1] - span[0] < fw * 0.25 and y > bb[1]: y -= 1; span = rowspan(f, y)
-        else:                                            # the urn's mouth: its highest row
-            y = bb[1]; span = rowspan(f, y)
-            while span and span[1] - span[0] < fw * 0.25 and y < bb[3]: y += 1; span = rowspan(f, y)
-        an.append([round((span[0] + span[1]) / 2), y])
-    save(sheet, 'vorace-' + part)
-    anchors[part] = {'frames': len(frames), 'w': fw, 'h': fh, 'at': an}
-mp = os.path.join(OUT, 'meta.json'); meta = json.load(open(mp)); meta['vorace'] = anchors
-json.dump(meta, open(mp, 'w'), indent=1); print('vorace', json.dumps(anchors))
+# (Vorace has its own import now: tools/import_vorace.py, three layers cut from one model picture)
 
 # ---------- the city's ground danger ----------
 robot = columns('dangers4')[0]

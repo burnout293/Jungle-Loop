@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 16/11/2026, version 0.21.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 17/11/2026, version 0.22.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -67,7 +67,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Volant | coléoptère / vautour / missile / flèche : un « ! » au bord droit à sa hauteur pendant 1 s, puis il traverse l'écran à 20 m/s de plus que toi | `DART` |
 | Hauteur des volants | 1,15 m (sauter) ou 4,25 m (rester au sol) ; avec Double saut aussi 7,25 m ; avec Vol aussi 10 et 12,75 m | `DART_ALTS` |
 | Suspendu | araignée / idole de pierre / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 500 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
-| Contour des dangers | aucun par défaut ; liseré rouge en option (Réglages, Affichage) ; 6 façons de les mettre en avant à comparer dans `mockups/lisibilite.html` | `setDangerRim`, `setLook` |
+| Mise en avant des dangers | façon 5 (son choix du 17/11) : contour sombre et bord éclairé en haut à gauche sur tout ce qui fait mal, décor de fond et décor du chemin assombris ; liseré rouge en plus en option (Réglages, Affichage) | `LOOK`, `setDangerRim` |
 | Décor à casser | grosse caisse (forêt) / jarre (ruines) / tonneau (donjon) / caisses (cité) ; posé derrière 30 % des motifs dès 70 m ; inoffensif, il ne se casse qu'avec Brise-tout, la Ruée ou le rhino | `addDecor`, `DECOR_RATE` |
 | Plateforme | 6,35 m de long, à 3,4 m du sol | `PLAT_W` |
 | Corniche | +3,4 m pendant 17,5 à 27,5 m, hérisson dessus 6 fois sur 10 | `STEP` |
@@ -118,18 +118,18 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Allure | derrière le sol, en deux parties tenues ensemble au bord de l'urne : le bas (l'urne sur ses pattes épineuses) marche en 4 images, le haut (la couronne) s'ouvre, bout et crache ; à sa mort le haut est écrasé par le tronc et l'urne s'effondre | `drawVorace`, js/render.js |
+| Allure | derrière le sol, 198 × 250 pixels, en trois couches tirées d'une seule image (pattes, tête, corps) : le col de feuilles cache la tige, le ventre cache le haut des pattes, aucune jointure ne peut se voir. Pattes : marche en 4 images ; tête : fermée, s'ouvre, grande ouverte (acide qui bout), crache ; mort : tête écrasée puis morte, urne fendue, pattes qui cèdent | `drawVorace`, js/render.js ; découpe : tools/import_vorace.py |
 | Apparition | vers 2000 m (± 100 m), une fois par course, seulement dans la forêt ; aussi sur une monture ; la relique du sac de Pépito s'illumine ; tous les autres dangers disparaissent pendant le combat | `BOSS.at`, `bossAt` |
 | Vitesse pendant le combat | 14 m/s ; ta propre vitesse continue de monter en parallèle | `BOSS.speed` |
 | Après le combat | la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne (de 14 à 29 m/s : environ 9 s) | `RAMP` |
 | Durée | 26 s d'attaques, puis un arbre l'écrase | `BOSS.fight` |
 | Rythme | une attaque toutes les 1,65 s au début, jusqu'à 1,15 s ; la gueule s'ouvre et l'acide brille 0,45 s avant | `boss` |
-| Gueule (départ des tirs) | 2,7 m après son bord gauche, 4,9 m du haut de l'écran | `BOSS.mouthX`, `BOSS.mouthY` |
+| Gueule (départ des tirs) | 1,25 m après son bord gauche, 5,6 m du haut de l'écran | `BOSS.mouthX`, `BOSS.mouthY` |
 | À pied (et gorille) | flaque, double flaque, boule basse (sauter), moyenne (rester au sol), haute (pas de grand saut), deux boules (haute + basse ou moyenne), pluie de 2 gouttes (ombre au sol avant), tentacule rampante (sauter) ; suspendu aux lianes : boules à hauteur des lianes | `boss` |
 | Sur le rhino | flaques, boules basses et hautes, pluie, tentacule (pas de boule moyenne) | `boss` |
 | Sur la libellule | éventail sur 5 couloirs avec 2 couloirs voisins libres, pluie, boules isolées | `boss` |
 | Pièces | des traînées continuent d'apparaître pendant le combat | `spawnPattern` |
-| Fin | un arbre bascule sur elle et l'enfonce dans le sol, sans trou : une ligne de 16 gemmes bleues à hauteur de course, il suffit de continuer tout droit | `boss` |
+| Fin | un tronc tombe à plat sur sa couronne (0,9 s), l'urne se fend, les pattes cèdent et elle s'affaisse, puis tout s'enfonce dans le sol avec le tronc, sans trou : une ligne de 16 gemmes bleues à hauteur de course, il suffit de continuer tout droit | `boss`, `voraceFrame` |
 | Récompense | 24 pièces et une gemme de chaque couleur, puis le décor change | `boss` |
 
 ## 7. Nuées (monstres suiveurs)

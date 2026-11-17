@@ -82,10 +82,12 @@ export const MOUNTS = {
 // down) or a high one (no big jump), two balls at once, a rain of drops from the sky (their shadows show
 // where), a tentacle slithering along the floor (jump). Every attack is announced (jaws open and glow,
 // shadows) and every pair leaves a way through. What it throws depends on what the hero rides. After
-// BOSS.fight seconds a tree falls on it and crushes it into the ground; the hero runs straight on over a
-// line of blue gems. It stands behind the floor and crawls on its root-legs (see render.js): BOSS.w is how
-// wide it is on screen, the mouth where its acid comes from (from its left edge, and from the top).
-export const BOSS = { at: 2000, speed: 560, fight: 26, w: 420, mouthX: 120, mouthY: 220 };
+// BOSS.fight seconds a trunk falls on it and crushes it into the ground; the hero runs straight on over a
+// line of blue gems. It stands behind the floor and walks on its root-legs (see render.js): BOSS.w is how
+// wide it is on screen, the mouth where its acid comes from (from its left edge, and from the top). They
+// follow its drawing (meta.json "vorace": 198 pixels wide, mouth 22 pixels from its left edge and 99 from
+// the top of the screen; 2.25 units a pixel).
+export const BOSS = { at: 2000, speed: 560, fight: 26, w: 446, mouthX: 50, mouthY: 223 };
 const LANE = { low: 28, mid: 115, high: 250, vine: 470 };
 // The heights a flyer may come at (its middle, above the floor), by what the hero owns: on foot, double jump, flight.
 const DART_ALTS = [[46, 170], [46, 170, 290], [46, 170, 290, 400, 510]];   // height of a ball's centre above the floor
