@@ -1,13 +1,10 @@
 # Cuts the later generated sheets of tools/raw/gen into game sprites. python tools/import_objets.py
 #   objets3.png : amphora, drum, heart, the hero as a ball, a jungle tree, a trunk used as a pillar
-#   araignee.png: the spider, legs out and legs curled in
 #   libellule.png: the dragonfly mount, four frames (it replaced the Moskito)
 #   brouilleur.png: the shop icon of the Brouilleur
 #   boss.png    : the giant carnivorous plant, jaws shut and jaws open
 #   pepito.png  : Pépito's body with his backpack and the relic, the same under his leaf rotor, the backpack icon
-#   dangers1/2/3.png: the dangers of the other sceneries (vulture, wasp, ball of brambles; stone idol,
-#                 bear trap, mine; missile, arrow, combat drone, little drone)
-#   dangers4.png: the city's own ground dangers
+#   (the dangers, araignee.png, chauve-souris.png, dangers1-4.png: tools/import_dangers.py)
 #   gravats.png : four ways of blocking the temple's doorway, for mockups/gravats.html
 # Run it AFTER import_gen.py, which still writes the old ruins and city crates.
 import os
@@ -87,36 +84,8 @@ for i, im in enumerate(pieces('gravats')):
     save(tall(im, 90), 'gravats-%d' % (i + 1), os.path.join(ROOT, 'mockups', 'img'))
     if i == 3: save(tall(im, 90), 'temple-rubble')     # the one chosen: boulders held in roots
 
-# the spider: two frames in cells of the same size, centred, hanging from the top
-frames = [tall(im, 32) for im in pieces('araignee')]
-cw = max(f.width for f in frames); sheet = Image.new('RGBA', (cw * 2, 32), (0, 0, 0, 0))
-for i, f in enumerate(frames): sheet.alpha_composite(f, (i * cw + (cw - f.width) // 2, 0))
-save(sheet, 'spider')
-
-# the bat: asleep, wings up, wings down, in cells of the same size, all at the same scale
-b = pieces('chauve-souris'); k = 30 / b[0].height
-frames = [shrink(im, k) for im in b]
-cw, ch = max(f.width for f in frames), max(f.height for f in frames); sheet = Image.new('RGBA', (cw * 3, ch), (0, 0, 0, 0))
-for i, f in enumerate(frames): sheet.alpha_composite(f, (i * cw + (cw - f.width) // 2, 0 if i == 0 else (ch - f.height) // 2))
-save(sheet, 'bat')
-
-# the spider in two colours: yellow drops to the floor, red stops halfway. Its orange stripes are
-# turned, the rest (violet body, yellow eyes) stays.
-import colorsys, json
-def recolour(im, hue, light=1.0):
-    out = im.copy(); px = out.load()
-    for y in range(out.height):
-        for x in range(out.width):
-            r, g, b, a = px[x, y]
-            if not a: continue
-            h, l, sat = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
-            if 0.03 < h < 0.12 and sat > 0.45:              # the orange of the stripes
-                r2, g2, b2 = colorsys.hls_to_rgb(hue, min(0.78, l * light), sat)
-                px[x, y] = (round(r2 * 255), round(g2 * 255), round(b2 * 255), a)
-    return out
-spider = Image.open(os.path.join(OUT, 'spider.png')).convert('RGBA')
-save(recolour(spider, 0.15, 1.35), 'spider-low')     # a bright yellow: it is the one seen at floor level
-save(recolour(spider, 0.99), 'spider-mid')
+# (the spider, its two colours and the bat: tools/import_dangers.py)
+import json
 
 # the dragonfly: four frames lined up on its leaf saddle, like the other mounts (see import_rig.py)
 saddle = lambda p: p[1] > p[0] + 30 and p[1] > p[2] + 80
@@ -180,52 +149,4 @@ save(shrink(bag, 54 / max(bag.size)), 'ico-jammer')                 # the Gros s
 mp = os.path.join(OUT, 'meta.json'); meta = json.load(open(mp)); meta['rig'] = rig
 json.dump(meta, open(mp, 'w'), indent=1); print('rig', rig)
 
-# ---------- the dangers of each scenery ----------
-# Cut by columns: every drawing with whatever bits float around it (sparks, crumbs), side by side.
-def columns(name, gap=14):
-    im = Image.open(os.path.join(SRC, name + '.png')).convert('RGBA'); px = im.load()
-    used = [any(not magenta(px[x, y]) for y in range(0, im.height, 2)) for x in range(im.width)]
-    spans, x = [], 0
-    while x < im.width:
-        if not used[x]: x += 1; continue
-        a = x
-        while x < im.width and (used[x] or any(used[x:x + gap])): x += 1
-        spans.append((a, x))
-    out = []
-    for a, b in spans:
-        part = im.crop((a, 0, b, im.height)); mp = part.load()
-        mask = Image.new('L', part.size, 0); mm = mask.load()
-        for y in range(part.height):
-            for x2 in range(part.width):
-                if not magenta(mp[x2, y]): mm[x2, y] = 255
-        box = mask.getbbox()
-        if box and (box[2] - box[0]) * (box[3] - box[1]) > 1500: out.append(part.crop(box))
-    return out
-
-def frames_sheet(frames, k, name):
-    """Frames at the same scale, bottoms and middles lined up, in one strip."""
-    sm = [shrink(f, k) for f in frames]
-    cw, ch = max(f.width for f in sm), max(f.height for f in sm)
-    sheet = Image.new('RGBA', (cw * len(sm), ch), (0, 0, 0, 0))
-    for i, f in enumerate(sm): sheet.alpha_composite(f, (i * cw + (cw - f.width) // 2, ch - f.height))
-    save(sheet, name)
-
-vul1, vul2, wasp, thorns = columns('dangers1')
-frames_sheet([vul1, vul2], 46 / max(vul1.width, vul2.width), 'vulture')
-save(shrink(wasp, 40 / wasp.width), 'wasp')
-save(shrink(thorns, 30 / thorns.width), 'thornball')
-idol, trap1, trap2, mine = columns('dangers2')
-save(shrink(idol, 30 / idol.height), 'idol')
-frames_sheet([trap1, trap2], 38 / max(trap1.width, trap2.width), 'beartrap')
-# (the mine gave way to the city's spiky robot: see dangers4 below)
-missile, arrow, drone, minidrone = columns('dangers3')
-save(shrink(missile, 46 / missile.width), 'missile')
-save(shrink(arrow, 46 / arrow.width), 'arrow')
-save(shrink(drone, 46 / drone.width), 'drone-big')
-save(shrink(minidrone, 32 / minidrone.width), 'drone')
-
-# (Vorace has its own import now: tools/import_vorace.py, three layers cut from one model picture)
-
-# ---------- the city's ground danger ----------
-robot = columns('dangers4')[0]
-save(shrink(robot, 34 / robot.width), 'spikebot')
+# (the dangers of each scenery, dangers1-4.png, and the city's robot: tools/import_dangers.py)

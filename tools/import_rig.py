@@ -122,18 +122,7 @@ save(out, 'mount-gorilla-hang')
 seats = [centre(f, saddle) for f in hang]
 meta['mounts']['gorilla-hang'] = { 'frames': 4, 'seatX': gx, 'seats': [[round(s[0] * 0.3 + o[0]), round(s[1] * 0.3 + o[1])] for s, o in zip(seats, offs)] }
 
-# ---------- the mosquito: wings up, level, down, and diving; lined up on its eye ----------
-q = sheet('mosquito'); found = sorted(components(q, 4000), key=lambda c: c[0][0])
-assert len(found) == 4, len(found)
-frames = [cut(q, c) for c in found]; eyes = [centre(f, eye) for f in frames]
-Q = 36 / max(f.height for f in frames)
-left = max(e[0] for e in eyes); up = max(e[1] for e in eyes)
-cw = round(max(left - e[0] + f.width for f, e in zip(frames, eyes)) * Q) + 1
-ch = round(max(up - e[1] + f.height for f, e in zip(frames, eyes)) * Q) + 1
-out = Image.new('RGBA', (cw * 4, ch), (0, 0, 0, 0))
-for i, (f, e) in enumerate(zip(frames, eyes)): out.alpha_composite(shrink(f, Q), (i * cw + round((left - e[0]) * Q), round((up - e[1]) * Q)))
-save(out, 'mosquito')
-meta['mosquito'] = { 'frames': 4 }
+# (the mosquito: tools/import_dangers.py)
 
 # ---------- shop icons: loose bits (bubbles, an arrow) belong to the icon next to them ----------
 def groups(im, cell=8, grow=1):

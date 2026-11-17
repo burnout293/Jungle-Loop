@@ -10,7 +10,7 @@ from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMG = os.path.join(ROOT, 'assets', 'img')
-SPRITES = {'bat': 1.0, 'mount-dragonfly': 0.82}       # name: how much the filled pixels are darkened
+SPRITES = {'mount-dragonfly': 0.82}                  # name: how much the filled pixels are darkened (the bat is cut cleanly now: import_dangers.py)
 
 def enclosed(a):
     clear = a[..., 3] == 0; H, W = clear.shape; out = np.zeros_like(clear)

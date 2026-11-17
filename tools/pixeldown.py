@@ -60,3 +60,15 @@ def vote_shrink(im, k, palette, bg=None, outline_max=OUTLINE_MAX, bias=1/3, sub=
     solid = pick != n
     out[solid, :3] = pal[pick[solid]]; out[solid, 3] = 255
     return Image.fromarray(out, 'RGBA')
+
+
+def palette_of(px, n=64, far=40):
+    """Its main colours (median cut), plus every colour still far from them (small details)."""
+    q = Image.fromarray(px[None].astype(np.uint8), 'RGB').quantize(n, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    P = np.array(q.getpalette()[:n * 3]).reshape(-1, 3).astype(float); sample = px[::17].astype(float)
+    while len(P) < 256:
+        d = np.abs(sample[:, None] - P[None]).sum(axis=2).min(axis=1); i = int(d.argmax())
+        if d[i] <= far: break
+        P = np.vstack([P, sample[i]])
+    img = Image.new('P', (1, 1)); flat = [int(v) for c in P.astype(int) for v in c]
+    img.putpalette(flat + flat[-3:] * (256 - len(P))); return img
