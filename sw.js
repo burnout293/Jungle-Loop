@@ -1,5 +1,5 @@
 // Offline cache. Bump VERSION at each release so players get the new files (and VERSION in js/main.js with it).
-const VERSION = 'jungle-loop-0.28.0';
+const VERSION = 'jungle-loop-0.28.1';
 // The code is fetched up front; images and music are kept as the game asks for them,
 // so this list never has to follow the art.
 const FILES = ['./', 'index.html', 'style.css', 'icon.svg', 'manifest.webmanifest',
@@ -18,6 +18,8 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // the Godot version on trial (godot/) is another game: left to the browser, never kept here
+  if (new URL(e.request.url).pathname.includes('/godot/')) return;
   // lists anyone may edit (coin patterns, music): the network first, the kept copy only when offline
   if (/\.(txt|json)$/.test(new URL(e.request.url).pathname)) {
     e.respondWith(fetch(e.request).then((res) => { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); return res; }).catch(() => caches.match(e.request, { ignoreSearch: true })));

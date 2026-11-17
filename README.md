@@ -18,4 +18,6 @@ paysage et peut s'installer sur l'écran d'accueil.
 
 Pour essayer sans toucher à sa sauvegarde : ajouter `?bac` à l'adresse.
 
-Une version Godot est en cours de portage, dans un dossier à part (`Projects/Jungle-Loop-Godot`).
+Une version Godot est en cours de portage (branche `godot`, dossier `Projects/Jungle-Loop-Godot`). Son export web
+est publié à l'essai dans `godot/` : https://burnout293.github.io/Jungle-Loop/godot/ (44 Mo, sa sauvegarde est à part :
+exporter le code ici et l'importer là-bas).
