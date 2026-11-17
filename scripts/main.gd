@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.28.0"
+const VERSION := "0.29.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -33,6 +33,15 @@ var run: Game.Run = null
 var still: Game.Run                    # never updated: the frozen temple scene behind the menus
 var input := Game.Controls.new()
 var render: Render
+var game_vp: SubViewport               # the game is drawn here, q x q real pixels per art pixel (the web canvas)
+var game_view: TextureRect             # and shown from here, fitted to the frame
+var demo := Demo.new()                 # the shop's animated preview
+var demo_render: Render
+var demo_vp: SubViewport
+var q := 3                             # real pixels per art pixel of the game's picture (see fit)
+var cap := 4                           # the finest picture this device has proved it can keep up with
+var watch := {"n": 0, "sum": 0.0, "bad": 0, "before": 0.0, "locked": false}
+var CAP_FILE := "user://jungle-loop-cap" + ("-bac" if "--bac" in OS.get_cmdline_user_args() else "") + ".txt"
 var time := 0.0
 var dead_for := 0.0
 var banner_timer := 0.0
@@ -57,6 +66,14 @@ var hud_state := {"dist": -1, "gold": -1, "hearts": -1}
 var debug_layer: CanvasLayer
 var debug_panel: Control = null
 var taps: Array = []                   # touches on the level badge: five in a row open the debug menu
+var touches := {}                     # fingers down on the game (not on a button): the jump is held while one stays
+var confetti_layer: Control
+var modal: CanvasLayer = null          # the in-game « Oui / Non » question, while one is asked
+var web_cbs := []                      # the browser's callbacks, kept alive (web only)
+var rebuild_due := false               # the window changed size: the pixel typeface's sizes are worked out again
+var rebuild_t := 0.0
+var fps_param := false                 # "?fps" in the address (web): the frame rate shown, as in the web version                   # (once it has stopped changing for a moment)
+var perf := {"n": 0, "game": 0, "draw": 0, "text": ""}   # what a frame costs, averaged: the FPS corner shows it
 
 # ---------- start ----------
 
@@ -65,7 +82,23 @@ func _ready() -> void:
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
 	Debug.setup()
 	render = Render.new()
-	add_child(render)
+	game_vp = _viewport(render)
+	game_view = TextureRect.new()
+	game_view.texture = game_vp.get_texture()
+	game_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	game_view.stretch_mode = TextureRect.STRETCH_SCALE
+	game_view.size = Vector2(W, H)
+	game_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(game_view)
+	demo_render = Render.new()
+	demo_render.view_w = Demo.W
+	demo_vp = _viewport(demo_render)
+	demo_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	cap = 3 if _touch() else 4                    # a phone's chip fills far fewer pixels than a PC's
+	if FileAccess.file_exists(CAP_FILE):
+		cap = clampi(int(FileAccess.get_file_as_string(CAP_FILE)), 1, 4)
+	get_window().size_changed.connect(fit)
+	fit()
 	still = Game.new_run({})
 	var layer = CanvasLayer.new()
 	add_child(layer)
@@ -80,7 +113,9 @@ func _ready() -> void:
 	loading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ui.add_child(loading)
 	w["loading"] = loading
-	if "--test" in OS.get_cmdline_user_args():      # the bench: a bot plays (see bench.gd)
+	# the bench: a bot plays (see bench.gd); in a browser only on this computer, with "?test" in the address
+	var web_test = OS.has_feature("web") and _js_yes("['localhost','127.0.0.1'].includes(location.hostname) && location.search.includes('test')")
+	if "--test" in OS.get_cmdline_user_args() or web_test:
 		var bench = load("res://scripts/bench.gd").new()
 		bench.main = self
 		add_child(bench)
@@ -88,7 +123,9 @@ func _ready() -> void:
 
 func _load() -> void:
 	await get_tree().process_frame                # the "loading" text is on screen first
+	var t0 = Time.get_ticks_msec()
 	Art.load_all()
+	var t_art = Time.get_ticks_msec() - t0
 	Art.set_danger_rim(save["dangerRim"])
 	render.shift = save["alertShift"]
 	Game.set_shapes(FileAccess.get_file_as_string("res://assets/patterns.txt"))
@@ -97,7 +134,83 @@ func _load() -> void:
 	_styles()
 	_build()
 	w["loading"].queue_free()
+	await get_tree().process_frame               # every block has its size: each one is told where it flies from
+	_aim_flyers()
+	print("Jungle Loop %s : prêt en %d ms (dont images %d ms)" % [VERSION, Time.get_ticks_msec() - t0, t_art])
 	go("menu")
+
+func _viewport(r: Render) -> SubViewport:
+	var vp = SubViewport.new()
+	vp.disable_3d = true
+	vp.transparent_bg = false
+	vp.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	vp.size = Vector2i(569, 320)
+	vp.add_child(r)
+	add_child(vp)
+	return vp
+
+## A phone or a tablet (touch first), in an app or in a browser.
+func _touch() -> bool:
+	return OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
+
+## The game is always shown in 16:9 (569 x 320 art pixels). Its picture holds q x q real pixels per art
+## pixel: `want` is what the screen can show (4 at most). Sprites then move by fractions of an art pixel
+## and the picture is softened as it is fitted to the screen: "smooth". It costs: a phone has to fill up
+## to sixteen times the pixels. So "auto" starts there and comes down as far as it takes to keep the
+## frame rate (see _watch); "sharp" settles for 2 at most and shows hard squares, the lightest picture.
+func fit() -> void:
+	var win = Vector2(get_window().size)
+	var real = U * minf(win.x / W, win.y / H)
+	var want = clampi(ceili(real - 0.01), 1, 4)
+	var mode = save["quality"] if save != null else "auto"
+	if mode == "sharp":
+		q = clampi(floori(real + 0.01), 1, 2)
+	elif mode == "smooth":
+		q = want
+	else:
+		q = mini(want, cap)
+	game_vp.size = Vector2i(569 * q, 320 * q)
+	demo_vp.size = Vector2i(roundi(Demo.W * q), roundi(Demo.H * q))
+	# finer than the screen: fitted smoothly; coarser (2 or less): hard squares, smoothed it would only blur
+	var smooth = mode != "sharp" and (q >= real - 0.01 or q > 2)
+	game_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if smooth else CanvasItem.TEXTURE_FILTER_NEAREST
+	if w.has("demo-view"):
+		w["demo-view"].texture_filter = game_view.texture_filter
+
+## "auto" quality: while playing, frames are timed. Two slow spells in a row (under 54 frames a second)
+## and the picture goes down one step. If that changed nothing, the device is simply capped (battery
+## saver, 30 Hz screen): the step is given back and nothing more is tried. What was found is kept.
+func _watch(ms: float) -> void:
+	if state != "play" or ms > 100 or run == null or run.t < 2:
+		return
+	watch["n"] += 1
+	watch["sum"] += ms
+	if watch["n"] < 90:
+		return
+	var avg = watch["sum"] / watch["n"]
+	watch["n"] = 0
+	watch["sum"] = 0.0
+	if save["quality"] != "auto" or watch["locked"]:
+		return
+	if watch["before"] > 0:                          # just came down a step: was it worth it?
+		if avg > watch["before"] * 0.9:
+			cap = q + 1
+			watch["locked"] = true
+		watch["before"] = 0.0
+		watch["bad"] = 0
+	elif avg > 18.5 and q > 1:
+		watch["bad"] += 1
+		if watch["bad"] < 2:
+			return
+		cap = q - 1
+		watch["before"] = avg
+	else:
+		watch["bad"] = 0
+		return
+	var f = FileAccess.open(CAP_FILE, FileAccess.WRITE)
+	if f != null:
+		f.store_string(str(cap))
+	fit()
 
 func _tex(name: String) -> Texture2D:
 	var path = "res://assets/img/" + name + ".png"
@@ -134,14 +247,34 @@ func _font() -> void:
 		bold = FontVariation.new()
 		bold.base_font = base
 		bold.variation_opentype = {wght: 700}
+	# the symbols neither typeface has (◈ ● ○ ★ ↻ −), drawn on Silkscreen's grid (tools/make_symbols.py):
+	# a browser or a phone has no system font to find them in
+	if ResourceLoader.exists(dir + "JungleSymbols.ttf") and font != ThemeDB.fallback_font:
+		var sym: FontFile = load(dir + "JungleSymbols.ttf")
+		sym.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+		sym.hinting = TextServer.HINTING_NONE
+		sym.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+		for f in [font, bold]:
+			f.fallbacks = [sym]
 	var th = Theme.new()
 	th.default_font = font
 	th.default_font_size = ts("m")
 	ui.theme = th
 
-## Text sizes, in units: small, middle, large, extra large (style.css --t-s ... --t-xl).
+## Text sizes, in units: small, middle, large, extra large (style.css --t-s ... --t-xl). The pixel
+## typeface is only sharp when one of its own pixels covers a whole number of the screen's: like the web
+## version, its sizes are brought to the nearest such size (it is drawn on a grid of 8).
 func ts(k: String) -> int:
-	return roundi({"s": 11, "m": 14, "l": 19, "xl": 26, "huge": 52}[k] * fk * U)
+	var base = {"s": 11, "m": 14, "l": 19, "xl": 26, "huge": 52}[k] * fk * U
+	if not save["pixelFont"] or k == "huge":
+		return roundi(base)
+	var sc = _ui_scale()
+	return maxi(1, roundi(maxf(8, roundf(base * sc / 8 - 0.12) * 8) / sc))
+
+## Real pixels per unit of the 1280 x 720 frame.
+func _ui_scale() -> float:
+	var win = Vector2(get_window().size)
+	return maxf(0.1, minf(win.x / W, win.y / H))
 
 func a(v: float) -> float:
 	return v * U
@@ -173,21 +306,30 @@ func _plaque(name: String, h: float, cap: float, mod: Color = Color.WHITE, inset
 	s.content_margin_bottom = 0
 	return s
 
+## The same box, drawn two art pixels lower, with what it holds (a pressed button).
+func _down(sb: StyleBox) -> StyleBox:
+	sb.expand_margin_top = -a(2)
+	sb.expand_margin_bottom = a(2)
+	sb.content_margin_top = maxf(sb.content_margin_top, 0) + a(4)
+	return sb
+
 func _styles() -> void:
 	for spec in [["", "ui-btn-slate-38", 38, 41], ["big", "ui-btn-green-50", 50, 54], ["small", "ui-btn-slate-30", 30, 33], ["gold", "ui-btn-gold-38", 38, 41], ["small gold", "ui-btn-gold-30", 30, 33]]:
 		var inset = 0.6 if spec[2] == 50 else 0.85
 		styles[spec[0]] = {
 			"normal": _plaque(spec[1], spec[2], spec[3], Color.WHITE, inset),
 			"hover": _plaque(spec[1], spec[2], spec[3], Color(1.12, 1.12, 1.12), inset),
-			"pressed": _plaque(spec[1], spec[2], spec[3], Color(0.9, 0.9, 0.9), inset),
+			"pressed": _down(_plaque(spec[1], spec[2], spec[3], Color(0.9, 0.9, 0.9), inset)),
 			"disabled": _plaque(spec[1], spec[2], spec[3], Color(0.55, 0.55, 0.6), inset),
 			"h": spec[2],
 		}
 	styles["box"] = _flat(BOX)
 	styles["box-sel"] = _flat(Color("#2c3558"), GOLD)
+	styles["box-down"] = _down(_flat(BOX.darkened(0.1)))
+	styles["box-sel-down"] = _down(_flat(Color("#2c3558").darkened(0.1), GOLD))
 	styles["pane"] = _flat(Color(24 / 255.0, 30 / 255.0, 54 / 255.0, 0.96))
 	styles["pane"].set_content_margin_all(a(9))
-	styles["slot"] = _flat(Color(16 / 255.0, 20 / 255.0, 40 / 255.0, 0.5), Color(1, 248 / 255.0, 230 / 255.0, 0.4))
+	styles["slot"] = _flat(Color(16 / 255.0, 20 / 255.0, 40 / 255.0, 0.5), Color(0, 0, 0, 0))   # its dashed edge is drawn by the slot itself
 	styles["slot-full"] = _flat(Color("#2b3358"), GOLD, 2)
 
 # ---------- widgets ----------
@@ -231,8 +373,9 @@ func _style_button(b: Button, cls: String) -> void:
 	b.add_theme_font_override("font", bold)
 	if flat:
 		var sel = "sel" in parts
-		for st in ["normal", "hover", "pressed", "disabled"]:
+		for st in ["normal", "hover", "disabled"]:
 			b.add_theme_stylebox_override(st, styles["box-sel"] if sel else styles["box"])
+		b.add_theme_stylebox_override("pressed", styles["box-sel-down"] if sel else styles["box-down"])
 		b.add_theme_color_override("font_color", GOLD if sel else (INK if "square" in parts else DIM))
 		b.add_theme_font_size_override("font_size", ts("s"))
 		return
@@ -326,9 +469,11 @@ func _screen(name: String, dim: bool) -> Control:
 	s.visible = false
 	if dim:
 		var bg = ColorRect.new()
+		bg.name = "bg"
 		bg.color = Color(8 / 255.0, 10 / 255.0, 24 / 255.0, 0.6)
 		bg.size = Vector2(W, H)
 		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bg.set_meta("still", true)
 		s.add_child(bg)
 	ui.add_child(s)
 	screens[name] = s
@@ -393,8 +538,21 @@ func _build() -> void:
 	ui.add_child(w["info"])
 	w["fps"] = _label("", roundi(8 * U), Color.WHITE, 0)
 	w["fps"].z_index = 10
-	_place(w["fps"], 4, 320 - 4 - 12, 300, 12)
+	_place(w["fps"], 4, 320 - 4 - 12, 560, 12)
 	ui.add_child(w["fps"])
+	var fx = CanvasLayer.new()                       # confetti, over the screens
+	fx.layer = 5
+	add_child(fx)
+	confetti_layer = Confetti.new()
+	confetti_layer.size = Vector2(W, H)
+	confetti_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fx.add_child(confetti_layer)
+	_build_screens()
+	get_window().size_changed.connect(_on_resized)
+	_web_setup()
+
+## Every screen. Built again when the typeface changes (a setting) or the window's size does.
+func _build_screens() -> void:
 	_build_hud()
 	_build_menu()
 	_build_intro()
@@ -402,6 +560,63 @@ func _build() -> void:
 	_build_settings()
 	_build_score("over")
 	_build_score("pause")
+	var turn = _label("Tourne l'écran pour jouer en grand ↻", ts("m"), INK)   # a phone held upright
+	turn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_place(turn, 0, 74, 569, 20)
+	turn.name = "turn"
+	w["turn"] = turn
+	ui.add_child(turn)
+	_check_turn()
+
+## Builds the screens again with the typeface and sizes of now, and puts back what was showing.
+func _rebuild() -> void:
+	rebuild_due = false
+	for k in screens:
+		screens[k].queue_free()
+	screens = {}
+	if w.has("turn"):
+		w["turn"].queue_free()
+	title_letters = []
+	_font()
+	_styles()
+	_build_screens()
+	await get_tree().process_frame
+	_aim_flyers()
+	for k in screens:
+		screens[k].visible = false
+	if run != null:
+		_fill_hud()
+	match state:
+		"menu": refresh_menu()
+		"shop": refresh_shop()
+		"settings": refresh_settings()
+	var name = "hud" if state == "play" else state
+	if screens.has(name):
+		show_screen(name)
+	if state == "pause":
+		pause_view()
+
+func _on_resized() -> void:
+	_check_turn()
+	if save["pixelFont"]:
+		rebuild_due = true                       # soon, or at the next screen change: never in the middle of a run
+		rebuild_t = 0.3
+
+func _check_turn() -> void:
+	if w.has("turn") and is_instance_valid(w["turn"]):
+		var win = Vector2(get_window().size)
+		w["turn"].visible = win.x < win.y * 0.75
+
+func _fill_hud() -> void:
+	hud_state = {"dist": -1, "gold": -1, "hearts": -1}
+	var hearts: HBoxContainer = w["hud-hearts"]
+	for ch in hearts.get_children():
+		ch.queue_free()
+	for i in run.max_hearts:
+		hearts.add_child(_icon_rect(icon("heart"), 20))
+	hearts.visible = run.max_hearts > 1          # a single life needs no counter
+	w["btn-dash"].visible = run.lvl("dash") > 0
+	w["btn-slow"].visible = run.lvl("slow") > 0
 
 func _build_hud() -> void:
 	var s = _screen("hud", false)
@@ -421,11 +636,18 @@ func _build_hud() -> void:
 	top.add_child(spacer)
 	w["hud-hearts"] = _hbox(3)
 	top.add_child(w["hud-hearts"])
-	var pause_b = _button("II", "square", pause)
+	var pause_b = _button("", "square", pause)
 	pause_b.custom_minimum_size = Vector2(a(36), a(36))
+	var bars = func() -> void:                       # two upright bars, as on the web
+		var down = a(2) if pause_b.button_pressed else 0.0
+		for dx in [-a(4.5), a(2)]:
+			pause_b.draw_rect(Rect2(pause_b.size.x / 2 + dx - a(1), pause_b.size.y / 2 - a(7.5) + down, a(5), a(15)), INK)
+	pause_b.draw.connect(bars)
+	w["btn-pause"] = pause_b
 	top.add_child(pause_b)
 	s.add_child(top)
 	w["toasts"] = _vbox(4)
+	w["toasts"].set_meta("still", true)
 	w["toasts"].alignment = BoxContainer.ALIGNMENT_BEGIN
 	_place(w["toasts"], 0, 38, 569, 120)
 	s.add_child(w["toasts"])
@@ -436,12 +658,14 @@ func _build_hud() -> void:
 	_place(w["banner"], 0, 320 * 0.22, 569, 34)
 	w["banner"].pivot_offset = Vector2(W / 2, a(17))
 	w["banner"].modulate.a = 0
+	w["banner"].set_meta("still", true)
 	s.add_child(w["banner"])
 	w["hint"] = _label("", ts("l"))
 	w["hint"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_place(w["hint"], 0, 320 * 0.76 - 20, 569, 24)
 	w["hint"].pivot_offset = Vector2(W / 2, a(12))
 	w["hint"].visible = false
+	w["hint"].set_meta("still", true)
 	s.add_child(w["hint"])
 	var acts = _hbox(10)
 	for k in ["slow", "dash"]:
@@ -468,6 +692,33 @@ func _build_hud() -> void:
 		w["cd-" + k] = cool
 	_place(acts, 569 - 12 - 114, 320 - 12 - 52, 114, 52)
 	s.add_child(acts)
+
+## Paper falling over the screens: a buy (14 pieces), a record (60).
+func confetti(count: int) -> void:
+	confetti_layer.add(count)
+
+class Confetti extends Control:
+	const COLOURS := [Color("#ffd35c"), Color("#5cf2e0"), Color("#e0456b"), Color("#7bd13c"), Color("#fff8e6")]
+	var bits: Array = []
+	func add(count: int) -> void:
+		for i in count:
+			bits.append({"x": randf() * size.x, "c": COLOURS[randi() % COLOURS.size()], "dur": 1.4 + randf() * 1.6, "t": -randf() * 0.5, "spin": randf() * TAU})
+	func _process(delta: float) -> void:
+		if bits.is_empty():
+			return
+		for b in bits:
+			b["t"] += delta
+		bits = bits.filter(func(b): return b["t"] < b["dur"])
+		queue_redraw()
+	func _draw() -> void:
+		var u = size.y / 320.0
+		for b in bits:
+			if b["t"] < 0:
+				continue
+			var k = b["t"] / b["dur"]
+			draw_set_transform(Vector2(b["x"], -0.06 * size.y + k * 360 * u), b["spin"] + k * 4 * PI, Vector2.ONE)
+			draw_rect(Rect2(-2.5 * u, -4 * u, 5 * u, 8 * u), b["c"])
+		draw_set_transform(Vector2.ZERO)
 
 ## The shade sweeping round an active's button while it charges (conic-gradient in the web version).
 class Cooldown extends Control:
@@ -561,6 +812,8 @@ func _build_menu() -> void:
 	w["menu-info"] = _box("pane")
 	_place(w["menu-info"], 569 / 2.0 - 150, 320 - M - 50 - 60, 300, 56)
 	w["menu-info"].visible = false
+	w["menu-info"].set_meta("still", true)
+	w["menu-info"].z_index = 4
 	s.add_child(w["menu-info"])
 	w["menu-loadout"] = _hbox(M)
 	_place(w["menu-loadout"], 212.5, 320 - M - 42, 150, 42)
@@ -710,17 +963,33 @@ func _build_shop() -> void:
 	col.add_child(w["card-actions"])
 	card.add_child(col)
 	s.add_child(card)
-	var prev = _box("pane")
+	var prev = PanelContainer.new()
+	var ps: StyleBoxFlat = styles["pane"].duplicate()
+	ps.set_content_margin_all(a(6))
+	prev.add_theme_stylebox_override("panel", ps)
 	_place(prev, 569 - M - 227, 30, 227, 282)
 	var pc = _vbox(6)
-	w["demo-icon"] = TextureRect.new()
-	w["demo-icon"].expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	w["demo-icon"].stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	w["demo-icon"].custom_minimum_size = Vector2(a(210), a(120))
-	pc.add_child(w["demo-icon"])
+	pc.alignment = BoxContainer.ALIGNMENT_BEGIN
+	# the animated preview: a tiny real run, drawn by a second renderer into its own picture
+	var frame = PanelContainer.new()
+	var fs = StyleBoxFlat.new()
+	fs.bg_color = Color("#0a0f14")
+	fs.border_color = LINE
+	fs.set_border_width_all(roundi(a(1.5)))
+	frame.add_theme_stylebox_override("panel", fs)
+	var view = TextureRect.new()
+	view.texture = demo_vp.get_texture()
+	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	view.stretch_mode = TextureRect.STRETCH_SCALE
+	view.custom_minimum_size = Vector2(a(212), a(212 * Demo.H / Demo.W))
+	view.texture_filter = game_view.texture_filter
+	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(view)
+	pc.add_child(frame)
+	w["demo-view"] = view
 	w["demo-desc"] = _label("", ts("s"), DIM, 0)
 	w["demo-desc"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	w["demo-desc"].custom_minimum_size.x = a(210)
+	w["demo-desc"].custom_minimum_size.x = a(212)
 	pc.add_child(w["demo-desc"])
 	prev.add_child(pc)
 	s.add_child(prev)
@@ -769,6 +1038,8 @@ func _build_settings() -> void:
 		row.add_child(b)
 		w[id] = b
 		main.add_child(row)
+		if id == "tg-full":
+			row.visible = _can_full()
 	w["panel-main"] = main
 	col.add_child(main)
 	var access = _vbox(6)
@@ -816,7 +1087,9 @@ func _build_settings() -> void:
 		DisplayServer.clipboard_set(code)
 		_msg("Code copié.")
 	grid.add_child(_button("Exporter", "small", on_export))
-	grid.add_child(_button("Importer", "small", func() -> void: _import(w["save-code"].text)))
+	grid.add_child(_button("Importer", "small", _import_field))
+	grid.add_child(_button("Fichier", "small", _save_file))
+	grid.add_child(_button("Ouvrir", "small", _open_file))
 	rc.add_child(grid)
 	w["save-msg"] = _label("", ts("s"), DIM, 0)
 	rc.add_child(w["save-msg"])
@@ -874,9 +1147,67 @@ func _build_score(name: String) -> void:
 
 # ---------- moving between screens ----------
 
+## Every block of a screen leaves towards, and comes back from, the edge of the frame it sits closest to
+## (the web version's "fly" blocks). Worked out once, from where each block rests.
+func _aim_flyers() -> void:
+	for k in screens:
+		for ch in screens[k].get_children():
+			if not (ch is Control) or ch.has_meta("still"):
+				continue
+			_set_rest(ch, ch.position)
+
+func _set_rest(ch: Control, pos: Vector2) -> void:
+	var r = Rect2(pos, ch.size)
+	var gaps = {"left": r.position.x, "right": W - r.end.x, "top": r.position.y, "bottom": H - r.end.y}
+	var best = "left"
+	for g in gaps:
+		if gaps[g] < gaps[best]:
+			best = g
+	var away = {"left": Vector2(-a(580), 0), "right": Vector2(a(580), 0), "top": Vector2(0, -a(330)), "bottom": Vector2(0, a(330))}[best]
+	ch.set_meta("rest", pos)
+	ch.set_meta("away", away)
+	var sc: Control = ch.get_parent()
+	if not sc.visible or sc.has_meta("closing"):
+		ch.position = pos + away
+	else:
+		ch.position = pos
+
+## Shows one screen (or the HUD): its blocks slide in with a little overshoot while the others' slide out.
 func show_screen(name: String) -> void:
 	for k in screens:
-		screens[k].visible = k == name
+		var sc: Control = screens[k]
+		var on = k == name
+		var shown_now = sc.visible and not sc.has_meta("closing")
+		if on == shown_now:
+			continue
+		if sc.has_meta("tw"):
+			(sc.get_meta("tw") as Tween).kill()
+		var tw = create_tween().set_parallel()
+		sc.set_meta("tw", tw)
+		var bg = sc.get_node_or_null("bg")
+		if on:
+			sc.remove_meta("closing")
+			sc.visible = true
+			sc.mouse_behavior_recursive = Control.MOUSE_BEHAVIOR_INHERITED
+			for ch in sc.get_children():
+				if ch.has_meta("rest"):
+					tw.tween_property(ch, "position", ch.get_meta("rest"), 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			if bg != null:
+				tw.tween_property(bg, "modulate:a", 1.0, 0.35)
+		else:
+			sc.set_meta("closing", true)
+			sc.mouse_behavior_recursive = Control.MOUSE_BEHAVIOR_DISABLED   # nothing can be touched on its way out
+			for ch in sc.get_children():
+				if ch.has_meta("rest"):
+					tw.tween_property(ch, "position", ch.get_meta("rest") + ch.get_meta("away"), 0.42).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+			if bg != null:
+				tw.tween_property(bg, "modulate:a", 0.0, 0.35)
+			var hide_it = func() -> void:
+				if sc.has_meta("closing"):
+					sc.visible = false
+					sc.remove_meta("closing")
+			tw.chain().tween_callback(hide_it)
+	demo_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if name == "shop" else SubViewport.UPDATE_DISABLED
 
 func refresh_menu() -> void:
 	_set_level(w["menu-level"], false)
@@ -909,13 +1240,41 @@ func refresh_menu() -> void:
 			else:
 				_slot_info(id)
 		slot.pressed.connect(on_slot)
+		var outline = func() -> void:
+			if id == "":                         # empty: a dashed place on the scenery
+				var col = Color(1, 248 / 255.0, 230 / 255.0, 0.4)
+				var r = Rect2(Vector2.ZERO, slot.size).grow(-a(0.75))
+				var dash = a(4)
+				var x = r.position.x
+				while x < r.end.x:
+					var x2 = minf(x + dash, r.end.x)
+					slot.draw_line(Vector2(x, r.position.y), Vector2(x2, r.position.y), col, a(1.5))
+					slot.draw_line(Vector2(x, r.end.y), Vector2(x2, r.end.y), col, a(1.5))
+					x += dash * 2
+				var y = r.position.y
+				while y < r.end.y:
+					var y2 = minf(y + dash, r.end.y)
+					slot.draw_line(Vector2(r.position.x, y), Vector2(r.position.x, y2), col, a(1.5))
+					slot.draw_line(Vector2(r.end.x, y), Vector2(r.end.x, y2), col, a(1.5))
+					y += dash * 2
+			if slot.get_meta("sel", false):
+				slot.draw_rect(Rect2(Vector2(-a(3), -a(3)), slot.size + Vector2(a(6), a(6))), INK, false, a(1.5))
+		slot.draw.connect(outline)
+		slot.set_meta("id", id)
 		w["menu-loadout"].add_child(slot)
+
+func _mark_slots(id: String) -> void:
+	for sl in w["menu-loadout"].get_children():
+		sl.set_meta("sel", id != "" and sl.get_meta("id", "") == id)
+		sl.queue_redraw()
 
 func _slot_info(id: String) -> void:
 	var box: PanelContainer = w["menu-info"]
 	if box.visible and box.get_meta("id", "") == id:
 		box.visible = false
+		_mark_slots("")
 		return
+	_mark_slots(id)
 	for ch in box.get_children():
 		ch.queue_free()
 	box.set_meta("id", id)
@@ -945,7 +1304,9 @@ func refresh_settings() -> void:
 		w["panel-" + key].visible = set_tab == key
 		_style_button(w["settab-" + key], "tab sel" if set_tab == key else "tab")
 	w["set-right"].visible = not in_run         # opened from the pause: the save waits for the end of the run
-	w["set-left"].position.x = a(153.5) if in_run else a(14)
+	var rest = Vector2(a(153.5) if in_run else a(14), w["set-left"].get_meta("rest", w["set-left"].position).y)
+	if w["set-left"].get_meta("rest", Vector2.ZERO) != rest:
+		_set_rest(w["set-left"], rest)
 
 func _volume(key: String, d: int) -> void:
 	save[key] = clampi(save[key] + d, 0, 10)
@@ -961,8 +1322,15 @@ func _toggle(id: String) -> void:
 	match id:
 		"tg-font":
 			save["pixelFont"] = not save["pixelFont"]
-		"tg-smooth":
+			SaveData.store(save)
+			_rebuild()
+			return
+		"tg-smooth":                                 # choosing again also forgets what "auto" had settled for
 			save["quality"] = SaveData.QUALITIES[(SaveData.QUALITIES.find(save["quality"]) + 1) % SaveData.QUALITIES.size()]
+			cap = 3 if _touch() else 4
+			watch = {"n": 0, "sum": 0.0, "bad": 0, "before": 0.0, "locked": false}
+			DirAccess.remove_absolute(CAP_FILE)
+			fit()
 		"tg-full":
 			save["full"] = not _is_full()
 			_apply_fullscreen()
@@ -977,12 +1345,25 @@ func _toggle(id: String) -> void:
 	SaveData.store(save)
 	refresh_settings()
 
+func _is_full_web() -> bool:
+	return _js_yes("document.fullscreenElement")
+
 func _is_full() -> bool:
+	if OS.has_feature("web"):
+		return _is_full_web()
 	var m = DisplayServer.window_get_mode()
 	return m == DisplayServer.WINDOW_MODE_FULLSCREEN or m == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
 
 func _apply_fullscreen() -> void:
-	if OS.has_feature("mobile") or OS.has_feature("web"):
+	if OS.has_feature("web"):
+		if not _can_full():
+			return
+		if save["full"]:
+			_js("document.documentElement.requestFullscreen({navigationUI:'hide'}).then(function(){try{screen.orientation.lock('landscape')}catch(e){}}).catch(function(){})")
+		else:
+			_js("document.fullscreenElement && document.exitFullscreen().catch(function(){})")
+		return
+	if OS.has_feature("mobile"):
 		return
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if save["full"] else DisplayServer.WINDOW_MODE_WINDOWED)
 
@@ -1007,18 +1388,140 @@ func _after_load() -> void:
 	render.shift = save["alertShift"]
 	refresh_settings()
 
+## A question in the game's own look (the web version's confirm()): a pane, « Non » and « Oui ».
 func _confirm(text: String, fn: Callable) -> void:
-	var d = ConfirmationDialog.new()
-	d.dialog_text = text
-	d.ok_button_text = "Oui"
-	d.cancel_button_text = "Non"
-	d.confirmed.connect(fn)
-	var on_hidden = func() -> void:
-		if not d.visible:
-			d.queue_free()
-	d.visibility_changed.connect(on_hidden)
+	if modal != null:
+		modal.queue_free()
+	var layer = CanvasLayer.new()
+	layer.layer = 40
+	add_child(layer)
+	var root = Control.new()
+	root.size = Vector2(W, H)
+	root.theme = ui.theme
+	layer.add_child(root)
+	var shade = ColorRect.new()
+	shade.color = Color(8 / 255.0, 10 / 255.0, 24 / 255.0, 0.7)
+	shade.size = Vector2(W, H)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(shade)
+	var p = _box("pane")
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	_place(p, 569 / 2.0 - 140, 90, 280, 0)
+	var col = _vbox(10)
+	var l = _label(text, ts("m"), INK, 0)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.custom_minimum_size.x = a(258)
+	col.add_child(l)
+	var row = _hbox(10)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var close = func() -> void:
+		layer.queue_free()
+		modal = null
+	var yes = func() -> void:
+		close.call()
+		fn.call()
+	row.add_child(_button("Non", "small plain", close))
+	row.add_child(_button("Oui", "small gold", yes))
+	col.add_child(row)
+	p.add_child(col)
+	root.add_child(p)
+	modal = layer
+
+func _import_field() -> void:
+	var code: String = w["save-code"].text.strip_edges()
+	if code == "" and OS.has_feature("web"):         # on a phone the field cannot be typed in: the browser asks
+		var got = JavaScriptBridge.eval("window.prompt('Colle ici ton code de sauvegarde :') || ''", true)
+		code = str(got) if got != null else ""
+		w["save-code"].text = code
+	if code == "":
+		_msg("Colle d'abord un code dans le champ.")
+		return
+	_import(code)
+
+## The code in a file: downloaded in a browser, saved where the player chooses elsewhere.
+func _save_file() -> void:
+	var code = SaveData.export_code(save)
+	if OS.has_feature("web"):
+		JavaScriptBridge.download_buffer(code.to_utf8_buffer(), "jungle-loop-sauvegarde.txt", "text/plain")
+		return
+	var d = FileDialog.new()
+	d.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	d.access = FileDialog.ACCESS_FILESYSTEM
+	d.use_native_dialog = true
+	d.current_file = "jungle-loop-sauvegarde.txt"
+	d.filters = PackedStringArray(["*.txt ; Sauvegarde"])
+	var on_file = func(path: String) -> void:
+		var f = FileAccess.open(path, FileAccess.WRITE)
+		if f != null:
+			f.store_string(code)
+			_msg("Sauvegarde enregistrée.")
+	d.file_selected.connect(on_file)
 	add_child(d)
-	d.popup_centered()
+	d.popup_centered_ratio(0.6)
+
+func _open_file() -> void:
+	if OS.has_feature("web"):                        # a file picker of the browser's; the text comes back here
+		var win = JavaScriptBridge.get_interface("window")
+		var cb = JavaScriptBridge.create_callback(_on_opened)
+		web_cbs.append(cb)
+		win.jlOpened = cb
+		JavaScriptBridge.eval("(function(){var i=document.createElement('input');i.type='file';i.accept='.txt,.json';i.onchange=function(){var f=i.files[0];if(f)f.text().then(function(t){window.jlOpened(t);});};i.click();})()", true)
+		return
+	var d = FileDialog.new()
+	d.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	d.access = FileDialog.ACCESS_FILESYSTEM
+	d.use_native_dialog = true
+	d.filters = PackedStringArray(["*.txt, *.json ; Sauvegarde"])
+	var on_file = func(path: String) -> void:
+		_import(FileAccess.get_file_as_string(path))
+	d.file_selected.connect(on_file)
+	add_child(d)
+	d.popup_centered_ratio(0.6)
+
+func _on_opened(args: Array) -> void:
+	_import(str(args[0]) if args.size() > 0 else "")
+
+# ---------- the browser (web only) ----------
+
+func _js(code: String):
+	return JavaScriptBridge.eval(code, true) if OS.has_feature("web") else null
+
+## A yes-or-no question to the browser. (Its answer is made a number first: a true or false coming
+## back from JavaScript is not always a bool on Godot's side, and comparing it to one stops the script.)
+func _js_yes(code: String) -> bool:
+	var v = _js("(" + code + ") ? 1 : 0")
+	return v != null and int(v) == 1
+
+## Full screen where the browser has it (not on iPhone, where the game is added to the home screen
+## instead); installed as an app it already fills the screen. Elsewhere, the window.
+func _can_full() -> bool:
+	if OS.has_feature("web"):
+		return _js_yes("document.fullscreenEnabled && document.documentElement.requestFullscreen && !matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches")
+	return not OS.has_feature("mobile")
+
+## Hiding the tab pauses the run and silences the game; closing it keeps the coins picked up so far.
+func _web_setup() -> void:
+	if not OS.has_feature("web"):
+		return
+	fps_param = str(_js("location.search")).contains("fps")
+	var doc = JavaScriptBridge.get_interface("document")
+	var win = JavaScriptBridge.get_interface("window")
+	var on_vis = JavaScriptBridge.create_callback(_on_visibility)
+	var on_hide = JavaScriptBridge.create_callback(_on_pagehide)
+	web_cbs.append_array([on_vis, on_hide])
+	doc.addEventListener("visibilitychange", on_vis)
+	win.addEventListener("pagehide", on_hide)
+
+func _on_visibility(_args: Array) -> void:
+	var hidden = _js_yes("document.hidden")
+	if hidden:
+		pause()
+	Audio.sleep(hidden)
+
+func _on_pagehide(_args: Array) -> void:
+	if state == "play" or state == "pause" or in_run:
+		bank()
 
 # ---------- the shop ----------
 
@@ -1040,14 +1543,16 @@ func refresh_shop(just_bought: String = "") -> void:
 				picked_mount = mk
 				refresh_shop()
 			list.add_child(_tile(icon("mount-" + k), Game.MOUNTS[k]["name"], k == picked_mount, DIM, on_mount, 4))
-		_card(Game.MOUNTS[picked_mount]["name"], "Rare. Elle attend sur le chemin : touche-la pour monter. Au premier coup, elle s'en va à ta place.", MOUNT_TEXT[picked_mount], icon("mount-" + picked_mount))
+		_card(Game.MOUNTS[picked_mount]["name"], "Rare. Elle attend sur le chemin : touche-la pour monter. Au premier coup, elle s'en va à ta place.", MOUNT_TEXT[picked_mount])
+		_show_demo("m-" + picked_mount, 1)
 		return
 	if tab == "skin":
 		var l = _label("Bientôt : la tenue, les cheveux, la cape et les baskets du héros, à changer séparément.", ts("s"), DIM, 0)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = a(250)
 		list.add_child(l)
-		_card("Skins", "À venir.", "", null)
+		_card("Skins", "À venir.", "")
+		_show_demo("sprint", 1)
 		return
 	var full: bool = save["equipped"].size() >= SaveData.MAX_EQUIPPED
 	var shown: Array = SaveData.UPGRADES.filter(func(u): return u.get("power", false) == (tab == "power"))
@@ -1094,7 +1599,8 @@ func refresh_shop(just_bought: String = "") -> void:
 		status = "Possédé. Les 3 emplacements sont pris." if full else "Possédé."
 	else:
 		status = "Bouton en jeu." if u["kind"] == "actif" else "Toujours actif une fois équipé."
-	_card(u["name"] + pips, status, u["desc"], icon("ico-" + u["icon"]))
+	_card(u["name"] + pips, status, u["desc"])
+	_show_demo(u["id"], st["lvl"])
 	var acts: HBoxContainer = w["card-actions"]
 	if st["lvl"] > 0 and st["cost"] >= 0:
 		var b = _button("Niv. %d · ◈ %d" % [st["lvl"] + 1, st["cost"]], "small gold", func() -> void: _buy(u))
@@ -1154,16 +1660,21 @@ func _tile(tex: Texture2D, text: String, sel: bool, colour: Color, fn: Callable,
 	b.pressed.connect(on_tile)
 	return b
 
-func _card(name: String, status: String, desc: String, tex: Texture2D) -> void:
+func _card(name: String, status: String, desc: String) -> void:
 	w["card-name"].text = name
 	w["card-status"].text = status
 	w["demo-desc"].text = desc
-	w["demo-icon"].texture = tex
+
+## A new preview only when another one is asked for: picking the same tile again lets it run on.
+func _show_demo(id: String, lvl: int) -> void:
+	if id != demo.shown or maxi(1, lvl) != demo.level or demo.run == null:
+		demo.show_demo(id, lvl)
 
 func _buy(u: Dictionary) -> void:
 	var ok = SaveData.buy(save, u)
 	Audio.sfx("buy" if ok else "no")
 	if ok:
+		confetti(14)
 		picked = u["id"]
 	refresh_shop(u["id"] if ok else "")
 
@@ -1212,13 +1723,7 @@ func go(name: String) -> void:
 		Game.launch(run)                             # rumble, then the doorway blows out
 		Debug.debug_run(run)                         # what the debug menu asks for, if anything
 		dead_for = 0
-		hud_state = {"dist": -1, "gold": -1, "hearts": -1}
-		var hearts: HBoxContainer = w["hud-hearts"]
-		for ch in hearts.get_children():
-			ch.queue_free()
-		for i in run.hearts:
-			hearts.add_child(_icon_rect(icon("heart"), 20))
-		hearts.visible = run.max_hearts > 1          # a single life needs no counter
+		_fill_hud()
 		last_dist = 0
 		for ch in w["toasts"].get_children():
 			ch.queue_free()
@@ -1227,8 +1732,6 @@ func go(name: String) -> void:
 		Progress.start_run(save)
 		progress({"runs": 1})
 		hint(1 if save["loops"] < 2 else 0)          # the first escapes explain the one control
-		w["btn-dash"].visible = run.lvl("dash") > 0
-		w["btn-slow"].visible = run.lvl("slow") > 0
 		Audio.music("")                              # silence for the rumble: the theme starts on the blast
 		return
 	if state == "pause" and not in_run:
@@ -1244,6 +1747,9 @@ func go(name: String) -> void:
 		refresh_settings()
 	Audio.music("" if name == "intro" else ("run" if in_run else "menu"))
 	state = name
+	if rebuild_due:
+		_rebuild()
+		return
 	show_screen(name)
 
 func game_over() -> void:
@@ -1266,7 +1772,10 @@ func game_over() -> void:
 	tw.tween_method(count, 0.0, float(dist), dur).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	w["over-best"].text = "Debug : record non enregistré" if run.debug else ("★ Nouveau record ! ★" if record else "Record : %d m" % best_of(run.mode))
 	_set_colour(w["over-best"], GOLD if record else DIM)
+	w["over-best"].label_settings.font_size = ts("m") if record else ts("s")
+	w["over-best"].set_meta("hop", record)
 	if record:
+		confetti(60)
 		Audio.sfx("record")
 	Audio.music("over")                              # the run's music winds down, the menu's comes in
 	state = "over"
@@ -1275,14 +1784,19 @@ func game_over() -> void:
 func pause() -> void:
 	if state != "play" or run == null or run.dead:
 		return
+	touches.clear()
+	input.hold = false
+	pause_view()
+	state = "pause"
+	show_screen("pause")
+	Audio.duck(true)                                 # the music goes on, quieter
+
+func pause_view() -> void:
 	w["pause-dist"].text = "%d m" % floori(run.dist)
 	w["pause-gold"].text = "+%d ◈" % run.gold
 	w["pause-best"].text = "Debug : record non enregistré" if run.debug else "Record : %d m" % best_of(run.mode)
 	_set_level(w["pause-level"], true)
 	_quest_cards(w["pause-quests"])
-	state = "pause"
-	show_screen("pause")
-	Audio.duck(true)                                 # the music goes on, quieter
 
 func resume() -> void:
 	if state == "pause":
@@ -1323,8 +1837,13 @@ func toast(ico: String, text: String, coins: int, xp: int) -> void:
 	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	box.modulate.a = 0
 	w["toasts"].add_child(box)
+	box.scale = Vector2(0.8, 0.8)
+	var centre = func() -> void:
+		box.pivot_offset = box.size / 2
+	centre.call_deferred()
 	var tw = create_tween()
 	tw.tween_property(box, "modulate:a", 1.0, 0.27)
+	tw.parallel().tween_property(box, "scale", Vector2.ONE, 0.27).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_interval(2.6)
 	tw.tween_property(box, "modulate:a", 0.0, 0.5)
 	tw.tween_callback(box.queue_free)
@@ -1366,7 +1885,10 @@ func hud() -> void:
 		hud_state["hearts"] = run.hearts
 		var i = 0
 		for h in w["hud-hearts"].get_children():
-			h.modulate = Color(0.5, 0.5, 0.5, 0.5) if i >= run.hearts else Color.WHITE
+			var lost = i >= run.hearts
+			h.pivot_offset = h.size / 2
+			create_tween().tween_property(h, "modulate", Color(0.35, 0.35, 0.35, 0.5) if lost else Color.WHITE, 0.2)
+			create_tween().tween_property(h, "scale", Vector2(0.8, 0.8) if lost else Vector2.ONE, 0.2)
 			i += 1
 	for k in ["dash", "slow"]:
 		var act = run.dash if k == "dash" else run.slow
@@ -1384,11 +1906,61 @@ func press() -> void:
 		input.pressed = true
 		input.hold = true
 
-## While playing, a touch anywhere on the frame is a jump (the HUD's buttons keep their own job).
+## Which of the HUD's buttons is under a spot, if any.
+func _hud_button_at(pos: Vector2) -> String:
+	for k in ["btn-pause", "btn-dash", "btn-slow"]:
+		var b: Control = w.get(k)
+		if b != null and is_instance_valid(b) and b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
+			return k
+	return ""
+
+## Before the buttons see anything. Godot's buttons only follow the first finger: a second finger on the
+## HUD's buttons (the jump held with the other thumb) is handled here. A touch anywhere puts away the
+## card of an equipped item, as on the web.
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and event.pressed and event.index > 0 and state == "play":
+		match _hud_button_at(event.position):
+			"btn-pause":
+				pause()
+				get_viewport().set_input_as_handled()
+			"btn-dash":
+				input.dash = true
+				get_viewport().set_input_as_handled()
+			"btn-slow":
+				input.slow = true
+				get_viewport().set_input_as_handled()
+	var down = (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION)
+	if down and state == "menu" and w.has("menu-info") and w["menu-info"].visible:
+		var on_slot = false
+		for sl in w["menu-loadout"].get_children():
+			if sl.get_global_rect().has_point(event.position):
+				on_slot = true
+		if not on_slot:
+			w["menu-info"].visible = false
+			_mark_slots("")
+	if down and OS.has_feature("web") and _touch() and save["full"] and state != "loading":
+		var win = Vector2(get_window().size)
+		if win.x > win.y and not _is_full_web() and _can_full():   # a phone held sideways plays full screen (at a touch: turning is no gesture)
+			_apply_fullscreen()
+
+## While playing, a touch anywhere on the frame is a jump (the HUD's buttons keep their own job). Each
+## finger counts: the jump is held while one of them stays down.
 func _unhandled_input(event: InputEvent) -> void:
-	if debug_panel != null:
-		return                                       # the debug menu is open: its own fields take the keys
+	if debug_panel != null or modal != null:
+		return                                       # the debug menu or a question is open: its own fields take the keys
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			if state == "play" and _hud_button_at(event.position) == "":
+				touches[event.index] = true
+				press()
+		else:
+			touches.erase(event.index)
+			if touches.is_empty():
+				input.hold = false
+		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.device == InputEvent.DEVICE_ID_EMULATION:
+			return                                   # a finger, already handled as a touch
 		if event.pressed:
 			press()
 			if state != "play" and state != "pause" and state != "intro" and state != "loading":
@@ -1439,12 +2011,19 @@ func _notification(what: int) -> void:
 
 func _process(delta: float) -> void:
 	var dt = minf(0.033, delta)
+	_watch(delta * 1000.0)
+	if rebuild_due and state != "play" and state != "loading" and state != "pause":
+		rebuild_t -= delta
+		if rebuild_t <= 0:
+			_rebuild()
 	time += delta
 	if state == "loading":
 		return
 	if state == "play" or state == "over":
 		run.view_w = render.view_w * Game.PIXEL
+		var t0 = Time.get_ticks_usec()
 		Game.update(run, dt, input)
+		perf["game"] += Time.get_ticks_usec() - t0
 		var stats = {"dist": run.dist - last_dist, "coins": 0, "gems": 0, "jumps": 0, "plats": 0, "breaks": 0, "shrooms": 0, "monkeys": 0, "mounts": 0, "dodges": 0, "hurt": false}
 		last_dist = run.dist
 		for ev in run.events:
@@ -1485,6 +2064,17 @@ func _process(delta: float) -> void:
 		banner_timer -= dt
 		if banner_timer <= 0:
 			create_tween().tween_property(w["banner"], "modulate:a", 0.0, 0.35)
+	if w.has("over-best") and is_instance_valid(w["over-best"]):
+		var rb: Label = w["over-best"]
+		if rb.get_meta("hop", false) and state == "over":
+			var ph = fposmod(time, 0.6) / 0.6
+			var k = sin(ph / 0.6 * PI) if ph < 0.6 else 0.0
+			rb.pivot_offset = rb.size / 2
+			rb.rotation = -0.07 * k
+			rb.scale = Vector2.ONE * (1 + 0.08 * k)
+		elif rb.rotation != 0:
+			rb.rotation = 0
+			rb.scale = Vector2.ONE
 	if w.has("hint") and w["hint"].visible:          # it pulses gently
 		w["hint"].scale = Vector2.ONE * (1.0 + 0.025 * (1 - cos(time * TAU)))
 	for i in title_letters.size():                   # the title's letters hop one after the other
@@ -1495,17 +2085,33 @@ func _process(delta: float) -> void:
 		var l: Label = title_letters[i]
 		l.position.y = (a(63) - l.get_minimum_size().y) / 2 - hop * a(29 * fk) * 0.2
 	if w.has("fps"):                                 # the frame rate in a corner (Réglages, Affichage)
-		w["fps"].visible = save["showFps"]
-		if save["showFps"] and Engine.get_process_frames() % 15 == 0:
-			w["fps"].text = "%d i/s · x%d" % [Engine.get_frames_per_second(), render.q]
+		w["fps"].visible = save["showFps"] or fps_param
+		if w["fps"].visible and Engine.get_process_frames() % 15 == 0:
+			w["fps"].text = "%d i/s · x%d · %dx%d · %s · %s" % [Engine.get_frames_per_second(), q, game_vp.size.x, game_vp.size.y, save["quality"], perf["text"]]
+	_measure()
 	if w.has("info"):                                # the debug menu's « Mesures en jeu »
 		w["info"].visible = Debug.dbg["info"] and run != null
 		if w["info"].visible and Engine.get_process_frames() % 5 == 0:
 			w["info"].text = "%.1f m/s (propre %.1f) · %d m · %d s · hauteur %.2f m · max %.2f m" % [run.speed / 40, run.own / 40, floori(run.dist), roundi(run.t), run.h, run.max_h]
 	# Behind the menus: the temple, frozen. The hero only appears once the run starts.
 	var shown: Game.Run = run if (state == "play" or state == "pause" or state == "over" or in_run) and run != null else still
-	var win = get_window().size
-	render.show_run(shown, time, minf(win.x / W, win.y / H))
+	render.show_run(shown, time, q)
+	if state == "shop" and demo.run != null:         # the shop's preview: a tiny real run
+		demo.step(dt)
+		demo_render.position = Vector2(0, (Demo.H - 320) * q)   # the floor at the bottom
+		demo_render.show_run(demo.run, time, q)
+
+## Every 30 frames: the average time spent in the game's rules and in its drawing, in milliseconds.
+func _measure() -> void:
+	perf["n"] += 1
+	if perf["n"] < 30:
+		return
+	perf["draw"] += Render.draw_us
+	Render.draw_us = 0
+	perf["text"] = "jeu %.1f ms · dessin %.1f ms" % [perf["game"] / 30000.0, perf["draw"] / 30000.0]
+	perf["n"] = 0
+	perf["game"] = 0
+	perf["draw"] = 0
 
 # ---------- the debug menu (debug.gd) ----------
 

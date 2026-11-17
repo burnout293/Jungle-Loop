@@ -7,10 +7,13 @@ config_version=5
 
 config/name="Jungle Loop"
 config/description="Course infinie en pixel art : Pépito a volé la relique du temple."
-config/version="0.26.0"
+config/version="0.29.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0.039, 0.059, 0.078, 1)
+boot_splash/image="res://assets/pwa/splash.png"
+boot_splash/use_filter=false
 
 [autoload]
 

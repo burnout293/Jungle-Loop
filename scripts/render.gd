@@ -42,7 +42,12 @@ const DIGITS := {1: "010110010010111", 2: "111001111100111", 3: "111001111001111
 class Layer extends Node2D:
 	var paint: Callable
 	func _draw() -> void:
+		var t0 = Time.get_ticks_usec()
 		paint.call(self)
+		Render.draw_us += Time.get_ticks_usec() - t0
+
+## Time spent in the drawing code (microseconds, summed since the last read): the FPS corner shows it.
+static var draw_us := 0
 
 ## What the hero is drawn through: its children only show inside `rect` (he is hidden in the doorway).
 class Clip extends Node2D:
@@ -66,7 +71,6 @@ var front: Layer
 var over: Layer
 
 func _ready() -> void:
-	scale = Vector2(PIXEL, PIXEL)
 	back = _layer(_draw_back, false, self)
 	hero_clip = Clip.new()
 	hero_clip.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
@@ -83,11 +87,13 @@ func _layer(fn: Callable, smooth: bool, parent: Node) -> Layer:
 	parent.add_child(l)
 	return l
 
-## Called every frame with what to show.
-func show_run(r: Game.Run, time: float, screen_scale: float) -> void:
+## Called every frame with what to show. The node draws into a picture of q x q real pixels per art
+## pixel (a SubViewport, sized by main.gd: the web version's canvas), fitted to the screen afterwards.
+func show_run(r: Game.Run, time: float, q_: int) -> void:
 	run = r
 	t = time
-	q = clampf(ceilf(PIXEL * screen_scale - 0.01), 1, 4)
+	q = q_
+	scale = Vector2(q, q)
 	Ambient.q = q
 	var off = Vector2.ZERO
 	if r.shake > 0:
