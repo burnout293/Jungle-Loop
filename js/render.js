@@ -4,7 +4,7 @@
 // but they can stand and scroll at any Q-th of a pixel, which is what keeps a fast run steady,
 // and the browser smooths the picture's edges when it fits the canvas to the screen.
 
-import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, propAt, floorAt, flatAt, biomeAt } from './game.js';
+import { TENTACLE, GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, SLOW_WARN, propAt, floorAt, flatAt, biomeAt } from './game.js';
 import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js';
 
 // Each scenery has its own far background, middle distance, floor, props, and its own version of
@@ -342,16 +342,51 @@ function drawDirt(ctx, cam, t) {
   for (const d of dirt) { ctx.fillStyle = d.life > 0.25 ? '#5a3a24' : '#7a5236'; ctx.fillRect(snap(d.x - cam), snap(d.y), 2, 2); }
 }
 
-// The warning of a flyer about to cross: a red "!" at the right edge, blinking, an arrow pointing in.
-function warnMark(ctx, x, y, t) {
-  if (Math.floor(t * 8) % 2) return;
-  ctx.fillStyle = '#1a1024'; ctx.fillRect(x - 5, y - 10, 11, 21);
-  ctx.fillStyle = RED; ctx.fillRect(x - 4, y - 9, 9, 19);
-  ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 1, y - 7, 3, 9); ctx.fillRect(x - 1, y + 4, 3, 3);
-  chevronLeft(ctx, x - 9, y);
+// The warning of a flyer about to cross: a big danger sign at the right edge, at the height it will come
+// at, pulsing between two sizes in a red glow, an arrow pointing in and a dashed trail along its path.
+// Never blinked away: it has to catch the eye at once.
+const SIGNS = {};
+function warnSign(h) {                                   // a red triangle, light rim, white "!", dark outline
+  if (SIGNS[h]) return SIGNS[h];
+  const w = Math.round(h * 1.16), c = canvasOf(w + 2, h + 2), x = c.getContext('2d'), mid = (w + 2) / 2;
+  const tri = (inset, col) => {
+    x.fillStyle = col;
+    for (let y = Math.ceil(inset * 1.9); y < h - inset; y++) {
+      const half = (y - inset * 1.9) / (h - inset * 2.9) * (w / 2 - inset * 1.2);
+      if (half > 0) x.fillRect(Math.round(mid - Math.max(0.5, half)), y + 1, Math.max(1, Math.round(2 * Math.max(0.5, half))), 1);
+    }
+  };
+  tri(0, '#1a1024'); tri(1, '#ffd35c'); tri(2.5, RED);
+  const bw = Math.max(2, Math.round(h / 8)), top = Math.round(h * 0.34), bar = Math.round(h * 0.36), bx = Math.round(mid - bw / 2);
+  x.fillStyle = '#1a1024'; x.fillRect(bx - 1, top - 1, bw + 2, bar + 2); x.fillRect(bx - 1, top + bar + 2, bw + 2, bw + 2);
+  x.fillStyle = '#ffffff'; x.fillRect(bx, top, bw, bar); x.fillRect(bx, top + bar + 3, bw, bw);
+  return (SIGNS[h] = c);
 }
-function chevronLeft(ctx, x, y) {
-  for (const [c, g] of [['#1a1024', 1], [RED, 0]]) { ctx.fillStyle = c; for (let k = 0; k < 4; k++) ctx.fillRect(x + k - g, y - k - g, 1 + 2 * g, 2 * k + 1 + 2 * g); }
+function warnMark(ctx, x, y, t, age) {
+  const big = Math.floor(t * 7) % 2 === 0, im = warnSign(big ? 30 : 26);
+  y = Math.max(im.height / 2 + 2, Math.min(VH - 34, y));
+  const g = ctx.createRadialGradient(x, y, 2, x, y, 30);
+  g.addColorStop(0, `rgba(255,59,78,${big ? 0.55 : 0.4})`); g.addColorStop(1, 'rgba(255,59,78,0)');
+  ctx.fillStyle = g; ctx.fillRect(x - 30, y - 30, 60, 60);
+  for (let k = 0; k < 6; k++) {                          // its path, fading towards the hero
+    const dx = x - 26 - k * 14 - ((t * 40) % 14);
+    ctx.fillStyle = `rgba(255,96,96,${0.7 * (1 - k / 6) * Math.min(1, age * 4)})`; ctx.fillRect(snap(dx), Math.round(y), 8, 2);
+  }
+  ctx.drawImage(im, Math.round(x - im.width / 2), Math.round(y - im.height / 2));
+  chevronLeft(ctx, Math.round(x - im.width / 2) - 7, Math.round(y), 6);
+}
+// A digit in a 3 x 5 pixel font, `k` times larger, outlined, centred on x: the Sablier's last seconds.
+const DIGITS = { 1: '010110010010111', 2: '111001111100111', 3: '111001111001111' };
+function drawDigit(ctx, d, x, y, k) {
+  const bits = DIGITS[d]; if (!bits) return;
+  const x0 = Math.round(x - 1.5 * k), y0 = Math.round(y);
+  for (const [col, g] of [['#1a1024', 1], ['#d6f4ff', 0]]) {
+    ctx.fillStyle = col;
+    for (let i = 0; i < 15; i++) if (bits[i] === '1') ctx.fillRect(x0 + (i % 3) * k - g, y0 + Math.floor(i / 3) * k - g, k + 2 * g, k + 2 * g);
+  }
+}
+function chevronLeft(ctx, x, y, size = 4) {
+  for (const [c, g] of [['#1a1024', 1], [RED, 0]]) { ctx.fillStyle = c; for (let k = 0; k < size; k++) ctx.fillRect(x + k - g, y - k - g, 1 + 2 * g, 2 * k + 1 + 2 * g); }
 }
 
 // A pile of `count` crates as one outlined picture, made the first time it is needed.
@@ -900,17 +935,24 @@ export function draw(ctx, run, v, t) {
     if ((x > v.w + 10 && !(o.kind === 'dart' && o.state === 'warn')) || x < -80) continue;   // a fonceur waiting off screen still shows its warning
     if (o.kind === 'acid') {                           // the plant's acid: a glowing ball in the air, a bubbling puddle on the floor
       const w = n(o.w), cx = x + w / 2;
-      if (o.tentacle) {                                // a root of Vorace slithering along the floor, its pointed end first:
-        // drawn pixel by pixel in the colours of her legs, so it stays sharp (outline, lit top, thorns)
-        const C = ['#1a1024', '#2c4f1c', '#4c8a2c', '#86c048', '#f0e2c0'];
+      if (o.tentacle) {                                // a root of Vorace crawling along the floor, its pointed end first:
+        // drawn pixel by pixel, as tall as it hurts, in the dark violet of her veins so it stands out from
+        // the moss (lit top, ivory thorns, a glowing acid tip); it undulates slowly and throws up earth
+        const C = ['#1a1024', '#3a1a4a', '#7a3a9a', '#d08cf0', '#f0e2c0', '#c8ff5c'], H = n(TENTACLE.h);
+        ctx.fillStyle = 'rgba(14,8,34,.4)'; ctx.fillRect(x + 1, foot - 2, w, 3);                    // its shadow on the floor
         for (let u = 0; u < w; u++) {
-          const th = Math.min(5, 2 + (u / 5 | 0)), yy = Math.round(foot - 5 - th - Math.sin(t * 12 + u * 0.18 + o.ph) * 2.5), xx = x + u;
+          const th = 3 + Math.round(3 * u / w), yy = Math.round(foot - 2 - th - (Math.sin(t * 5 - u * 0.33 + o.ph) * 0.5 + 0.5) * Math.max(0, H - 3 - th)), xx = x + u;   // thin at the tip, a slow wave running along it
           ctx.fillStyle = C[0]; ctx.fillRect(xx, yy - 1, 1, th + 2);
           ctx.fillStyle = C[2]; ctx.fillRect(xx, yy, 1, th);
           ctx.fillStyle = C[3]; ctx.fillRect(xx, yy, 1, 1);
-          ctx.fillStyle = C[1]; ctx.fillRect(xx, yy + th - 1, 1, 1);
-          if (u % 11 === 6 && th >= 4) { ctx.fillStyle = C[0]; ctx.fillRect(xx - 1, yy - 4, 3, 3); ctx.fillStyle = C[4]; ctx.fillRect(xx, yy - 3, 1, 2); }
+          ctx.fillStyle = C[1]; ctx.fillRect(xx, yy + th - 2, 1, 2);
+          if (u % 6 === 3 && u > 4) { ctx.fillStyle = C[0]; ctx.fillRect(xx - 1, yy - 4, 3, 4); ctx.fillStyle = C[4]; ctx.fillRect(xx, yy - 3, 1, 3); }
         }
+        const tipY = foot - 5;                                                              // the tip: a drop of acid glowing
+        const g = ctx.createRadialGradient(x, tipY, 1, x, tipY, 11); g.addColorStop(0, 'rgba(200,255,92,.85)'); g.addColorStop(1, 'rgba(200,255,92,0)');
+        ctx.fillStyle = g; ctx.fillRect(x - 11, tipY - 11, 22, 22);
+        ctx.fillStyle = C[0]; ctx.fillRect(x - 2, tipY - 2, 4, 4); ctx.fillStyle = C[5]; ctx.fillRect(x - 1, tipY - 1, 2, 2);
+        if (Math.random() < 0.4) dirt.push({ x: x + w - 2 + n(run.cam), y: foot - 2, vx: 20 + Math.random() * 50, vy: -50 - Math.random() * 50, life: 0.45 });   // the earth it ploughs
         continue;
       }
       if (o.drop) {                                    // its shadow on the floor shows where it will land
@@ -959,7 +1001,7 @@ export function draw(ctx, run, v, t) {
         ctx.fillStyle = g; ctx.fillRect(cx - 9, foot - im.height - 6, 18, 18);
       }
     } else if (o.kind === 'dart') {                    // a "!" at the edge, at its height; then across in one go
-      if (o.state === 'warn') warnMark(ctx, v.w - 12, cy, t);
+      if (o.state === 'warn') warnMark(ctx, v.w - 20, cy, t, o.t || 0);
       else if (o.state === 'go') {
         const frame = H.frames > 1 ? Math.floor(t * (name === 'fly' ? 14 : 9) + o.ph) % H.frames : 0, x0 = snap(cx - fw / 2);
         ctx.fillStyle = 'rgba(255,255,255,.45)';
@@ -1107,7 +1149,15 @@ export function draw(ctx, run, v, t) {
 
   if (run.boom > 0) { ctx.fillStyle = `rgba(255,244,214,${run.boom * 0.8})`; ctx.fillRect(0, 0, v.w, VH); }
   if (run.flash > 0) { ctx.fillStyle = `rgba(255,70,90,${run.flash * 0.3})`; ctx.fillRect(0, 0, v.w, VH); }
-  if (run.slow.t > 0) { ctx.fillStyle = 'rgba(120,200,255,.16)'; ctx.fillRect(0, 0, v.w, VH); }
+  if (run.slow.t > 0) {                                // the Sablier: the world tinted blue; in its last seconds the tint
+    const left = run.slow.t, u = SLOW_WARN - left;      // blinks faster and faster, the edges flash and a count rises over him
+    const on = left > SLOW_WARN || Math.floor(2 * (3 * u + 3 * u * u)) % 2 === 0;
+    ctx.fillStyle = `rgba(120,200,255,${on ? 0.16 : 0.05})`; ctx.fillRect(0, 0, v.w, VH);
+    if (left <= SLOW_WARN) {
+      if (on) { ctx.fillStyle = 'rgba(214,244,255,.85)'; ctx.fillRect(0, 0, v.w, 3); ctx.fillRect(0, VH - 3, v.w, 3); ctx.fillRect(0, 0, 3, VH); ctx.fillRect(v.w - 3, 0, 3, VH); }
+      drawDigit(ctx, Math.ceil(left), n(run.sx), n(run.p.y) - 64, 3);
+    }
+  }
   if (run.glitch > 0) {                                // time tear
     const g = run.glitch;
     ctx.fillStyle = `rgba(255,255,255,${g * 0.45})`; ctx.fillRect(0, 0, v.w, VH);

@@ -31,6 +31,10 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const DASH_CD = [0, 14, 10, 7];
 const SLOW_TIME = [0, 3, 4.5];
 const SLOW_CD = 20;
+// Its end is announced: the last SLOW_WARN seconds tick (faster and faster) and blink, then the world
+// eases back to full speed over SLOW_EASE seconds instead of snapping.
+export const SLOW_WARN = 2;
+const SLOW_TICKS = [2, 1.5, 1, 0.65, 0.4, 0.2], SLOW_EASE = 0.35;
 const MAGNET = [0, 110, 170, 240];
 const DRUNK = [0, 0.06, 0.1, 0.15];     // Faune alcoolisée: share of the creatures that are harmless
 const FLAP = 430;                       // how fast the leaf rotor climbs
@@ -54,7 +58,7 @@ const GAP = { dist: 420, time: 0.72, margin: 110, fill: 640 };
 const DECOR_RATE = 0.3;   // `speed`: how fast it flies, on top of the hero's own
 const HOVER = { w: 60, h: 56 };
 // Not before this many metres: the hanging dangers, low then at head height.
-export const FROM = { low: 500, mid: 1500 };   // (the debug menu may change these)
+export const FROM = { low: 150, mid: 1500 };   // (the debug menu may change these)
 
 // Mounts: rare friendly animals waiting on the path. Running into one puts the hero on its back until
 // something hits them: the animal takes the blow and vanishes. Each one plays its own game, and the
@@ -89,6 +93,9 @@ export const MOUNTS = {
 // the top of the screen; 2.25 units a pixel).
 export const BOSS = { at: 2000, speed: 560, fight: 26, w: 446, mouthX: 50, mouthY: 223 };
 const LANE = { low: 28, mid: 115, high: 250, vine: 470 };
+// The tentacle crawling at him: its size (units) and how fast it closes in (on top of the scrolling it is
+// carried by). A short jump clears it with room to spare.
+export const TENTACLE = { w: 56, h: 22, closing: 240 };
 // The heights a flyer may come at (its middle, above the floor), by what the hero owns: on foot, double jump, flight.
 const DART_ALTS = [[46, 170], [46, 170, 290], [46, 170, 290, 400, 510]];   // height of a ball's centre above the floor
 const ACID = { ball: 36, puddle: 120, closing: 650 };
@@ -294,16 +301,18 @@ function spawnPattern(run) {
   const up = run.up, x = run.nextX, G = GROUND;
   const tier = up.flight ? 2 : up.doubleJump ? 1 : 0;
   const riding = run.mount || run.items.length;                       // a mount in play: nothing with a roof
-  // The first metres are a warm-up: one obstacle at a time, nothing in the air.
-  let opts = x < 70 * PPM ? ['spiky', 'spiky', 'coins', 'plat']
-    : ['spiky', 'spiky', 'spiky', 'double', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
+  // The first metres are a warm-up: one obstacle at a time, nothing in the air, but already the shapes
+  // of the road (a ledge up, a hollow down, a platform). Then everything mixes from the start.
+  let opts = x < 70 * PPM ? ['spiky', 'spiky', 'coins', 'plat', 'ledge', 'hollow']
+    : ['spiky', 'spiky', 'double', 'perch', 'hop', 'fly', 'coins', 'plat', 'cave', 'log', 'gallery', 'stairs', 'ledge', 'ledge', 'hollow'];
   if (x / PPM >= FROM.low) opts.push('hover', 'hover', 'hover');       // the hanging ones
   if (tier >= 1 && x >= 70 * PPM) opts.push('fly');
   if (tier >= 2 && x >= 70 * PPM) opts.push('swarm', 'swarm');
   const shapes = SHAPES.filter((s) => s.top <= REACH[tier]);
   if (shapes.length && x >= 70 * PPM) opts.push('shape', 'shape');
   if (riding) opts = opts.filter((k) => k !== 'cave');
-  if (run.fm || run.fmDue || run.boss) opts = ['coins'];             // a follower monster, or the boss, needs a clear road
+  if (run.fm || run.fmDue) opts = ['coins'];                          // a follower monster needs a clear road
+  else if (run.boss) opts = ['plat', 'plat', 'steps', 'coins'];        // the boss: no other danger, but ledges to climb onto
   else if (!riding && x > 70 * PPM && x / PPM >= run.nextMount) opts = ['mount'];
   const kind = pick(opts);
   let len = 0;
@@ -327,6 +336,24 @@ function spawnPattern(run) {
       addDart(run, x, a); addDart(run, x + 520, b);
       len = 520; break;
     }
+    case 'perch': {                                                    // a platform over a hedgehog: jump over it, or onto the platform
+      const y = G - 135;
+      run.plats.push({ x, y, w: PLAT_W });
+      coinLine(run, x + 40, y - 40, 4);
+      addSpiky(run, x + PLAT_W / 2 - SPIKY.w / 2);
+      len = PLAT_W; break;
+    }
+    case 'hop':                                                        // a hedgehog under an arch of coins: the jump is the reward
+      addSpiky(run, x + 140);
+      coinArc(run, x + 40, 150, 7, 260);
+      len = 320; break;
+    case 'steps':                                                      // two ledges climbing (the boss fight: nothing to jump on them)
+      for (let k = 0; k < 2; k++) {
+        const px = x + k * 300, py = G - 120 - k * 112;
+        run.plats.push({ x: px, y: py, w: PLAT_W });
+        coinLine(run, px + 60, py - 40, 3);
+      }
+      len = 300 + PLAT_W; break;
     case 'plat': {                                                     // a ledge to hop on, with a reward
       const y = G - 135;
       run.plats.push({ x, y, w: PLAT_W });
@@ -393,7 +420,7 @@ function spawnPattern(run) {
   const gap = Math.max(GAP.dist, run.speed * GAP.time + GAP.margin) * rnd(0.85, 1.3) * (kind === 'coins' ? 1.3 : 1);
   // A wide gap gets something that asks no jump: a danger at head height, or a fonceur.
   if (gap > GAP.fill && x / PPM >= FROM.mid && !run.fm && !run.fmDue && !run.boss && Math.random() < 0.5) addHover(run, x + len + gap * 0.5, HEAD);
-  else if (gap > GAP.fill && x / PPM > 300 && !run.fm && !run.fmDue && !run.boss && Math.random() < 0.35) addDart(run, x + len + gap * 0.5, 170);
+  else if (gap > GAP.fill && x / PPM > 150 && !run.fm && !run.fmDue && !run.boss && Math.random() < 0.35) addDart(run, x + len + gap * 0.5, 170);
   if (x / PPM > 70 && !run.boss && Math.random() < DECOR_RATE) addDecor(run, x + len + gap * rnd(0.3, 0.6));   // something to smash
   if (kind === 'coins' || Math.random() < 0.55) {
     const n = Math.min(8, Math.floor((gap - 200) / 44));
@@ -556,8 +583,8 @@ function boss(run, d) {
             }
             run.events.push('spit'); break;
           case 'tentacle': {                                             // a tentacle slithering along the floor towards him
-            const o = addObs(run, run.cam + b.sx + 40, GROUND - 30, 150, 30, 'acid', false);
-            o.ghost = false; o.tentacle = true; o.vx = run.speed - 330; o.ph = rnd(0, 6);
+            const o = addObs(run, run.cam + b.sx + 40, GROUND - TENTACLE.h, TENTACLE.w, TENTACLE.h, 'acid', false);
+            o.ghost = false; o.tentacle = true; o.vx = run.speed - TENTACLE.closing; o.ph = rnd(0, 6);
             run.events.push('slither'); break;
           }
         }
@@ -761,7 +788,7 @@ export function update(run, dt, input) {
   run.p.squash = Math.max(0, run.p.squash - dt * 7);
   run.boom = Math.max(0, run.boom - dt * 2.2);
   run.blend = Math.min(1, run.blend + dt / 1.2);
-  const ts = run.slow.t > 0 ? 0.45 : 1;       // the Sablier slows the world, not the timers
+  const ts = run.slow.t > 0 ? 0.45 + 0.55 * Math.max(0, 1 - run.slow.t / SLOW_EASE) : 1;   // the Sablier slows the world, not the timers
   const d = dt * ts;
   if (run.gone && (run.gone.t += dt) > 0.7) run.gone = null;
   for (const q of run.parts) {
@@ -793,7 +820,12 @@ export function update(run, dt, input) {
 
   // --- actives ---
   run.dash.t = Math.max(0, run.dash.t - dt); run.dash.cd = Math.max(0, run.dash.cd - dt);
+  const slowWas = run.slow.t;
   run.slow.t = Math.max(0, run.slow.t - dt); run.slow.cd = Math.max(0, run.slow.cd - dt);
+  if (slowWas > 0) {                            // the Sablier running out: ticks, then the world catching up
+    for (const at of SLOW_TICKS) if (slowWas > at && run.slow.t <= at) run.events.push('slowtick');
+    if (run.slow.t === 0) run.events.push('slowend');
+  }
   if (!run.leap && input.dash && up.dash && run.dash.cd === 0) {
     run.dash.t = 0.55; run.dash.cd = run.dash.max; run.events.push('dash');
   }
