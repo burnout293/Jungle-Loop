@@ -55,6 +55,7 @@ var view_w := 569.0
 var t := 0.0
 var q := 4.0                           # drawing steps per art pixel
 var shift := false                     # « Signalements décalés »: the fonceurs' warnings stand further in
+var hitbox := false                    # the debug menu's « Hitbox »: the boxes the rules test, over everything
 var seat = null                        # where the hero sits on his mount this frame
 var dirt: Array = []
 var dirt_t := 0.0
@@ -1333,6 +1334,28 @@ func _draw_front(c: CanvasItem) -> void:
 	else:
 		var S: Dictionary = Art.scene[run.prev_biome] if edge >= view_w else Art.scene[run.biome]
 		edges(c, S["fore"], Rect2(0, -8, view_w, VH + 16), mod)
+	if hitbox and not run.dead:
+		_draw_hitboxes(c)
+
+const HIT_COLOURS := {"hero": Color("#ff3b4e"), "danger": Color("#ff9f1a"), "ghost": Color("#7fd8ff"), "waiting": Color(1, 0.62, 0.1, 0.45), "coins": Color("#ffe36a"), "ledge": Color("#7bd13c")}
+
+func _draw_hitboxes(c: CanvasItem) -> void:
+	var H = Game.hitboxes(run)
+	var cam = run.cam / PIXEL
+	var pts = PackedVector2Array()
+	var x = 0.0
+	while x <= view_w:                               # the floor
+		pts.append(Vector2(x, Game.floor_at(run, (cam + x) * PIXEL) / PIXEL))
+		x += 4
+	c.draw_polyline(pts, Color(0.36, 0.95, 0.88, 0.7), 1)
+	for b in H["boxes"]:
+		var col: Color = HIT_COLOURS[b["kind"]]
+		if b["kind"] == "ledge":
+			c.draw_line(Vector2(b["L"] / PIXEL - cam, b["T"] / PIXEL), Vector2(b["R"] / PIXEL - cam, b["T"] / PIXEL), col, 1)
+		else:
+			c.draw_rect(Rect2(b["L"] / PIXEL - cam, b["T"] / PIXEL, (b["R"] - b["L"]) / PIXEL, (b["B"] - b["T"]) / PIXEL), col, false, 1)
+	if H["coin"] != null:
+		c.draw_arc(Vector2(H["coin"]["x"] / PIXEL - cam, H["coin"]["y"] / PIXEL), H["coin"]["r"] / PIXEL, 0, TAU, 32, HIT_COLOURS["coins"], 1)
 
 func edges(c: CanvasItem, F: Dictionary, clip: Rect2, mod: Color) -> void:
 	var cam = run.cam / PIXEL

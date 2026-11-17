@@ -6,7 +6,7 @@ extends Node
 ## (not with --headless, which draws nothing). Always with --bac: the real save is never touched.
 
 var main: Node
-var opts := {"seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false}
+var opts := {"seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -31,6 +31,7 @@ func _ready() -> void:
 			"ride": opts["ride"] = kv[1]
 			"biome": opts["biome"] = int(kv[1])
 			"still": opts["still"] = true
+			"hitbox": opts["hitbox"] = true
 	if opts["shots"] != "":
 		DirAccess.make_dir_recursive_absolute(opts["shots"])
 
@@ -51,6 +52,7 @@ func _start() -> void:
 	main.go("play")
 	var r: Game.Run = main.run
 	r.god = opts["god"]
+	main.render.hitbox = opts["hitbox"]
 	if opts["start"] > 0:                            # as if the first metres had already been run
 		var D: float = opts["start"] * Game.PPM
 		var g := Game.SPEED_GAIN
@@ -87,7 +89,9 @@ func _process(delta: float) -> void:
 		return
 	t += delta
 	if opts["screen"] != "":                         # only a screen to look at: no run
-		if main.state != opts["screen"] and t < 0.5:
+		if opts["screen"] == "debug" and main.debug_panel == null and t < 0.5:
+			main.open_debug()
+		elif opts["screen"] != "debug" and main.state != opts["screen"] and t < 0.5:
 			main.go(opts["screen"])
 		await _shoot(delta)
 		if t >= opts["seconds"]:

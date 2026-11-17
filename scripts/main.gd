@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.27.0"
+const VERSION := "0.28.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -54,12 +54,16 @@ var icons := {}
 var styles := {}
 var title_letters: Array = []
 var hud_state := {"dist": -1, "gold": -1, "hearts": -1}
+var debug_layer: CanvasLayer
+var debug_panel: Control = null
+var taps: Array = []                   # touches on the level badge: five in a row open the debug menu
 
 # ---------- start ----------
 
 func _ready() -> void:
 	save = SaveData.load_save()
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
+	Debug.setup()
 	render = Render.new()
 	add_child(render)
 	still = Game.new_run({})
@@ -360,6 +364,33 @@ func _actions(s: Control, buttons: Array, min_w: float = 190) -> void:
 # ---------- the screens ----------
 
 func _build() -> void:
+	# the debug menu's strip: thin, red, above absolutely everything, while anything is changed there
+	var top = CanvasLayer.new()
+	top.layer = 100
+	add_child(top)
+	var strip = ColorRect.new()
+	strip.color = Color("#e0203a")
+	strip.size = Vector2(W, 16)
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tag = Label.new()
+	tag.text = "D E B U G"
+	tag.add_theme_font_override("font", ThemeDB.fallback_font)
+	tag.add_theme_font_size_override("font_size", 12)
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.size = Vector2(W, 16)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	strip.add_child(tag)
+	top.add_child(strip)
+	debug_layer = CanvasLayer.new()
+	debug_layer.layer = 50
+	add_child(debug_layer)
+	Debug.strip = strip
+	Debug.on_change = _debug_changed
+	Debug.apply(false)                               # the strip as the kept settings say
+	w["info"] = _label("", roundi(8 * U), Color.WHITE, 0)
+	w["info"].z_index = 10
+	_place(w["info"], 4, 320 - 16 - 12, 560, 12)
+	ui.add_child(w["info"])
 	w["fps"] = _label("", roundi(8 * U), Color.WHITE, 0)
 	w["fps"].z_index = 10
 	_place(w["fps"], 4, 320 - 4 - 12, 300, 12)
@@ -497,6 +528,8 @@ func _build_menu() -> void:
 	status.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_place(status, 569 - M - 200, M, 200, 60)
 	w["menu-level"] = _level_box(false)
+	w["menu-level"].mouse_filter = Control.MOUSE_FILTER_STOP
+	w["menu-level"].gui_input.connect(_on_level_input)
 	w["menu-level"].size_flags_horizontal = Control.SIZE_SHRINK_END
 	status.add_child(w["menu-level"])
 	w["menu-coins"] = _coins_pill()
@@ -1147,7 +1180,9 @@ func bank() -> void:
 	run.banked = true
 	save["coins"] += run.gold
 	save["loops"] += 1
-	if run.mode == "endless":
+	if run.debug:
+		pass                                         # in debug: no record
+	elif run.mode == "endless":
 		save["bestEndless"] = maxi(save["bestEndless"], floori(run.dist))
 	else:
 		save["best"] = maxi(save["best"], floori(run.dist))
@@ -1175,6 +1210,7 @@ func go(name: String) -> void:
 		run = Game.new_run(SaveData.loadout(save), save["mode"])   # only the three equipped upgrades come along
 		run.view_w = render.view_w * Game.PIXEL
 		Game.launch(run)                             # rumble, then the doorway blows out
+		Debug.debug_run(run)                         # what the debug menu asks for, if anything
 		dead_for = 0
 		hud_state = {"dist": -1, "gold": -1, "hearts": -1}
 		var hearts: HBoxContainer = w["hud-hearts"]
@@ -1211,7 +1247,7 @@ func go(name: String) -> void:
 	show_screen(name)
 
 func game_over() -> void:
-	var record = floori(run.dist) > best_of(run.mode)
+	var record = not run.debug and floori(run.dist) > best_of(run.mode)
 	bank()
 	w["over-title"].text = Game.pick(DEATHS)
 	hint(0)
@@ -1228,7 +1264,7 @@ func game_over() -> void:
 		w["over-dist"].text = "%d m" % shown
 		w["over-gold"].text = "+%d ◈" % roundi(gold * (v / dist if dist > 0 else 1.0))
 	tw.tween_method(count, 0.0, float(dist), dur).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	w["over-best"].text = "★ Nouveau record ! ★" if record else "Record : %d m" % best_of(run.mode)
+	w["over-best"].text = "Debug : record non enregistré" if run.debug else ("★ Nouveau record ! ★" if record else "Record : %d m" % best_of(run.mode))
 	_set_colour(w["over-best"], GOLD if record else DIM)
 	if record:
 		Audio.sfx("record")
@@ -1241,7 +1277,7 @@ func pause() -> void:
 		return
 	w["pause-dist"].text = "%d m" % floori(run.dist)
 	w["pause-gold"].text = "+%d ◈" % run.gold
-	w["pause-best"].text = "Record : %d m" % best_of(run.mode)
+	w["pause-best"].text = "Debug : record non enregistré" if run.debug else "Record : %d m" % best_of(run.mode)
 	_set_level(w["pause-level"], true)
 	_quest_cards(w["pause-quests"])
 	state = "pause"
@@ -1350,6 +1386,8 @@ func press() -> void:
 
 ## While playing, a touch anywhere on the frame is a jump (the HUD's buttons keep their own job).
 func _unhandled_input(event: InputEvent) -> void:
+	if debug_panel != null:
+		return                                       # the debug menu is open: its own fields take the keys
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			press()
@@ -1460,7 +1498,40 @@ func _process(delta: float) -> void:
 		w["fps"].visible = save["showFps"]
 		if save["showFps"] and Engine.get_process_frames() % 15 == 0:
 			w["fps"].text = "%d i/s · x%d" % [Engine.get_frames_per_second(), render.q]
+	if w.has("info"):                                # the debug menu's « Mesures en jeu »
+		w["info"].visible = Debug.dbg["info"] and run != null
+		if w["info"].visible and Engine.get_process_frames() % 5 == 0:
+			w["info"].text = "%.1f m/s (propre %.1f) · %d m · %d s · hauteur %.2f m · max %.2f m" % [run.speed / 40, run.own / 40, floori(run.dist), roundi(run.t), run.h, run.max_h]
 	# Behind the menus: the temple, frozen. The hero only appears once the run starts.
 	var shown: Game.Run = run if (state == "play" or state == "pause" or state == "over" or in_run) and run != null else still
 	var win = get_window().size
 	render.show_run(shown, time, minf(win.x / W, win.y / H))
+
+# ---------- the debug menu (debug.gd) ----------
+
+## Five touches on the level badge, each within two seconds of the first, open it.
+func _on_level_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+		return
+	var now = Time.get_ticks_msec()
+	taps = taps.filter(func(t): return now - t < 2000)
+	taps.append(now)
+	if taps.size() >= 5:
+		taps = []
+		open_debug()
+
+func open_debug() -> void:
+	if debug_panel != null:
+		debug_panel.queue_free()
+	debug_panel = Debug.panel(self)
+	debug_layer.add_child(debug_panel)
+
+func close_debug() -> void:
+	if debug_panel != null:
+		debug_panel.queue_free()
+		debug_panel = null
+	if state == "menu":
+		refresh_menu()
+
+func _debug_changed() -> void:
+	render.hitbox = Debug.dbg["hitbox"]

@@ -44,9 +44,10 @@ const SLOW_EASE := 0.35
 const MAGNET := [0.0, 110.0, 170.0, 240.0]
 const DRUNK := [0.0, 0.06, 0.1, 0.15]   # Faune alcoolisée: share of the creatures that are harmless
 const FLAP := 430.0                     # how fast the leaf rotor climbs
-const SPEED_BASE := 280.0
-const SPEED_GAIN := 5.0
-const SPEED_SPRINT := 160.0
+# (static, not const: the debug menu may change these, see debug.gd)
+static var SPEED_BASE := 280.0
+static var SPEED_GAIN := 5.0
+static var SPEED_SPRINT := 160.0
 const RAMP := 70.0
 const JUMP_V := 760.0
 const JUMP_DOUBLE := 700.0
@@ -65,14 +66,14 @@ const DECOR_RATE := 0.12
 const HOVER_W := 60.0
 const HOVER_H := 56.0
 # Not before this many metres: the hanging dangers, low then at head height.
-const FROM_LOW := 150.0
-const FROM_MID := 1500.0
+static var FROM_LOW := 150.0
+static var FROM_MID := 1500.0
 
 # Mounts. `half` and `tall`: the hitbox with the hero on its back; `base` and `gain`: its pace;
 # `ahead`: how fast it moves on while waiting, as a share of the hero's speed.
 const MOUNTS := {
 	"gorilla": {"name": "Gorille", "jump": -820.0, "half": 34.0, "tall": 118.0, "base": 300.0, "gain": 24.0, "ahead": 0.45},
-	"rhino": {"name": "Rhino", "jump": -560.0, "half": 34.0, "tall": 104.0, "smash": true, "tough": true, "time": 8.0, "grab_w": 78.0, "grab_h": 150.0, "base": 300.0, "gain": 44.0, "ahead": 0.0},
+	"rhino": {"name": "Rhino", "jump": -560.0, "half": 34.0, "tall": 104.0, "smash": true, "tough": true, "time": 8.0, "grab_w": 78.0, "grab_h": 150.0, "mul": 2.0, "ramp": 420.0, "ahead": 0.0},   # mul: twice the hero's own speed, reached within a second or two (ramp)
 	"dragonfly": {"name": "Libellule", "fly": true, "half": 28.0, "tall": 92.0, "base": 320.0, "gain": 28.0, "ahead": 0.5},
 }
 const MOUNT_KINDS := ["gorilla", "rhino", "dragonfly"]
@@ -83,7 +84,7 @@ const DEATH_PACE := 0.3
 const DEATH_TIME := 2.9
 const DEATH_CALM := 900.0
 const DEATH_EASY := 2600.0
-const BOSS_AT := 2000.0
+static var BOSS_AT := 2000.0
 const BOSS_SPEED := 560.0
 const BOSS_FIGHT := 26.0
 const BOSS_W := 446.0
@@ -400,6 +401,7 @@ class Run:
 	var max_h := 0.0
 	var god := false
 	var banked := false
+	var debug := false             # started with something changed in the debug menu: no record
 
 	func lvl(id: String) -> int:
 		return int(up.get(id, 0))
@@ -965,7 +967,7 @@ static func spawn_pattern(run: Run) -> void:
 						"sky": h = 400 + sin(i * 0.9) * 30               # out of reach without the Vol
 					coin(run, wx, f - h)
 					if style == "double":
-						coin(run, wx, f - 124)                          # two rows: the top one for a hop
+						coin(run, wx, f - 84)                           # two rows, both caught at a run (the top one by the leaves on his head)
 			if run.lvl("lucky") > 0 and run.lvl("scatter") > 0 and randf() < 0.12 * run.lvl("lucky"):
 				coin(run, cx + n * 44 + 30, floor_at(run, cx + n * 44 + 30) - 110, gem(run))
 	run.next_x = x + extent + gap
@@ -1511,6 +1513,43 @@ static func _puff(run: Run, px: float, y: float) -> void:     # curling up and u
 static func _leaves(run: Run, px: float, y: float) -> void:   # leaves shaken off his rotor
 	part(run, px + rnd(-40, 40), y - 105, rnd(-160, -40), rnd(-40, 60), 0.6, colour_of(["#8fd14a", "#c9e86a", "#5fae3a"]), rnd(4, 8), 300)
 
+## For the debug menu: the boxes the rules test, in world units. kind: hero, danger, ghost (harmless),
+## waiting (not dangerous yet), coins (what he picks up), ledge (where a falling hero lands). "coin": the
+## circle that also picks up coins.
+static func hitboxes(run: Run) -> Dictionary:
+	var p = run.p
+	var px = run.cam + run.sx
+	var M: Dictionary = MOUNTS[run.mount.kind] if run.mount != null else {}
+	var half: float = M["half"] if run.mount != null else HERO_HALF
+	var tall: float = M["tall"] if run.mount != null else HERO_H
+	var out: Array = []
+	var box = func(L: float, R: float, T: float, B: float, kind: String) -> void:
+		out.append({"L": L, "R": R, "T": T, "B": B, "kind": kind})
+	box.call(px - half, px + half, p.y - tall + 6, p.y - 2, "hero")
+	for o in run.obs:
+		if not o.gone:
+			box.call(o.x + 6, o.x + o.w - 6, o.y + 6, o.y + o.h - 6, "ghost" if o.ghost else ("waiting" if o.kind == "dart" and o.state != "go" else "danger"))
+	var grab = M.has("grab_w")
+	if grab:
+		box.call(px - M["grab_w"], px + M["grab_w"], p.y - M["grab_h"], p.y + 10, "coins")
+	elif p.ball == null:
+		box.call(px - COIN_HALF, px + COIN_HALF, p.y - tall - COIN_TOP, p.y, "coins")
+	for pl in run.plats:
+		box.call(pl.x - HERO_HALF, pl.x + pl.w + HERO_HALF, pl.y, pl.y, "ledge")
+	var f = run.fm
+	if f != null and not f.ghost and not f.hit:
+		for k in FM_LANES:
+			if not f.act[k]:
+				continue
+			if f.phase == "fire":
+				var y0 = GROUND - (k + 0.5) * FM_STEP - LASER_H / 2
+				box.call(run.cam - 200, run.cam + f.sx, y0 + 4, y0 + LASER_H - 4, "danger" if f.t > LASER_ON and f.t < LASER_OFF else "waiting")
+			else:
+				var x0 = run.cam + f.sx - FM_W / 2
+				var y1 = GROUND - (k + 0.5) * FM_STEP - FM_H / 2
+				box.call(x0 + 8, x0 + FM_W - 8, y1 + 6, y1 + FM_H - 6, "danger" if f.phase == "rush" else "waiting")
+	return {"boxes": out, "coin": null if grab else {"x": px, "y": p.y - (20.0 if p.ball != null else 40.0), "r": COIN_R}}
+
 static func update(run: Run, dt: float, input: Controls) -> void:
 	# Particles and screen effects keep living after death.
 	run.shake = maxf(0, run.shake - dt * 2.5)
@@ -1602,10 +1641,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		pace = BOSS_SPEED * (DEATH_PACE if run.boss.phase == "fall" else 1.0)
 	elif run.mount != null:
 		var R: Dictionary = MOUNTS[run.mount.kind]
-		pace = R["base"] + R["gain"] * run.mount.t
+		pace = own * R["mul"] if R.has("mul") else R["base"] + R["gain"] * run.mount.t
 	# Slowing down is quick; speeding back up (after a mount or the boss) is gradual.
 	if pace > run.speed:
-		run.speed = minf(pace, run.speed + RAMP * dt)
+		var ramp = MOUNTS[run.mount.kind].get("ramp", RAMP) if run.mount != null and run.boss == null else RAMP
+		run.speed = minf(pace, run.speed + ramp * dt)
 	else:
 		run.speed = run.speed + (pace - run.speed) * minf(1, dt * 3)
 	run.own = own

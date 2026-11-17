@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. État au
-17/11/2026 : au niveau de la version web 0.27.0, sauf ce qui est listé plus bas. Le jeu tourne : courses
+17/11/2026 : au niveau de la version web 0.28.0, sauf ce qui est listé plus bas. Le jeu tourne : courses
 automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run illimitée, changements de
 décor), écrans vérifiés en capture (accueil, boutique, réglages, course, boss, donjon, cité). Pas encore
 essayé à la main ni sur téléphone.
@@ -48,13 +48,22 @@ Les unités sont celles de la version web : 1 pixel d'art = 2,25 unités, écran
 
 ## Pas encore porté
 
-- Le menu de debug (`js/debug.js`, avec son bandeau rouge et l'arrêt des records) et les aperçus animés
-  de la boutique (`js/demo.js`) : la boutique montre l'icône à la place.
+- Les aperçus animés de la boutique (`js/demo.js`) : la boutique montre l'icône à la place.
 - Les confettis, le glissement des écrans, le changement de police sans relancer.
 
 Polices : Silkscreen et Fredoka (Google Fonts, licence OFL, dans `assets/fonts/`).
 
+Le menu de debug (`scripts/debug.gd`) s'ouvre comme dans la version web : cinq touches sur le badge de
+niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.json`.
+
 ## Export
 
-Pour exporter (Windows, Android, Web), il faut les modèles d'export de Godot 4.7, et ajouter
-`*.json, *.txt` aux fichiers non-ressources à inclure (meta.json, patterns.txt, tracks.json).
+`export_presets.cfg` a un préréglage « Web » sans fils d'exécution (il marche sur GitHub Pages, qui ne
+peut pas envoyer les en-têtes qu'exigent les fils), qui inclut `*.json, *.txt` (meta.json, patterns.txt,
+tracks.json). Il faut les modèles d'export de Godot 4.7.2 (seuls ceux du web sont installés sur ce PC) :
+
+```
+Godot --headless --path . --export-release "Web" export/web/index.html
+```
+
+Résultat : 44 Mo dans `export/web` (moteur `index.wasm` 39,5 Mo, jeu `index.pck` 6 Mo), jamais committé.
