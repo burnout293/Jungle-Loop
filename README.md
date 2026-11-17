@@ -17,3 +17,5 @@ paysage et peut s'installer sur l'écran d'accueil.
 - [BESTIAIRE.md](BESTIAIRE.md) : dangers, boss, montures, plateformes, par décor
 
 Pour essayer sans toucher à sa sauvegarde : ajouter `?bac` à l'adresse.
+
+Une version Godot est en cours de portage, dans un dossier à part (`Projects/Jungle-Loop-Godot`).

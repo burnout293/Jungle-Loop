@@ -37,7 +37,7 @@ export const isPower = (id) => !!UPGRADES.find((u) => u.id === id && u.power);
 
 function blank() {
   // best: the record of the Histoire mode (the older saves knew only that one); bestEndless: the Run illimitée's
-  return { v: 1, coins: 0, best: 0, bestEndless: 0, mode: 'story', loops: 0, upgrades: {}, musicVol: 7, sfxVol: 7, pixelFont: true, dangerRim: false, alertShift: false, quality: 'auto', full: true, seenIntro: false,
+  return { v: 1, coins: 0, best: 0, bestEndless: 0, mode: 'story', loops: 0, upgrades: {}, musicVol: 7, sfxVol: 7, pixelFont: true, dangerRim: false, alertShift: false, showFps: false, quality: 'auto', full: true, seenIntro: false,
     equipped: [], powersOff: [], xp: 0, quests: [], questsDone: 0, lastQuest: '' };
 }
 
@@ -58,6 +58,7 @@ function sanitize(raw) {
   s.pixelFont = raw.pixelFont !== false;
   s.dangerRim = raw.dangerRim === true;
   s.alertShift = raw.alertShift === true;
+  s.showFps = raw.showFps === true;
   s.quality = QUALITIES.includes(raw.quality) ? raw.quality : 'auto';
   s.full = raw.full !== false;
   s.seenIntro = !!raw.seenIntro;

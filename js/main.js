@@ -9,7 +9,7 @@ import * as P from './progress.js';
 import { open as openDebug, debugRun, dbg } from './debug.js';
 
 // The game's version, shown on the home screen. sw.js names its cache after it: both move together.
-const VERSION = '0.26.0';
+const VERSION = '0.27.0';
 
 const $ = (id) => document.getElementById(id);
 // (A canvas without transparency, { alpha: false }, is a little lighter, but some Firefox builds on
@@ -288,7 +288,7 @@ function slotInfo(id, slot) {
 document.addEventListener('click', () => { $('menu-info').hidden = true; for (const s of document.querySelectorAll('#menu-loadout .slot')) s.classList.remove('sel'); });
 
 function refreshSettings() {
-  for (const [id, on] of [['tg-font', save.pixelFont], ['tg-full', !!document.fullscreenElement], ['tg-rim', save.dangerRim], ['tg-shift', save.alertShift]]) {
+  for (const [id, on] of [['tg-font', save.pixelFont], ['tg-full', !!document.fullscreenElement], ['tg-rim', save.dangerRim], ['tg-shift', save.alertShift], ['tg-fps', save.showFps]]) {
     $(id).textContent = on ? 'Oui' : 'Non';
     $(id).className = (on ? 'on' : 'plain') + ' small';
   }
@@ -377,7 +377,8 @@ function bank() {
   run.banked = true;
   save.coins += run.gold;
   save.loops++;
-  if (run.mode === 'endless') save.bestEndless = Math.max(save.bestEndless, Math.floor(run.dist));
+  if (run.debug) { /* in debug: no record */ }
+  else if (run.mode === 'endless') save.bestEndless = Math.max(save.bestEndless, Math.floor(run.dist));
   else save.best = Math.max(save.best, Math.floor(run.dist));
   S.store(save);
 }
@@ -420,7 +421,7 @@ function go(name) {
 }
 
 function gameOver() {
-  const record = Math.floor(run.dist) > bestOf(run.mode);
+  const record = !run.debug && Math.floor(run.dist) > bestOf(run.mode);
   bank();
   $('over-title').textContent = pick(DEATHS);
   hint(0);
@@ -432,7 +433,7 @@ function gameOver() {
   });
   const best = $('over-best');
   best.classList.toggle('record', record);
-  best.textContent = record ? '★ Nouveau record ! ★' : `Record : ${bestOf(run.mode)} m`;
+  best.textContent = run.debug ? 'Debug : record non enregistré' : record ? '★ Nouveau record ! ★' : `Record : ${bestOf(run.mode)} m`;
   if (record) { confetti(60); audio.sfx('record'); }
   audio.music('over');                                  // the run's music winds down into the jingle, which leads to the menu's
   state = 'over'; show('over');
@@ -442,7 +443,7 @@ function pause() {
   if (state !== 'play' || run.dead) return;
   $('pause-dist').textContent = Math.floor(run.dist) + ' m';
   $('pause-gold').textContent = '+' + run.gold + ' ◈';
-  $('pause-best').textContent = `Record : ${bestOf(run.mode)} m`;
+  $('pause-best').textContent = run.debug ? 'Debug : record non enregistré' : `Record : ${bestOf(run.mode)} m`;
   levelBar('pause-level', true); questCards('pause-quests');
   state = 'pause'; show('pause'); audio.duck(true);    // the music goes on, quieter
 }
@@ -475,6 +476,7 @@ $('tg-smooth').addEventListener('click', () => {      // choosing again also for
 });
 $('tg-rim').addEventListener('click', () => { save.dangerRim = !save.dangerRim; S.store(save); setDangerRim(save.dangerRim); refreshSettings(); });
 $('tg-shift').addEventListener('click', () => { save.alertShift = !save.alertShift; S.store(save); setAlertShift(save.alertShift); refreshSettings(); });
+$('tg-fps').addEventListener('click', () => { save.showFps = !save.showFps; S.store(save); showFps(save.showFps); refreshSettings(); });
 for (const t of document.querySelectorAll('.set-tabs .tab')) t.addEventListener('click', () => {   // Général / Accessibilité
   for (const o of document.querySelectorAll('.set-tabs .tab')) o.classList.toggle('sel', o === t);
   for (const q of document.querySelectorAll('.set-panel')) q.hidden = q.dataset.panel !== t.dataset.set;
@@ -488,7 +490,7 @@ function applyImport(code) {
   if (!confirm(`Remplacer la partie actuelle par celle-ci ?\n◈ ${s.coins} · record ${s.best} m · ${s.loops} courses`)) return;
   save = s; S.store(save);
   audio.setVolumes(save.musicVol, save.sfxVol);
-  applyFont(); resize(); refreshSettings();
+  applyFont(); resize(); refreshSettings(); showFps(save.showFps);
   msg('Partie importée.');
 }
 
@@ -585,11 +587,11 @@ function hud() {
 // ---------- loop ----------
 
 let last = performance.now(), fpsTick = 0, fpsCount = 0, fpsFrom = last, fpsNow = 0;
-// The frame rate and the canvas in a corner: "?fps" in the address, or the debug menu
+// The frame rate and the canvas in a corner: a setting (Réglages, Affichage), or "?fps" in the address
 const fpsBox = $('stage').appendChild(el('div'));
 fpsBox.id = 'fps';
 const showFps = (on) => { fpsBox.hidden = !on; };
-showFps(new URLSearchParams(location.search).has('fps') || dbg.fps);
+showFps(new URLSearchParams(location.search).has('fps') || save.showFps);
 const infoBox = $('stage').appendChild(el('div'));
 infoBox.id = 'info';
 const showInfo = (on) => { infoBox.hidden = !on; };
@@ -621,7 +623,6 @@ function frame(now) {
       if (ev === 'mount') stats.mounts++;
       if (ev === 'dodge') stats.dodges++;
       if (ev === 'boom') audio.music('run');
-      if (ev === 'debug') banner('Debug actif');
       if (ev === 'boss') banner('Vorace !');
       if (ev === 'timber') banner('Ça tombe !');
       if (ev === 'bossfall') banner('Écrasée !');
@@ -659,7 +660,7 @@ $('menu-level').addEventListener('click', () => {
   taps = taps.filter((t) => now - t < 2000); taps.push(now);
   if (taps.length < 5) return;
   taps = [];
-  openDebug({ save: () => save, store: () => S.store(save), changed: () => { refreshMenu(); if (state === 'shop') refreshShop(); }, fps: showFps, info: showInfo });
+  openDebug({ save: () => save, store: () => S.store(save), changed: () => { refreshMenu(); if (state === 'shop') refreshShop(); }, info: showInfo });
 });
 
 // On a phone, full screen follows the way it is held. Turning the phone is not a gesture the browser

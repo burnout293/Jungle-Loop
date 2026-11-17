@@ -781,21 +781,90 @@ function drawHang(ctx, frame, x) {
 }
 
 // The vines the gorilla travels along: a braided liana across the top of the frame (vine-garland.png,
-// tools/import_platforms.py), short lianas hanging from it. `k` slides them in from above (0 hidden, 1 down).
-function drawVines(ctx, cam, t, width, k) {
+// tools/import_platforms.py), short lianas hanging from it; in the dungeon an iron chain, in the city a
+// power cable. `k` slides them in from above (0 hidden, 1 down).
+function drawVines(ctx, run, cam, t, width, k) {
   const G = IMG['vine-garland'], Hn = IMG['vine-hang'], M = meta.vines;
   const dy = Math.round((k - 1) * 50);
   if (!G || !M) return;
   // the braided liana, repeated mirrored (its ends always meet), and short lianas hanging from it
   const gw = G.width, first = Math.floor(cam / gw);
   for (let i = first - 1; i * gw - cam < width; i++) {
-    const x0 = snap(i * gw - cam);
-    if (i % 2) { ctx.save(); ctx.translate(x0 + gw, 0); ctx.scale(-1, 1); ctx.drawImage(G, 0, dy + 4); ctx.restore(); }
+    const x0 = snap(i * gw - cam), biome = biomeAt(run, (i * gw + gw / 2) * PIXEL);
+    if (biome === 3) chainAcross(ctx, x0, x0 + gw, dy + 14, IRON.bright);
+    else if (biome === 2) cableAcross(ctx, x0, x0 + gw, dy + 14, t, i, CABLE.bright);
+    else if (i % 2) { ctx.save(); ctx.translate(x0 + gw, 0); ctx.scale(-1, 1); ctx.drawImage(G, 0, dy + 4); ctx.restore(); }
     else ctx.drawImage(G, x0, dy + 4);
-    if (Hn) for (let q = 0; q < 2; q++) {
-      const which = Math.floor(h01(i * 2 + q, 81) * 2), hx = x0 + Math.round(gw * (0.2 + 0.55 * h01(i * 2 + q, 83)));
-      hang(ctx, Hn, M.hang, which, hx, dy + 14, t, i * 2 + q);
+    for (let q = 0; q < 2; q++) {
+      const which = Math.floor(h01(i * 2 + q, 81) * 2), hx = x0 + Math.round(gw * (0.2 + 0.55 * h01(i * 2 + q, 83))), len = M.hang.len[which];
+      if (biome === 3) hangChain(ctx, hx, dy + 17, Math.round(len * 0.8), t, i * 2 + q, IRON.bright);
+      else if (biome === 2) hangCable(ctx, hx, dy + 17, Math.round(len * 0.8), t, i * 2 + q, CABLE.bright);
+      else if (Hn) hang(ctx, Hn, M.hang, which, hx, dy + 14, t, i * 2 + q);
     }
+  }
+}
+
+// What hangs where there are no lianas: iron chains in the dungeon, power cables in the city, drawn
+// pixel by pixel. Two shades of each: bright for what the gorilla holds, darker for mere scenery.
+// IRON: outline, face of a link, its light edge, a link seen edge-on. CABLE: outline, sheath, its sheen, the LED.
+const IRON = { bright: ['#1a1024', '#5c5a6c', '#9a98aa', '#7c7a8c'], dim: ['#0d0a14', '#34323f', '#55536a', '#45435a'] };
+const CABLE = { bright: ['#120c2c', '#2a2f52', '#5866a8', '#5cf2e0'], dim: ['#0a0718', '#262b4a', '#46508a', '#3fd9e6'] };
+const paintRect = (ctx, c, x, y, w, h) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+
+// A chain hanging from (x, y), `len` pixels long, swinging a little from its top, a hook or a ring at its end.
+function hangChain(ctx, x, y, len, t, seed, P) {
+  const [ink, face, lit, edge] = P, swing = (r) => Math.round(Math.sin(t * 1.1 + seed) * 1.8 * r / len);
+  for (let r = 0, k = 0; r < len; r += 5, k++) {
+    const cx = x + swing(r), yy = y + r;
+    if (k % 2) { paintRect(ctx, ink, cx - 1, yy, 3, 7); paintRect(ctx, edge, cx, yy + 1, 1, 5); }
+    else { paintRect(ctx, ink, cx - 3, yy, 7, 7); paintRect(ctx, face, cx - 2, yy + 1, 5, 5); paintRect(ctx, ink, cx - 1, yy + 2, 3, 3); paintRect(ctx, lit, cx - 2, yy + 1, 2, 1); }
+  }
+  const ex = x + swing(len), ey = y + len + 4;
+  if (h01(seed, 29) < 0.5) {                           // a hook
+    paintRect(ctx, ink, ex - 1, ey, 3, 8); paintRect(ctx, face, ex, ey + 1, 1, 6);
+    paintRect(ctx, ink, ex - 5, ey + 6, 6, 3); paintRect(ctx, face, ex - 4, ey + 7, 4, 1);
+    paintRect(ctx, ink, ex - 6, ey + 2, 3, 6); paintRect(ctx, face, ex - 5, ey + 3, 1, 4); paintRect(ctx, lit, ex - 5, ey + 3, 1, 1);
+  } else {                                             // a heavy ring
+    for (const [dx, dy, w, h] of [[-2, 0, 5, 1], [-3, 1, 7, 1], [-4, 2, 9, 5], [-3, 7, 7, 1], [-2, 8, 5, 1]]) paintRect(ctx, ink, ex + dx, ey + dy, w, h);
+    for (const [dx, dy, w, h] of [[-2, 1, 5, 1], [-3, 2, 7, 5], [-2, 7, 5, 1]]) paintRect(ctx, face, ex + dx, ey + dy, w, h);
+    paintRect(ctx, ink, ex - 1, ey + 3, 3, 3); paintRect(ctx, lit, ex - 2, ey + 1, 2, 1); paintRect(ctx, lit, ex - 3, ey + 2, 1, 2);
+  }
+}
+// The chain across the top of the screen: big links lying flat and edge-on in turn, an iron ring set in
+// the ceiling now and then.
+function chainAcross(ctx, x0, x1, y, P) {
+  const [ink, face, lit, edge] = P;
+  for (let x = x0, k = 0; x < x1; x += 7, k++) {
+    if (k % 2) { paintRect(ctx, ink, x, y - 2, 10, 4); paintRect(ctx, edge, x + 1, y - 1, 8, 2); paintRect(ctx, lit, x + 1, y - 1, 8, 1); }
+    else {
+      paintRect(ctx, ink, x + 1, y - 5, 8, 1); paintRect(ctx, ink, x, y - 4, 10, 8); paintRect(ctx, ink, x + 1, y + 4, 8, 1);
+      paintRect(ctx, face, x + 1, y - 4, 8, 8); paintRect(ctx, ink, x + 3, y - 2, 4, 4); paintRect(ctx, lit, x + 1, y - 4, 4, 1); paintRect(ctx, lit, x + 1, y - 3, 1, 2);
+    }
+  }
+}
+// A cable hanging from (x, y), swinging a little, a plug with a blinking light at its end.
+function hangCable(ctx, x, y, len, t, seed, P) {
+  const [ink, sheath, lit, led] = P, swing = (r) => Math.round(Math.sin(t * 1.3 + seed) * 2 * r / len);
+  for (let r = 0; r < len; r += 2) paintRect(ctx, ink, x + swing(r) - 1, y + r, 4, 2);
+  for (let r = 0; r < len; r += 2) { const cx = x + swing(r); paintRect(ctx, sheath, cx, y + r, 2, 2); if ((r + seed * 4) % 14 < 2) paintRect(ctx, lit, cx, y + r, 1, 2); }
+  const ex = x + swing(len), ey = y + len;
+  paintRect(ctx, ink, ex - 2, ey - 1, 6, 8); paintRect(ctx, lit, ex - 1, ey, 4, 6); paintRect(ctx, sheath, ex, ey + 1, 3, 5);
+  if (Math.sin(t * 3 + seed * 1.7) > -0.3) paintRect(ctx, led, ex, ey + 3, 2, 1);
+}
+// A cable sagging between two points along the top of the screen.
+function sagCable(ctx, x, span, y0, sag, P) {
+  const [ink, sheath, lit] = P, yAt = (k) => Math.round(y0 + 4 * sag * (k / span) * (1 - k / span));
+  for (let k = 0; k <= span; k++) paintRect(ctx, ink, x + k, yAt(k) - 1, 1, 4);
+  for (let k = 0; k <= span; k++) paintRect(ctx, k % 9 === 4 ? lit : sheath, x + k, yAt(k), 1, 2);
+}
+// The power cable across the top of the screen: a thick sheath, a clamp now and then with its light.
+function cableAcross(ctx, x0, x1, y, t, seed, P) {
+  const [ink, sheath, lit, led] = P, w = x1 - x0;
+  paintRect(ctx, ink, x0, y - 2, w, 6); paintRect(ctx, sheath, x0, y - 1, w, 4); paintRect(ctx, lit, x0, y - 1, w, 1);
+  for (const at of [40, 150]) {
+    const cx = Math.round(x0 + at);
+    paintRect(ctx, ink, cx - 3, y - 4, 7, 10); paintRect(ctx, '#5c6280', cx - 2, y - 3, 5, 8); paintRect(ctx, '#8a92b8', cx - 2, y - 3, 5, 1);
+    if (Math.sin(t * 4 + seed + at) > 0) paintRect(ctx, led, cx, y, 1, 2);
   }
 }
 // One of the hanging lianas, swaying a little from its top (drawn in slices).
@@ -806,8 +875,8 @@ function hang(ctx, im, H, which, x, y, t, seed) {
     ctx.drawImage(im, sx, r, H.w, Math.min(4, len - r), x - (H.w >> 1) + sway, y + r, H.w, Math.min(4, len - r));
   }
 }
-// Hanging lianas as scenery, in the forest and the ruins: here and there along the way, from the top of
-// the screen, a little darker than what can be touched.
+// Hanging lianas as scenery, in the forest and the ruins, here and there along the way from the top of the
+// screen, a little darker than what can be touched; chains in the dungeon, cables in the city.
 const VINE_CELL = 110;
 let HANGS = null;
 function drawHangingVines(ctx, run, cam, width, t) {
@@ -818,8 +887,12 @@ function drawHangingVines(ctx, run, cam, width, t) {
   for (let i = first; i <= last; i++) {
     if (h01(i, 17) > 0.42) continue;
     const wx = i * VINE_CELL + Math.round(h01(i, 19) * 70), biome = biomeAt(run, wx * PIXEL);
-    if (biome > 1) continue;
-    hang(ctx, HANGS, M.hang, Math.floor(h01(i, 23) * M.hang.n), snap(wx - cam), -2, t, i);
+    const which = Math.floor(h01(i, 23) * M.hang.n), x = snap(wx - cam), len = M.hang.len[which];
+    if (biome <= 1) hang(ctx, HANGS, M.hang, which, x, -2, t, i);
+    else if (biome === 3) hangChain(ctx, x, -4, Math.round(len * 0.8), t, i, IRON.dim);
+    // (they hang low enough to show under the dark foliage along the top edge)
+    else if (h01(i, 31) < 0.45) sagCable(ctx, x, 60 + Math.round(h01(i, 37) * 70), -2, 24 + Math.round(h01(i, 41) * 28), CABLE.dim);
+    else hangCable(ctx, x, -2, Math.max(40, len), t, i, CABLE.dim);
   }
 }
 
@@ -1002,7 +1075,7 @@ export function draw(ctx, run, v, t) {
 
   for (const c of run.coins) if (c.tight !== 'log') coinAt(c);
 
-  if (run.vine > 0) drawVines(ctx, cam, t, v.w, run.vine);
+  if (run.vine > 0) drawVines(ctx, run, cam, t, v.w, run.vine);
 
   // mounts waiting on the path: a warm glow and a bouncing arrow say "come here", not "watch out"
   // Each one waits its own way: the gorilla swings along a vine high up, the rhino grazes, the
@@ -1076,7 +1149,8 @@ export function draw(ctx, run, v, t) {
     }
     const role = ROLE[o.kind];
     if (!role) continue;
-    const name = o.kind === 'hover' && !o.biome ? (o.mid ? 'spider-mid' : 'spider-low') : role[o.biome || 0], H = HAZ[name];
+    // the hanging ones of the ruins are the forest's spiders as well (the stone idol is set aside)
+    const name = o.kind === 'hover' && (o.biome || 0) <= 1 ? (o.mid ? 'spider-mid' : 'spider-low') : role[o.biome || 0], H = HAZ[name];
     if (!H) continue;
     const im = o.ghost ? H.ghost : H.im, pad = o.ghost ? 1 : H.pad, fw = im.width / H.frames, cx = x + n(o.w) / 2, cy = y + n(o.h) / 2;
     if (LOOK === 3 && !o.ghost && !(o.kind === 'dart' && o.state !== 'go')) {   // a warm glow behind what hurts

@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 17/11/2026, version 0.26.0. Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 17/11/2026, version 0.27.0. Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -16,7 +16,7 @@ Tous ont un contour sombre et un bord éclairé (lisibilité 5) ; le décor de f
 |---|---|---|---|---|
 | **Au sol** : sauter | hérisson violet | boule de ronces | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
 | **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur, puis il traverse l'écran | coléoptère | vautour | flèche | missile |
-| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m, à hauteur de tête (rester au sol) dès 1500 m | araignée jaune (bas), rouge (tête) | idole de pierre | chauve-souris | drone |
+| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m, à hauteur de tête (rester au sol) dès 1500 m | araignée jaune (bas), rouge (tête) | les mêmes araignées | chauve-souris | drone |
 | **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | guêpes | feux follets | gros drones qui tirent un laser au lieu de foncer |
 
 Faune alcoolisée (objet) : une partie des créatures et des nuées deviennent inoffensives (pâles, bleutées).
@@ -54,10 +54,10 @@ Inoffensif ; il se casse avec Brise-tout, la Ruée ou le rhino (4 pièces). Un p
 |---|---|---|---|---|
 | **Plateforme** | bloc de sol flottant (terre et herbe) | bloc de sol flottant (dalles) | passerelle de planches pendue à deux chaînes | plateforme en lévitation sur 3 réacteurs cyan |
 | **Colline** (décor sombre, jamais un obstacle) | ronde, touffue | colonnes brisées sur la crête | roche | blocs, quelques fenêtres |
-| **Lianes** | pendent du haut de l'écran ici et là | idem | — | — |
+| **Lianes** | pendent du haut de l'écran ici et là | idem | chaînes à crochet ou anneau | câbles à prise lumineuse, câbles tendus en arc |
 
 Les blocs de sol flottants ne viennent qu'avec une colline derrière eux. Avec le Gorille, une liane
-tressée court tout le long du haut de l'écran.
+tressée court tout le long du haut de l'écran (une chaîne au donjon, un câble à pinces lumineuses dans la cité).
 
 ## Amis et trésors
 
@@ -68,7 +68,7 @@ tressée court tout le long du haut de l'écran.
 
 Caisses à sauter (devenues décor à casser), mine (remplacée par le robot à pointes), geyser, ronces,
 bloc de pilier, piqué de chauve-souris, plateformes de bois, premiers nénuphars verts (remplacés par ceux
-de Vorace), voix « Danger ! », tentacules de Vorace.
+de Vorace), voix « Danger ! », tentacules de Vorace, idole de pierre des ruines (mise de côté, remplacée par les araignées).
 
 ## D'où viennent les images
 

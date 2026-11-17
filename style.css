@@ -288,3 +288,14 @@ textarea { width: 100%; height: calc(var(--ui) * 26); flex: none; resize: none; 
 .set-tabs .tab.sel { border-color: var(--gold); color: var(--gold); background: #2c3558; }
 .set-panel { display: flex; flex-direction: column; gap: calc(var(--ui) * 6); }
 .set-panel[hidden] { display: none; }
+
+/* the debug menu's strip: thin, red, above absolutely everything, while anything is changed there */
+#debug-strip { position: fixed; top: 0; left: 0; right: 0; height: 12px; z-index: 2147483647; pointer-events: none;
+  background: #e0203a; color: #fff; font: 700 9px/12px system-ui, sans-serif; letter-spacing: .3em; text-align: center;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .55); }
+#debug-strip[hidden] { display: none; }
+#debug { padding-top: 24px; }
+/* what is changed in the debug menu: in red */
+#debug .row.mod > span:first-child { color: #ff5a6a; font-weight: 700; }
+#debug .row.mod input, #debug .row.mod select { outline: 2px solid #ff5a6a; }
+#debug .row.mod small { color: #ff9aa4; }

@@ -51,7 +51,7 @@ export const JUMP = { v: 760, double: 700, gravity: 2400, held: 1500 };   // uni
 // - the spiky one sits on the floor: jump it (hedgehog, ball of brambles, bear trap, mine);
 // - the flyer: a "!" at the right edge shows the height it will come at, DART.warn seconds before it
 //   crosses the whole screen in one go (beetle, vulture, arrow, missile);
-// - the hanging one stays still in mid-air, never touching floor or ceiling (spider, stone idol, bat,
+// - the hanging one stays still in mid-air, never touching floor or ceiling (spider in the forest and the ruins, bat,
 //   drone): low, it is jumped; at head height (from HOVER.from.mid metres), the hero stays down;
 // - the swarm, the follower monster (see FM).
 const DART = { w: 64, h: 40, warn: 1.0, speed: 800 };
@@ -133,6 +133,8 @@ const gemKind = () => pick('yyyyyyrrrb');
 const gem = (run) => (run.up.scatter ? gemKind() : undefined);
 const SCATTER = [0, 0.012, 0.022, 0.035];   // Gemmes dispersées: share of the coins that become gems
 const HEART_GOLD = 25;                      // what a heart is worth to someone who has all his lives
+// Picking up: within `r` of his middle, or within `half` of him sideways from his feet to `top` above his head.
+export const COIN = { r: 44, half: 34, top: 30 };
 const BLAST_COINS = 30;                     // thrown out of the temple when its doorway blows: they can be picked up
 
 // Groups of coins drawn as text in assets/patterns.txt (see that file). Each character is one cell of
@@ -515,7 +517,7 @@ function spawnPattern(run) {
               : style === 'sky' ? 400 + Math.sin(i * 0.9) * 30                   // out of reach without the Vol
                 : 40;
         run.coins.push({ x: wx, y: f - h });
-        if (style === 'double') run.coins.push({ x: wx, y: f - 84 });              // two rows: the top one for a hop
+        if (style === 'double') run.coins.push({ x: wx, y: f - 124 });             // two rows: the top one for a hop (out of reach of the leaves on his head)
       }
       if (up.lucky && up.scatter && Math.random() < 0.12 * up.lucky) run.coins.push({ x: cx + n * 44 + 30, y: floorAt(run, cx + n * 44 + 30) - 110, gem: gem(run) });
     }
@@ -1188,6 +1190,9 @@ export function update(run, dt, input) {
   // --- coins and gems ---
   const reach = MAGNET[up.magnet || 0], cy = p.y - (p.ball ? 20 : 40);
   const grab = run.mount && MOUNTS[run.mount.kind].grab;
+  // A coin is caught within COIN.r of his middle, and anywhere up his height and COIN.top above it: the
+  // leaves on his head reach well above his hitbox, and a coin they brush is a coin taken.
+  const tall = run.mount ? MOUNTS[run.mount.kind].tall : HERO_H;
   for (const c of run.coins) {
     if (c.tight && !p.ball) continue;                // inside a tight place: for the ball only
     if (c.toss) {                                    // thrown by the blast: it falls, bounces lower each time, then stays at running height
@@ -1201,7 +1206,8 @@ export function update(run, dt, input) {
       if (c.loot < 0.32) { c.vy += 1500 * d; c.x += (c.vx + run.speed) * d; c.y += c.vy * d; continue; }
       if (dist >= 44) { c.x += dx / dist * 1000 * d + run.speed * d; c.y += dy / dist * 1000 * d; continue; }
     }
-    if (grab ? Math.abs(dx) < grab.w && c.y > p.y - grab.h && c.y < p.y + 10 : dist < 44) {
+    if (grab ? Math.abs(dx) < grab.w && c.y > p.y - grab.h && c.y < p.y + 10
+      : dist < COIN.r || (!p.ball && Math.abs(dx) < COIN.half && c.y < p.y && c.y > p.y - tall - COIN.top)) {
       c.gone = true;
       if (c.heart) {                                 // a heart found: a life back, or its worth in gold when none is missing
         if (run.hearts < run.maxHearts) run.hearts++; else run.gold += HEART_GOLD;

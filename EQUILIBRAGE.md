@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 17/11/2026, version 0.26.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+État au 17/11/2026, version 0.27.0. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
@@ -80,13 +80,13 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Au sol, à sauter | hérisson / boule de ronces / robot à pointes à l'œil bleu clignotant (cité) / piège à loup ; 1,7 m × 1,35 m | `SPIKY` |
 | Volant | coléoptère / vautour / missile / flèche : un gros panneau rouge « ! » qui pulse au bord droit (à 64 % de la largeur avec « Signalements décalés »), à sa hauteur, avec sa trajectoire en pointillés et un klaxon à deux tons joué deux fois (pas deux fois en moins de 1,6 s), pendant 1 s ; puis il traverse l'écran à 20 m/s de plus que toi | `DART`, `warnMark` |
 | Hauteur des volants | 1,15 m (sauter) ou 4,25 m (rester au sol) ; avec Double saut aussi 7,25 m ; avec Vol aussi 10 et 12,75 m | `DART_ALTS` |
-| Suspendu | araignée / idole de pierre / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 150 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
+| Suspendu | araignée (forêt et ruines) / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 150 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
 | Mise en avant des dangers | façon 5 (son choix du 17/11) : contour sombre et bord éclairé en haut à gauche sur tout ce qui fait mal, décor de fond et décor du chemin assombris ; liseré rouge en plus en option (Réglages, Accessibilité) | `LOOK`, `setDangerRim` |
 | Décor à casser | grosse caisse (forêt) / jarre (ruines) / tonneau (donjon) / caisses (cité) ; posé derrière 12 % des motifs dès 70 m, un peu assombri ; inoffensif, il ne se casse qu'avec Brise-tout, la Ruée ou le rhino | `addDecor`, `DECOR_RATE` |
 | Plateforme (6 à 6,35 m de long, à 3,4 m du sol, plus haut dans les chaînes et montées) | forêt et ruines : bloc de sol flottant, toujours devant une colline ; donjon : passerelle de planches pendue à deux chaînes qui montent jusqu'en haut ; cité : plateforme en lévitation sur 3 réacteurs (elle oscille de 0,1 m) ; pendant Vorace seulement : ses nénuphars volants (turquoise aux veines violettes, épines, œil orange), qui montent et descendent de 0,2 à 0,55 m et portent le héros | `PLAT_KIND`, `addPlatform`, `PAD` |
 | Colline | décor sombre, jamais un obstacle : 12,5 à 37 m de large, 2,5 à 13 m de haut ; sa forme suit le décor (forêt : ronde et touffue ; ruines : colonnes brisées sur la crête ; donjon : roche ; cité : blocs et rares fenêtres) ; seule en décor après 22 % des motifs | `addHill`, `hill` |
 | Bloc de sol flottant | 4,25 / 6 / 8,25 m de large, la terre du décor ; dans le motif « colline » : 2 ou 3 en escalier (2,6 m d'écart à pied, 3,1 m avec le Double saut), pièces dessus, hérisson dessous 65 % des fois, gemme 30 % | `ISLE_W`, `hills` |
-| Lianes | forêt et ruines : des lianes pendent du haut de l'écran ici et là (un peu sombres, décor seulement) ; avec le Gorille : une liane tressée tout le long du haut de l'écran, où il se suspend | `drawHangingVines`, `drawVines` |
+| Lianes | forêt et ruines : des lianes pendent du haut de l'écran ici et là (un peu sombres, décor seulement) ; donjon : des chaînes à crochet ou anneau ; cité : des câbles à prise lumineuse et des câbles tendus en arc ; avec le Gorille : une liane tressée (une chaîne au donjon, un câble à pinces dans la cité) tout le long du haut de l'écran, où il se suspend | `drawHangingVines`, `drawVines`, `hangChain`, `hangCable` |
 | Corniche | +3,4 m pendant 17,5 à 27,5 m, hérisson dessus 6 fois sur 10 | `STEP` |
 | Creux | −1,65 m pendant 15 à 24 m | `HOLLOW` |
 | Grotte | 20 à 30 m, toit à 2,5 m | `SLAB` |
@@ -98,7 +98,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Traînée de pièces après un motif | 55 % des fois (toujours après « pièces ») ; formes : ligne, arche, zigzag (sauts), petite colline, double rangée ; avec le Vol aussi la vague haute ; sans le Vol, parfois une ligne à 10 m de haut (dès 300 m) | `spawnPattern` |
+| Traînée de pièces après un motif | 55 % des fois (toujours après « pièces ») ; formes : ligne, arche, zigzag (sauts), petite colline, double rangée (la seconde à 3,1 m : un petit saut) ; avec le Vol aussi la vague haute ; sans le Vol, parfois une ligne à 10 m de haut (dès 300 m) | `spawnPattern` |
 | Longueur d'une traînée | 3 à 8 pièces, une tous les 1,1 m | `spawnPattern` |
 | Plateforme seule | 4 pièces ; avec Gemmes dispersées, gemme 35 % (+20 % par niveau de Trèfle) | `spawnPattern` |
 | Trèfle | avec Gemmes dispersées : gemme après une traînée, 12 % par niveau | `spawnPattern` |
@@ -112,7 +112,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Cœur ramassé sans vie à rendre | 25 pièces | `HEART_GOLD` |
 | Explosion du temple | 30 pièces projetées sur les 35 premiers mètres environ, à ramasser | `BLAST_COINS` |
 | Aimant | portée 2,75 / 4,25 / 6 m | `MAGNET` |
-| Portée de ramassage | 1,1 m | `update` |
+| Portée de ramassage | 1,1 m autour de son milieu, et sur 0,85 m de chaque côté depuis ses pieds jusqu'à 0,75 m au-dessus de sa tête (les feuilles de sa tête attrapent les pièces : en courant, jusqu'à 2,7 m du sol) | `COIN`, `update` |
 
 ## 6. Montures
 
@@ -232,4 +232,4 @@ Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans 
 | Fin de course | la musique ralentit et s'éteint en 0,85 s ; la musique du menu entre à 0,6 s | `music('over')`, js/audio.js |
 | Avant-plan | deux rangées d'ombres fixes ; au plus 22 et 30 pixels en bas, 24 et 30 en haut (sur 320) | `silhouettes`, js/render.js |
 | Changement de décor | mosaïque : carreaux de 16 pixels, étalés sur 120 pixels de part et d'autre | `TILE`, `SPREAD`, js/render.js |
-| Réglages | deux onglets : Général (son, police, lissage, plein écran) et Accessibilité (contour rouge des dangers ; signalements décalés : les alertes des Fonceurs à 64 % de la largeur au lieu du bord droit, loin du pouce) | index.html, `setAlertShift` |
+| Réglages | deux onglets : Général (son, police, lissage, plein écran, images par seconde) et Accessibilité (contour rouge des dangers ; signalements décalés : les alertes des Fonceurs à 64 % de la largeur au lieu du bord droit, loin du pouce) | index.html, `setAlertShift` |
