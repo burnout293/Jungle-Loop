@@ -32,7 +32,7 @@ apply();
 export function debugRun(run) {
   run.god = dbg.god;
   if (dbg.biome) run.biome = run.prevBiome = dbg.biome;
-  if (changed.has('boss')) run.bossAt = BOSS.at;       // a boss set by hand comes exactly there
+  if (changed.has('boss') && run.mode !== 'endless') run.bossAt = BOSS.at;   // a boss set by hand comes exactly there (never in the Run illimitée)
   if (dbg.god || dbg.start || dbg.biome || dbg.mount || dbg.fm) run.events.push('debug');   // said on screen: nothing should look normal by mistake
   if (dbg.start > 0) {                                  // as if the first metres had already been run
     const D = dbg.start * PPM, g = SPEED.gain;

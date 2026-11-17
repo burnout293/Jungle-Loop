@@ -1,6 +1,7 @@
 ﻿# Jungle Loop
 
 Course infinie en pixel art : Pépito a volé la relique du temple, et la jungle ne le laissera pas partir.
+Deux modes : Histoire (avec les boss) et Run illimitée (sans boss).
 
 Le jeu est un site statique, sans compilation : ouvrir `index.html` derrière n'importe quel serveur web suffit.
 Il est publié sur GitHub Pages : https://burnout293.github.io/Jungle-Loop/. Sur téléphone, il se joue en

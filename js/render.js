@@ -4,7 +4,7 @@
 // but they can stand and scroll at any Q-th of a pixel, which is what keeps a fast run steady,
 // and the browser smooths the picture's edges when it fits the canvas to the screen.
 
-import { TENTACLE, GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, SLOW_WARN, ISLE_W, PLAT_KIND, propAt, floorAt, flatAt, biomeAt } from './game.js';
+import { GROUND, PIXEL, VIEW_H, PROP, PROP_CELL as CELL_UNITS, FM, LASER, MOUNTS, LOG, GALLERY, PERCH, BOSS, DECOR_W, SLOW_WARN, ISLE_W, PLAT_KIND, propAt, floorAt, flatAt, biomeAt } from './game.js';
 import { drawSky, drawLife, drawWeather, swayBlit, setStep } from './ambient.js';
 
 // Each scenery has its own far background, middle distance, floor, props, and its own version of
@@ -189,6 +189,10 @@ const ROLE = {
 const HAZ_FRAMES = { spiky: 1, thornball: 1, beartrap: 2, spikebot: 1, fly: 4, vulture: 2, arrow: 1, missile: 1, 'spider-low': 2, 'spider-mid': 2, idol: 1, bat: 3, drone: 1, mosquito: 4, wasp: 1, 'drone-big': 1 };
 const RED = '#ff3b4e';
 let RIM = false;                                       // the red outline around everything that hurts (a setting)
+// Accessibility, « Signalements décalés »: the fonceurs' warnings stand a third of the screen in from the
+// right edge, where a thumb does not cover them.
+let SHIFT = false;
+export function setAlertShift(on) { SHIFT = !!on; }
 // Ways of making the dangers stand out from the scenery, shown side by side in mockups/lisibilite.html:
 // 0 as it is; 1 a thick dark outline; 2 a lit edge (light from the top left) inside a dark outline;
 // 3 a warm glow behind; 4 the scenery much darker; 5 = 2 + 4, the one chosen for the game (16/11).
@@ -1046,26 +1050,6 @@ export function draw(ctx, run, v, t) {
     if ((x > v.w + 10 && !(o.kind === 'dart' && o.state === 'warn')) || x < -80) continue;   // a fonceur waiting off screen still shows its warning
     if (o.kind === 'acid') {                           // the plant's acid: a glowing ball in the air, a bubbling puddle on the floor
       const w = n(o.w), cx = x + w / 2;
-      if (o.tentacle) {                                // a root of Vorace crawling along the floor, its pointed end first:
-        // drawn pixel by pixel, as tall as it hurts, in the dark violet of her veins so it stands out from
-        // the moss (lit top, ivory thorns, a glowing acid tip); it undulates slowly and throws up earth
-        const C = ['#1a1024', '#3a1a4a', '#7a3a9a', '#d08cf0', '#f0e2c0', '#c8ff5c'], H = n(TENTACLE.h);
-        ctx.fillStyle = 'rgba(14,8,34,.4)'; ctx.fillRect(x + 1, foot - 2, w, 3);                    // its shadow on the floor
-        for (let u = 0; u < w; u++) {
-          const th = 3 + Math.round(3 * u / w), yy = Math.round(foot - 2 - th - (Math.sin(t * 5 - u * 0.33 + o.ph) * 0.5 + 0.5) * Math.max(0, H - 3 - th)), xx = x + u;   // thin at the tip, a slow wave running along it
-          ctx.fillStyle = C[0]; ctx.fillRect(xx, yy - 1, 1, th + 2);
-          ctx.fillStyle = C[2]; ctx.fillRect(xx, yy, 1, th);
-          ctx.fillStyle = C[3]; ctx.fillRect(xx, yy, 1, 1);
-          ctx.fillStyle = C[1]; ctx.fillRect(xx, yy + th - 2, 1, 2);
-          if (u % 6 === 3 && u > 4) { ctx.fillStyle = C[0]; ctx.fillRect(xx - 1, yy - 4, 3, 4); ctx.fillStyle = C[4]; ctx.fillRect(xx, yy - 3, 1, 3); }
-        }
-        const tipY = foot - 5;                                                              // the tip: a drop of acid glowing
-        const g = ctx.createRadialGradient(x, tipY, 1, x, tipY, 11); g.addColorStop(0, 'rgba(200,255,92,.85)'); g.addColorStop(1, 'rgba(200,255,92,0)');
-        ctx.fillStyle = g; ctx.fillRect(x - 11, tipY - 11, 22, 22);
-        ctx.fillStyle = C[0]; ctx.fillRect(x - 2, tipY - 2, 4, 4); ctx.fillStyle = C[5]; ctx.fillRect(x - 1, tipY - 1, 2, 2);
-        if (Math.random() < 0.4) dirt.push({ x: x + w - 2 + n(run.cam), y: foot - 2, vx: 20 + Math.random() * 50, vy: -50 - Math.random() * 50, life: 0.45 });   // the earth it ploughs
-        continue;
-      }
       if (o.drop) {                                    // its shadow on the floor shows where it will land
         const f = floorPx(cx), k = Math.max(0, Math.min(1, (y + 60) / (f + 20)));
         ctx.fillStyle = `rgba(20,40,6,${0.25 + 0.4 * k})`; ctx.fillRect(snap(cx - 4 - 10 * k), f - 2, snap(8 + 20 * k), 3);
@@ -1112,7 +1096,7 @@ export function draw(ctx, run, v, t) {
         ctx.fillStyle = g; ctx.fillRect(cx - 9, foot - im.height - 6, 18, 18);
       }
     } else if (o.kind === 'dart') {                    // a "!" at the edge, at its height; then across in one go
-      if (o.state === 'warn') warnMark(ctx, v.w - 20, cy, t, o.t || 0);
+      if (o.state === 'warn') warnMark(ctx, SHIFT ? Math.round(v.w * 0.64) : v.w - 20, cy, t, o.t || 0);
       else if (o.state === 'go') {
         const frame = H.frames > 1 ? Math.floor(t * (name === 'fly' ? 14 : 9) + o.ph) % H.frames : 0, x0 = snap(cx - fw / 2);
         ctx.fillStyle = 'rgba(255,255,255,.45)';
@@ -1162,7 +1146,10 @@ export function draw(ctx, run, v, t) {
       else if (MOUNTS[M.kind].fly) s = drawMount(ctx, M.kind, Math.floor(t * 18) % 4, hx, seatFloor(M.kind, n(p.y) - 34), 0);
       else {                                           // it gallops under him; in the air it stretches out
         const frame = !p.ground ? (M.kind === 'gorilla' ? 3 : 0) : Math.floor(p.phase / (Math.PI * 2) * 4) % 4;
+        const left = MOUNTS[M.kind].time ? MOUNTS[M.kind].time - M.t : 9;      // the rhino's time running out: it blinks
+        if (left < 1.5 && Math.floor(t * 10) % 2) ctx.globalAlpha = 0.45;
         s = drawMount(ctx, M.kind, frame, hx, n(p.y), p.ground ? -Math.abs(Math.sin(p.phase * 2)) * 1.5 : 0);
+        ctx.globalAlpha = 1;
       }
       if (s) seat = { ...s, k: Math.min(1, M.t / 0.32) };
     }

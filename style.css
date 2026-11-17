@@ -281,3 +281,10 @@ textarea { width: 100%; height: calc(var(--ui) * 26); flex: none; resize: none; 
   h1 span, #over-best.record, #hint { animation: none; }
   .fly { transition-duration: .01s; }
 }
+
+/* the settings' tabs (Général, Accessibilité) */
+.set-tabs { display: flex; gap: calc(var(--ui) * 4); }
+.set-tabs .tab { flex: 1; height: calc(var(--ui) * 22); font-size: var(--t-s); color: var(--dim); text-shadow: none; }
+.set-tabs .tab.sel { border-color: var(--gold); color: var(--gold); background: #2c3558; }
+.set-panel { display: flex; flex-direction: column; gap: calc(var(--ui) * 6); }
+.set-panel[hidden] { display: none; }

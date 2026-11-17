@@ -36,7 +36,8 @@ export const MAX_EQUIPPED = 3;   // owning is not enough: only three upgrades go
 export const isPower = (id) => !!UPGRADES.find((u) => u.id === id && u.power);
 
 function blank() {
-  return { v: 1, coins: 0, best: 0, loops: 0, upgrades: {}, musicVol: 7, sfxVol: 7, pixelFont: true, dangerRim: false, quality: 'auto', full: true, seenIntro: false,
+  // best: the record of the Histoire mode (the older saves knew only that one); bestEndless: the Run illimitée's
+  return { v: 1, coins: 0, best: 0, bestEndless: 0, mode: 'story', loops: 0, upgrades: {}, musicVol: 7, sfxVol: 7, pixelFont: true, dangerRim: false, alertShift: false, quality: 'auto', full: true, seenIntro: false,
     equipped: [], powersOff: [], xp: 0, quests: [], questsDone: 0, lastQuest: '' };
 }
 
@@ -47,6 +48,8 @@ function sanitize(raw) {
   const int = (x) => (Number.isFinite(x) && x > 0 ? Math.floor(x) : 0);
   s.coins = int(raw.coins);
   s.best = int(raw.best);
+  s.bestEndless = int(raw.bestEndless);
+  s.mode = raw.mode === 'endless' ? 'endless' : 'story';
   s.loops = int(raw.loops);
   // volumes go from 0 (off) to 10; older saves only knew on and off
   const vol = (v, on) => (Number.isInteger(v) && v >= 0 && v <= 10 ? v : on === false ? 0 : 7);
@@ -54,6 +57,7 @@ function sanitize(raw) {
   s.sfxVol = vol(raw.sfxVol, raw.sfx);
   s.pixelFont = raw.pixelFont !== false;
   s.dangerRim = raw.dangerRim === true;
+  s.alertShift = raw.alertShift === true;
   s.quality = QUALITIES.includes(raw.quality) ? raw.quality : 'auto';
   s.full = raw.full !== false;
   s.seenIntro = !!raw.seenIntro;

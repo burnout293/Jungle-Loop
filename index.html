@@ -44,7 +44,8 @@
     <div id="menu-coins" class="pill"></div>
   </div>
   <div class="fly" id="menu-buttons">
-    <button class="big" data-go="play">Jouer</button>
+    <button class="big" data-go="play" data-mode="story">Histoire</button>
+    <button class="big" data-go="play" data-mode="endless">Run illimitée</button>
     <button data-go="shop">Améliorations</button>
   </div>
   <div class="fly" id="menu-quests-box">
@@ -92,14 +93,22 @@
   <button class="fly" id="settings-back" data-go="menu">Retour</button>
   <h2 class="fly head">Réglages</h2>
   <div class="fly pane left">
+    <div class="set-tabs"><button class="tab sel" data-set="main">Général</button><button class="tab" data-set="access">Accessibilité</button></div>
+    <div class="set-panel" data-panel="main">
     <p class="label">Son</p>
     <div class="toggle">Musique<span class="vol" id="vol-music"><button class="square" data-d="-1">−</button><span class="bar"><i></i></span><button class="square" data-d="1">+</button></span></div>
     <div class="toggle">Effets<span class="vol" id="vol-sfx"><button class="square" data-d="-1">−</button><span class="bar"><i></i></span><button class="square" data-d="1">+</button></span></div>
     <p class="label">Affichage</p>
     <div class="toggle">Police pixel<button id="tg-font"></button></div>
     <div class="toggle">Lissage<button id="tg-smooth"></button></div>
-    <div class="toggle">Contour des dangers<button id="tg-rim"></button></div>
     <div class="toggle" id="row-full">Plein écran<button id="tg-full"></button></div>
+    </div>
+    <div class="set-panel" data-panel="access" hidden>
+    <div class="toggle">Contour rouge des dangers<button id="tg-rim"></button></div>
+    <p class="sub">Un liseré rouge autour de tout ce qui fait mal.</p>
+    <div class="toggle">Signalements décalés<button id="tg-shift"></button></div>
+    <p class="sub">Les alertes des Fonceurs apparaissent plus à gauche, loin du pouce.</p>
+    </div>
   </div>
   <div class="fly pane right">
     <p class="label">Sauvegarde</p>

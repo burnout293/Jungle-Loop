@@ -1,10 +1,11 @@
 # Jungle Loop — bestiaire par décor
 
-État au 17/11/2026, version 0.25.0. Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 17/11/2026, version 0.26.0. Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
-Ordre des décors : **forêt** jusqu'à la victoire sur Vorace (vers 2000 m), puis **ruines**, **donjon** à
-4000 m, **cité** à 6000 m, **forêt** à 8000 m, et ainsi de suite tous les 2000 m.
+Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
+Ordre des décors : **forêt**, puis **ruines** (en Histoire après la victoire sur Vorace, en Run illimitée à
+2000 m), **donjon** à 4000 m, **cité** à 6000 m, **forêt** à 8000 m, et ainsi de suite tous les 2000 m.
 
 ## Dangers
 
@@ -14,7 +15,7 @@ Tous ont un contour sombre et un bord éclairé (lisibilité 5) ; le décor de f
 | Rôle (comment l'éviter) | Forêt | Ruines | Donjon | Cité |
 |---|---|---|---|---|
 | **Au sol** : sauter | hérisson violet | boule de ronces | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
-| **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit, à sa hauteur, puis il traverse l'écran | coléoptère | vautour | flèche | missile |
+| **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur, puis il traverse l'écran | coléoptère | vautour | flèche | missile |
 | **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m, à hauteur de tête (rester au sol) dès 1500 m | araignée jaune (bas), rouge (tête) | idole de pierre | chauve-souris | drone |
 | **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | guêpes | feux follets | gros drones qui tirent un laser au lieu de foncer |
 
@@ -22,10 +23,10 @@ Faune alcoolisée (objet) : une partie des créatures et des nuées deviennent i
 
 ## Boss
 
-**Vorace**, la fleur-reine carnivore : une fois par course, vers 2000 m, seulement dans la forêt.
+**Vorace**, la fleur-reine carnivore : en mode Histoire, une fois par course, vers 2000 m, seulement dans la forêt.
 
 - Elle marche derrière le sol, en trois couches qui ne se décollent jamais (pattes épineuses, urne à l'œil orange, couronne de pétales violets à crocs).
-- Attaques : flaques et boules d'acide, pluie de gouttes, tentacule violette qui rampe au sol (à sauter).
+- Attaques : flaques et boules d'acide, pluie de gouttes.
 - Pendant le combat : aucun autre danger ; ses **nénuphars volants** (turquoise aux veines violettes, épines, œil orange, ils battent des ailes et clignent) servent de plateformes.
 - Sa fin, au ralenti : un tronc tombe sur sa couronne, l'urne se fend, les pattes cèdent, elle s'enfonce ; ensuite seulement les récompenses (pièces, trois gemmes, ligne de gemmes bleues), puis le décor change.
 
@@ -36,7 +37,7 @@ Seuls les boss ont du texte à l'écran.
 | Monture | Où elle attend | Ce qu'elle fait |
 |---|---|---|
 | Gorille | tout en haut, suspendu à la liane | saute haut, second saut jusqu'à la liane tressée où il se balance ; sa route : dangers au sol, dans les lianes, Fonceurs aux deux hauteurs |
-| Rhino | broute au sol | court de plus en plus vite, casse le décor |
+| Rhino | broute au sol | court de plus en plus vite, casse le décor, rien ne le blesse ; il repart tout seul au bout de 8 s |
 | Libellule | zigzague en l'air | vole : appuyé elle monte, relâché elle descend |
 
 ## Décor à casser
@@ -67,7 +68,7 @@ tressée court tout le long du haut de l'écran.
 
 Caisses à sauter (devenues décor à casser), mine (remplacée par le robot à pointes), geyser, ronces,
 bloc de pilier, piqué de chauve-souris, plateformes de bois, premiers nénuphars verts (remplacés par ceux
-de Vorace), voix « Danger ! ».
+de Vorace), voix « Danger ! », tentacules de Vorace.
 
 ## D'où viennent les images
 

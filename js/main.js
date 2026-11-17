@@ -1,7 +1,7 @@
 // Glue: screens, input, HUD and the frame loop.
 
 import { newRun, update, launch, setShapes, PIXEL, VIEW_H, MOUNTS } from './game.js';
-import { draw, loadAssets, setQuality, quality, setDangerRim, BIOMES } from './render.js';
+import { draw, loadAssets, setQuality, quality, setDangerRim, setAlertShift, BIOMES } from './render.js';
 import { showDemo, drawDemo, DEMO_W, DEMO_H } from './demo.js';
 import { audio } from './audio.js';
 import * as S from './save.js';
@@ -9,7 +9,7 @@ import * as P from './progress.js';
 import { open as openDebug, debugRun, dbg } from './debug.js';
 
 // The game's version, shown on the home screen. sw.js names its cache after it: both move together.
-const VERSION = '0.25.0';
+const VERSION = '0.26.0';
 
 const $ = (id) => document.getElementById(id);
 // (A canvas without transparency, { alpha: false }, is a little lighter, but some Firefox builds on
@@ -288,7 +288,7 @@ function slotInfo(id, slot) {
 document.addEventListener('click', () => { $('menu-info').hidden = true; for (const s of document.querySelectorAll('#menu-loadout .slot')) s.classList.remove('sel'); });
 
 function refreshSettings() {
-  for (const [id, on] of [['tg-font', save.pixelFont], ['tg-full', !!document.fullscreenElement], ['tg-rim', save.dangerRim]]) {
+  for (const [id, on] of [['tg-font', save.pixelFont], ['tg-full', !!document.fullscreenElement], ['tg-rim', save.dangerRim], ['tg-shift', save.alertShift]]) {
     $(id).textContent = on ? 'Oui' : 'Non';
     $(id).className = (on ? 'on' : 'plain') + ' small';
   }
@@ -377,7 +377,8 @@ function bank() {
   run.banked = true;
   save.coins += run.gold;
   save.loops++;
-  save.best = Math.max(save.best, Math.floor(run.dist));
+  if (run.mode === 'endless') save.bestEndless = Math.max(save.bestEndless, Math.floor(run.dist));
+  else save.best = Math.max(save.best, Math.floor(run.dist));
   S.store(save);
 }
 
@@ -392,7 +393,7 @@ function go(name) {
   if (name === 'play') {
     if (canFull && save.full && phone && landscape.matches) fullscreen(true);   // a phone held sideways plays full screen
     if (!save.seenIntro) { save.seenIntro = true; S.store(save); state = 'intro'; show('intro'); return; }
-    run = newRun(S.loadout(save));                      // only the three equipped upgrades come along
+    run = newRun(S.loadout(save), save.mode);           // only the three equipped upgrades come along; Histoire or Run illimitée
     run.viewW = view.logicalW;
     launch(run);                                        // rumble, then the doorway blows out
     debugRun(run);                                      // what the debug menu asks for, if anything
@@ -419,7 +420,7 @@ function go(name) {
 }
 
 function gameOver() {
-  const record = Math.floor(run.dist) > save.best;
+  const record = Math.floor(run.dist) > bestOf(run.mode);
   bank();
   $('over-title').textContent = pick(DEATHS);
   hint(0);
@@ -431,7 +432,7 @@ function gameOver() {
   });
   const best = $('over-best');
   best.classList.toggle('record', record);
-  best.textContent = record ? '★ Nouveau record ! ★' : `Record : ${save.best} m`;
+  best.textContent = record ? '★ Nouveau record ! ★' : `Record : ${bestOf(run.mode)} m`;
   if (record) { confetti(60); audio.sfx('record'); }
   audio.music('over');                                  // the run's music winds down into the jingle, which leads to the menu's
   state = 'over'; show('over');
@@ -441,13 +442,18 @@ function pause() {
   if (state !== 'play' || run.dead) return;
   $('pause-dist').textContent = Math.floor(run.dist) + ' m';
   $('pause-gold').textContent = '+' + run.gold + ' ◈';
-  $('pause-best').textContent = `Record : ${save.best} m`;
+  $('pause-best').textContent = `Record : ${bestOf(run.mode)} m`;
   levelBar('pause-level', true); questCards('pause-quests');
   state = 'pause'; show('pause'); audio.duck(true);    // the music goes on, quieter
 }
 function resume() { if (state === 'pause') { state = 'play'; show(null); audio.duck(false); } }
 
-for (const b of document.querySelectorAll('[data-go]')) b.addEventListener('click', () => go(b.dataset.go));
+for (const b of document.querySelectorAll('[data-go]')) b.addEventListener('click', () => {
+  if (b.dataset.mode) { save.mode = b.dataset.mode; S.store(save); }   // Histoire or Run illimitée: « Rejouer » keeps it
+  go(b.dataset.go);
+});
+// the record of the mode played
+const bestOf = (mode) => (mode === 'endless' ? save.bestEndless : save.best);
 for (const b of document.querySelectorAll('#shop-side [data-tab]')) b.addEventListener('click', () => { tab = b.dataset.tab; refreshShop(); });
 $('btn-resume').addEventListener('click', resume);
 $('btn-pause').addEventListener('click', pause);
@@ -468,6 +474,11 @@ $('tg-smooth').addEventListener('click', () => {      // choosing again also for
   S.store(save); resize(); refreshSettings();
 });
 $('tg-rim').addEventListener('click', () => { save.dangerRim = !save.dangerRim; S.store(save); setDangerRim(save.dangerRim); refreshSettings(); });
+$('tg-shift').addEventListener('click', () => { save.alertShift = !save.alertShift; S.store(save); setAlertShift(save.alertShift); refreshSettings(); });
+for (const t of document.querySelectorAll('.set-tabs .tab')) t.addEventListener('click', () => {   // Général / Accessibilité
+  for (const o of document.querySelectorAll('.set-tabs .tab')) o.classList.toggle('sel', o === t);
+  for (const q of document.querySelectorAll('.set-panel')) q.hidden = q.dataset.panel !== t.dataset.set;
+});
 $('tg-full').addEventListener('click', () => { save.full = !document.fullscreenElement; S.store(save); fullscreen(save.full); });
 const msg = (t) => { $('save-msg').textContent = t; };
 
@@ -659,6 +670,7 @@ document.addEventListener('pointerup', () => { if (canFull && phone && save.full
 refreshMenu();
 aimFlyers();           // before the first show(): every block is still at its resting place
 setDangerRim(save.dangerRim);
+setAlertShift(save.alertShift);
 loadAssets();
 requestAnimationFrame(frame);
 requestAnimationFrame(() => show('menu'));   // one frame later, so the menu slides in rather than pops

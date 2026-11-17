@@ -79,15 +79,15 @@ export const FROM = { low: 150, mid: 1500 };   // (the debug menu may change the
 // the hero's speed.
 export const MOUNTS = {
   gorilla: { name: 'Gorille', jump: -820, half: 34, tall: 118, speed: { base: 300, gain: 24 }, ahead: 0.45 },
-  rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, grab: { w: 78, h: 150 }, speed: { base: 300, gain: 44 }, ahead: 0 },   // grab: it sweeps up coins well above its back
+  rhino: { name: 'Rhino', jump: -560, half: 34, tall: 104, smash: true, tough: true, time: 8, grab: { w: 78, h: 150 }, speed: { base: 300, gain: 44 }, ahead: 0 },   // grab: it sweeps up coins well above its back; tough: nothing hurts it; time: it goes off after that many seconds
   dragonfly: { name: 'Libellule', fly: true, half: 28, tall: 92, speed: { base: 320, gain: 28 }, ahead: 0.5 },
 };
 // The boss, Vorace: a giant carnivorous plant. Around BOSS.at metres, in the forest only, it comes in on
 // the right and keeps pace with the hero, who runs at BOSS.speed meanwhile; the relic in his backpack
-// lights up as it comes. Its tentacles crawl on the floor around it, and it attacks from every side:
+// lights up as it comes, and it attacks from every side:
 // blobs of acid lobbed onto the path (puddles to jump), balls along a low lane (jump), a middle one (stay
 // down) or a high one (no big jump), two balls at once, a rain of drops from the sky (their shadows show
-// where), a tentacle slithering along the floor (jump). Every attack is announced (jaws open and glow,
+// where). Every attack is announced (jaws open and glow,
 // shadows) and every pair leaves a way through. What it throws depends on what the hero rides. After
 // BOSS.fight seconds a trunk falls on it and crushes it into the ground; the hero runs straight on over a
 // line of blue gems. It stands behind the floor and walks on its root-legs (see render.js): BOSS.w is how
@@ -99,9 +99,6 @@ export const MOUNTS = {
 const DEATH = { pace: 0.3, time: 2.9, calm: 900, easy: 2600 };
 export const BOSS = { at: 2000, speed: 560, fight: 26, w: 446, mouthX: 50, mouthY: 223 };
 const LANE = { low: 28, mid: 115, high: 250, vine: 470 };
-// The tentacle crawling at him: its size (units) and how fast it closes in (on top of the scrolling it is
-// carried by). A short jump clears it with room to spare.
-export const TENTACLE = { w: 56, h: 22, closing: 240 };
 // The platforms. A pad is a giant living lily pad flying on its own: it bobs up and down (bob units,
 // speed radians a second) and carries whoever stands on it. An isle is a block of the scenery's ground
 // floating in the air, which only comes with a dark hill behind it (a hill is scenery: it never
@@ -172,8 +169,11 @@ function layShape(run, s, x, lift = 0) {
 // hold rewards. GALLERY is how deep the ball rolls under the floor.
 export const GALLERY = 58;
 
-export function newRun(upgrades) {
-  return {
+// mode: 'story' (Histoire: the bosses, then the sceneries every ZONE metres) or 'endless' (Run illimitée:
+// no boss, a new scenery every ZONE metres from the start).
+export function newRun(upgrades, mode = 'story') {
+  const run = {
+    mode,
     up: upgrades, viewW: 960,
     t: 0, cam: 0, sx: 10, base: SPEED.base + (upgrades.sprint ? SPEED.sprint : 0), speed: SPEED.base, dist: 0, gold: 0, gems: 0,
     hearts: HEARTS + (upgrades.heart ? 1 : 0), maxHearts: HEARTS + (upgrades.heart ? 1 : 0),
@@ -202,6 +202,8 @@ export function newRun(upgrades) {
     relic: 0,                                    // how bright the relic in his backpack shines (1: flaring)
     own: 0, h: 0, maxH: 0,                       // measures: his own speed, his height above the floor and the highest this run
   };
+  if (mode === 'endless') { run.bossAt = Infinity; run.nextBiomeAt = ZONE; run.byMark = true; }   // no boss: the sceneries come with the marks
+  return run;
 }
 
 // ---------- the floor ----------
@@ -680,19 +682,14 @@ function boss(run, d) {
               o.ghost = false; o.drop = true; o.vx = 0; o.vy = 0; o.g = 2 * (GROUND - ACID.ball + 60) / (0.9 * 0.9);
             }
             run.events.push('spit'); break;
-          case 'tentacle': {                                             // a tentacle slithering along the floor towards him
-            const o = addObs(run, run.cam + b.sx + 40, GROUND - TENTACLE.h, TENTACLE.w, TENTACLE.h, 'acid', false);
-            o.ghost = false; o.tentacle = true; o.vx = run.speed - TENTACLE.closing; o.ph = rnd(0, 6);
-            run.events.push('slither'); break;
-          }
         }
       }
     } else if ((b.next -= d) <= 0) {
       // what it throws depends on how he gets about
       const M = run.mount && run.mount.kind;
       const set = M === 'dragonfly' ? ['fan', 'fan', 'rain', 'low', 'high', 'mid']
-        : M === 'rhino' ? ['puddle', 'spray', 'low', 'low', 'high', 'rain', 'tentacle']
-          : ['puddle', 'spray', 'low', 'low', 'mid', 'high', 'pair', 'rain', 'tentacle', ...(p.hang ? ['vine', 'vine'] : [])];
+        : M === 'rhino' ? ['puddle', 'spray', 'low', 'low', 'high', 'rain']
+          : ['puddle', 'spray', 'low', 'low', 'mid', 'high', 'pair', 'rain', ...(p.hang ? ['vine', 'vine'] : [])];
       b.attack = pick(set);
       b.wind = 0.45; b.next = Math.max(0.7, 1.2 - b.t * 0.025);   // more and more often
     }
@@ -753,9 +750,9 @@ function smash(run, dc) {
 }
 
 // Hit on a mount: the animal takes the blow in the hero's place and vanishes in a puff.
-function dismount(run) {
+function dismount(run, ended = false) {
   const p = run.p, px = run.cam + run.sx;
-  for (let i = 0; i < 24; i++) run.parts.push({ x: px + rnd(-60, 60), y: p.y - rnd(0, 110), vx: rnd(-160, 160), vy: rnd(-220, -20), life: 0, max: rnd(0.4, 0.9), c: pick(['#f4f0e0', '#cfd3e6', '#9aa0b8']), s: rnd(9, 20), g: -120 });
+  for (let i = 0; i < (ended ? 10 : 24); i++) run.parts.push({ x: px + rnd(-60, 60), y: p.y - rnd(0, 110), vx: rnd(-160, 160), vy: rnd(-220, -20), life: 0, max: rnd(0.4, 0.9), c: pick(['#f4f0e0', '#cfd3e6', '#9aa0b8']), s: rnd(9, 20), g: -120 });
   run.gone = { kind: run.mount.kind, hang: p.hang, x: px, y: p.y, t: 0 };   // drawn for a moment more: it tumbles away and fades
   // What was laid ahead for the ride (towers of crates, creatures up in the
   // sky) may be out of reach on foot: it vanishes in a puff. The coins stay.
@@ -765,14 +762,18 @@ function dismount(run) {
   }
   run.mount = null;
   p.hang = false; p.vineLeap = false; p.jumps = 1;
-  p.inv = 1.5; run.shake = 0.5; run.flash = 0.6;
+  if (ended) { p.inv = 0.8; run.events.push('bye'); }               // its time is up: it trots off, nothing lost
+  else { p.inv = 1.5; run.shake = 0.5; run.flash = 0.6; run.events.push('unmount'); }
   run.nextMount = Math.max(run.nextMount, run.dist + rnd(900, 1200) / friend(run.up));
-  run.events.push('unmount');
 }
 
 // Losing a heart leaves a moment of invincibility; the last one ends the run (or triggers the rewind).
 // On a mount nothing is lost: the animal vanishes instead.
 function hit(run, o) {
+  if (run.mount && MOUNTS[run.mount.kind].tough) {                // the rhino: what would hurt is smashed, or simply bounces off
+    if (o.kind && o.kind !== 'acid' && !o.gone) destroy(run, o); else o.gone = true;
+    run.shake = Math.max(run.shake, 0.3); return;
+  }
   o.gone = true;
   if (run.mount) { dismount(run); return; }
   if (!run.god) run.hearts--;                   // the debug menu's invincibility: the blow is felt, no heart goes
@@ -1067,6 +1068,7 @@ export function update(run, dt, input) {
 
     // --- mounts: the ones ahead wait to be touched, and may be missed ---
     if (run.mount) run.mount.t += dt;
+    if (run.mount && MOUNTS[run.mount.kind].time && run.mount.t >= MOUNTS[run.mount.kind].time) dismount(run, true);
     for (const it of run.items) {
       it.x += run.speed * MOUNTS[it.kind].ahead * d;
       const f = floorAt(run, it.x);
