@@ -1,0 +1,208 @@
+# Jungle Loop : les groupes de pièces, dessinés à la main.
+#
+# Pour en ajouter un : une ligne « = nom », puis le dessin, une ligne de texte par rangée.
+#   o   une pièce                 .   rien (ou un espace)
+#   y   gemme jaune (5 pièces)    r   gemme rouge (10)    b   gemme bleue (20)
+# Chaque caractère vaut 1,1 m de large et de haut. La rangée du bas se ramasse en courant.
+# « = nom, base 3 » remonte tout le dessin de 3 rangées.
+# Le jeu ne pose un dessin que si son sommet est atteignable : 5 rangées à pied,
+# 9 avec le Double saut, 13 avec le Vol. 14 rangées et 40 colonnes au plus.
+# Sans le Vol, un dessin peut aussi apparaître haut dans le ciel, hors d'atteinte : c'est l'envie de l'avoir.
+# Les lignes qui commencent par # sont ignorées. Recharge la page pour voir tes changements.
+
+= coeur
+.oo.oo.
+ooooooo
+ooooooo
+.ooooo.
+..ooo..
+...r...
+
+= losange
+..o..
+.o.o.
+o.y.o
+.o.o.
+..o..
+
+= fleche
+....o..
+.....o.
+ooooooo
+.....o.
+....o..
+
+= vague
+..oo......oo....
+.o..o....o..o...
+o....o..o....o.o
+......oo......o.
+
+= escalier
+......oo
+....oo..
+..oo....
+oo......
+
+= montagne
+...o...
+..o.o..
+.o...o.
+o.....o
+
+= rail
+oooooooooo
+..........
+oooooooooo
+
+= damier
+o.o.o.o.
+.o.o.o.o
+o.o.o.o.
+
+= sourire, base 1
+.oo..oo.
+.oo..oo.
+........
+o......o
+.o....o.
+..oooo..
+
+= couronne, base 2
+o..o..o
+oo.o.oo
+ooooooo
+ooyryoo
+
+= croix, base 2
+..oo..
+..oo..
+oooooo
+oooooo
+..oo..
+..oo..
+
+= anneau, base 3
+..ooo..
+.o...o.
+o..b..o
+o.....o
+.o...o.
+..ooo..
+
+= etoile, base 4
+....o....
+....o....
+...ooo...
+ooooroooo
+.ooooooo.
+..ooooo..
+..oo.oo..
+.oo...oo.
+
+= serpent, base 5
+oooo....oooo....oooo
+...o....o..o....o...
+...o....o..o....o...
+...oooooo..oooooo...
+
+= spirale, base 6
+ooooooo
+o.....o
+o.ooo.o
+o.o.b.o
+o.o...o
+o.ooooo
+
+# ---- ajoutés le 17/11 : des formes au sol, et d'autres qui ne s'attrapent qu'en volant ----
+
+= eclair
+...oo
+..oo.
+.oooo
+..oo.
+.oo..
+oo...
+
+= champignon
+.ooooo.
+ooyoyoo
+ooooooo
+..ooo..
+..ooo..
+
+= cle
+.ooo.......
+o...ooooooo
+o...o..o.o.
+.ooo.......
+
+= note
+...oooo
+...o..o
+...o..o
+.ooo.oo
+oooo...
+
+= pyramide
+....o....
+...ooo...
+..ooooo..
+.ooooooo.
+ooooooooo
+
+= vagues basses
+o...o...o...o
+.o.o.o.o.o.o.
+..o...o...o..
+
+= papillon, base 4
+oo.....oo
+ooo...ooo
+oooo.oooo
+.oooroooo
+oooo.oooo
+ooo...ooo
+oo.....oo
+
+= fusee, base 5
+....o....
+...ooo...
+...oyo...
+...ooo...
+..ooooo..
+.oo.o.oo.
+....o....
+...o.o...
+
+= lune, base 5
+..oooo.
+.oo....
+oo.....
+oo.....
+oo.....
+.oo....
+..oooo.
+
+= fantome, base 4
+..ooooo..
+.ooooooo.
+oo.oo.ooo
+ooooooooo
+ooooooooo
+o.o.o.o.o
+
+= nuage, base 7
+...oo.....
+..oooo.oo.
+.ooooooooo
+oooooooooo
+
+= gemme geante, base 6
+..ooooo..
+.oo.b.oo.
+ooooooooo
+.ooooooo.
+..ooooo..
+...ooo...
+....o....

@@ -1,0 +1,2077 @@
+class_name Game
+extends RefCounted
+## Game rules: player physics, spawning, collisions. No drawing here (port of js/game.js, 0.26.0).
+## World x grows to the right; the camera (run.cam) follows the player once he has left the temple.
+## y grows downward: 0 is the top of the play area, GROUND the floor.
+## All values are in "logical" units; the renderer divides them by PIXEL to get art pixels.
+
+const VIEW_H := 720.0          # height of the play area shown on screen
+const GROUND := 630.0          # floor line
+const PX := 200.0              # player's screen x once the camera follows him
+const CEIL := 24.0             # flight ceiling
+const PPM := 40.0              # logical units per metre
+const PIXEL := 2.25            # logical units per art pixel (720 units = 320 art pixels)
+const BIOME_COUNT := 4
+# The order of the sceneries (index in Render.BIOMES: jungle, ruins, city, dungeon): forest, ruins,
+# dungeon, city, and back to the forest.
+const NEXT_BIOME := [1, 3, 0, 2]
+# The scenery changes after the boss (the ruins), then while there is no other boss every ZONE metres.
+const ZONE := 2000.0
+const HEARTS := 1              # one life: the first blow ends the run (Cœur en plus gives a second)
+
+const HERO_H := 80.0
+const HERO_HALF := 14.0        # hitbox, smaller than the sprite: forgiving
+const SPIKY_W := 68.0
+const SPIKY_H := 54.0
+const PLAT_W := 254.0
+
+# Raised ways: a stone slab on pillars (a cave underneath) and a hollow log (a tunnel inside).
+const SLAB_H := 100.0
+const SLAB_T := 50.0
+const LOG_H := 106.0
+const LOG_T := 48.0
+const LOG_W := 520.0
+const TOUCH_H := 130.0         # scenery only reacts to a hero running past, not flying far above
+const MONKEY_H := 230.0        # how high the hero must be to greet a monkey
+
+const DASH_CD := [0.0, 14.0, 10.0, 7.0]
+const SLOW_TIME := [0.0, 3.0, 4.5]
+const SLOW_CD := 20.0
+# The Sablier's end is announced: the last SLOW_WARN seconds tick and blink, then the world eases back.
+const SLOW_WARN := 2.0
+const SLOW_TICKS := [2.0, 1.5, 1.0, 0.65, 0.4, 0.2]
+const SLOW_EASE := 0.35
+const MAGNET := [0.0, 110.0, 170.0, 240.0]
+const DRUNK := [0.0, 0.06, 0.1, 0.15]   # Faune alcoolisée: share of the creatures that are harmless
+const FLAP := 430.0                     # how fast the leaf rotor climbs
+const SPEED_BASE := 280.0
+const SPEED_GAIN := 5.0
+const SPEED_SPRINT := 160.0
+const RAMP := 70.0
+const JUMP_V := 760.0
+const JUMP_DOUBLE := 700.0
+const JUMP_GRAVITY := 2400.0
+const JUMP_HELD := 1500.0
+# The flyer: a "!" at the right edge shows its height DART_WARN seconds before it crosses the screen.
+const DART_W := 64.0
+const DART_H := 40.0
+const DART_WARN := 1.0
+const DART_SPEED := 800.0
+const GAP_DIST := 420.0
+const GAP_TIME := 0.72
+const GAP_MARGIN := 110.0
+const GAP_FILL := 640.0
+const DECOR_RATE := 0.12
+const HOVER_W := 60.0
+const HOVER_H := 56.0
+# Not before this many metres: the hanging dangers, low then at head height.
+const FROM_LOW := 150.0
+const FROM_MID := 1500.0
+
+# Mounts. `half` and `tall`: the hitbox with the hero on its back; `base` and `gain`: its pace;
+# `ahead`: how fast it moves on while waiting, as a share of the hero's speed.
+const MOUNTS := {
+	"gorilla": {"name": "Gorille", "jump": -820.0, "half": 34.0, "tall": 118.0, "base": 300.0, "gain": 24.0, "ahead": 0.45},
+	"rhino": {"name": "Rhino", "jump": -560.0, "half": 34.0, "tall": 104.0, "smash": true, "tough": true, "time": 8.0, "grab_w": 78.0, "grab_h": 150.0, "base": 300.0, "gain": 44.0, "ahead": 0.0},
+	"dragonfly": {"name": "Libellule", "fly": true, "half": 28.0, "tall": 92.0, "base": 320.0, "gain": 28.0, "ahead": 0.5},
+}
+const MOUNT_KINDS := ["gorilla", "rhino", "dragonfly"]
+
+# Vorace's end, slowed down to be seen: the run drops to DEATH_PACE of the fight's speed while she goes
+# down (DEATH_TIME seconds), then DEATH_CALM units of coins only and DEATH_EASY of a gentle road.
+const DEATH_PACE := 0.3
+const DEATH_TIME := 2.9
+const DEATH_CALM := 900.0
+const DEATH_EASY := 2600.0
+const BOSS_AT := 2000.0
+const BOSS_SPEED := 560.0
+const BOSS_FIGHT := 26.0
+const BOSS_W := 446.0
+const BOSS_MOUTH_X := 50.0
+const BOSS_MOUTH_Y := 223.0
+const LANE := {"low": 28.0, "mid": 115.0, "high": 250.0, "vine": 470.0}
+# The platforms: Vorace's flying lily pads bob (PAD_BOB units, PAD_SPEED radians a second).
+const PAD_BOB := 8.0
+const PAD_SPEED := 1.8
+const ISLE_W := [170.0, 240.0, 330.0]
+const CRUISE_H := 150.0
+const CRUISE_TIME := 4.0
+const DART_ALTS := [[46.0, 170.0], [46.0, 170.0, 290.0], [46.0, 170.0, 290.0, 400.0, 510.0]]
+const ACID_BALL := 36.0
+const ACID_PUDDLE := 120.0
+const ACID_CLOSING := 650.0
+const PERCH := 400.0
+const ZIG_LOW := 70.0
+const ZIG_HIGH := 230.0
+const ZIG_PERIOD := 1.6
+const HANG_Y := 190.0
+
+# Follower monsters: FM_LANES lanes of FM_STEP each above the floor.
+const FM_W := 90.0
+const FM_H := 64.0
+const FM_RUSH := 1150.0
+const FM_LANES := 5
+const FM_STEP := 110.0
+const LASER_ON := 0.25
+const LASER_OFF := 0.7
+const LASER_END := 0.95
+const LASER_H := 40.0
+
+const GEMS := {"y": 5, "r": 10, "b": 20}
+const SCATTER := [0.0, 0.012, 0.022, 0.035]
+const HEART_GOLD := 25
+const BLAST_COINS := 30
+const CELL := 44.0
+const REACH := [230.0, 400.0, 600.0]
+const GALLERY := 58.0
+const STEP := 135.0
+const HOLLOW := 66.0
+const PROP_CELL := 150.0 * PIXEL
+const PROP_KINDS := 9
+const PROP_FERN := 3
+const PROP_FLOWER := 4
+const PROP_SHROOM := 5
+const PROP_LANTERN := 6
+const LOW := 64.0
+const HEAD := 165.0
+const DECOR_W := 70.0
+const PLAT_KIND := ["isle", "isle", "hover", "walk"]
+
+# Groups of coins drawn as text in assets/patterns.txt.
+static var shapes: Array = []
+
+# ---------- the things in a run ----------
+
+class Player:
+	var y := 630.0
+	var vy := 0.0
+	var ground := true
+	var plat = null
+	var cruise := 0.0
+	var jumps := 0
+	var buf := 0.0
+	var phase := 0.0
+	var flying := false
+	var rotor := false
+	var spin := 0.0
+	var roll := 0.0
+	var inv := 0.0
+	var squash := 0.0
+	var hang := false
+	var vine_leap := false
+	var ball = null
+	var balled := 0.0
+
+class Obs:
+	var x := 0.0
+	var y := 0.0
+	var w := 0.0
+	var h := 0.0
+	var kind := ""
+	var fragile := false
+	var ghost := false
+	var gone := false
+	var passed := false
+	var ride := false
+	var biome := 0
+	var ph := 0.0
+	var mid := false
+	var state := ""
+	var t := 0.0
+	var ball := false
+	var lob := false
+	var drop := false
+	var puddle := false
+	var lane := 0.0
+	var vx := 0.0
+	var vy := 0.0
+	var g := 0.0
+
+class Coin:
+	var x := 0.0
+	var y := 0.0
+	var gem := ""
+	var heart := false
+	var tight := ""
+	var toss := false
+	var tvx := 0.0
+	var tvy := 0.0
+	var loot := -1.0
+	var vx := 0.0
+	var vy := 0.0
+	var gone := false
+	func _init(px: float, py: float) -> void:
+		x = px
+		y = py
+
+class Plat:
+	var x := 0.0
+	var y := 0.0
+	var w := 254.0
+	var kind := ""
+	var t := 0.0
+	var bobbing := false
+	var y0 := 0.0
+	var ph := 0.0
+	var bob := 0.0
+	var size := 1
+
+class Part:
+	var x := 0.0
+	var y := 0.0
+	var vx := 0.0
+	var vy := 0.0
+	var life := 0.0
+	var span := 1.0
+	var c := Color.WHITE
+	var s := 4.0
+	var g := 0.0
+	var shard := -1
+	var biome := 0
+	var rot := 0.0
+	var vr := 0.0
+
+class Item:
+	var x := 0.0
+	var kind := ""
+	var ph := 0.0
+	var y := 0.0
+	var gone := false
+
+class Hill:
+	var x := 0.0
+	var w := 0.0
+	var h := 0.0
+	var biome := 0
+	var seed := 0
+
+class Decor:
+	var x := 0.0
+	var biome := 0
+	var broken := false
+
+class Zone:
+	var x := 0.0
+	var w := 0.0
+	var kind := ""
+	var im = null          # the burrow's picture, made by the renderer
+	var of := -1
+
+class Monkey:
+	var x := 0.0
+	var ph := 0.0
+	var seen := -1.0
+
+class Pit:
+	var x0 := 0.0
+	var x1 := 0.0
+
+class Gone:
+	var kind := ""
+	var hang := false
+	var x := 0.0
+	var y := 0.0
+	var t := 0.0
+
+class Mount:
+	var kind := ""
+	var t := 0.0
+
+class Boss:
+	var phase := "enter"
+	var t := 0.0
+	var sx := 0.0
+	var next := 1.2
+	var wind := 0.0
+	var attack := ""
+	var open := 0.0
+	var wx := 0.0
+	var crushed := false
+	var last_step := -1
+
+class Swarm:
+	var biome := 0
+	var waves := 1
+	var aim := 1.7
+	var act: Array = []
+	var level := 0
+	var phase := "aim"
+	var t := 0.0
+	var sx := 0.0
+	var hit := false
+	var ghost := false
+
+class Active:
+	var t := 0.0
+	var cd := 0.0
+	var full := 0.0
+
+class Leap:
+	var n := 0
+	var v := 0.0
+
+class Box:
+	var l := 0.0
+	var r := 0.0
+	var t := 0.0
+	var b := 0.0
+
+## What the player does this frame (main.gd fills it).
+class Controls:
+	var pressed := false
+	var hold := false
+	var dash := false
+	var slow := false
+
+class Shape:
+	var name := ""
+	var base := 0
+	var rows: Array = []
+	var cols := 0
+	var top := 0.0
+
+class Run:
+	var mode := "story"
+	var up: Dictionary = {}
+	var view_w := 960.0
+	var t := 0.0
+	var cam := 0.0
+	var sx := 10.0
+	var base := 280.0
+	var speed := 280.0
+	var dist := 0.0
+	var gold := 0
+	var gems := 0
+	var hearts := 1
+	var max_hearts := 1
+	var p := Player.new()
+	var obs: Array = []
+	var coins: Array = []
+	var plats: Array = []
+	var parts: Array = []
+	var events: Array = []
+	var next_x := 1500.0
+	var biome := 0
+	var prev_biome := 0
+	var blend := 1.0
+	var next_biome_at := INF       # the first change comes once Vorace is beaten
+	var by_mark := false
+	var glitch := 0.0
+	var calm_until := 0.0          # after the boss: only coins, then a gentle road (world x)
+	var easy_until := 0.0
+	var dash := Active.new()
+	var slow := Active.new()
+	var rewind_left := 0
+	var dead := false
+	var shake := 0.0
+	var flash := 0.0
+	var wait := 0.0
+	var exploded := false
+	var boom := 0.0
+	var biome_x := -1e9             # world x where the current scenery begins
+	var touched := {}              # scenery that reacted: cell -> when
+	var monkeys: Array = []
+	var terrain: Array = [Vector2(-1e9, 630.0)]   # the floor's outline, see floor_at
+	var zones: Array = []
+	var items: Array = []
+	var mount = null
+	var gone = null
+	var vine := 0.0
+	var next_mount := 0.0
+	var fm = null
+	var fm_due := false
+	var next_fm := 0.0
+	var block_end := 0.0
+	var leap = null
+	var decor: Array = []
+	var hills: Array = []
+	var boss = null
+	var boss_done := false
+	var pits: Array = []
+	var boss_at := 2000.0
+	var relic := 0.0
+	var own := 0.0
+	var h := 0.0
+	var max_h := 0.0
+	var god := false
+	var banked := false
+
+	func lvl(id: String) -> int:
+		return int(up.get(id, 0))
+
+# ---------- helpers ----------
+
+static func rnd(a: float, b: float) -> float:
+	return a + randf() * (b - a)
+
+static func pick(arr: Array):
+	return arr[randi() % arr.size()]
+
+static func colour_of(names: Array) -> Color:
+	return Color(pick(names))
+
+static func h01(i: float, s: float) -> float:
+	var x = sin(i * 127.1 + s * 311.7) * 43758.5453
+	return x - floor(x)
+
+static func friend(run: Run) -> float:          # Ami de la nature: mounts come that much sooner
+	return 1.0 + 0.25 * run.lvl("nature")
+
+static func gem_kind() -> String:
+	return pick(["y", "y", "y", "y", "y", "y", "r", "r", "r", "b"])
+
+# Gems only turn up for whoever wears Gemmes dispersées (and as the boss's prize): elsewhere, a coin.
+static func gem(run: Run) -> String:
+	return gem_kind() if run.lvl("scatter") > 0 else ""
+
+static func part(run: Run, x: float, y: float, vx: float, vy: float, mx: float, c: Color, s: float, g: float) -> Part:
+	var q = Part.new()
+	q.x = x
+	q.y = y
+	q.vx = vx
+	q.vy = vy
+	q.span = mx
+	q.c = c
+	q.s = s
+	q.g = g
+	run.parts.append(q)
+	return q
+
+static func coin(run: Run, x: float, y: float, gem_: String = "") -> Coin:
+	var c = Coin.new(x, y)
+	c.gem = gem_
+	run.coins.append(c)
+	return c
+
+# ---------- shapes of coins ----------
+
+static func set_shapes(text: String) -> void:
+	var found: Array = []
+	var cur: Shape = null
+	var base_re = RegEx.create_from_string("base\\s+(\\d+)")
+	for raw in text.split("\n"):
+		var line: String = raw.strip_edges(false, true)
+		if line.begins_with("#") or line.strip_edges() == "":
+			continue
+		if line.begins_with("="):
+			var m = base_re.search(line)
+			cur = Shape.new()
+			cur.name = line.substr(1).split(",")[0].strip_edges()
+			cur.base = mini(12, int(m.get_string(1))) if m != null else 0
+			found.append(cur)
+		elif cur != null and cur.rows.size() < 14:
+			cur.rows.append(line.substr(0, 40))
+	var any_re = RegEx.create_from_string("[^. ]")
+	shapes = []
+	for s in found:
+		var ok = false
+		for r in s.rows:
+			if any_re.search(r) != null:
+				ok = true
+		if ok:
+			shapes.append(s)
+	for s in shapes:
+		var cols = 0
+		for r in s.rows:
+			cols = maxi(cols, r.length())
+		s.cols = cols
+		s.top = 40.0 + (s.base + s.rows.size() - 1) * CELL
+
+static func lay_shape(run: Run, s: Shape, x: float, lift: float = 0.0) -> float:
+	var n: int = s.rows.size()
+	for r in n:
+		var row: String = s.rows[r]
+		var h = 40.0 + lift + (s.base + n - 1 - r) * CELL
+		for k in row.length():
+			var ch = row[k]
+			if ch == "." or ch == " ":
+				continue
+			var c = coin(run, x + k * CELL, floor_at(run, x + k * CELL) - h)
+			if "yrb".contains(ch) and run.lvl("scatter") > 0:
+				c.gem = ch
+	return s.cols * CELL
+
+# ---------- a run ----------
+
+## mode: "story" (Histoire: the bosses, then the sceneries every ZONE metres) or "endless" (Run
+## illimitée: no boss, a new scenery every ZONE metres from the start).
+static func new_run(upgrades: Dictionary, mode: String = "story") -> Run:
+	var run = Run.new()
+	run.mode = mode
+	run.up = upgrades
+	run.base = SPEED_BASE + (SPEED_SPRINT if run.lvl("sprint") > 0 else 0.0)
+	run.speed = SPEED_BASE
+	run.hearts = HEARTS + (1 if run.lvl("heart") > 0 else 0)
+	run.max_hearts = run.hearts
+	run.dash.full = DASH_CD[run.lvl("dash")]
+	run.slow.full = SLOW_CD
+	run.rewind_left = 1 if run.lvl("rewind") > 0 else 0
+	run.next_mount = rnd(700, 1000) / friend(run)
+	run.next_fm = rnd(150, 230)
+	run.boss_at = BOSS_AT + rnd(-100, 100)
+	if mode == "endless":                    # no boss: the sceneries come with the marks
+		run.boss_at = INF
+		run.next_biome_at = ZONE
+		run.by_mark = true
+	return run
+
+# ---------- the floor ----------
+# The floor is a line through run.terrain's points. It stays at GROUND almost everywhere: now and then
+# it rises one level onto a ledge or sinks one level into a hollow, and always comes back.
+
+static func floor_at(run: Run, x: float) -> float:
+	var T: Array = run.terrain
+	var i = T.size() - 1
+	while i > 0 and T[i].x > x:
+		i -= 1
+	var a: Vector2 = T[i]
+	if i + 1 >= T.size() or x <= a.x:
+		return a.y
+	var b: Vector2 = T[i + 1]
+	return a.y + (b.y - a.y) * (x - a.x) / (b.x - a.x)
+
+static func relief(run: Run, x: float, pts: Array) -> void:
+	for pt in pts:
+		run.terrain.append(Vector2(x + pt[0], GROUND - pt[1]))
+
+static func flat_at(run: Run, x: float, w: float) -> bool:
+	return absf(floor_at(run, x) - floor_at(run, x + w)) < 1 and absf(floor_at(run, x) - floor_at(run, x + w / 2)) < 1
+
+## Which scenery a spot belongs to: the new one begins at run.biome_x and scrolls in.
+static func biome_at(run: Run, x: float) -> int:
+	return run.biome if x >= run.biome_x else run.prev_biome
+
+## The hero starts shut inside the temple: a short rumble, then the doorway blows out and he runs.
+static func launch(run: Run) -> void:
+	run.wait = 0.75
+	run.events.append("rumble")
+
+# ---------- scenery the hero can brush past ----------
+# Which prop stands in which cell is a pure function of the cell number, so the rules (here) and the
+# drawing (render.gd) always agree without sharing any state.
+
+static func prop_at(i: int):
+	if i < 2 or h01(i, 21) < 0.42:
+		return null
+	return {"kind": floori(h01(i, 33) * PROP_KINDS), "x": i * PROP_CELL + h01(i, 47) * 60 * PIXEL, "flip": h01(i, 59) > 0.5}
+
+const REACTS := {3: ["#7bd13c", 5], 4: ["#d98cff", 7], 5: ["#7dfff0", 12], 6: ["#7dfff0", 8]}
+
+# ---------- building the road ----------
+
+static func add_obs(run: Run, x: float, y: float, w: float, h: float, kind: String, fragile: bool) -> Obs:
+	var o = Obs.new()
+	o.x = x
+	o.y = y
+	o.w = w
+	o.h = h
+	o.kind = kind
+	o.fragile = fragile
+	# Faune alcoolisée: some creatures are tipsy ghosts of themselves and hurt nobody
+	if not fragile and run.lvl("drunk") > 0 and randf() < DRUNK[run.lvl("drunk")]:
+		o.ghost = true
+	run.obs.append(o)
+	return o
+
+## A platform where the road needs one: during Vorace one of her flying lily pads; otherwise the
+## scenery's own: a block of floating ground with a dark hill behind it (forest, ruins), a walkway
+## hanging from chains (dungeon), a platform levitating on its thrusters (city).
+static func add_platform(run: Run, x: float, y: float, bob: float = PAD_BOB) -> Plat:
+	if run.boss != null:
+		return add_pad(run, x, y, bob)
+	var kind: String = PLAT_KIND[biome_at(run, x)]
+	if kind == "isle":
+		var behind = false
+		for hl in run.hills:
+			if x > hl.x + 40 and x + PLAT_W < hl.x + hl.w - 40:
+				behind = true
+				break
+		if not behind:
+			add_hill(run, x - rnd(120, 300), rnd(700, 1200), GROUND - y + rnd(60, 160))
+		return add_isle(run, x, y, 1)
+	var pl = Plat.new()
+	pl.x = x
+	pl.y = y
+	pl.kind = kind
+	if kind == "hover":                      # it floats: a slow sway
+		pl.bobbing = true
+		pl.y0 = y
+		pl.ph = rnd(0, 6)
+		pl.bob = 4
+	run.plats.append(pl)
+	return pl
+
+static func add_pad(run: Run, x: float, y: float, bob: float = PAD_BOB) -> Plat:
+	var pl = Plat.new()
+	pl.x = x
+	pl.y = y
+	pl.y0 = y
+	pl.kind = "pad"
+	pl.bobbing = true
+	pl.ph = rnd(0, 6)
+	pl.bob = bob
+	run.plats.append(pl)
+	return pl
+
+static func add_hill(run: Run, x: float, w: float, h: float) -> void:
+	var hl = Hill.new()
+	hl.x = x
+	hl.w = w
+	hl.h = h
+	hl.biome = biome_at(run, x)
+	hl.seed = floori(rnd(0, 1e6))
+	run.hills.append(hl)
+
+static func add_isle(run: Run, x: float, y: float, size: int) -> Plat:
+	var pl = Plat.new()
+	pl.x = x
+	pl.y = y
+	pl.w = ISLE_W[size]
+	pl.kind = "isle"
+	pl.size = size
+	run.plats.append(pl)
+	return pl
+
+static func add_decor(run: Run, x: float) -> void:
+	var dc = Decor.new()
+	dc.x = x
+	dc.biome = biome_at(run, x)
+	run.decor.append(dc)
+
+static func add_spiky(run: Run, x: float) -> void:
+	add_obs(run, x, floor_at(run, x) - SPIKY_H, SPIKY_W, SPIKY_H, "spiky", false).biome = biome_at(run, x)
+
+## A hanging danger, still in mid-air: low (`h` above the floor of its middle: jump it) or at head height.
+static func add_hover(run: Run, x: float, h: float) -> Obs:
+	var o = add_obs(run, x, floor_at(run, x) - h - HOVER_H / 2, HOVER_W, HOVER_H, "hover", false)
+	o.biome = biome_at(run, x)
+	o.ph = rnd(0, 6)
+	o.mid = h > 100
+	return o
+
+## A flyer: it waits beyond the right edge until the screen reaches it, shows a "!" at its height, then crosses.
+static func add_dart(run: Run, x: float, alt: float) -> Obs:
+	var o = add_obs(run, x, floor_at(run, x) - alt - DART_H / 2, DART_W, DART_H, "dart", false)
+	o.biome = biome_at(run, x)
+	o.state = "wait"
+	o.t = 0
+	o.ph = rnd(0, 6)
+	return o
+
+static func coin_line(run: Run, x: float, y: float, n: int) -> void:
+	for i in n:
+		coin(run, x + i * 44, y)
+
+static func coin_arc(run: Run, x: float, peak: float, n: int, span: float) -> void:
+	for i in n:
+		var k = float(i) / (n - 1)
+		coin(run, x + span * k, floor_at(run, x + span * k) - 40 - peak * 4 * k * (1 - k))
+
+static func burst(run: Run, x: float, y: float, color: Color, n: int, spd: float = 220.0) -> void:
+	for i in n:
+		var a = rnd(0, TAU)
+		var v = rnd(spd * 0.3, spd)
+		part(run, x, y, cos(a) * v, sin(a) * v - 80, rnd(0.3, 0.7), color, rnd(4, 9), 700)
+
+# A tight place and what it holds: coins all along, a few gems, once in a blue moon a heart.
+static func tight(run: Run, kind: String, x: float, w: float, y: float) -> void:
+	var z = Zone.new()
+	z.x = x
+	z.w = w
+	z.kind = kind
+	run.zones.append(z)
+	var count = floori((w - 160) / 40)
+	for i in count:
+		var c = coin(run, x + 80 + i * 40, y)
+		c.tight = kind
+		if i % 6 == 3:
+			c.gem = gem(run)
+	if randf() < 0.03:
+		var c = coin(run, x + w - 70, y)
+		c.tight = kind
+		c.heart = true
+
+# Gemmes dispersées: among the coins just laid, a few turn into gems.
+static func scatter(run: Run, start: int) -> void:
+	var rate: float = SCATTER[run.lvl("scatter")]
+	if rate <= 0:
+		return
+	for i in range(start, run.coins.size()):
+		var c: Coin = run.coins[i]
+		if c.gem == "" and not c.heart and randf() < rate:
+			c.gem = gem_kind()
+
+# ---------- spawning ----------
+# One pattern at run.next_x, then a gap sized on the current speed so it stays fair. What can appear
+# depends on what the player owns: nothing asks for a skill not bought yet.
+
+static func spawn_pattern(run: Run) -> void:
+	var laid = run.coins.size()
+	if run.mount != null and run.fm == null and not run.fm_due and run.boss == null:
+		spawn_ride(run)
+		scatter(run, laid)
+		return
+	var x = run.next_x
+	var G = GROUND
+	var tier = 2 if run.lvl("flight") > 0 else (1 if run.lvl("doubleJump") > 0 else 0)
+	var riding = run.mount != null or run.items.size() > 0
+	# The first metres are a warm-up: one obstacle at a time, nothing in the air.
+	var opts: Array
+	if x < 70 * PPM:
+		opts = ["spiky", "spiky", "coins", "plat", "ledge", "hollow"]
+	else:
+		opts = ["spiky", "spiky", "double", "perch", "hop", "fly", "coins", "plat", "plat", "cave", "log", "gallery", "stairs", "ledge", "ledge", "hollow",
+			"hills", "hills", "hills", "padchain", "padchain", "padchain", "padzig", "padzig"]
+	if x / PPM >= FROM_LOW:
+		opts.append_array(["hover", "hover", "hover"])
+	if tier >= 1 and x >= 70 * PPM:
+		opts.append("fly")
+	if tier >= 2 and x >= 70 * PPM:
+		opts.append_array(["swarm", "swarm"])
+	var fit: Array = shapes.filter(func(s): return s.top <= REACH[tier])
+	if fit.size() > 0 and x >= 70 * PPM:
+		opts.append_array(["shape", "shape"])
+	if tier < 2 and shapes.size() > 0 and x >= 70 * PPM:
+		opts.append("skyshape")
+	if riding:
+		opts = opts.filter(func(k): return k != "cave")
+	if x < run.calm_until:
+		opts = ["coins"]
+	elif x < run.easy_until:
+		opts = ["spiky", "coins", "coins", "plat", "ledge", "hollow"]
+	if run.fm != null or run.fm_due:
+		opts = ["coins"]
+	elif run.boss != null:
+		opts = ["plat", "plat", "steps", "padchain", "coins"]
+	elif not riding and x > 70 * PPM and x / PPM >= run.next_mount:
+		opts = ["mount"]
+	var kind: String = pick(opts)
+	var extent = 0.0
+
+	match kind:
+		"spiky":
+			add_spiky(run, x)
+			extent = SPIKY_W
+		"shape":
+			extent = lay_shape(run, pick(fit), x)
+		"hover":
+			if x / PPM < FROM_MID or randf() < 0.6:
+				add_hover(run, x, LOW)
+			else:                                  # at head height: coins underneath, for whoever stays down
+				add_hover(run, x + 88, HEAD)
+				coin_line(run, x, floor_at(run, x) - 40, 5)
+			extent = 220
+		"double":
+			var d = run.speed + 90
+			add_spiky(run, x)
+			add_spiky(run, x + d)
+			extent = d + SPIKY_W
+		"fly":
+			add_dart(run, x, pick(DART_ALTS[tier]))
+			extent = 120
+		"swarm":                                     # two flyers, one after the other, at different heights
+			var alts: Array = DART_ALTS[2].duplicate()
+			alts.shuffle()
+			add_dart(run, x, alts[0])
+			add_dart(run, x + 520, alts[1])
+			extent = 520
+		"perch":                                     # a platform over a hedgehog: jump over it, or onto it
+			var y = G - 135
+			add_platform(run, x, y)
+			coin_line(run, x + 40, y - 40, 4)
+			add_spiky(run, x + PLAT_W / 2 - SPIKY_W / 2)
+			extent = PLAT_W
+		"hop":                                       # a hedgehog under an arch of coins
+			add_spiky(run, x + 140)
+			coin_arc(run, x + 40, 150, 7, 260)
+			extent = 320
+		"steps":                                     # two ledges climbing (the boss fight)
+			for k in 2:
+				var px = x + k * 300
+				var py = G - 120 - k * 112
+				add_platform(run, px, py)
+				coin_line(run, px + 60, py - 40, 3)
+			extent = 300 + PLAT_W
+		"plat":                                      # a platform to hop on, with a reward
+			var y = G - 135
+			add_platform(run, x, y)
+			coin_line(run, x + 40, y - 40, 4)
+			if randf() < 0.35 + 0.2 * run.lvl("lucky"):
+				coin(run, x + PLAT_W / 2, y - 110, gem(run))
+			extent = PLAT_W
+		"cave":                                      # two ways: down through the hollow, or over its roof
+			var R = 70.0
+			var w = roundf(rnd(800, 1200))
+			var y = G - SLAB_H
+			relief(run, x, [[0, 0], [R, -HOLLOW], [R + w, -HOLLOW], [2 * R + w, 0]])
+			var pl = Plat.new()
+			pl.x = x + R
+			pl.y = y
+			pl.w = w
+			pl.t = SLAB_T
+			pl.kind = "slab"
+			run.plats.append(pl)
+			coin_line(run, x + R + w * 0.25, G + HOLLOW - 40, floori(w * 0.5 / 44))
+			coin_line(run, x + R + 70, y - 40, mini(16, floori((w - 140) / 60)))
+			coin(run, x + R + w - 60, y - 110, gem(run))
+			var mk = Monkey.new()
+			mk.x = x + R + w * rnd(0.3, 0.7)
+			mk.ph = rnd(0, 6)
+			run.monkeys.append(mk)
+			extent = 2 * R + w
+		"hollow":                                    # one level down for a while, coins at the bottom
+			var R = 70.0
+			var w = roundf(rnd(600, 950))
+			relief(run, x, [[0, 0], [R, -HOLLOW], [R + w, -HOLLOW], [2 * R + w, 0]])
+			coin_line(run, x + R + 30, G + HOLLOW - 40, floori((w * 0.4) / 44))
+			if x > 70 * PPM:
+				add_spiky(run, x + R + w * 0.7)
+			extent = 2 * R + w
+		"ledge":                                     # one level up for a while
+			var R = 150.0
+			var w = roundf(rnd(700, 1100))
+			relief(run, x, [[0, 0], [R, STEP], [R + w, STEP], [2 * R + w, 0]])
+			if x > 70 * PPM and randf() < 0.6:
+				add_spiky(run, x + R + w * 0.55)
+			else:
+				coin_line(run, x + R + 60, G - STEP - 40, 6)
+			extent = 2 * R + w
+		"log":                                       # a hollow trunk behind the path: only a ball gets in
+			tight(run, "log", x, LOG_W, G - 24)
+			extent = LOG_W
+		"gallery":                                   # a gallery under the path: the same
+			var w = roundf(rnd(800, 1200))
+			tight(run, "gallery", x, w, G + GALLERY - 22)
+			extent = w
+		"stairs":                                    # three ledges climbing to the canopy
+			for k in 3:
+				var px = x + k * 300
+				var py = G - 120 - k * 112
+				add_platform(run, px, py)
+				coin_line(run, px + 60, py - 40, 3)
+			coin(run, x + 600 + PLAT_W / 2, G - 344 - 110, gem(run))
+			var mk = Monkey.new()
+			mk.x = x + 600 + PLAT_W * 0.6
+			mk.ph = rnd(0, 6)
+			run.monkeys.append(mk)
+			add_spiky(run, x + 420)
+			extent = 600 + PLAT_W
+		"hills":                                     # a dark hill, and its scenery's platforms in front of it
+			var w = roundf(rnd(700, 1500))
+			var h = roundf(rnd(160, 520))
+			add_hill(run, x, w, h)
+			var n: int = pick([2, 3, 3]) if tier >= 1 else pick([2, 2, 3])
+			var rise = 125.0 if tier >= 1 else 105.0     # a plain jump reaches 120
+			var ix = x + rnd(20, 80)
+			for k in n:
+				var size: int = pick([0, 1, 1, 2])
+				var lvl_k = 1 if (k == n - 1 and n > 2) else k
+				var iy = G - 130 - lvl_k * rise - (k % 2) * 20
+				var pl: Plat
+				if PLAT_KIND[biome_at(run, ix)] == "isle":
+					pl = add_isle(run, ix, iy, size)
+				else:
+					pl = add_platform(run, ix, iy)
+				coin_line(run, ix + 30, iy - 40, maxi(2, floori((pl.w - 60) / 44)))
+				ix += pl.w + rnd(70, 150)
+			if randf() < 0.3 + 0.2 * run.lvl("lucky"):
+				coin(run, ix - 120, G - 130 - (n - 1) * rise - 110, gem(run))
+			if x > 70 * PPM and randf() < 0.65:     # below, a hedgehog: up there is the safe way
+				add_spiky(run, x + rnd(0.3, 0.6) * (ix - x))
+			extent = maxf(w, ix - x)
+		"padchain":                                  # pads one after the other, up and down, bobbing out of step
+			var hs: Array = pick([[135, 220, 135, 250], [135, 200, 265, 200], [180, 135, 220, 135], [135, 235, 135]])
+			for k in hs.size():
+				var px = x + k * 320
+				add_platform(run, px, G - hs[k], PAD_BOB + k * 3)
+				coin_line(run, px + 60, G - hs[k] - 40, 3)
+			if x > 70 * PPM and run.boss == null and randf() < 0.5:
+				add_spiky(run, x + 320 + PLAT_W / 2)
+			extent = hs.size() * 320
+		"padzig":                                    # a climb from pad to pad, a gem at the top
+			var n = 4 if tier >= 1 else 3
+			for k in n:
+				var px = x + k * 260
+				var py = G - 130 - k * 105
+				add_platform(run, px, py, 5)
+				coin_line(run, px + 70, py - 40, 2)
+			coin(run, x + (n - 1) * 260 + PLAT_W / 2, G - 130 - (n - 1) * 105 - 110, gem(run))
+			extent = (n - 1) * 260 + PLAT_W
+		"skyshape":                                  # a drawing of coins up in the sky: only the Vol gets there
+			var s: Shape = pick(shapes)
+			var lift = maxf(0, REACH[tier] + 60 - (40 + s.base * CELL))
+			extent = lay_shape(run, s, x, minf(lift, REACH[2] - 40 - s.top))
+		"mount":                                     # an animal waiting: a trail of coins leads to it
+			coin_line(run, x, G - 40, 5)
+			var it = Item.new()
+			it.x = x + 330
+			it.kind = pick(MOUNT_KINDS)
+			it.ph = rnd(0, ZIG_PERIOD * 2)
+			it.y = G - ZIG_LOW
+			run.items.append(it)
+			run.next_mount = x / PPM + rnd(1300, 1800) / friend(run)
+			extent = 460
+	# Under a roof nobody can jump, so nothing there may have to be jumped over.
+	for pl in run.plats:
+		if pl.t > 0:
+			for o in run.obs:
+				if o.x + o.w > pl.x - 30 and o.x < pl.x + pl.w + 30 and o.y + o.h > pl.y + pl.t:
+					o.gone = true
+	if kind != "coins" and kind != "mount":
+		run.block_end = x + extent
+
+	# The gap to the next pattern is set in distance (GAP_DIST), so the road keeps its density as the
+	# speed grows; only where a jump would no longer have room to land does it widen with the speed.
+	var gap = maxf(GAP_DIST, run.speed * GAP_TIME + GAP_MARGIN) * rnd(0.85, 1.3) * (1.3 if kind == "coins" else 1.0)
+	var clear = run.fm == null and not run.fm_due and run.boss == null
+	# A wide gap gets something that asks no jump: a danger at head height, or a fonceur.
+	if gap > GAP_FILL and x / PPM >= FROM_MID and clear and randf() < 0.5:
+		add_hover(run, x + extent + gap * 0.5, HEAD)
+	elif gap > GAP_FILL and x / PPM > 150 and clear and randf() < 0.35:
+		add_dart(run, x + extent + gap * 0.5, 170)
+	if x / PPM > 70 and run.boss == null and randf() < DECOR_RATE:
+		add_decor(run, x + extent + gap * rnd(0.3, 0.6))     # something to smash
+	if x / PPM > 40 and kind != "hills" and randf() < 0.22:
+		add_hill(run, x + extent + gap * rnd(-0.2, 0.3), rnd(500, 1400), rnd(100, 480))   # scenery only
+	if kind == "coins" or randf() < 0.55:
+		var n = mini(8, floori((gap - 200) / 44))
+		var cx = x + extent + 100
+		if n >= 3:
+			var calm = run.fm == null and not run.fm_due
+			var styles: Array
+			if tier == 2 and calm:
+				styles = ["line", "arc", "wave", "wave", "zig", "steps", "double"]
+			else:
+				styles = ["line", "line", "arc", "zig", "steps", "double"]
+				if calm and x > 300 * PPM:
+					styles.append("sky")
+			var style: String = pick(styles)
+			if style == "arc":
+				coin_arc(run, cx, 200.0 if tier > 0 else 110.0, n, (n - 1) * 44)
+			else:
+				for i in n:
+					var wx = cx + i * 44
+					var f = floor_at(run, wx)
+					var h = 40.0
+					match style:
+						"wave": h = 320 - sin(i * 0.7) * 130
+						"zig": h = 120.0 if i % 2 == 1 else 50.0       # up and down: hops
+						"steps": h = 40 + mini(i, n - 1 - i) * 30         # a little hill of coins
+						"sky": h = 400 + sin(i * 0.9) * 30               # out of reach without the Vol
+					coin(run, wx, f - h)
+					if style == "double":
+						coin(run, wx, f - 84)                           # two rows: the top one for a hop
+			if run.lvl("lucky") > 0 and run.lvl("scatter") > 0 and randf() < 0.12 * run.lvl("lucky"):
+				coin(run, cx + n * 44 + 30, floor_at(run, cx + n * 44 + 30) - 110, gem(run))
+	run.next_x = x + extent + gap
+	scatter(run, laid)
+
+# Coins along the sides of a regular shape: 4 sides is a diamond (or a square, turned), 12 a circle.
+static func shape(run: Run, cx: float, cy: float, r: float, sides: int, each: int, turn: float) -> void:
+	for k in sides:
+		var a = turn + k * TAU / sides
+		var b = turn + (k + 1) * TAU / sides
+		for i in each:
+			var t = float(i) / each
+			coin(run, cx + r * (sin(a) + (sin(b) - sin(a)) * t), cy - r * (cos(a) + (cos(b) - cos(a)) * t))
+
+# What comes while a mount is ridden. The gorilla plays on the floor and under the vines; the rhino on
+# the floor only; the dragonfly everywhere. Flat ground throughout, and creatures that keep their place.
+static func spawn_ride(run: Run) -> void:
+	var x = run.next_x
+	var G = GROUND
+	var v = run.speed
+	var kind: String = run.mount.kind
+	var extent = 0.0
+	var first = run.obs.size()
+
+	if kind == "gorilla":
+		var top = HANG_Y - 50
+		var vines = G - HANG_Y + 62                    # coins and creatures along the vines
+		var reach = v * 0.9 + 280                       # room to get from the floor to the vines, or back
+		match pick(["low", "high", "both", "both", "gauntlet", "gauntlet", "darts", "darts", "double", "swing", "diag", "line"]):
+			"gauntlet":                                  # the floor, then the vines, then the floor again
+				var k0 = randf() < 0.5
+				for k in 3:
+					var at = x + k * reach
+					if (k % 2 == 0) == k0:
+						add_spiky(run, at)
+					else:
+						add_hover(run, at, vines)
+				extent = 2 * reach + 70
+			"darts":                                     # fonceurs along the vines and along the floor
+				var order = [vines - 30, 46.0] if randf() < 0.5 else [46.0, vines - 30]
+				add_dart(run, x, order[0])
+				add_dart(run, x + reach + 200, order[1])
+				extent = reach + 320
+			"double":                                    # two on the floor: up you go
+				add_spiky(run, x)
+				add_spiky(run, x + v * 0.5 + 120)
+				coin_line(run, x, top, 10)
+				extent = v * 0.5 + 200
+			"swing":                                     # coins swinging from the floor to the vines over a hedgehog
+				for i in 12:
+					coin(run, x + i * 44, G - 40 + (top - G + 40) * sin(i / 11.0 * PI))
+				add_spiky(run, x + 5.5 * 44 - SPIKY_W / 2)
+				extent = 520
+			"low":
+				add_spiky(run, x + 120)
+				coin_line(run, x, top, 8)
+				extent = 320
+			"high":
+				add_hover(run, x + 120, vines)
+				coin_line(run, x, G - 40, 8)
+				extent = 320
+			"both":
+				if randf() < 0.5:
+					add_spiky(run, x)
+					add_hover(run, x + reach, vines)
+				else:
+					add_hover(run, x, vines)
+					add_spiky(run, x + reach)
+				extent = reach + 70
+			"diag":
+				var rising = randf() < 0.5
+				for i in 10:
+					var k = i / 9.0
+					coin(run, x + i * 44, G - 40 + (top - G + 40) * (k if rising else 1.0 - k))
+				extent = 400
+			"line":
+				coin_line(run, x, top if randf() < 0.5 else G - 40, 10)
+				extent = 400
+	elif kind == "rhino":
+		match pick(["crates", "crates", "spiky", "spiky", "mix", "line", "heap", "heap"]):
+			"crates":                                    # scenery to charge through, coins along it
+				var count = 1 + randi() % 3
+				for k in count:
+					add_decor(run, x + k * 170)
+				coin_line(run, x + 30, G - 40, count * 4 - 1)
+				extent = count * 170
+			"spiky":
+				add_spiky(run, x)
+				extent = SPIKY_W
+			"mix":
+				add_decor(run, x)
+				add_spiky(run, x + v * 0.7 + 260)
+				extent = v * 0.7 + 260 + SPIKY_W
+			"line":
+				coin_line(run, x, G - 40, 12)
+				extent = 500
+			"heap":                                      # two rows at a run, the third for a hop
+				coin_line(run, x, G - 40, 5)
+				coin_line(run, x + 22, G - 78, 4)
+				coin_line(run, x + 44, G - 116, 3)
+				extent = 200
+	else:
+		var lanes = [70.0, 180.0, 290.0, 400.0, 510.0]   # heights above the floor
+		match pick(["flyers", "flyers", "gate", "gate", "tower", "zigzag", "zigzag", "shape", "shape"]):
+			"flyers":
+				var mixed: Array = lanes.duplicate()
+				mixed.shuffle()
+				mixed = mixed.slice(0, 3 if randf() < 0.4 else 2)
+				for k in mixed.size():
+					add_hover(run, x + k * 260, mixed[k])
+				extent = mixed.size() * 260
+			"gate":                                      # a column of creatures with a wide opening
+				var open = randi() % 4
+				for k in lanes.size():
+					if k != open and k != open + 1:
+						add_hover(run, x + 200, lanes[k])
+				coin_line(run, x, G - (lanes[open] + lanes[open + 1]) / 2, 8)
+				extent = 360
+			"tower":                                     # a column of creatures from the floor up: over the top
+				var count = 2 + randi() % 3
+				for k in count:
+					add_hover(run, x + 110, 60 + k * 110)
+				coin_line(run, x, G - 60 - count * 110 - 30, 6)
+				extent = 260
+			"zigzag":                                    # each slope lasts over a second, whatever the speed
+				var half = maxi(7, ceili(v * 1.2 / 44))
+				var count = half * 3
+				for i in count:
+					var k = i % (2 * half)
+					var f = float(k) / half if k < half else float(2 * half - k) / half
+					coin(run, x + i * 44, 150 + (G - 250) * f)
+				extent = count * 44
+			"shape":
+				var drawn: Array = shapes.filter(func(s): return s.top <= REACH[2] - 80)
+				if drawn.size() > 0 and randf() < 0.6:
+					var s: Shape = pick(drawn)
+					extent = lay_shape(run, s, x, rnd(0, REACH[2] - 80 - s.top))
+				else:
+					var fig: Array = pick([[4, 3, 0.0], [4, 3, PI / 4], [3, 4, 0.0], [12, 1, 0.0]])
+					shape(run, x + 100, rnd(210, G - 190), 96, fig[0], fig[1], fig[2])
+					extent = 200
+	# laid for the ride: if the animal is lost, what was laid for it goes too (see dismount)
+	for i in range(first, run.obs.size()):
+		run.obs[i].ride = true
+	run.block_end = x + extent
+	run.next_x = x + extent + (v * 0.7 + 220) * rnd(0.9, 1.3)
+
+# ---------- the boss ----------
+
+static func _boss_ball(run: Run, mouth: Vector2, h: float) -> void:      # a ball along a lane, h above the floor
+	var o = add_obs(run, mouth.x, mouth.y, ACID_BALL, ACID_BALL, "acid", false)
+	o.ghost = false
+	o.ball = true
+	o.lane = GROUND - h - ACID_BALL / 2
+	o.vx = run.speed - ACID_CLOSING
+
+static func _boss_lob(run: Run, mouth: Vector2, ahead: float, T: float = 0.9) -> void:   # a blob that lands `ahead` of the hero
+	var land = run.cam + run.sx + ahead + run.speed * T
+	var g = 1600.0
+	var o = add_obs(run, mouth.x, mouth.y, ACID_BALL, ACID_BALL, "acid", false)
+	o.ghost = false
+	o.lob = true
+	o.vx = (land - mouth.x) / T
+	o.vy = (GROUND - ACID_BALL - mouth.y - 0.5 * g * T * T) / T
+	o.g = g
+
+static func boss(run: Run, d: float) -> void:
+	var p = run.p
+	if run.boss == null:
+		if run.boss_done or run.dist < run.boss_at or run.biome != 0 or run.prev_biome != 0:
+			return                                   # only ever in the forest
+		var nb = Boss.new()
+		nb.sx = run.view_w + 60
+		run.boss = nb
+		run.items.clear()                            # no mount waiting during the fight
+		for o in run.obs:                            # nor any other danger: Vorace alone
+			if not o.gone and o.x + o.w > run.cam + run.sx + 40:
+				o.gone = true
+				for i in 6:
+					part(run, o.x + rnd(0, o.w), o.y + rnd(0, o.h), rnd(-80, 80), rnd(-160, -20), rnd(0.3, 0.6), colour_of(["#f4f0e0", "#cfd3e6"]), rnd(6, 14), -60)
+		run.relic = 1
+		run.shake = maxf(run.shake, 0.6)
+		run.events.append("boss")
+		return
+	var b: Boss = run.boss
+	var mouth = Vector2(run.cam + b.sx + BOSS_MOUTH_X, BOSS_MOUTH_Y)
+	b.t += d
+	b.open = maxf(0, b.open - d)
+	if b.phase == "enter":                           # it slides in from the right edge
+		b.sx += (run.view_w - BOSS_W - b.sx) * minf(1, d * 2.5)
+		if b.t > 1.6:
+			b.phase = "fight"
+			b.t = 0
+		return
+	if b.phase == "fight":
+		if b.wind > 0:                               # its jaws open, acid glows: then it fires
+			b.wind -= d
+			if b.wind <= 0:
+				b.open = 0.35
+				match b.attack:
+					"puddle":
+						_boss_lob(run, mouth, rnd(380, 640))
+						run.events.append("spit")
+					"spray":                         # two puddles, room to land between them
+						_boss_lob(run, mouth, 320)
+						_boss_lob(run, mouth, 760)
+						run.events.append("spit")
+					"low", "mid", "high", "vine":
+						_boss_ball(run, mouth, LANE[b.attack])
+						run.events.append("acid")
+					"pair":                          # a short jump or staying down gets through
+						_boss_ball(run, mouth, LANE["high"])
+						_boss_ball(run, mouth, pick([LANE["low"], LANE["mid"]]))
+						run.events.append("acid")
+					"fan":                           # on the dragonfly: every lane but two neighbours
+						var gap_k = randi() % 4
+						var hs = [70.0, 180.0, 290.0, 400.0, 510.0]
+						for k in hs.size():
+							if k != gap_k and k != gap_k + 1:
+								_boss_ball(run, mouth, hs[k])
+						run.events.append("acid")
+					"rain":                          # drops from the sky, their shadows on the floor first
+						for ahead in [420.0, 860.0]:
+							var x: float = run.cam + run.sx + ahead + run.speed * 0.9
+							var o = add_obs(run, x, -60, ACID_BALL, ACID_BALL, "acid", false)
+							o.ghost = false
+							o.drop = true
+							o.vx = 0
+							o.vy = 0
+							o.g = 2 * (GROUND - ACID_BALL + 60) / (0.9 * 0.9)
+						run.events.append("spit")
+		else:
+			b.next -= d
+			if b.next <= 0:
+				# what it throws depends on how he gets about
+				var M: String = run.mount.kind if run.mount != null else ""
+				var moves: Array
+				if M == "dragonfly":
+					moves = ["fan", "fan", "rain", "low", "high", "mid"]
+				elif M == "rhino":
+					moves = ["puddle", "spray", "low", "low", "high", "rain"]
+				else:
+					moves = ["puddle", "spray", "low", "low", "mid", "high", "pair", "rain"]
+					if p.hang:
+						moves.append_array(["vine", "vine"])
+				b.attack = pick(moves)
+				b.wind = 0.45
+				b.next = maxf(0.7, 1.2 - b.t * 0.025)     # more and more often
+		if b.t > BOSS_FIGHT and b.wind <= 0:           # a tree comes down on it
+			b.phase = "fall"
+			b.t = 0
+			b.wx = run.cam + b.sx
+			b.crushed = false
+			run.next_x = maxf(run.next_x, run.cam + run.view_w + 2600)   # nothing else on the road while she goes down
+			run.events.append("timber")
+		return
+	# falling: it stays where it stood; the tree lands at 0.9 s and drives it into the ground
+	b.sx = b.wx - run.cam
+	if not b.crushed and b.t >= 0.9:
+		b.crushed = true
+		run.shake = 1
+		run.events.append("bossfall")
+	if b.t > DEATH_TIME:                             # gone under the ground: the fight is won
+		run.boss = null
+		run.boss_done = true
+		# the rewards, further on, while the speed comes back: coins thrown from where she sank, then a
+		# line of blue gems at running height off the right edge, then the scenery changes
+		for i in 24:
+			loot(run, run.cam + run.sx + rnd(40, 400), GROUND - rnd(80, 300))
+		for g in ["y", "r", "b"]:
+			loot(run, run.cam + run.sx + rnd(100, 300), GROUND - 200)
+			run.coins[run.coins.size() - 1].gem = g
+		var g0 = run.cam + run.view_w + 200
+		for k in 16:
+			coin(run, g0 + k * 48, floor_at(run, g0 + k * 48) - 40, "b")
+		run.calm_until = g0 + 16 * 48 + DEATH_CALM
+		run.easy_until = run.calm_until + DEATH_EASY
+		run.next_x = maxf(run.next_x, g0)
+		# the world moves on after the gems, unless the Gros sac à dos muffles the relic (one time in two)
+		if not (run.lvl("jammer") > 0 and randf() < 0.5):
+			run.next_biome_at = run.dist + (g0 + 16 * 48 - run.cam - run.sx) / PPM
+			run.by_mark = false
+		else:
+			run.next_biome_at = maxf(2 * ZONE, (floorf(run.dist / ZONE) + 1) * ZONE)
+			run.by_mark = true
+		run.events.append("bossdown")
+
+# ---------- blows, breaks, mounts ----------
+
+# A coin thrown out of something broken: it pops up ahead of the hero, then flies to him (see update).
+static func loot(run: Run, x: float, y: float) -> void:
+	var c = coin(run, x + rnd(-10, 10), y)
+	c.vx = rnd(40, 360)
+	c.vy = rnd(-560, -260)
+	c.loot = 0
+
+# Breaking a creature (in a Ruée): a burst, and a coin.
+static func destroy(run: Run, o: Obs) -> void:
+	o.gone = true
+	var cx = o.x + o.w / 2
+	burst(run, cx, o.y + o.h / 2, Color("#b04a8f"), 14, 320)
+	loot(run, cx, o.y + o.h / 2)
+	run.shake = maxf(run.shake, 0.25)
+	run.events.append("break")
+
+# Smashing scenery: four spinning pieces of its own picture (render.gd cuts them out), dust, four coins.
+static func smash(run: Run, dc: Decor) -> void:
+	dc.broken = true
+	var cx = dc.x + DECOR_W / 2
+	var cy = floor_at(run, cx) - 50
+	for q in 4:
+		var s = part(run, cx + (16 if q % 2 == 1 else -16), cy + (-16 if q < 2 else 16), run.speed * rnd(0.45, 1.25), rnd(-560, -140), rnd(0.6, 0.95), Color.WHITE, 4, 1700)
+		s.shard = q
+		s.biome = dc.biome
+		s.vr = rnd(-13, 13)
+	for i in 6:                                      # dust
+		part(run, cx + rnd(-24, 24), cy + rnd(-20, 20), run.speed * rnd(0.3, 0.9), rnd(-90, 30), rnd(0.3, 0.55), colour_of(["#e9dcc0", "#cbb894", "#fff6dc"]), rnd(10, 20), -80)
+	for i in 4:
+		loot(run, cx, cy)
+	burst(run, cx, cy, Color("#e8c890"), 12, 420)    # splinters
+	run.shake = maxf(run.shake, 0.3)
+	run.events.append("crate")
+
+# Hit on a mount: the animal takes the blow in the hero's place and vanishes in a puff. `ended`: its
+# time is up (the rhino), it trots off and nothing is lost.
+static func dismount(run: Run, ended: bool = false) -> void:
+	var p = run.p
+	var px = run.cam + run.sx
+	for i in (10 if ended else 24):
+		part(run, px + rnd(-60, 60), p.y - rnd(0, 110), rnd(-160, 160), rnd(-220, -20), rnd(0.4, 0.9), colour_of(["#f4f0e0", "#cfd3e6", "#9aa0b8"]), rnd(9, 20), -120)
+	var gn = Gone.new()
+	gn.kind = run.mount.kind
+	gn.hang = p.hang
+	gn.x = px
+	gn.y = p.y
+	run.gone = gn
+	# What was laid ahead for the ride may be out of reach on foot: it vanishes in a puff. The coins stay.
+	for o in run.obs:
+		if o.ride and not o.gone and o.x + o.w > px:
+			o.gone = true
+			for i in 8:
+				part(run, o.x + rnd(0, o.w), o.y + rnd(0, o.h), rnd(-80, 80), rnd(-160, -20), rnd(0.3, 0.6), colour_of(["#f4f0e0", "#cfd3e6"]), rnd(6, 14), -60)
+	run.mount = null
+	p.hang = false
+	p.vine_leap = false
+	p.jumps = 1
+	if ended:
+		p.inv = 0.8
+		run.events.append("bye")
+	else:
+		p.inv = 1.5
+		run.shake = 0.5
+		run.flash = 0.6
+		run.events.append("unmount")
+	run.next_mount = maxf(run.next_mount, run.dist + rnd(900, 1200) / friend(run))
+
+# Losing a heart leaves a moment of invincibility; the last one ends the run (or triggers the rewind).
+# On a mount nothing is lost: the animal vanishes instead. `o` may be null (a swarm, a fall).
+static func hit(run: Run, o: Obs) -> void:
+	if run.mount != null and MOUNTS[run.mount.kind].get("tough", false):   # the rhino: what would hurt is smashed, or bounces off
+		if o != null and o.kind != "acid" and not o.gone:
+			destroy(run, o)
+		elif o != null:
+			o.gone = true
+		run.shake = maxf(run.shake, 0.3)
+		return
+	if o != null:
+		o.gone = true
+	if run.mount != null:
+		dismount(run)
+		return
+	if not run.god:                                  # the debug menu's invincibility
+		run.hearts -= 1
+	run.shake = 0.6
+	run.flash = 1
+	if run.hearts > 0 or run.god:
+		run.p.inv = 1.6
+		burst(run, run.cam + run.sx, run.p.y - 40, Color("#ff4d6d"), 12, 300)
+		run.events.append("hurt")
+		return
+	if run.rewind_left > 0:
+		run.rewind_left -= 1
+		run.hearts = run.max_hearts
+		run.p.inv = 2
+		run.glitch = 1
+		run.obs = run.obs.filter(func(q): return q.x > run.cam + run.view_w)
+		run.fm = null
+		run.fm_due = false
+		run.next_fm = run.dist + rnd(170, 300)
+		run.events.append("rewind")
+		return
+	if run.lvl("lastLeap") > 0:                      # Dernier élan: knocked out, he still bounces a few metres further
+		var p = run.p
+		var lp = Leap.new()
+		lp.n = run.lvl("lastLeap")
+		lp.v = maxf(420, run.speed)
+		run.leap = lp
+		p.vy = -640
+		p.ground = false
+		p.plat = null
+		p.rotor = false
+		burst(run, run.cam + run.sx, p.y - 40, Color("#ff4d6d"), 14, 320)
+		run.events.append_array(["hurt", "bounce"])
+		return
+	die(run)
+
+static func die(run: Run) -> void:
+	run.dead = true
+	run.shake = 1
+	burst(run, run.cam + run.sx, run.p.y - 40, Color("#5cf2e0"), 26, 420)
+	run.events.append("hit")
+
+static func jump(run: Run, v: float) -> void:
+	var p = run.p
+	p.vy = v
+	p.ground = false
+	p.plat = null
+	p.jumps += 1
+	p.buf = 0
+	run.events.append("jump")
+
+# ---------- follower monsters ----------
+
+# A new line-up of mosquitoes. How many lanes they take grows with the distance run; a lane the hero
+# can reach with what he owns is always left free.
+static func wave(run: Run) -> void:
+	var f: Swarm = run.fm
+	var N = FM_LANES
+	var reach = N if run.lvl("flight") > 0 else (3 if run.lvl("doubleJump") > 0 else 2)
+	var level = clampi(floori(run.dist / 450 + rnd(-0.6, 0.6)), 0, 3)
+	var safe = randi() % reach
+	f.act = []
+	f.act.resize(N)
+	f.act.fill(false)
+	if level < 2:                                    # one or two lanes, among those he is likely to be in
+		var low: Array = [0, 1, 2].filter(func(k): return k != safe)
+		low.shuffle()
+		for k in low.slice(0, level + 1):
+			f.act[k] = true
+	else:
+		var twin = -1
+		if level != 3:
+			twin = safe + 1 if (safe + 1 < N and (safe == 0 or randf() < 0.5)) else safe - 1
+		for k in N:
+			f.act[k] = k != safe and k != twin
+	f.level = level
+	f.phase = "aim"
+	f.t = 0
+	f.sx = run.view_w + 90
+	f.hit = false
+	f.ghost = run.lvl("drunk") > 0 and randf() < DRUNK[run.lvl("drunk")]
+	run.events.append("fm")
+
+static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
+	var p = run.p
+	var px = run.cam + run.sx
+	if run.fm == null and run.boss != null:
+		run.fm_due = false
+		run.next_fm = maxf(run.next_fm, run.dist + 150)
+		return
+	if run.fm == null:
+		if run.mount != null:                        # never on top of a ride
+			run.fm_due = false
+			run.next_fm = maxf(run.next_fm, run.dist + 100)
+			return
+		if not run.fm_due and run.dist >= run.next_fm:
+			run.fm_due = true                        # from now on only coins are laid ahead
+		if not run.fm_due or px < run.block_end + 60:
+			return                                   # waits until the road is clear
+		var nf = Swarm.new()
+		nf.biome = biome_at(run, px)
+		nf.waves = 1 + (1 if run.dist > 450 and randf() < 0.6 else 0) + (1 if run.dist > 900 and randf() < 0.5 else 0)
+		nf.aim = 1.7
+		run.fm = nf
+		wave(run)
+	var f: Swarm = run.fm
+	f.t += d
+	if f.phase == "aim":                             # they follow the hero from the right edge
+		f.sx += (run.view_w - 110 - f.sx) * minf(1, d * 5)
+		if f.t >= f.aim:
+			f.phase = "fire" if f.biome == 2 else "rush"
+			f.t = 0
+			run.events.append("laser" if f.phase == "fire" else "rush")
+		return
+	if f.phase == "fire":                            # the city's drones stay put and fire along their lanes
+		if not f.hit and not f.ghost and f.t > LASER_ON and f.t < LASER_OFF:
+			for k in FM_LANES:
+				var y0 = GROUND - (k + 0.5) * FM_STEP - LASER_H / 2
+				if not f.act[k] or y0 + 4 > box.b or y0 + LASER_H - 4 < box.t:
+					continue
+				if dashing:
+					break
+				if p.inv == 0:
+					f.hit = true
+					hit(run, null)
+					if run.dead or run.leap != null or run.fm == null:
+						return
+				break
+		if f.t < LASER_END:
+			return
+		f.sx = -999                                  # gone: the wave is over
+	else:
+		f.sx += (260.0 if f.t < 0.14 else -FM_RUSH) * d   # a short recoil, then the charge
+	var x0 = run.cam + f.sx - FM_W / 2
+	if not f.hit and not f.ghost and x0 + 8 < box.r and x0 + FM_W - 8 > box.l:
+		for k in FM_LANES:
+			var y0 = GROUND - (k + 0.5) * FM_STEP - FM_H / 2
+			if not f.act[k] or y0 + 6 > box.b or y0 + FM_H - 6 < box.t:
+				continue
+			if dashing:
+				f.hit = true
+				f.sx = -999
+				run.gold += 3
+				burst(run, px + 40, y0 + FM_H / 2, Color("#7fe0c8"), 18, 340)
+				run.shake = maxf(run.shake, 0.3)
+				run.events.append("break")
+			elif p.inv == 0:
+				f.hit = true
+				hit(run, null)
+				if run.dead or run.leap != null or run.fm == null:
+					return
+			break
+	if f.sx > -FM_W:
+		return
+	if not f.hit:
+		run.events.append("dodge")
+	f.aim = 1.15
+	f.waves -= 1
+	if f.waves > 0:
+		wave(run)
+		return
+	run.fm = null
+	run.fm_due = false
+	run.next_fm = run.dist + rnd(170, 300)
+	run.next_x = maxf(run.next_x, run.cam + run.view_w + 150)   # obstacles come back from beyond the screen
+
+# ---------- update ----------
+
+static func _puff(run: Run, px: float, y: float) -> void:     # curling up and uncurling: a puff of leaves
+	for i in 12:
+		part(run, px + rnd(-22, 22), y - rnd(8, 60), rnd(-180, 120), rnd(-200, 40), rnd(0.3, 0.6), colour_of(["#8fd14a", "#c9e86a", "#5fae3a", "#f4f0e0"]), rnd(5, 11), 300)
+
+static func _leaves(run: Run, px: float, y: float) -> void:   # leaves shaken off his rotor
+	part(run, px + rnd(-40, 40), y - 105, rnd(-160, -40), rnd(-40, 60), 0.6, colour_of(["#8fd14a", "#c9e86a", "#5fae3a"]), rnd(4, 8), 300)
+
+static func update(run: Run, dt: float, input: Controls) -> void:
+	# Particles and screen effects keep living after death.
+	run.shake = maxf(0, run.shake - dt * 2.5)
+	run.glitch = maxf(0, run.glitch - dt * 1.6)
+	run.flash = maxf(0, run.flash - dt * 4)
+	run.p.squash = maxf(0, run.p.squash - dt * 7)
+	run.boom = maxf(0, run.boom - dt * 2.2)
+	run.blend = minf(1, run.blend + dt / 1.2)
+	var ts = 1.0
+	if run.slow.t > 0:                               # the Sablier slows the world, not the timers
+		ts = 0.45 + 0.55 * maxf(0, 1 - run.slow.t / SLOW_EASE)
+	var d = dt * ts
+	if run.gone != null:
+		run.gone.t += dt
+		if run.gone.t > 0.7:
+			run.gone = null
+	for q in run.parts:
+		q.life += d
+		q.vy += q.g * d
+		q.x += q.vx * d
+		q.y += q.vy * d
+		if q.shard < 0:
+			continue
+		q.rot += q.vr * d                            # a piece of crate tumbles and bounces
+		var f = floor_at(run, q.x) - 8
+		if q.y > f and q.vy > 0:
+			q.y = f
+			q.vy *= -0.5
+			q.vx *= 0.7
+			q.vr *= 0.6
+	run.parts = run.parts.filter(func(q): return q.life < q.span)
+	if run.dead:
+		return
+
+	if run.wait > 0:                                 # still inside: the temple shakes, dust falls from the lintel
+		run.wait -= dt
+		run.shake = maxf(run.shake, 0.22)
+		if randf() < 0.6:
+			part(run, rnd(60, 125), GROUND - rnd(195, 225), rnd(-20, 40), rnd(20, 120), 0.5, Color("#cfd3e6"), rnd(4, 8), 500)
+		if run.wait > 0:
+			return
+		run.exploded = true
+		run.shake = 1
+		run.boom = 1
+		if run.lvl("flight") > 0:
+			run.p.cruise = CRUISE_TIME               # with the Vol, he flies out of the doorway
+		for i in 46:                                 # the doorway bursts outward in blocks of stone and moss
+			part(run, rnd(60, 130), GROUND - rnd(40, 220), rnd(80, 900), rnd(-760, -40), rnd(0.8, 1.7), colour_of(["#8a8fa8", "#6a6f8c", "#4a4f6c", "#7bd13c", "#cfd3e6"]), rnd(8, 22), 1500)
+		for i in BLAST_COINS:                        # the temple's gold flies out: real coins, which bounce and wait
+			var c = coin(run, rnd(70, 130), GROUND - rnd(50, 200))
+			c.toss = true
+			c.tvx = rnd(420, 1500)
+			c.tvy = rnd(-820, -120)
+		run.events.append("boom")
+
+	var p = run.p
+	for pl in run.plats:                             # the pads bob
+		if pl.bobbing:
+			pl.y = pl.y0 + sin(run.t * PAD_SPEED + pl.ph) * pl.bob
+
+	# --- actives ---
+	run.dash.t = maxf(0, run.dash.t - dt)
+	run.dash.cd = maxf(0, run.dash.cd - dt)
+	var slow_was = run.slow.t
+	run.slow.t = maxf(0, run.slow.t - dt)
+	run.slow.cd = maxf(0, run.slow.cd - dt)
+	if slow_was > 0:                                 # the Sablier running out: ticks, then the world catching up
+		for at in SLOW_TICKS:
+			if slow_was > at and run.slow.t <= at:
+				run.events.append("slowtick")
+		if run.slow.t == 0:
+			run.events.append("slowend")
+	if run.leap == null and input.dash and run.lvl("dash") > 0 and run.dash.cd == 0:
+		run.dash.t = 0.55
+		run.dash.cd = run.dash.full
+		run.events.append("dash")
+	if run.leap == null and input.slow and run.lvl("slow") > 0 and run.slow.cd == 0:
+		run.slow.t = SLOW_TIME[run.lvl("slow")]
+		run.slow.cd = SLOW_CD
+		run.events.append("slow")
+	var dashing = run.dash.t > 0
+
+	# --- scrolling: the hero first runs out of the temple, then the camera follows him ---
+	run.t += d
+	# The hero's own speed grows for ever; a mount, then the boss, impose theirs while they last.
+	var own = run.base + run.t * SPEED_GAIN
+	var pace = own
+	if run.boss != null:
+		pace = BOSS_SPEED * (DEATH_PACE if run.boss.phase == "fall" else 1.0)
+	elif run.mount != null:
+		var R: Dictionary = MOUNTS[run.mount.kind]
+		pace = R["base"] + R["gain"] * run.mount.t
+	# Slowing down is quick; speeding back up (after a mount or the boss) is gradual.
+	if pace > run.speed:
+		run.speed = minf(pace, run.speed + RAMP * dt)
+	else:
+		run.speed = run.speed + (pace - run.speed) * minf(1, dt * 3)
+	run.own = own
+	run.relic = maxf(0, run.relic - dt * 0.6)
+	var gorilla_on = run.mount != null and run.mount.kind == "gorilla"
+	run.vine = clampf(run.vine + (1.0 if gorilla_on else -1.0) * dt * 2.5, 0, 1)
+	if run.leap != null:
+		run.leap.v = maxf(160, run.leap.v - 170 * d)   # knocked out: he only slows down
+	# he is thrown out of the temple faster than he runs
+	var move: float
+	if run.leap != null:
+		move = run.leap.v * d
+	else:
+		move = run.speed * (1.7 if dashing else 1.0) * (1.8 if run.exploded and run.sx < PX else 1.0) * d
+	if run.sx < PX:
+		run.sx = minf(PX, run.sx + move)
+	else:
+		run.cam += move
+	run.dist = run.cam / PPM
+	var px = run.cam + run.sx
+	var fl = floor_at(run, px)                      # the floor right under him
+
+	if run.leap != null:                             # --- Dernier élan: a rag doll bouncing along ---
+		p.vy += 2000 * d
+		p.y += p.vy * d
+		p.roll += d * 11
+		p.flying = false
+		if p.y >= fl:
+			p.y = fl
+			for i in 8:
+				part(run, px + rnd(-20, 20), fl - 2, rnd(-160, 160), rnd(-110, -20), 0.35, Color("#f4f0e0"), rnd(4, 9), 0)
+			run.leap.n -= 1
+			if run.leap.n >= 0:
+				p.vy = -520 - 50 * run.leap.n
+				run.shake = maxf(run.shake, 0.3)
+				run.events.append("bounce")
+			else:
+				die(run)
+				return
+	else:
+		# --- player ---
+		var M: Dictionary = MOUNTS[run.mount.kind] if run.mount != null else {}
+		var mounted = run.mount != null
+		var gorilla = gorilla_on
+		var spring = 1.0 + 0.1 * run.lvl("spring")
+		p.inv = maxf(0, p.inv - dt)
+		p.buf = maxf(0, p.buf - dt)
+		p.spin = maxf(0, p.spin - dt)
+		p.flying = false
+		var half: float = M["half"] if mounted else HERO_HALF
+		var tall: float = M["tall"] if mounted else HERO_H
+		if p.ball != null and px > p.ball.x + p.ball.w:   # out at the far end, back on his feet
+			p.ball = null
+			p.y = fl
+			_puff(run, px, p.y)
+			run.events.append("unroll")
+		if p.ball == null and run.lvl("sphere") > 0 and not mounted and p.ground and p.plat == null:   # the Sphère: in he rolls
+			for z in run.zones:
+				if px >= z.x and px < z.x + 110:
+					p.ball = z
+					break
+			if p.ball != null:
+				p.balled = 0
+				_puff(run, px, p.y)
+				run.events.append("roll")
+		if p.ball != null:
+			var z: Zone = p.ball
+			var k = minf(1, minf((px - z.x) / 70, (z.x + z.w - px) / 70))
+			p.ground = true
+			p.plat = null
+			p.vy = 0
+			p.rotor = false
+			p.jumps = 0
+			p.y = fl + (GALLERY * maxf(0, k) if z.kind == "gallery" else 0.0)
+			p.roll += run.speed * d / 26
+			p.balled += dt
+		elif mounted and M.get("fly", false):
+			# the dragonfly: held, it climbs; let go, it sinks. It turns round at once.
+			p.ground = false
+			p.plat = null
+			p.rotor = false
+			p.vy += ((-480.0 if input.hold else 440.0) - p.vy) * minf(1, d * 16)
+			p.y += p.vy * d
+			if p.y > fl - 12:
+				p.y = fl - 12
+				p.vy = minf(p.vy, 0)
+			if p.y - tall < CEIL:
+				p.y = CEIL + tall
+				p.vy = maxf(p.vy, 0)
+		elif p.cruise > 0 and not mounted:
+			# with the Vol, out of the temple: he flies on his own at cruising height until the first press
+			p.cruise -= dt
+			p.ground = false
+			p.plat = null
+			p.jumps = 2
+			p.rotor = true
+			p.spin = 0.22
+			p.flying = true
+			var target = fl - CRUISE_H
+			p.vy += ((target - p.y) * 5 - p.vy) * minf(1, d * 5)
+			p.y += p.vy * d
+			if randf() < 0.25:
+				_leaves(run, px, p.y)
+			if input.pressed or input.hold or p.cruise <= 0:   # taken in hand: a press is a flap, as in flight
+				p.cruise = 0
+				p.rotor = input.pressed or input.hold
+				if input.pressed:
+					p.vy = minf(p.vy, -FLAP)
+					run.events.append("flap")
+		elif p.hang:
+			# the gorilla under the vines: it swings from one to the next until a press lets go
+			p.y = HANG_Y
+			p.vy = 0
+			p.phase += 1.5 * TAU * d
+			if input.pressed:
+				p.hang = false
+				p.vy = 160
+				p.jumps = 1
+				run.events.append("drop")
+		else:
+			if input.pressed:
+				if p.ground:                         # on foot, a press is a plain jump
+					jump(run, (M["jump"] if mounted else -JUMP_V) * spring)
+				elif gorilla and p.jumps < 2:        # the gorilla's second jump goes as high as it takes to reach the vines
+					jump(run, -sqrt(2 * 2400 * maxf(80, p.y - HANG_Y + 40)))
+					p.vine_leap = true
+					burst(run, px, p.y, Color.WHITE, 8, 160)
+				elif not mounted and run.lvl("doubleJump") > 0 and p.jumps < 2:
+					jump(run, -JUMP_DOUBLE * spring)
+					burst(run, px, p.y, Color.WHITE, 6, 120)
+					p.rotor = run.lvl("flight") > 0
+				elif not mounted and run.lvl("flight") > 0:   # in the air, every press lifts him at once
+					p.rotor = true
+					p.spin = 0.22
+					p.vy = minf(p.vy, -FLAP)
+					run.events.append("flap")
+				else:
+					p.buf = 0.12                     # pressed just before landing: remembered
+			if not input.hold:
+				p.rotor = false                      # released: he drops straight away
+			if p.ground and p.plat != null and (px < p.plat.x - HERO_HALF or px > p.plat.x + p.plat.w + HERO_HALF):
+				p.ground = false                     # ran off the end of a ledge
+				p.plat = null
+				p.jumps = 1
+			if p.ground and p.plat != null:
+				p.y = p.plat.y                       # a pad carries him up and down
+			if p.ground and p.plat == null:          # on a slope he follows it; where the floor gives way, he falls
+				if fl - p.y > 40:
+					p.ground = false
+					p.jumps = maxi(p.jumps, 1)
+				else:
+					p.y = fl
+			if not p.ground:
+				var before = p.y
+				if p.rotor:
+					p.vy = minf(-FLAP, p.vy + 2400 * d)   # the leaf rotor: a steady climb while held
+				else:
+					p.vy += (JUMP_HELD if (input.hold and p.vy < 0 and not p.vine_leap) else JUMP_GRAVITY) * d
+				p.flying = p.rotor or p.spin > 0
+				if p.flying and randf() < 0.25:
+					_leaves(run, px, p.y)
+				p.y += p.vy * d
+				if p.vine_leap and p.y <= HANG_Y:    # the vines: caught
+					p.y = HANG_Y
+					p.vy = 0
+					p.hang = true
+					p.vine_leap = false
+					p.jumps = 0
+					run.events.append("grab")
+				if p.y - tall < CEIL:
+					p.y = CEIL + tall
+					if p.vy < 0:
+						p.vy = 0
+				for pl in run.plats:                 # under a cave roof: he bumps his head
+					var under: float = pl.y + pl.t
+					if pl.t > 0 and px > pl.x and px < pl.x + pl.w and p.y > under + HERO_H * 0.6 and p.y - HERO_H < under:
+						p.y = under + HERO_H
+						if p.vy < 0:
+							p.vy = 0
+				var land = fl if p.y >= fl else NAN
+				var on = null
+				if p.vy > 0:                         # ledges only catch a falling hero
+					for pl in run.plats:
+						if before <= pl.y and p.y >= pl.y and px > pl.x - HERO_HALF and px < pl.x + pl.w + HERO_HALF:
+							land = pl.y
+							on = pl
+							break
+				if not is_nan(land):
+					p.y = land
+					p.vy = 0
+					p.ground = true
+					p.plat = on
+					p.jumps = 0
+					p.squash = 1
+					p.rotor = false
+					p.spin = 0
+					p.vine_leap = false
+					for i in 5:
+						part(run, px + rnd(-16, 16), land - 2, rnd(-140, 140), rnd(-70, -20), 0.3, Color("#f4f0e0"), rnd(4, 8), 0)
+					if on != null:
+						run.events.append("land")
+					if p.buf > 0:
+						jump(run, (M["jump"] if mounted else -JUMP_V) * spring)
+			else:
+				# strides per second: quicker as he speeds up, but never a blur
+				p.phase += (1.75 + (minf(900, run.speed) - 360) / 600) * TAU * d * (1.4 if dashing else 1.0)
+				if randf() < 0.25:
+					part(run, px - 30, p.y - 2, rnd(-90, -30), rnd(-50, -10), 0.35, Color("#f4f0e0"), rnd(4, 8), 0)
+		if dashing and randf() < 0.8:
+			part(run, px - 20, p.y - rnd(5, 75), -300, 0, 0.25, Color("#ffd35c"), rnd(4, 8), 0)
+
+		# --- mounts: the ones ahead wait to be touched, and may be missed ---
+		if run.mount != null:
+			run.mount.t += dt
+			var time: float = MOUNTS[run.mount.kind].get("time", 0.0)
+			if time > 0 and run.mount.t >= time:
+				dismount(run, true)
+		for it in run.items:
+			it.x += run.speed * MOUNTS[it.kind]["ahead"] * d
+			var f = floor_at(run, it.x)
+			if it.kind == "dragonfly":
+				var k = fmod((run.t + it.ph) / ZIG_PERIOD, 2.0)
+				it.y = f - ZIG_LOW - (ZIG_HIGH - ZIG_LOW) * (k if k < 1 else 2 - k)
+			if run.mount != null or absf(px - it.x) > 70:
+				continue
+			var reach = false
+			if it.kind == "gorilla":
+				reach = p.y - HERO_H < f - PERCH + 24              # up to the gorilla: a high jump
+			elif it.kind == "rhino":
+				reach = p.y > f - 50                               # the rhino: at its level, not over it
+			else:
+				reach = absf(p.y - HERO_H / 2 - it.y) < 64         # the dragonfly: where it flies
+			if not reach:
+				continue
+			var mt = Mount.new()
+			mt.kind = it.kind
+			run.mount = mt
+			it.gone = true
+			p.rotor = false
+			p.hang = false
+			p.vine_leap = false
+			p.inv = maxf(p.inv, 0.5)
+			if MOUNTS[it.kind].get("fly", false):
+				p.ground = false
+				p.plat = null
+				p.vy = -200
+				p.y = minf(p.y, floor_at(run, it.x) - 60)
+			elif not p.ground:                       # caught in the air: they come down together
+				p.vy = maxf(p.vy, 0)
+				p.jumps = 1
+			burst(run, it.x, p.y - 70, Color("#ffd35c"), 16, 260)
+			run.events.append("mount")
+
+		run.h = maxf(0, (floor_at(run, px) - p.y) / PPM)
+		run.max_h = maxf(run.max_h, run.h)
+
+		# --- obstacles ---
+		var box = Box.new()
+		box.l = px - half
+		box.r = px + half
+		box.t = p.y - tall + 6
+		box.b = p.y - 2
+		for o in run.obs:
+			if p.ball != null:
+				break                                # nothing reaches him in there
+			if o.kind == "dart":                     # waiting beyond the edge, then the warning, then across in one go
+				if o.state == "wait" and (run.fm != null or run.fm_due):
+					o.gone = true                    # never a fonceur (or a missile) during a swarm
+					continue
+				if o.state == "wait" and o.x <= run.cam + run.view_w + 40:
+					o.state = "warn"
+					o.t = 0
+					run.events.append("warn")
+				if o.state == "warn":
+					o.x = run.cam + run.view_w + 60
+					o.t += d
+					if o.t >= DART_WARN:
+						o.state = "go"
+						run.events.append("dart")
+				if o.state == "go":
+					o.x -= DART_SPEED * d
+			if o.kind == "acid":
+				o.x += o.vx * d
+				if o.lob:                            # a blob in the air: where it lands, a puddle of acid stays
+					o.vy += o.g * d
+					o.y += o.vy * d
+					var f = floor_at(run, o.x + o.w / 2)
+					if o.y + o.h >= f:
+						o.lob = false
+						o.vx = 0
+						o.x -= (ACID_PUDDLE - o.w) / 2
+						o.w = ACID_PUDDLE
+						o.h = 22
+						o.y = f - o.h
+						o.puddle = true
+						for i in 10:
+							part(run, o.x + rnd(10, o.w - 10), f - 6, rnd(-160, 160), rnd(-320, -80), rnd(0.3, 0.6), colour_of(["#a8ff3c", "#5cf25c", "#e8ffb0"]), rnd(5, 10), 1200)
+						run.events.append("splash")
+				elif o.ball:
+					o.y += (o.lane - o.y) * minf(1, d * 4)
+				elif o.drop:                         # a drop from the sky: a small puddle where it lands
+					o.vy += o.g * d
+					o.y += o.vy * d
+					var f = floor_at(run, o.x + o.w / 2)
+					if o.y + o.h >= f:
+						o.drop = false
+						o.x -= 27
+						o.w = 90
+						o.h = 22
+						o.y = f - o.h
+						o.puddle = true
+						run.events.append("splash")
+			if o.gone or o.x + 6 > box.r or o.x + o.w - 6 < box.l or o.y + 6 > box.b or o.y + o.h - 6 < box.t:
+				continue
+			if dashing:
+				destroy(run, o)
+			elif o.ghost:
+				if not o.passed:
+					o.passed = true
+					burst(run, o.x + o.w / 2, o.y + o.h / 2, Color("#c9f3ff"), 6, 120)
+			elif p.inv == 0:
+				hit(run, o)
+				if run.dead:
+					return
+				break
+		# scenery that can be smashed, run past with Brise-tout, on the rhino, or in a Ruée
+		if run.lvl("breaker") > 0 or dashing or M.get("smash", false):
+			for dc in run.decor:
+				if not dc.broken and absf(px - (dc.x + DECOR_W / 2)) < 50 and p.y > floor_at(run, dc.x) - 160:
+					smash(run, dc)
+		if run.leap == null:
+			followers(run, d, box, dashing)
+		if run.dead:
+			return
+		if run.leap == null:
+			boss(run, d)
+		# fallen into a hole: a heart goes, and he is put back on the far side
+		if p.y > GROUND + 150:
+			var pit = null
+			for hp in run.pits:
+				if px > hp.x0 - 60 and px < hp.x1 + 60:
+					pit = hp
+					break
+			if pit != null:
+				run.cam = pit.x1 + 40 - run.sx
+				p.y = GROUND
+				p.vy = 0
+				p.ground = true
+				p.jumps = 0
+			else:
+				p.y = floor_at(run, run.cam + run.sx)
+			p.inv = 0
+			hit(run, null)
+			if run.god:
+				p.inv = 0.5
+			if run.dead:
+				return
+	run.items = run.items.filter(func(it): return not it.gone and it.x > run.cam - 200)
+	run.decor = run.decor.filter(func(dc): return dc.x > run.cam - 200)
+	run.hills = run.hills.filter(func(hl): return hl.x + hl.w > run.cam - 200)
+	run.zones = run.zones.filter(func(z): return z.x + z.w > run.cam - 200 or z == run.p.ball)
+	run.obs = run.obs.filter(func(o): return not o.gone and o.x + o.w > run.cam - 120)
+	run.plats = run.plats.filter(func(pl): return pl.x + pl.w > run.cam - 120)
+
+	while run.terrain.size() > 2 and run.terrain[1].x < run.cam - 300:
+		run.terrain.pop_front()
+
+	# --- spawning ---
+	var edge = run.cam + run.view_w + 200
+	while run.next_x < edge:
+		spawn_pattern(run)
+
+	# --- scenery change ---
+	if run.dist >= run.next_biome_at and run.by_mark and run.lvl("jammer") > 0 and randf() < 0.5:
+		run.next_biome_at = maxf(2 * ZONE, (floorf(run.dist / ZONE) + 1) * ZONE)   # the Gros sac à dos muffles the relic: not this time
+	elif run.dist >= run.next_biome_at:
+		run.by_mark = true                           # from now on the changes come with the distance marks
+		run.prev_biome = run.biome
+		run.biome = NEXT_BIOME[run.biome]
+		run.biome_x = run.cam + run.view_w + 400     # the new scenery starts ahead, off screen, and scrolls in
+		run.next_biome_at = maxf(2 * ZONE, (floorf(run.dist / ZONE) + 1) * ZONE)
+		run.relic = 1
+		run.glitch = maxf(run.glitch, 0.5)           # the relic flares: it is what moves the world
+		run.events.append("biome")
+
+	if run.leap == null:
+		# --- scenery reacting as he runs past: it shivers and lets something go ---
+		var cell = floori(px / PROP_CELL)
+		for i in [cell - 1, cell]:
+			var pr = prop_at(i)
+			if pr == null or not REACTS.has(pr["kind"]):
+				continue
+			var react: Array = REACTS[pr["kind"]]
+			if run.touched.has(i) or p.y < fl - TOUCH_H or biome_at(run, pr["x"]) != 0 or not flat_at(run, pr["x"], PROP_CELL * 0.6):
+				continue
+			var cx: float = pr["x"] + 34 * PIXEL
+			if px < cx - 20 or px > cx + 90:
+				continue
+			run.touched[i] = run.t
+			for k in react[1]:
+				part(run, cx + rnd(-40, 40), fl - rnd(60, 150), rnd(-50, 90), rnd(-150, -30), rnd(0.7, 1.4), Color(react[0]), rnd(4, 8), 90)
+			run.events.append("shroom" if pr["kind"] == PROP_SHROOM else "rustle")
+		for i in run.touched.keys():
+			if run.t - run.touched[i] > 6:
+				run.touched.erase(i)
+
+		# --- monkeys in the vines: climb high enough under one and it waves back ---
+		for m in run.monkeys:
+			if m.seen < 0 and absf(px - m.x) < 70 and p.y < GROUND - MONKEY_H:
+				m.seen = run.t
+				run.events.append("monkey")
+				burst(run, m.x, 150, Color("#ffd35c"), 10, 200)
+	run.monkeys = run.monkeys.filter(func(m): return m.x > run.cam - 200)
+
+	# --- coins and gems ---
+	var reach: float = MAGNET[run.lvl("magnet")]
+	var cy = p.y - (20.0 if p.ball != null else 40.0)
+	var grab_w = 0.0
+	var grab_h = 0.0
+	if run.mount != null and MOUNTS[run.mount.kind].has("grab_w"):
+		grab_w = MOUNTS[run.mount.kind]["grab_w"]
+		grab_h = MOUNTS[run.mount.kind]["grab_h"]
+	for c in run.coins:
+		if c.tight != "" and p.ball == null:
+			continue                                 # inside a tight place: for the ball only
+		if c.toss:                                   # thrown by the blast: it falls, bounces lower each time, then stays
+			var f = floor_at(run, c.x) - 40
+			c.tvy += 1000 * d
+			c.x += c.tvx * d
+			c.y += c.tvy * d
+			if c.y > f and c.tvy > 0:
+				c.y = f
+				c.tvy *= -0.45
+				c.tvx *= 0.55
+				if c.tvy > -70:
+					c.toss = false
+		var dx = px - c.x
+		var dy = cy - c.y
+		var dist = sqrt(dx * dx + dy * dy)
+		if c.loot >= 0:                              # out of a crate: thrown up and ahead, then drawn to the hero
+			c.loot += d
+			if c.loot < 0.32:
+				c.vy += 1500 * d
+				c.x += (c.vx + run.speed) * d
+				c.y += c.vy * d
+				continue
+			if dist >= 44:
+				c.x += dx / dist * 1000 * d + run.speed * d
+				c.y += dy / dist * 1000 * d
+				continue
+		var caught = (absf(dx) < grab_w and c.y > p.y - grab_h and c.y < p.y + 10) if grab_w > 0 else dist < 44
+		if caught:
+			c.gone = true
+			if c.heart:                              # a life back, or its worth in gold when none is missing
+				if run.hearts < run.max_hearts:
+					run.hearts += 1
+				else:
+					run.gold += HEART_GOLD
+				run.events.append("heart")
+				burst(run, c.x, c.y, Color("#ff6b8a"), 14, 260)
+			elif c.gem != "":
+				run.gold += GEMS.get(c.gem, 10)
+				run.gems += 1
+				run.events.append("gem")
+				burst(run, c.x, c.y, Color({"y": "#ffe36a", "r": "#ff6b6b"}.get(c.gem, "#5cc8ff")), 10, 220)
+			else:
+				run.gold += 1
+				run.events.append("coin")
+				burst(run, c.x, c.y, Color("#fff3a8"), 4, 150)
+			continue
+		if dist < reach:
+			c.x += dx / dist * 700 * d + run.speed * d
+			c.y += dy / dist * 700 * d
+	run.coins = run.coins.filter(func(c): return not c.gone and c.x > run.cam - 60)
