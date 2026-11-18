@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.32.1** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 18/11/2026, **version Godot 0.33.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -23,15 +23,15 @@ L'accueil a un bouton par mode ; « Rejouer » relance le dernier mode choisi.
 
 | Valeur | Aujourd'hui | Où (js/game.js) |
 |---|---|---|
-| Vitesse au départ | 9 m/s (360 u/s) ; en Histoire, chaque nouveau décor repart de là | `SPEED_BASE` |
-| Accélération | +0,125 m/s chaque seconde | `SPEED.gain` |
-| Vitesse maximale | aucune : 16,5 m/s après 1 min, 24 m/s après 2 min, 39 m/s après 4 min (Run illimitée ; en Histoire elle repart de 9 m/s à chaque décor, deux fois plus vite) | |
+| Vitesse au départ | 9 m/s (360 u/s) ; en Histoire, chaque décor a la sienne (ligne « Nouveau décor ») | `SPEED_BASE` |
+| Accélération | Run illimitée : +0,125 m/s chaque seconde ; Histoire : +0,25 m/s chaque seconde | `SPEED_GAIN`, `STORY_GAIN` |
+| Vitesse maximale | aucune : 16,5 m/s après 1 min, 24 m/s après 2 min, 39 m/s après 4 min (Run illimitée ; en Histoire elle repart à chaque décor de la vitesse de ce décor) | |
 | **Sprint** | départ à 11 m/s : **+57 %** (+4 m/s, gardés toute la course) | `SPEED.sprint` |
 | Sortie du temple | vitesse × 1,8 jusqu'à sa place à l'écran | `update` |
 | Ruée | vitesse × 1,7 pendant 0,55 s | `update` |
 | Vol à la sortie du temple | avec le Vol, Pépito décolle tout seul à l'explosion et vole à 3,75 m jusqu'au premier appui (4 s au plus) | `CRUISE` |
 | Sablier | le monde tourne à 45 % ; ses 2 dernières secondes sont annoncées (6 tics de plus en plus rapprochés, teinte qui clignote, bords de l'écran qui flashent, « 2 » puis « 1 » au-dessus de Pépito), puis le monde reprend sa vitesse en douceur sur 0,35 s | `SLOW_WARN`, `SLOW_TICKS`, `SLOW_EASE` |
-| Nouveau décor (Histoire) | la vitesse repart de 9 m/s et monte deux fois plus vite (0,25 m/s par seconde) | `zone_t`, `ZONE_ACCEL` |
+| Nouveau décor (Histoire) | la vitesse repart de celle du décor : forêt 9 m/s, ruines 10, donjon 11, cité 12 (Sprint en plus, frein en moins), puis +0,25 m/s par seconde. Exemple : les ruines, de 10 m/s à environ 29 m/s 1450 m plus loin | `ZONE_EXTRA`, `STORY_GAIN`, `zone_t` |
 | Changement de décor | Run illimitée : un décor tous les **800 m** ; Histoire : les ruines juste après la victoire sur Vorace (après la ligne de gemmes bleues), puis tant qu'il n'y a pas d'autre boss : le donjon à 4000 m, la cité à 6000 m, la forêt à 8000 m, et ainsi de suite tous les 2000 m ; avec le Gros sac à dos, 1 fois sur 2 le décor reste jusqu'à la marque suivante | `boss`, `ZONE` |
 | Textes à l'écran | seulement pour le boss (« Vorace ! », « Ça tombe ! », « Écrasée ! », « Vorace est vaincue ! ») ; plus de nom de décor, de monture, de nuée ni de « Cours ! » | js/main.js |
 | Ordre des décors | toujours forêt → ruines → donjon → cité, puis on reboucle sur la forêt | `NEXT_BIOME` |
@@ -44,7 +44,7 @@ L'accueil a un bouton par mode ; « Rejouer » relance le dernier mode choisi.
 | Saut maintenu | 4,8 m (gravité réduite à 1500 en montée) | `update` |
 | Double saut | 2,6 m de plus (4,1 m maintenu) | élan `-700` |
 | Ressort | élan +10 % par niveau, soit hauteur +21 % puis +44 % | `spring` |
-| Vol | chaque appui : montée à 10,75 m/s tant qu'on tient | `FLAP` |
+| Vol | chaque appui : montée à 15 m/s tant qu'on tient (10,75 avant la 0.33) ; relâché : la montée s'arrête net, puis chute 1,4 fois plus rapide qu'un saut, jusqu'à toucher le sol | `FLAP`, `VOL_DROP`, `flew` |
 | Plafond | à 0,6 m du haut de l'écran | `CEIL` |
 | Appui juste avant d'atterrir | retenu 0,12 s | `p.buf` |
 | Corps du héros (collisions) | 0,7 m de large, 2 m de haut, 0,15 m de marge sur chaque obstacle | `HERO_HALF`, `HERO_H` |
@@ -90,7 +90,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Araignées (0.32) | bien plus nombreuses : suspendu ×8 entrées, motif « araignées » (2 ou 3 à la suite : une jaune immobile, des rouges) ; **jaunes immobiles, rouges qui montent et descendent de 2,5 m de chaque côté en 2,4 s**, du sol jusqu'au plafond ; une colonne bouge d'un bloc | `SPIDER_*`, `add_hover` |
 | Vagues de volants | 2 à 10 volants, de 0,9 s d'écart à 9 m/s jusqu'à 0,3 s à 30 m/s ; à pied à hauteur de tête (rester au sol), un bas seulement en premier avec 0,8 s avant le suivant (avec Double saut aussi au-dessus d'un petit saut) ; avec le Vol chacun vise ta hauteur ; rien d'autre sur la route pendant une vague | `WAVE_*`, `_wave` |
 | Objets rares | une vie ou un frein (-4 m/s pour le reste de la course), dans une bulle qui zigzague entre 2,75 et 4,5 m (à portée de saut), un tous les 1 400 à 2 400 m environ (dès 300 m) | `BONUS_*`, `add_bonus`, `BRAKE` |
-| Toujours esquivable | vérifié par un banc qui essaie toutes les façons de jouer image par image : à pied (sauts tapés ou tenus de 0,1 à 0,5 s) et avec le Vol (montée 10,75 m/s), 43 200 images chacun (12 min) : aucun passage impossible ; un campeur volant prend 17 à 21 coups par minute | bancs fair_bfs, fly_tests |
+| Toujours esquivable | vérifié par un banc qui essaie toutes les façons de jouer image par image : à pied (sauts tapés ou tenus de 0,1 à 0,5 s) et avec le Vol (tenu ou relâché à chaque image, montée 15 m/s, vraie chute), 43 200 images chacun (12 min) : aucun passage impossible ; un campeur volant prend 17 à 21 coups par minute | bancs fair_bfs, fly_tests |
 | Suspendu | araignée (forêt et ruines) / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 150 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
 | Mise en avant des dangers | façon 5 (son choix du 17/11) : contour sombre et bord éclairé en haut à gauche sur tout ce qui fait mal, décor de fond et décor du chemin assombris ; liseré rouge en plus en option (Réglages, Accessibilité) | `LOOK`, `setDangerRim` |
 | Décor à casser | grosse caisse (forêt) / jarre (ruines) / tonneau (donjon) / caisses (cité) ; posé derrière 12 % des motifs dès 70 m, un peu assombri ; inoffensif, il ne se casse qu'avec Brise-tout, la Ruée ou le rhino | `addDecor`, `DECOR_RATE` |
@@ -133,7 +133,9 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Suivantes | 1300 à 1800 m après la précédente | `spawnPattern` |
 | Après en avoir perdu une | pas avant 900 à 1200 m | `dismount` |
 | Ami de la nature | ces distances divisées par 1,25 / 1,5 / 1,75 | `friend` |
-| Laquelle | 1 chance sur 3 chacune | `spawnPattern` |
+| Laquelle | 1 chance sur 3 chacune, parmi celles qui sont activées (boutique, onglet Montures : Activer / Désactiver) ; toutes désactivées : plus aucune monture | `run.mounts`, `save.mountsOff` |
+| Dompté (amélioration) | niv. 1 / 2 : attrapée à 2,9 / 4 m d'elle au lieu de 1,75 m ; elle avance 30 / 60 % moins vite devant toi ; gorille atteint 1 / 2 m plus bas, rhino attrapé même en sautant (1,75 / 3,5 m au-dessus de lui), libellule à 1 / 2 m de plus de sa hauteur | `tamed` |
+| Aimant de monture (amélioration) | sur une monture, les pièces viennent à toi de 4,25 / 6 m (niv. 1 / 2), ou plus si ton Aimant fait mieux | `mountMagnet` |
 | Comment elles attendent | gorille tout en haut des lianes, pieds à 10 m du sol, avance à 45 % de ta vitesse : il faut le Vol (ou Double saut + Ressort) ; rhino immobile qui broute : il faut le toucher au sol, un saut le fait rater ; libellule qui zigzague entre 1,75 et 5,75 m (un aller en 1,6 s) et avance à 50 % de ta vitesse | `MOUNTS.ahead`, `PERCH`, `ZIG` |
 | Vitesse sur une monture | gorille et libellule : la leur, départ à 7,5 m/s (libellule 8 m/s), puis + 0,6 m/s par seconde (gorille), + 1,4 (libellule, ×2 depuis la 0.32) ; **rhino : le double de ta vitesse**, atteint en 1 à 2 secondes. Ta propre vitesse continue de monter en parallèle ; quand la monture part, la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne | `MOUNTS.speed` (`mul`, `ramp` pour le rhino), `RAMP` |
 | Gorille | saut 3,5 m (5,6 m maintenu), second saut jusqu'aux lianes | `MOUNTS.gorilla` |
@@ -153,9 +155,10 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Après le combat | la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne (de 4 à 29 m/s : environ 14 s) | `RAMP` |
 | Durée | 26 s d'attaques, puis un arbre l'écrase | `BOSS.fight` |
 | Rythme | une attaque toutes les 1,65 s au début, jusqu'à 1,15 s ; la gueule s'ouvre et l'acide brille 0,45 s avant | `boss` |
-| Gueule (départ des tirs) | 1,25 m après son bord gauche, 5,6 m du haut de l'écran | `BOSS.mouthX`, `BOSS.mouthY` |
+| Place | 3,5 m plus à droite qu'avant la 0.33 (une partie de son corps hors de l'écran) : sa gueule est à 20,6 m de toi au lieu de 17,1 | `BOSS_BACK` |
+| Gueule (départ des tirs) | 1,25 m après son bord gauche, 5,6 m du haut de l'écran ; une boule prend sa hauteur en 0,25 s (0,75 s avant) : sa hauteur se lit environ 1 s avant qu'elle t'atteigne (0,3 s avant) | `BOSS.mouthX`, `BOSS.mouthY`, `BALL_SETTLE` |
 | À pied (et gorille) | flaque, double flaque, boule basse (sauter), moyenne (rester au sol), haute (pas de grand saut), deux boules (haute + basse ou moyenne), pluie de 2 gouttes (ombre au sol avant) ; suspendu aux lianes : boules à hauteur des lianes | `boss` |
-| Contre le Vol et la libellule | éventail de boules sur 6 couloirs jusqu'au plafond (1,6 à 14 m), deux couloirs voisins libres, à 2 places au plus de l'ouverture précédente ; tirs 1,3 fois plus fréquents | `FAN_LANES`, `FLY_PACE` |
+| Contre le Vol et la libellule | éventail de boules sur 6 couloirs jusqu'au plafond (1,6 à 14 m), **trois** couloirs voisins libres, à 1 place au plus de l'ouverture précédente ; tirs 1,3 fois plus fréquents. Vérifié : 12 combats volés, toutes les façons de voler image par image, aucun moment sans passage | `FAN_LANES`, `FLY_PACE`, banc vorace_fly |
 | Toujours esquivable | chaque danger demande d'être en l'air (flaque, goutte, boule basse) ou au sol (boule moyenne) pendant un moment ; une attaque n'est lancée que si un petit saut (0,63 s en l'air) passe encore tout, avec 0,2 s entre deux gestes (0,26 s pour décider) ; sinon elle en choisit une autre, ou attend 0,2 s. Sur 30 combats simulés : aucune paire impossible | `_threats`, `_fits`, `_attack_fits` |
 | Sur le rhino | flaques, boules basses et hautes, pluie (pas de boule moyenne) ; le rhino est invulnérable, mais il part au bout de 8 s | `boss` |
 | Sur la libellule | éventail sur 5 couloirs avec 2 couloirs voisins libres, pluie, boules isolées | `boss` |
@@ -202,35 +205,45 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 | Sprint (pouvoir) | 8 | 4000 | +4 m/s |
 | Sphère (pouvoir) | 10 | 6000 |  |
 | Rembobinage | 12 | 10000 | 1 fois par course |
+| Dompté (Montures) | 3 | 1200 / 2800 | voir § 6 |
+| Aimant de monture (Montures) | 4 | 1500 / 3500 | 4,25 / 6 m sur une monture |
 
-Emplacements d'équipement : 3 (`MAX_EQUIPPED`, js/save.js). Les prix sont dans `UPGRADES`.
+Emplacements d'équipement : 3 (`MAX_EQUIPPED`). **Prix et niveau requis se changent dans
+`assets/progression.txt`** (version Godot, section `[ameliorations]`) : le jeu le lit à chaque lancement,
+un réexport suffit. Les montures et leurs deux améliorations sont dans l'onglet Montures.
 
-## 9. Niveau et défis (js/progress.js)
+## 9. Niveau et défis (`assets/progression.txt`)
 
-| Valeur | Aujourd'hui |
-|---|---|
-| Expérience | 1 point par mètre, plus celle des défis |
-| Niveau 1 → 2 | 200 points, puis 150 de plus à chaque niveau |
-| Récompense d'un niveau | 20 pièces × le niveau atteint |
-| Défi | 30 pièces et 40 XP, +15 pièces et +20 XP par palier |
-| Palier | +1 tous les 3 défis réussis, 12 au plus |
+Tout ce tableau se règle dans **`assets/progression.txt`** (dépôt Godot) : un fichier texte, une ligne par
+élément, colonnes séparées par `|`. Le jeu le lit à chaque lancement ; une ligne absente ou mal écrite garde la
+valeur d'origine. Après un changement : réexporter le jeu.
 
-| Défi | Objectif de départ | Par palier |
+| Valeur | Aujourd'hui | Ligne du fichier |
 |---|---|---|
-| Courir en une course | 150 m | +75 m |
-| Courir en tout | 400 m | +250 m |
-| Pièces en une course | 25 | +15 |
-| Pièces en tout | 80 | +50 |
-| Gemmes | 2 | +1 |
-| Sauts | 30 | +20 |
-| Plateformes | 3 | +2 |
-| Courir sans être touché | 80 m | +50 m |
-| Courses lancées | 3 | +1 |
-| Champignons frôlés | 5 | +3 |
-| Singes salués en une course | 2 | +1 |
-| Décors ou créatures cassés | 4 | +3 |
-| Montures | 1 | +1 |
-| Nuées esquivées | 2 | +1 |
+| Expérience | 1 point tous les 20 m courus, plus celle des défis | `[niveaux] metres par point` |
+| Niveau | 1000 points chaque niveau, sans palier | `[niveaux] points par niveau` |
+| Récompense d'un niveau | 20 pièces × le niveau atteint | `[niveaux] pieces par niveau` |
+| Annonce | rien pendant la course ; à la fin (écran de fin, ou retour au menu depuis la pause), un panneau : le niveau atteint, les pièces reçues, ce qui se débloque dans la boutique | `show_levels` (main.gd) |
+| Anciennes sauvegardes | expérience divisée par 20 au premier lancement de la 0.33 (1 point valait 1 m), défis en cours payés selon le fichier | `sanitize` (save.gd) |
+
+| Défi | Objectif | Pièces | XP |
+|---|---|---|---|
+| Courir en une course | 800 m | 40 | 120 |
+| Courir en tout | 3000 m | 60 | 200 |
+| Pièces en une course | 60 | 40 | 120 |
+| Pièces en tout | 300 | 60 | 200 |
+| Gemmes | 4 | 50 | 150 |
+| Sauts | 80 | 40 | 120 |
+| Plateformes | 8 | 40 | 120 |
+| Courir sans être touché | 300 m | 60 | 180 |
+| Courses lancées | 5 | 30 | 100 |
+| Champignons frôlés | 10 | 40 | 120 |
+| Singes salués en une course | 3 | 50 | 150 |
+| Décors ou créatures cassés | 10 | 50 | 150 |
+| Montures | 2 | 60 | 180 |
+| Nuées esquivées | 3 | 60 | 180 |
+
+Un défi absent du fichier garde l'ancienne règle des paliers (+1 palier tous les 3 défis réussis).
 
 ## 10. Affichage et son
 
