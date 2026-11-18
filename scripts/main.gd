@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.30.0"
+const VERSION := "0.31.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -63,6 +63,7 @@ var hud_state := {"dist": -1, "gold": -1, "hearts": -1}
 var debug_layer: CanvasLayer
 var debug_panel: Control = null
 var taps: Array = []                   # touches on the level badge: five in a row open the debug menu
+var adopted_note := ""                # said once on the menu: the web version's game was taken over
 var photo: ImageTexture = null          # the game as it was the moment he fell, for the end screen
 var photo_taken := false
 var touches := {}                     # fingers down on the game (not on a button): the jump is held while one stays
@@ -78,6 +79,7 @@ var perf := {"n": 0, "game": 0, "draw": 0, "text": ""}   # what a frame costs, a
 
 func _ready() -> void:
 	save = SaveData.load_save()
+	_adopt_web_save()
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
 	Debug.setup()
 	render = Render.new()
@@ -132,8 +134,53 @@ func _load() -> void:
 	w["loading"].queue_free()
 	await get_tree().process_frame               # every block has its size: each one is told where it flies from
 	_aim_flyers()
+	if adopted_note != "":
+		_menu_note.call_deferred(adopted_note)
 	print("Jungle Loop %s : prêt en %d ms (dont images %d ms)" % [VERSION, Time.get_ticks_msec() - t0, t_art])
 	go("menu")
+
+## The game used to be the web version, at this same address: its progress is in the browser's
+## localStorage (jungle-loop-save-v1), in the same format as the save codes. The first time this version
+## runs there, it takes that game over, unless its own has come further (more experience); what it had
+## is kept aside (user://jungle-loop-save-before-web.json). Done once (jungle-loop-godot-adopted).
+func _adopt_web_save() -> bool:
+	if not OS.has_feature("web") or "--bac" in OS.get_cmdline_user_args() or _js_yes("location.search.includes('bac')"):
+		return false
+	if _js_yes("localStorage.getItem('jungle-loop-godot-adopted')"):
+		return false
+	var raw = _js("localStorage.getItem('jungle-loop-save-v1') || ''")
+	_js("localStorage.setItem('jungle-loop-godot-adopted', '1')")
+	if raw == null or str(raw) == "":
+		return false
+	var parsed = JSON.parse_string(str(raw))
+	if not (parsed is Dictionary):
+		return false
+	var web = SaveData.sanitize(parsed)
+	var had = FileAccess.file_exists(SaveData.path())
+	if had and int(save["xp"]) >= int(web["xp"]):
+		return false                                 # this version's own game has come further
+	if had:
+		var f = FileAccess.open("user://jungle-loop-save-before-web.json", FileAccess.WRITE)
+		if f != null:
+			f.store_string(JSON.stringify(save))
+	save = web
+	SaveData.store(save)
+	adopted_note = "Ta partie a été reprise : niveau %d, %d pièces, record %d m." % [Progress.level_info(save["xp"])["level"], save["coins"], save["best"]]
+	print("Partie de la version web reprise : ", adopted_note)
+	return true
+
+## A short note on the menu, in the box over the slots; a touch puts it away.
+func _menu_note(text: String) -> void:
+	var box: PanelContainer = w["menu-info"]
+	for ch in box.get_children():
+		ch.queue_free()
+	box.set_meta("id", "")
+	var l = _label(text, ts("s"), INK, 0)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.custom_minimum_size.x = a(280)
+	box.add_child(l)
+	box.visible = true
 
 func _viewport(r: Render) -> SubViewport:
 	var vp = SubViewport.new()
@@ -254,6 +301,61 @@ func _flat(bg: Color, border: Color = LINE, bw: float = 1.5) -> StyleBoxFlat:
 	s.set_content_margin_all(a(4))
 	return s
 
+# ---------- the UI kit v2 (assets/img/ui-v2: tools/import_ui_v2_godot.py) ----------
+# Stone, vines and a turquoise gem, made at the exact size of each box in art pixels: nothing is ever
+# stretched out of shape or cut. Buttons and bars keep their ends whole and stretch only a middle made of
+# identical columns; fixed panels are their box's exact size; the panels that follow their text repeat
+# identical rows. Each picture is enlarged to the frame's art pixel (U), as the web version shows it.
+const KIT_CAP := {30: 27, 38: 33, 50: 43}                    # buttons: the width of their ends
+const KIT_FRAME := [16, 15, 21, 13]                          # panels: the stone frame left, right, top, bottom
+const KIT_BAR := {8: [12, 13, 2, 6, 8, 9], 12: [15, 17, 4, 8, 12, 10]}   # ends l/r, trough rows, fill insets l/r
+
+func _kit(name: String) -> Texture2D:
+	var key = "kit:" + name
+	if icons.has(key):
+		return icons[key]
+	var path = "res://assets/img/ui-v2/" + name + ".png"
+	var tex: Texture2D = null
+	if ResourceLoader.exists(path):
+		var im = (load(path) as Texture2D).get_image()
+		im.resize(roundi(im.get_width() * U), roundi(im.get_height() * U), Image.INTERPOLATE_NEAREST)
+		tex = ImageTexture.create_from_image(im)
+	icons[key] = tex
+	return tex
+
+## A box of the kit: `slice` [left, right, top, bottom] art pixels kept whole, `pad` the room inside.
+func _kit_box(name: String, slice: Array, pad: Array, mod: Color = Color.WHITE) -> StyleBoxTexture:
+	var sb = StyleBoxTexture.new()
+	sb.texture = _kit(name)
+	sb.texture_margin_left = a(slice[0])
+	sb.texture_margin_right = a(slice[1])
+	sb.texture_margin_top = a(slice[2])
+	sb.texture_margin_bottom = a(slice[3])
+	sb.content_margin_left = a(pad[0])
+	sb.content_margin_right = a(pad[1])
+	sb.content_margin_top = a(pad[2])
+	sb.content_margin_bottom = a(pad[3])
+	sb.modulate_color = mod
+	return sb
+
+## A panel of a fixed size (pane-left 262 x 204...): the room inside is what the frame leaves.
+func _kit_panel(name: String, more: float = 0.0) -> StyleBoxTexture:
+	return _kit_box(name, [0, 0, 0, 0], [KIT_FRAME[0] + 2 + more, KIT_FRAME[1] + 2 + more, KIT_FRAME[2] + 1 + more, KIT_FRAME[3] + 1])
+
+## A panel of a fixed width whose height follows its text (intro-pane 361, menu-info 300).
+func _kit_tall(name: String) -> StyleBoxTexture:
+	return _kit_box(name, [0, 0, 51, 55], [KIT_FRAME[0] + 6, KIT_FRAME[1] + 6, KIT_FRAME[2] + 4, KIT_FRAME[3] + 4])
+
+## A square button of the kit at its exact size (36 or 28): `icon_name` gem, gear, play, close, check, blank.
+func _kit_square(b: Button, icon_name: String, size: int) -> void:
+	var n = "sq-%s-%d" % [icon_name, size]
+	b.custom_minimum_size = Vector2(a(size), a(size))
+	b.add_theme_stylebox_override("normal", _kit_box(n, [0, 0, 0, 0], [0, 0, 0, 0]))
+	b.add_theme_stylebox_override("hover", _kit_box(n, [0, 0, 0, 0], [0, 0, 0, 0], Color(1.12, 1.12, 1.12)))
+	b.add_theme_stylebox_override("pressed", _down(_kit_box(n, [0, 0, 0, 0], [0, 0, 0, 0], Color(0.85, 0.85, 0.85))))
+	b.add_theme_stylebox_override("disabled", _kit_box(n, [0, 0, 0, 0], [0, 0, 0, 0], Color(0.6, 0.6, 0.65)))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
 ## A plaque of temple stone, its gilded ends kept whole and only its middle stretched (border-image).
 func _plaque(name: String, h: float, cap: float, mod: Color = Color.WHITE, inset: float = 0.6) -> StyleBoxTexture:
 	var t: Texture2D = icons.get(name)
@@ -281,14 +383,21 @@ func _down(sb: StyleBox) -> StyleBox:
 	return sb
 
 func _styles() -> void:
-	for spec in [["", "ui-btn-slate-38", 38, 41], ["big", "ui-btn-green-50", 50, 54], ["small", "ui-btn-slate-30", 30, 33], ["gold", "ui-btn-gold-38", 38, 41], ["small gold", "ui-btn-gold-30", 30, 33]]:
-		var inset = 0.6 if spec[2] == 50 else 0.85
+	# The kit's buttons: four states of one plaque (slate; its teal hover state stands for what is chosen,
+	# "gold" / "on": the kit has no gold or green). The text lies between the ends, as on the web.
+	for spec in [["", 38], ["big", 50], ["small", 30], ["gold", 38], ["small gold", 30]]:
+		var h: int = spec[1]
+		var cap: int = KIT_CAP[h]
+		var chosen: bool = (spec[0] as String).contains("gold")
+		var pad = [cap * 0.8, cap * 0.8, 0, 0]
+		var slice = [cap, cap, h / 2.0, h / 2.0]
 		styles[spec[0]] = {
-			"normal": _plaque(spec[1], spec[2], spec[3], Color.WHITE, inset),
-			"hover": _plaque(spec[1], spec[2], spec[3], Color(1.12, 1.12, 1.12), inset),
-			"pressed": _down(_plaque(spec[1], spec[2], spec[3], Color(0.9, 0.9, 0.9), inset)),
-			"disabled": _plaque(spec[1], spec[2], spec[3], Color(0.55, 0.55, 0.6), inset),
-			"h": spec[2],
+			"normal": _kit_box("btn-%s-%d" % ["hover" if chosen else "normal", h], slice, pad),
+			"hover": _kit_box("btn-hover-%d" % h, slice, pad, Color(1.1, 1.1, 1.1) if chosen else Color.WHITE),
+			"pressed": _down(_kit_box("btn-pressed-%d" % h, slice, pad)),
+			"disabled": _kit_box("btn-disabled-%d" % h, slice, pad),
+			"h": h,
+			"cap": cap,
 		}
 	styles["box"] = _flat(BOX)
 	styles["box-sel"] = _flat(Color("#2c3558"), GOLD)
@@ -351,12 +460,10 @@ func _style_button(b: Button, cls: String) -> void:
 		key = size
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, styles[key][st])
-	b.custom_minimum_size = Vector2(a(30 + 2 * (54 if size == "big" else 41)), a(styles[key]["h"]))
-	if size == "small":
-		b.custom_minimum_size.x = a(96)
+	b.custom_minimum_size = Vector2(a(30 + 2 * styles[key]["cap"]), a(styles[key]["h"]))
 	var colour = Color("#fff3d6")
 	if gold:
-		colour = Color("#4a3200")
+		colour = GOLD if "gold" in parts else Color.WHITE
 	elif "plain" in parts:
 		colour = DIM
 	elif "danger" in parts:
@@ -366,7 +473,7 @@ func _style_button(b: Button, cls: String) -> void:
 	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]:
 		b.add_theme_color_override(k, colour)
 	b.add_theme_color_override("font_disabled_color", colour.darkened(0.4))
-	b.add_theme_color_override("font_outline_color", Color(1, 244 / 255.0, 190 / 255.0, 0.8) if gold else Color(10 / 255.0, 14 / 255.0, 34 / 255.0, 0.85))
+	b.add_theme_color_override("font_outline_color", Color(10 / 255.0, 14 / 255.0, 34 / 255.0, 0.85))
 	b.add_theme_constant_override("outline_size", roundi(a(1.5)))
 	b.add_theme_font_size_override("font_size", ts("l") if size == "big" else (ts("s") if size == "small" else ts("m")))
 
@@ -400,18 +507,23 @@ func _hbox(gap: float) -> HBoxContainer:
 	return h
 
 ## A bar to fill: `set_bar` sets how full it is.
+## A bar to fill: the kit's bar-8 (levels, objectives) or bar-12 (volumes), its gem end and far end kept
+## whole; the colour fills its trough. `set_bar` sets how full it is.
 func _bar(width: float, height: float, colour: Color) -> Panel:
+	var kh = 12 if height >= 10 else 8
+	var m: Array = KIT_BAR[kh]
 	var p = Panel.new()
-	p.add_theme_stylebox_override("panel", _flat(Color("#0d1020")))
-	p.custom_minimum_size = Vector2(a(width), a(height))
+	p.add_theme_stylebox_override("panel", _kit_box("bar-%d" % kh, [m[0], m[1], 0, 0], [0, 0, 0, 0]))
+	p.custom_minimum_size = Vector2(a(maxf(width, m[0] + m[1] + 4)), a(kh))
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.set_meta("ins", [a(m[4]), a(m[5])])
 	var f = ColorRect.new()
 	f.color = colour
+	f.offset_left = a(m[4])
+	f.offset_top = a(m[2])
 	f.anchor_bottom = 1
-	f.offset_left = a(1.5)
-	f.offset_top = a(1.5)
-	f.offset_bottom = -a(1.5)
-	f.offset_right = a(1.5)
+	f.offset_bottom = -a(kh - m[3])
+	f.offset_right = a(m[4])
 	f.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	f.name = "fill"
 	p.add_child(f)
@@ -419,9 +531,10 @@ func _bar(width: float, height: float, colour: Color) -> Panel:
 
 func set_bar(bar: Panel, k: float) -> void:
 	var f: ColorRect = bar.get_node("fill")
+	var ins: Array = bar.get_meta("ins", [a(1.5), a(1.5)])
 	k = clampf(k, 0, 1)
 	f.anchor_right = k
-	f.offset_right = a(1.5) - k * a(3)
+	f.offset_right = ins[0] - k * (ins[0] + ins[1])
 
 func _place(c: Control, x: float, y: float, width: float = -1, height: float = -1) -> Control:
 	c.position = Vector2(a(x), a(y))
@@ -453,8 +566,22 @@ func _head(s: Control, text: String) -> Label:
 	s.add_child(l)
 	return l
 
+## What goes inside a panel of fixed size: if it were ever taller than the room, it scrolls (by a finger or
+## the wheel) rather than make the panel grow, which would stretch its picture.
+func _fixed(c: Control) -> ScrollContainer:
+	var sc = ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	sc.mouse_filter = Control.MOUSE_FILTER_PASS
+	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	c.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.add_child(c)
+	return sc
+
 func _pane(s: Control, right: bool, height: float = 204) -> PanelContainer:
-	var p = _box("pane")
+	var p = PanelContainer.new()
+	var kit = ("pane-right" if right else "pane-left") if height <= 204 else ("settings-right" if right else "settings-left")
+	p.add_theme_stylebox_override("panel", _kit_panel(kit))
 	if right:
 		_place(p, 569 - 14 - 265, 50, 265, height)
 	else:
@@ -604,7 +731,7 @@ func _build_hud() -> void:
 	w["hud-hearts"] = _hbox(3)
 	top.add_child(w["hud-hearts"])
 	var pause_b = _button("", "square", pause)
-	pause_b.custom_minimum_size = Vector2(a(36), a(36))
+	_kit_square(pause_b, "blank", 36)
 	var bars = func() -> void:                       # two upright bars, as on the web
 		var down = a(2) if pause_b.button_pressed else 0.0
 		for dx in [-a(4.5), a(2)]:
@@ -709,11 +836,8 @@ func _build_menu() -> void:
 	var s = _screen("menu", false)
 	var gear = Button.new()
 	gear.focus_mode = Control.FOCUS_NONE
-	gear.flat = true
-	gear.icon = icon("ui-gear")
-	gear.expand_icon = true
-	gear.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	_place(gear, M, M, 40, 40)
+	_kit_square(gear, "gear", 36)
+	_place(gear, M, M, 36, 36)
 	var on_gear = func() -> void:
 		Audio.sfx("click")
 		go("settings")
@@ -776,8 +900,10 @@ func _build_menu() -> void:
 	w["menu-quests"] = _vbox(4)
 	quests.add_child(w["menu-quests"])
 	s.add_child(quests)
-	w["menu-info"] = _box("pane")
-	_place(w["menu-info"], 569 / 2.0 - 150, 320 - M - 50 - 60, 300, 56)
+	w["menu-info"] = PanelContainer.new()
+	w["menu-info"].add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	w["menu-info"].mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(w["menu-info"], 569 / 2.0 - 150, 320 - M - 50 - 110, 300, 110)
 	w["menu-info"].visible = false
 	w["menu-info"].set_meta("still", true)
 	w["menu-info"].z_index = 4
@@ -861,7 +987,9 @@ func _quest_cards(holder: VBoxContainer) -> void:
 
 func _build_intro() -> void:
 	var s = _screen("intro", true)
-	var p = _box("pane")
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_tall("intro-pane"))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_place(p, 104, 52, 361, 150)
 	var col = _vbox(10)
 	var h = _label("La relique", ts("xl"), GOLD)
@@ -921,11 +1049,9 @@ func _build_shop() -> void:
 	scroll.add_child(w["shop-list"])
 	s.add_child(scroll)
 	var prev = PanelContainer.new()
-	var ps: StyleBoxFlat = styles["pane"].duplicate()
-	ps.set_content_margin_all(a(6))
-	prev.add_theme_stylebox_override("panel", ps)
+	prev.add_theme_stylebox_override("panel", _kit_panel("shop-preview-wide", 3))   # 253 x 282: off the corner leaves
 	prev.mouse_filter = Control.MOUSE_FILTER_STOP
-	_place(prev, 308, 30, 569 - M - 308, 282)
+	_place(prev, 308, 30, 253, 282)
 	var pc = _vbox(5)
 	var head = _hbox(6)
 	w["card-name"] = _label("", ts("m"), GOLD, 0)
@@ -946,7 +1072,7 @@ func _build_shop() -> void:
 	view.texture = demo_vp.get_texture()
 	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	view.stretch_mode = TextureRect.STRETCH_SCALE
-	view.custom_minimum_size = Vector2(a(238), a(238 * Demo.H / Demo.W))
+	view.custom_minimum_size = Vector2(a(210), a(210 * Demo.H / Demo.W))   # inside the stone frame
 	view.texture_filter = game_view.texture_filter
 	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(view)
@@ -954,11 +1080,11 @@ func _build_shop() -> void:
 	w["demo-view"] = view
 	w["demo-desc"] = _label("", ts("s"), INK, 0)
 	w["demo-desc"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	w["demo-desc"].custom_minimum_size.x = a(238)
+	w["demo-desc"].custom_minimum_size.x = a(210)
 	pc.add_child(w["demo-desc"])
 	w["card-status"] = _label("", ts("s"), DIM, 0)
 	w["card-status"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	w["card-status"].custom_minimum_size.x = a(238)
+	w["card-status"].custom_minimum_size.x = a(210)
 	pc.add_child(w["card-status"])
 	var fill = Control.new()
 	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1085,7 +1211,7 @@ func _build_settings() -> void:
 	var reset = _button("Tout effacer", "small danger", ask_reset)
 	reset.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	rc.add_child(reset)
-	right.add_child(rc)
+	right.add_child(_fixed(rc))
 
 func _toggle_row(text: String) -> HBoxContainer:
 	var row = _hbox(4)
@@ -1098,7 +1224,7 @@ func _toggle_row(text: String) -> HBoxContainer:
 
 func _small_square(text: String, fn: Callable) -> Button:
 	var b = _button(text, "square", fn)
-	b.custom_minimum_size = Vector2(a(28), a(28))
+	_kit_square(b, "blank", 28)
 	b.add_theme_font_size_override("font_size", ts("l"))
 	return b
 
@@ -1112,7 +1238,7 @@ func _build_score(name: String) -> void:
 		var shot = Button.new()
 		shot.focus_mode = Control.FOCUS_NONE
 		shot.flat = true
-		shot.custom_minimum_size = Vector2(a(128), a(72))
+		shot.custom_minimum_size = Vector2(a(96), a(54))
 		shot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		var sb = StyleBoxFlat.new()
 		sb.bg_color = Color("#0a0f14")
@@ -1138,7 +1264,7 @@ func _build_score(name: String) -> void:
 		w["over-shot"] = shot
 		w["over-pic"] = pic
 		col.add_child(shot)
-	w[name + "-dist"] = _label("0 m", ts("huge") if name == "pause" else roundi(ts("huge") * 0.8), INK, 3)
+	w[name + "-dist"] = _label("0 m", ts("huge") if name == "pause" else roundi(ts("huge") * 0.72), INK, 3)
 	w[name + "-best"] = _label("", ts("s"), DIM, 0)
 	w[name + "-dist"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(w[name + "-dist"])
@@ -1150,14 +1276,14 @@ func _build_score(name: String) -> void:
 	col.add_child(gain)
 	w[name + "-best"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(w[name + "-best"])
-	left.add_child(col)
+	left.add_child(_fixed(col))
 	var right = _pane(s, true)
 	var rc = _vbox(6)
 	w[name + "-level"] = _level_box(true)
 	rc.add_child(w[name + "-level"])
 	w[name + "-quests"] = _vbox(4)
 	rc.add_child(w[name + "-quests"])
-	right.add_child(rc)
+	right.add_child(_fixed(rc))
 	if name == "over":
 		_actions(s, [_button("Menu", "", func() -> void: go("menu")), _button("Rejouer", "big", func() -> void: go("play"))])
 	else:
@@ -1422,9 +1548,10 @@ func _confirm(text: String, fn: Callable) -> void:
 	shade.size = Vector2(W, H)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(shade)
-	var p = _box("pane")
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_tall("menu-info"))   # 300 wide, as tall as its text
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
-	_place(p, 569 / 2.0 - 140, 90, 280, 0)
+	_place(p, 569 / 2.0 - 150, 80, 300, 110)
 	var col = _vbox(10)
 	var l = _label(text, ts("m"), INK, 0)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2173,6 +2300,10 @@ func _process(delta: float) -> void:
 				"bossfall": banner("Écrasée !")
 				"bossdown": banner("Vorace est vaincue !")
 				"hurt", "rewind", "hit": stats["hurt"] = true
+				"fatal":                                # the blow that ends the run: the photo, now
+					if not photo_taken:
+						photo_taken = true
+						_take_photo()
 		run.events.clear()
 		progress(stats)
 		if hint_step == 1 and stats["jumps"] > 0:

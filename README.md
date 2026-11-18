@@ -1,13 +1,17 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.30.0** (18/11/2026) : à parité avec la version web 0.28, puis ses propres changements (plus bas, « Depuis
-la parité »). Le jeu
+**0.31.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
 environ 1 ms de calcul, 60 images/s). Pas encore essayé à la main sur téléphone.
 
-Publiée à l'essai sur https://burnout293.github.io/Jungle-Loop/godot/ (installable sur l'écran d'accueil).
+Publiée à l'adresse principale, https://burnout293.github.io/Jungle-Loop/ (installable sur l'écran d'accueil) :
+l'export web est copié à la racine de la branche `main`. L'ancienne version web y reste jouable sur
+`web.html` ; `godot/` (l'essai) renvoie à la racine. Au premier lancement dans un navigateur, la partie de
+l'ancienne version web (localStorage `jungle-loop-save-v1`, même adresse) est reprise si elle est plus
+avancée (plus d'expérience) ; celle d'avant est gardée dans `user://jungle-loop-save-before-web.json`.
 
 ## Ouvrir le projet
 
@@ -94,6 +98,24 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.31.0
+
+- **Le Vol ne campe plus** : araignées à toutes les hauteurs (`SKY_HOVERS`), rideaux d'araignées à un seul
+  passage (`CURTAIN`, passage à 2 places au plus du précédent, `CURTAIN_LEAD` pour le voir venir), volants
+  qui visent ta hauteur quand leur « ! » s'affiche (`Obs.aim`), et un volant pour qui garde la même hauteur
+  2,6 s (`camp`). À pied sans le Vol : moins de volants, plus de hérissons et d'araignées jaunes.
+  Vérifié (banc fly_tests) : sur 8 parcours de 150 s, un passage atteignable partout ; un campeur volant prend
+  17 à 21 coups par minute (2 à 3 avant).
+- **Une seule zone de ramassage** des pièces (une boîte, `COIN_HALF` 44 de chaque côté) au lieu d'une boîte
+  et d'un cercle ; roulé en Sphère, une boîte à sa taille (`BALL_REACH`).
+- **Kit d'interface v2** (pierre, lianes, gemme) : boutons, carrés (engrenage, pause, − et +), barres et
+  panneaux, chacun à la taille exacte de sa boîte, jamais étiré ni coupé. Les images viennent du dépôt web
+  (`assets/ui-v2`, fait par `tools/import_ui_v2.py`) ; `tools/import_ui_v2_godot.py` les copie dans
+  `assets/img/ui-v2` et fabrique avec les mêmes fonctions les panneaux aux tailles propres à cette version
+  (Réglages 262 × 262 et 265 × 262, aperçu de la boutique 253 × 282). Le contenu d'un panneau fixe défile
+  plutôt que de le faire grandir (`_fixed`). Le kit n'a ni vert ni or : le bouton choisi prend l'état survol.
+- Reprise de la partie de l'ancienne version web (`_adopt_web_save`).
 
 ## Export
 

@@ -12,7 +12,7 @@ const PIXEL := Game.PIXEL
 const VH := 320.0                      # play area height, in art pixels
 const GN := 280.0                      # floor line where the path is at its starting level
 const TEMPLE_X := -64.0                # temple's left edge, at camera 0
-const DOOR_X := 29.0                   # and its doorway
+const DOOR_X := 35.0                   # and its doorway (temple v2: the door is x 90 to 134, y 72 to 140 of its picture)
 const PROP_CELL := Game.PROP_CELL / Game.PIXEL
 const EARTH := 24.0
 const SLICE := 4
@@ -702,15 +702,18 @@ func chain(c: CanvasItem, x: float, y: float) -> void:
 		k += 1
 
 ## What is left of the doorway once it has blown out: a ragged hole and rubble on the steps.
+## The doorway blown open: a dark hole with ragged edges where the boulders were (the temple v2's door,
+## x 90 to 134 and y 72 to 140 of its picture, which stands 3 pixels into the floor), and stones on the steps.
 func draw_blast(c: CanvasItem, x: float) -> void:
 	var hole = Color("#0d0a18")
-	rect(c, x + 84, GN - 100, 42, 84, hole)
-	rect(c, x + 80, GN - 88, 4, 60, hole)
-	rect(c, x + 126, GN - 92, 5, 66, hole)
-	rect(c, x + 90, GN - 106, 28, 6, hole)
-	rect(c, x + 76, GN - 60, 4, 22, hole)
-	rect(c, x + 131, GN - 70, 3, 30, hole)
-	for s in [[70, 14, 12, 8, "#6a6f8c"], [96, 10, 9, 7, "#8a8fa8"], [118, 15, 14, 9, "#4a4f6c"], [140, 8, 8, 6, "#6a6f8c"], [154, 12, 11, 8, "#8a8fa8"], [108, 20, 7, 5, "#7bd13c"]]:
+	var top = GN + 3 - 174 + 72
+	rect(c, x + 90, top, 44, 68, hole)
+	rect(c, x + 86, top + 10, 4, 48, hole)
+	rect(c, x + 134, top + 6, 5, 54, hole)
+	rect(c, x + 96, top - 6, 28, 6, hole)
+	rect(c, x + 82, top + 32, 4, 18, hole)
+	rect(c, x + 139, top + 24, 3, 24, hole)
+	for s in [[76, 14, 12, 8, "#6a6f8c"], [102, 10, 9, 7, "#8a8fa8"], [124, 15, 14, 9, "#4a4f6c"], [146, 8, 8, 6, "#6a6f8c"], [160, 12, 11, 8, "#8a8fa8"], [114, 20, 7, 5, "#7bd13c"]]:
 		rect(c, x + s[0] - 1, GN - s[1] - 1, s[2] + 2, s[3] + 2, INK)
 		rect(c, x + s[0], GN - s[1], s[2], s[3], Color(s[4]))
 
@@ -1055,11 +1058,8 @@ func _draw_back(c: CanvasItem) -> void:
 	var in_temple = temple != null and templeX > -temple.get_width()
 	if in_temple:
 		blit(c, temple, templeX, GN - temple.get_height() + 3)
-		if run.exploded:
-			draw_blast(c, templeX)
-		elif Art.tex.has("temple-rubble"):           # the jungle has closed the way out, until the blast
-			var rb: Texture2D = Art.tex["temple-rubble"]
-			blit(c, rb, templeX + 105 - (rb.get_width() >> 1), GN - 14 - rb.get_height())
+		if run.exploded:                             # (temple v2: its doorway is blocked in the picture itself,
+			draw_blast(c, templeX)                   # boulders held by vines: no rubble drawn over it)
 
 	_draw_zones(c)
 	_draw_plats(c)
