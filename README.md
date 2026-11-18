@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.35.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.36.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,23 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
 
+## 0.36.0
+
+- Onglet **Montures** en sous-onglets (la maquette C, choisie parmi les quatre de `mockups/montures.html`) : en
+  haut un onglet par animal (Gorille, Rhino, Libellule ; celui qui est ouvert en or, un animal désactivé
+  grisé), puis trois lignes : « Sur le chemin » (sa case coche ou décoche tout de suite ; la ligne, elle,
+  montre l'animal dans la fiche), Dompté, Aimant ; dessous, l'animal en grand, animé, sur une lueur chaude
+  (grisé s'il est désactivé, la libellule flotte : `MountStage`). La fiche de droite décrit la ligne
+  choisie, comme dans Équipements ; celle d'un animal ne dit plus que sa description (et « Désactivée »).
+- Fiches de la boutique : elles ne grandissent plus quand le texte est long (le bas du cadre sortait de
+  l'écran et les boutons n'étaient jamais au même endroit) ; l'aperçu se fait plus petit à la place, de
+  ce qui manque, de moitié au plus (`_card_size`).
+- Coop : « chacun son héros » confirmé (chaque téléphone fait courir le sien sur la même route).
+- Serveur : `deploy.ps1` demande le sous-domaine workers.dev d'un compte tout neuf (wrangler ne le demande
+  que s'il peut parler dans la fenêtre : le script le relance sans garder sa réponse, puis republie pour
+  lire l'adresse) ; les avertissements de wrangler (sur stderr) ne l'arrêtent plus (PowerShell 5.1 en
+  faisait une erreur fatale) ; essayé de bout en bout avec un faux wrangler.
+
 ## 0.35.0
 
 - Boutique : les fiches ne disent plus que la description (plus d'explication en dessous) ; avec deux
@@ -138,7 +155,7 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
 - Vol : montée 12 m/s au niveau 1, 13,5 et 15 aux niveaux 2 et 3 (`FLAP_LV`, `flap()`), chute ×1,2.
 - Araignées : jamais plus de 2 dans une colonne (`SPIDER_COLUMN`, `add_hover` refuse la troisième) ; rideau à
   deux araignées et deux places libres ; porte et tour de la libellule à deux.
-- Montures : Dompté et Aimant pour chacune (`gorillaTamed`, `rhinoMagnet`…, champ `mount`), listés sous elle
+- Montures : Dompté et Aimant pour chacune (`gorillaTamed`, `rhinoMagnet`…, champ `mount`), listés sous elle (dans son sous-onglet depuis 0.36)
   dans l'onglet (`_up_row`) ; l'ancien Dompté / Aimant de monture et le Gros sac à dos sont remboursés
   (`SaveData.REMOVED`).
 - Objets : Bottes de métal (`boots`, `quake`, plongeon `p.diving`), Fana de TNT (`tnt`, `Shot`, `blast`),

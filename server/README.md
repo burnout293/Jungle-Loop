@@ -34,9 +34,12 @@ messages de la course à deux).
    powershell -ExecutionPolicy Bypass -File deploy.ps1
    ```
 
-   Une page Cloudflare s'ouvre pour autoriser l'outil (accepter). Au premier déploiement, Cloudflare peut
-   demander de choisir un sous-domaine `workers.dev` (le nom qui sera dans l'adresse). Le script crée la
-   base, ses tables, publie le serveur et **écrit son adresse dans `reglages/reseau.txt`**.
+   Une page Cloudflare s'ouvre pour autoriser l'outil (accepter). Au premier déploiement, wrangler demande
+   de choisir ton sous-domaine `workers.dev` (le nom qui sera dans l'adresse), en anglais : « Would you like
+   to register a workers.dev subdomain now? » → `y` ; « What would you like your workers.dev subdomain to
+   be? » → un nom en minuscules ; « Ok to proceed? » → `y`. Le script crée la base, ses tables, publie le
+   serveur et **écrit son adresse dans `reglages/reseau.txt`**. Relancé après une erreur, il reprend où il
+   en était (la base déjà créée est gardée).
 3. Me dire « réexporte » : je réexporte le jeu et je le publie. Le bouton « Amis » apparaît alors à
    l'accueil.
 

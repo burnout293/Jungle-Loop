@@ -9,4 +9,4 @@ ORIGIN = "https://burnout293.github.io"   # only the game's page may call it fro
 [[d1_databases]]
 binding = "DB"
 database_name = "jungle-loop"
-database_id = "TO FILL IN"                 # given by: npx wrangler d1 create jungle-loop
+database_id = "828e6f52-a9be-46e4-a221-ce60e4f239ff"                 # given by: npx wrangler d1 create jungle-loop

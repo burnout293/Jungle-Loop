@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.35.0"
+const VERSION := "0.36.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -1209,7 +1209,7 @@ func _build_shop() -> void:
 	var view = TextureRect.new()
 	view.texture = demo_vp.get_texture()
 	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	view.stretch_mode = TextureRect.STRETCH_SCALE
+	view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED   # (lower when the text is long: _card_size)
 	view.custom_minimum_size = Vector2(a(210), a(210 * Demo.H / Demo.W))   # inside the stone frame
 	view.texture_filter = game_view.texture_filter
 	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1826,35 +1826,51 @@ func refresh_shop(just_bought: String = "") -> void:
 		ch.queue_free()
 	_card_size.call_deferred()
 	w["card-pips"].text = ""
-	if tab == "mount":                               # the animals, each on or off; under the one picked, its own two upgrades
+	if tab == "mount":                               # a tab per animal; under it, its rows (on the road or not, its
 		var open_k: String = picked_mount if picked_mount in Game.MOUNT_KINDS else str(SaveData.upgrade(picked_mount).get("mount", "gorilla"))
+		var kinds = _hbox(4)                         # two upgrades), then the animal itself, big and alive
+		kinds.mouse_filter = Control.MOUSE_FILTER_PASS
 		for k in Game.MOUNT_KINDS:
 			var mk: String = k
-			var off_k: bool = k in save["mountsOff"]
-			var on_mount = func() -> void:
+			var on_kind = func() -> void:
 				picked_mount = mk
 				refresh_shop()
-			var mrow = _row(_frame_of(icon("mount-" + k), 4), Game.MOUNTS[k]["name"], _note("Désactivée" if off_k else "Activée", DIM if off_k else RELIC), k == picked_mount, 0, on_mount)
-			if off_k:
-				mrow.modulate = Color(0.7, 0.7, 0.75)
-			list.add_child(mrow)
-			if k == open_k:
-				for u in SaveData.UPGRADES:
-					if u.get("mount", "") == k:
-						list.add_child(_up_row(u, picked_mount, just_bought))
-		if picked_mount in Game.MOUNT_KINDS:
-			var mk: String = picked_mount
-			var off_m: bool = mk in save["mountsOff"]
-			_card(Game.MOUNTS[mk]["name"], "Désactivée : elle ne t'attend plus sur le chemin." if off_m else "Rare. Elle attend sur le chemin : touche-la pour monter. Au premier coup, elle s'en va à ta place.", MOUNT_TEXT[mk])
-			_show_demo("m-" + mk, 1)
+			kinds.add_child(_kind_tab(Game.MOUNTS[k]["name"].to_upper(), k == open_k, k in save["mountsOff"], on_kind))
+		list.add_child(kinds)
+		var gap = Control.new()
+		gap.custom_minimum_size.y = a(3)
+		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		list.add_child(gap)
+		var off_o: bool = open_k in save["mountsOff"]
+		var tick = Button.new()                      # the box ticks or unticks at once; the row only picks
+		tick.focus_mode = Control.FOCUS_NONE
+		_kit_square(tick, "blank" if off_o else "check", 28)
+		var on_tick = func() -> void:
+			Audio.sfx("click")
+			_toggle_mount(open_k)
+		tick.pressed.connect(on_tick)
+		var on_road = func() -> void:
+			picked_mount = open_k
+			refresh_shop()
+		list.add_child(_row(null, "Sur le chemin", tick, picked_mount == open_k, 0, on_road))
+		for u in SaveData.UPGRADES:
+			if u.get("mount", "") == open_k:
+				list.add_child(_up_row(u, picked_mount, just_bought))
+		var stage = MountStage.new()
+		stage.tex = icon("mount-" + open_k)
+		stage.frames = int(Art.meta["mounts"][open_k]["frames"])
+		stage.flies = Game.MOUNTS[open_k].get("fly", false)
+		stage.custom_minimum_size = Vector2(a(236), a(134))
+		stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if off_o:
+			stage.modulate = Color(0.45, 0.45, 0.52)
+		list.add_child(stage)
+		if picked_mount == open_k:
+			_card(Game.MOUNTS[open_k]["name"], "Désactivée : elle ne t'attend plus sur le chemin." if off_o else "", MOUNT_TEXT[open_k])
+			_show_demo("m-" + open_k, 1)
 			var on_toggle = func() -> void:
-				if mk in save["mountsOff"]:
-					save["mountsOff"].erase(mk)
-				else:
-					save["mountsOff"].append(mk)
-				SaveData.store(save)
-				refresh_shop()
-			w["card-actions"].add_child(_button("Activer" if off_m else "Désactiver", "small on" if off_m else "small plain", on_toggle))
+				_toggle_mount(open_k)
+			w["card-actions"].add_child(_button("Activer" if off_o else "Désactiver", "small on" if off_o else "small plain", on_toggle))
 			return                                   # an animal's card
 	if tab == "skin":
 		var l = _label("Bientôt : la tenue, les cheveux, la cape et les baskets du héros, à changer séparément.", ts("s"), DIM, 0)
@@ -1915,10 +1931,90 @@ func refresh_shop(just_bought: String = "") -> void:
 		acts.add_child(b)
 	_fit_actions(acts, st, u)
 
-## The card back to its picture's size, once its new content is in (it never stretches).
+## An animal on the road or not (the Montures tab: its box, or its card's button).
+func _toggle_mount(mk: String) -> void:
+	if mk in save["mountsOff"]:
+		save["mountsOff"].erase(mk)
+	else:
+		save["mountsOff"].append(mk)
+	SaveData.store(save)
+	refresh_shop()
+
+## One of the Montures tab's three tabs (an animal): the one open in gold, an animal kept off the road greyed.
+## Narrow (76 art pixels): the text may run over the plaque's gilded ends.
+func _kind_tab(text: String, open: bool, off: bool, fn: Callable) -> Button:
+	var b = _button(text, "gold" if open else "", fn)
+	for st in ["normal", "hover", "pressed", "disabled"]:
+		var sb: StyleBox = b.get_theme_stylebox(st).duplicate()
+		sb.content_margin_left = a(3)
+		sb.content_margin_right = a(3)
+		b.add_theme_stylebox_override(st, sb)
+	b.custom_minimum_size = Vector2(a(76), a(38))
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.add_theme_font_size_override("font_size", ts("s"))
+	b.mouse_filter = Control.MOUSE_FILTER_PASS        # a finger dragging over it scrolls the list, as on the rows
+	if off:
+		b.modulate = Color(0.7, 0.7, 0.75)
+	return b
+
+## The animal of the Montures tab, big and alive under its rows, on a warm glow (greyed by its owner when it
+## stays off the road; the dragonfly floats). Drawn at the art's scale: 236 art pixels across.
+class MountStage extends Control:
+	var tex: Texture2D
+	var frames := 4
+	var flies := false
+	var t := 0.0
+	func _ready() -> void:
+		var k = custom_minimum_size.x / 236.0
+		var g = GradientTexture2D.new()
+		g.width = 128
+		g.height = 128
+		g.fill = GradientTexture2D.FILL_RADIAL
+		g.fill_from = Vector2(0.5, 0.5)
+		g.fill_to = Vector2(1.0, 0.5)
+		var gr = Gradient.new()
+		gr.offsets = PackedFloat32Array([0.0, 0.65])
+		gr.colors = PackedColorArray([Color(1, 0.88, 0.47, 0.25), Color(1, 0.88, 0.47, 0.0)])
+		g.gradient = gr
+		var glow = TextureRect.new()
+		glow.texture = g
+		glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		glow.stretch_mode = TextureRect.STRETCH_SCALE
+		glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		glow.show_behind_parent = true
+		glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		glow.position = Vector2(44 * k, 21 * k)
+		glow.size = Vector2(150 * k, 110 * k)
+		add_child(glow)
+	func _process(delta: float) -> void:
+		t += delta
+		queue_redraw()
+	func _draw() -> void:
+		if tex == null:
+			return
+		var k = size.x / 236.0
+		var fw = tex.get_width() / float(frames)
+		var h = float(tex.get_height())
+		var f = floori(t * 10) % frames
+		var bob = sin(t * 3.0) * 2.5 if flies else 0.0
+		var at = Vector2(roundf((size.x - fw * k) / 2), roundf((115 - h + bob) * k))
+		draw_texture_rect_region(tex, Rect2(at, Vector2(fw, h) * k), Rect2(fw * f, 0, fw, h))
+
+## The card back to its picture's size, once its new content is in (it never stretches): when the text is
+## too long for it, the preview gets lower (and narrower, the same shape) by what is missing, half at most.
 func _card_size() -> void:
-	if w.has("card-panel") and is_instance_valid(w["card-panel"]):
-		w["card-panel"].size = Vector2(a(253), a(282))
+	if not (w.has("card-panel") and is_instance_valid(w["card-panel"])):
+		return
+	var panel: Control = w["card-panel"]
+	var view: Control = w["demo-view"]
+	var full = Vector2(a(210), a(210 * Demo.H / Demo.W))
+	view.custom_minimum_size = full
+	var inside: Control = panel.get_child(0)
+	var frame_h = panel.get_combined_minimum_size().y - inside.get_combined_minimum_size().y
+	var over = inside.get_combined_minimum_size().y - (a(282) - frame_h)
+	if over > 0:
+		view.custom_minimum_size.y = maxf(full.y - over - a(1), full.y * 0.5)
+	panel.size = Vector2(a(253), a(282))
 
 ## The card's buttons must fit inside it (210 art pixels): with two of them, the next level's button says
 ## less and less (« Niv. 2 · 6000 », « Niv.2 6000 », « 6000 »), and « Désactiver » becomes « Couper ».
@@ -1992,15 +2088,6 @@ func _coin_button(text: String, fn: Callable) -> Button:
 	b.custom_minimum_size.x = a(110)
 	return b
 
-## The first picture of a sheet of `frames` (a mount).
-func _frame_of(tex: Texture2D, frames: int) -> Texture2D:
-	if tex == null:
-		return null
-	var at = AtlasTexture.new()
-	at.atlas = tex
-	at.region = Rect2(0, 0, tex.get_width() / float(frames), tex.get_height())
-	return at
-
 ## A row of the list: the picture, the name, a word or the price on the right. `gate` > 0: not unlocked
 ## yet, a blue ribbon across it says at which level.
 func _row(tex: Texture2D, name: String, right: Control, sel: bool, gate: int, fn: Callable) -> Button:
@@ -2014,16 +2101,17 @@ func _row(tex: Texture2D, name: String, right: Control, sel: bool, gate: int, fn
 	h.offset_left = a(8)
 	h.offset_right = -a(9)
 	h.alignment = BoxContainer.ALIGNMENT_BEGIN
-	var r = TextureRect.new()
-	r.texture = tex
-	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	r.custom_minimum_size = Vector2(a(26), a(24))
-	r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if gate > 0:
-		r.modulate = Color(0.45, 0.45, 0.5)
-	h.add_child(r)
+	if tex != null:                                 # (« Sur le chemin » has no picture)
+		var r = TextureRect.new()
+		r.texture = tex
+		r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		r.custom_minimum_size = Vector2(a(26), a(24))
+		r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if gate > 0:
+			r.modulate = Color(0.45, 0.45, 0.5)
+		h.add_child(r)
 	var l = _label(name, ts("s"), (GOLD if sel else INK) if gate == 0 else DIM, 0)
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER

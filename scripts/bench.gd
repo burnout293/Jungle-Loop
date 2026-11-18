@@ -218,7 +218,8 @@ func _tour() -> void:
 		[32.7, "go", "shop"], [32.75, "tab", "up"], [32.8, "own", "tnt"], [32.85, "pick", "tnt"], [34.0, "shot", "27-shop-tnt-owned"],
 		[34.1, "own", "dash"], [34.15, "pick", "dash"], [35.2, "shot", "28-shop-dash-owned"],
 		[35.3, "tab", "power"], [35.35, "own", "flight"], [35.4, "pick", "flight"], [36.5, "shot", "29-shop-flight-owned"],
-		[36.7, "quit", ""],
+		[36.6, "tab", "mount"], [36.65, "mpick", "dragonfly"], [37.8, "shot", "30-shop-dragonfly"], [37.85, "mtick", ""], [38.2, "mtick", ""], [38.25, "mpick", "rhino"], [39.3, "shot", "31-shop-rhino"],
+		[39.4, "quit", ""],
 	]
 	while tour_i < steps.size() and t >= steps[tour_i][0]:
 		var st = steps[tour_i]
@@ -241,6 +242,11 @@ func _tour() -> void:
 			"mpick":                                    # the Montures tab: an animal or a mount upgrade
 				main.picked_mount = arg
 				main.refresh_shop()
+			"mtick":                                    # the box of « Sur le chemin », pressed as a finger would
+				var boxes = main.w["shop-list"].find_children("*", "Button", true, false).filter(func(b): return not b.is_queued_for_deletion() and b.custom_minimum_size == Vector2(main.a(28), main.a(28)))
+				if boxes.size() == 1:
+					boxes[0].pressed.emit()
+				print("mtick: boxes %d, off %s" % [boxes.size(), main.save["mountsOff"]])
 			"moff":
 				if arg in main.save["mountsOff"]:
 					main.save["mountsOff"].erase(arg)
