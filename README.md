@@ -119,7 +119,9 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
 - Serveur : `deploy.ps1` demande le sous-domaine workers.dev d'un compte tout neuf (wrangler ne le demande
   que s'il peut parler dans la fenêtre : le script le relance sans garder sa réponse, puis republie pour
   lire l'adresse) ; les avertissements de wrangler (sur stderr) ne l'arrêtent plus (PowerShell 5.1 en
-  faisait une erreur fatale) ; essayé de bout en bout avec un faux wrangler.
+  faisait une erreur fatale) ; il réessaie (5 fois, 20 s) quand Cloudflare ne « voit » pas encore un serveur
+  tout juste reçu (« This Worker does not exist », 10007), refait toujours les tables (sans rien effacer) et
+  vérifie à la fin que le serveur répond et que sa base a ses tables ; essayé de bout en bout avec un faux wrangler.
 
 ## 0.35.0
 
