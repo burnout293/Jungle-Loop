@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.35.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 18/11/2026, **version Godot 0.36.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -139,8 +139,8 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Suivantes | 1300 à 1800 m après la précédente | `spawnPattern` |
 | Après en avoir perdu une | pas avant 900 à 1200 m | `dismount` |
 | Ami de la nature | ces distances divisées par 1,25 / 1,5 / 1,75 | `friend` |
-| Laquelle | 1 chance sur 3 chacune, parmi celles qui sont activées (boutique, onglet Montures : Activer / Désactiver) ; toutes désactivées : plus aucune monture | `run.mounts`, `save.mountsOff` |
-| Améliorations | **chaque monture a les siennes** (0.34), achetées et coupées à part, listées sous elle dans l'onglet Montures : Gorille dompté, Aimant du gorille, Rhino dompté, Aimant du rhino, Libellule domptée, Aimant de la libellule | `<monture>Tamed`, `<monture>Magnet` |
+| Laquelle | 1 chance sur 3 chacune, parmi celles qui sont activées (boutique, onglet Montures, sous-onglet de l'animal : case « Sur le chemin », ou Activer / Désactiver dans sa fiche) ; toutes désactivées : plus aucune monture | `run.mounts`, `save.mountsOff` |
+| Améliorations | **chaque monture a les siennes** (0.34), achetées et coupées à part, dans son sous-onglet de l'onglet Montures : Gorille dompté, Aimant du gorille, Rhino dompté, Aimant du rhino, Libellule domptée, Aimant de la libellule | `<monture>Tamed`, `<monture>Magnet` |
 | Dompté | niv. 1 / 2 : attrapée à 2,9 / 4 m d'elle au lieu de 1,75 m ; elle avance 30 / 60 % moins vite devant toi ; gorille atteint 1 / 2 m plus bas, rhino attrapé même en sautant (1,75 / 3,5 m au-dessus de lui), libellule à 1 / 2 m de plus de sa hauteur | `TAME_*` |
 | Aimant (de la monture) | sur cette monture, les pièces viennent à toi de 4,25 / 6 m (niv. 1 / 2), ou plus si ton Aimant fait mieux | `MOUNT_MAGNET` |
 | Comment elles attendent | gorille tout en haut des lianes, pieds à 10 m du sol, avance à 45 % de ta vitesse : il faut le Vol (ou Double saut + Ressort) ; rhino immobile qui broute : il faut le toucher au sol, un saut le fait rater ; libellule qui zigzague entre 1,75 et 5,75 m (un aller en 1,6 s) et avance à 50 % de ta vitesse | `MOUNTS.ahead`, `PERCH`, `ZIG` |
