@@ -222,6 +222,10 @@ func _recipes() -> Dictionary:
 		# a crate: the crack, the planks giving way, the thud
 		"crate": [T(640, 0.04, "square", 0.14, 0, 210), N(0.17, 0.55, 1300, 0.01), N(0.11, 0.3, 3400, 0.04), T(170, 0.17, "sine", 0.38, 0.01, 52)],
 		"dash": [T(200, 0.35, "sawtooth", 0.18, 0, 1200)],
+		"throw": [T(500, 0.12, "triangle", 0.12, 0, 900), N(0.3, 0.12, 4200, 0.05)],              # a stick thrown, its fuse hissing
+		"tnt": [T(120, 0.8, "sawtooth", 0.42, 0, 26), N(0.7, 0.6, 700), N(0.4, 0.35, 2600, 0.02)],   # the blast
+		"dive": [T(900, 0.22, "sawtooth", 0.1, 0, 220)],                                          # the boots plunging
+		"quake": [T(70, 0.5, "sine", 0.5, 0, 30), N(0.45, 0.5, 380), T(140, 0.2, "square", 0.15, 0, 60)],   # metal on stone
 		"slow": [T(900, 0.6, "sine", 0.2, 0, 150)],
 		"hit": [T(240, 0.5, "sawtooth", 0.3, 0, 40)],
 		"hurt": [T(300, 0.22, "square", 0.2, 0, 90)],

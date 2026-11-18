@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.33.0"
+const VERSION := "0.34.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -21,6 +21,13 @@ const LEAF := Color("#6cc22e")
 const DEATHS := ["La boucle se referme…", "Aïe. On rembobine.", "Retour au temple !", "Presque. Enfin… non.",
 	"La jungle : 1 — Toi : 0", "Ça piquait, hein ?", "Encore ! Encore !", "Le temps te rattrape."]
 const TABS := {"up": "Équipements", "power": "Pouvoirs", "mount": "Montures", "skin": "Skins"}
+# The home screen's three buttons: what each one is about, in a panel while hovered or held.
+const MENU_TIPS := {
+	"endless": "Essayez autant que vous souhaitez de vous échapper de cette forêt, mais il y a peu de chances que vous vous en sortiez vivant.",
+	"story": "Peut-être qu'il y a un scénario dans ce jeu… ou pas. À vous de voir.",
+	"shop": "Parce que tout aventurier a le droit à sa panoplie de gadgets.",
+}
+const ACTS := ["tnt", "boots", "slow", "dash"]   # the HUD's buttons, right to left as shown
 const MOUNT_TEXT := {
 	"gorilla": "Il saute plus haut, et son second saut l'emmène jusqu'aux lianes du haut de l'écran. Appuie pour en redescendre.",
 	"rhino": "Il saute peu mais court de plus en plus vite, pulvérise les caisses et ramasse large. Rien ne le blesse, et il repart tout seul au bout de 8 secondes.",
@@ -77,11 +84,16 @@ var rebuild_due := false               # the window changed size: the pixel type
 var rebuild_t := 0.0
 var fps_param := false                 # "?fps" in the address (web): the frame rate shown, as in the web version                   # (once it has stopped changing for a moment)
 var perf := {"n": 0, "game": 0, "draw": 0, "text": ""}   # what a frame costs, averaged: the FPS corner shows it
+var endless_biome := 0                 # where the next Run illimitée (Jouer) starts: the home screen shows it
+var held: Button = null                # a home screen button held down (a long press shows its panel)
+var held_t := 0.0
+var tip_held := false                  # its panel came from a long press: that press launches nothing
 
 # ---------- start ----------
 
 func _ready() -> void:
-	Progress.load_config(FileAccess.get_file_as_string("res://assets/progression.txt"))   # prices, levels, objectives
+	Progress.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))   # prices, levels, objectives
+	Tune.load_file()                              # reglages/equilibrage.txt: the game's numbers (before Debug takes its origin)
 	save = SaveData.load_save()
 	Net.set_from_args()
 	net = Net.new()
@@ -105,6 +117,7 @@ func _ready() -> void:
 	get_window().size_changed.connect(fit)
 	fit()
 	still = Game.new_run({})
+	_roll_biome()
 	var layer = CanvasLayer.new()
 	add_child(layer)
 	ui = Control.new()
@@ -133,7 +146,7 @@ func _load() -> void:
 	var t_art = Time.get_ticks_msec() - t0
 	Art.set_danger_rim(save["dangerRim"])
 	render.shift = save["alertShift"]
-	Game.set_shapes(FileAccess.get_file_as_string("res://assets/patterns.txt"))
+	Game.set_shapes(FileAccess.get_file_as_string("res://reglages/patterns.txt"))
 	for n in ["ui-btn-slate-38", "ui-btn-slate-30", "ui-btn-green-50", "ui-btn-gold-38", "ui-btn-gold-30", "ui-gear", "ui-title", "coin-icon", "heart"]:
 		icons[n] = _tex(n)
 	_styles()
@@ -313,7 +326,7 @@ func _flat(bg: Color, border: Color = LINE, bw: float = 1.5) -> StyleBoxFlat:
 # stretched out of shape or cut. Buttons and bars keep their ends whole and stretch only a middle made of
 # identical columns; fixed panels are their box's exact size; the panels that follow their text repeat
 # identical rows. Each picture is enlarged to the frame's art pixel (U), as the web version shows it.
-const KIT_CAP := {30: 27, 38: 33, 50: 43}                    # buttons: the width of their ends
+const KIT_CAP := {30: 27, 38: 33, 50: 43, 58: 43}                  # buttons: the width of their ends
 const KIT_FRAME := [16, 15, 21, 13]                          # panels: the stone frame left, right, top, bottom
 const KIT_BAR := {8: [12, 13, 2, 6, 8, 9], 12: [15, 17, 4, 8, 12, 10]}   # ends l/r, trough rows, fill insets l/r
 
@@ -408,17 +421,23 @@ func _down(sb: StyleBox) -> StyleBox:
 func _styles() -> void:
 	# The kit's buttons: four states of one plaque (slate; its teal hover state stands for what is chosen,
 	# "gold" / "on": the kit has no gold or green). The text lies between the ends, as on the web.
-	for spec in [["", 38], ["big", 50], ["small", 30], ["gold", 38], ["small gold", 30]]:
+	# "play": Jouer, a gold frame and taller; "go" / "stop": a green or red-orange plate (Reprendre,
+	# Abandonner); "dark": a slate one in the shade (Histoire). Made by tools/make_ui_colours.py.
+	for spec in [["", 38, ""], ["big", 50, ""], ["small", 30, ""], ["gold", 38, ""], ["small gold", 30, ""],
+			["play", 58, "-gold"], ["go", 50, "-green"], ["stop", 38, "-red"], ["dark", 50, ""]]:
 		var h: int = spec[1]
 		var cap: int = KIT_CAP[h]
 		var chosen: bool = (spec[0] as String).contains("gold")
 		var pad = [cap * 0.8, cap * 0.8, 0, 0]
 		var slice = [cap, cap, h / 2.0, h / 2.0]
+		var c: String = spec[2]
+		var shade = Color(0.72, 0.72, 0.8) if spec[0] == "dark" else Color.WHITE
+		var lit = Color(0.86, 0.86, 0.92) if spec[0] == "dark" else (Color(1.1, 1.1, 1.1) if chosen else Color.WHITE)
 		styles[spec[0]] = {
-			"normal": _kit_box("btn-%s-%d" % ["hover" if chosen else "normal", h], slice, pad),
-			"hover": _kit_box("btn-hover-%d" % h, slice, pad, Color(1.1, 1.1, 1.1) if chosen else Color.WHITE),
-			"pressed": _down(_kit_box("btn-pressed-%d" % h, slice, pad)),
-			"disabled": _kit_box("btn-disabled-%d" % h, slice, pad),
+			"normal": _kit_box("btn-%s-%d%s" % ["hover" if chosen else "normal", h, c], slice, pad, shade),
+			"hover": _kit_box("btn-hover-%d%s" % [h, c], slice, pad, lit),
+			"pressed": _down(_kit_box("btn-pressed-%d%s" % [h, c], slice, pad, shade)),
+			"disabled": _kit_box("btn-disabled-%d%s" % [h, c], slice, pad),
 			"h": h,
 			"cap": cap,
 		}
@@ -481,6 +500,9 @@ func _style_button(b: Button, cls: String) -> void:
 	var key = (size + " gold").strip_edges() if gold and size != "big" else size
 	if not styles.has(key):
 		key = size
+	for special in ["play", "go", "stop", "dark"]:
+		if special in parts:
+			key = special
 	for st in ["normal", "hover", "pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, styles[key][st])
 	b.custom_minimum_size = Vector2(a(30 + 2 * styles[key]["cap"]), a(styles[key]["h"]))
@@ -491,14 +513,14 @@ func _style_button(b: Button, cls: String) -> void:
 		colour = DIM
 	elif "danger" in parts:
 		colour = Color("#ff8ea6")
-	elif size == "big":
+	elif size == "big" or key in ["play", "go", "stop", "dark"]:
 		colour = Color.WHITE
 	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]:
 		b.add_theme_color_override(k, colour)
 	b.add_theme_color_override("font_disabled_color", colour.darkened(0.4))
 	b.add_theme_color_override("font_outline_color", Color(10 / 255.0, 14 / 255.0, 34 / 255.0, 0.85))
 	b.add_theme_constant_override("outline_size", roundi(a(1.5)))
-	b.add_theme_font_size_override("font_size", ts("l") if size == "big" else (ts("s") if size == "small" else ts("m")))
+	b.add_theme_font_size_override("font_size", ts("xl") if key == "play" else (ts("l") if size == "big" or key == "go" or key == "dark" else (ts("s") if size == "small" else ts("m"))))
 
 func _icon_rect(tex: Texture2D, h: float) -> TextureRect:
 	var r = TextureRect.new()
@@ -734,8 +756,8 @@ func _fill_hud() -> void:
 	for i in run.max_hearts:
 		hearts.add_child(_icon_rect(icon("heart"), 20))
 	hearts.visible = run.max_hearts > 1          # a single life needs no counter
-	w["btn-dash"].visible = run.lvl("dash") > 0
-	w["btn-slow"].visible = run.lvl("slow") > 0
+	for k in ACTS:
+		w["btn-" + k].visible = run.lvl(k) > 0
 
 func _build_hud() -> void:
 	var s = _screen("hud", false)
@@ -787,7 +809,8 @@ func _build_hud() -> void:
 	w["hint"].set_meta("still", true)
 	s.add_child(w["hint"])
 	var acts = _hbox(10)
-	for k in ["slow", "dash"]:
+	acts.alignment = BoxContainer.ALIGNMENT_END   # the ones not owned take no room
+	for k in ACTS:
 		var b = Button.new()
 		b.focus_mode = Control.FOCUS_NONE
 		_style_button(b, "square")
@@ -801,15 +824,12 @@ func _build_hud() -> void:
 		cool.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(cool)
 		var on_down = func() -> void:
-			if k == "dash":
-				input.dash = true
-			else:
-				input.slow = true
+			_act(k)
 		b.button_down.connect(on_down)
 		acts.add_child(b)
 		w["btn-" + k] = b
 		w["cd-" + k] = cool
-	_place(acts, 569 - 12 - 114, 320 - 12 - 52, 114, 52)
+	_place(acts, 569 - 12 - 238, 320 - 12 - 52, 238, 52)
 	s.add_child(acts)
 
 ## Paper falling over the screens: a buy (14 pieces), a record (60).
@@ -904,10 +924,13 @@ func _build_menu() -> void:
 	status.add_child(w["menu-coins"])
 	s.add_child(status)
 	var buttons = _vbox(M)
-	_place(buttons, M, 106, 236, 160)
-	for spec in [["Histoire", "big", "story"], ["Run illimitée", "big", "endless"], ["Améliorations", "", ""]]:
+	_place(buttons, M, 98, 236, 170)
+	for spec in [["Jouer", "play", "endless"], ["Histoire", "dark", "story"], ["Améliorations", "", ""]]:
 		var mode: String = spec[2]
 		var on_menu = func() -> void:
+			if tip_held:
+				tip_held = false                             # (it was held to read its panel)
+				return
 			if mode != "":
 				save["mode"] = mode                  # Histoire or Run illimitée: « Rejouer » keeps it
 				SaveData.store(save)
@@ -917,8 +940,23 @@ func _build_menu() -> void:
 				go("shop")
 		var b = _button(spec[0], spec[1], on_menu)
 		b.size_flags_horizontal = Control.SIZE_FILL
+		_menu_tip_on(b, mode if mode != "" else "shop")
 		buttons.add_child(b)
 	s.add_child(buttons)
+	w["menu-tip"] = PanelContainer.new()            # what a button is about: hovered, or held down
+	w["menu-tip"].add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	w["menu-tip"].mouse_filter = Control.MOUSE_FILTER_IGNORE
+	w["menu-tip"].visible = false
+	w["menu-tip"].set_meta("still", true)
+	w["menu-tip"].z_index = 6
+	var tip_l = _label("", ts("s"), INK, 0)
+	tip_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tip_l.custom_minimum_size.x = a(260)
+	w["menu-tip"].add_child(tip_l)
+	w["menu-tip-text"] = tip_l
+	_place(w["menu-tip"], M + 236 + 6, 98, 300, 60)
+	s.add_child(w["menu-tip"])
 	var quests = _vbox(4)
 	_place(quests, 569 - M - 218, 80, 218, 150)
 	quests.add_child(_label("DÉFIS", ts("s"), INK, 1.5))
@@ -941,6 +979,50 @@ func _build_menu() -> void:
 	version.modulate.a = 0.75
 	_place(version, 569 - M - 120, 320 - 5 - 9, 120, 10)
 	s.add_child(version)
+
+## The panel of a home screen button: shown while the pointer is over it, or once it has been held
+## down a moment (a finger): then letting go launches nothing.
+func _menu_tip_on(b: Button, which: String) -> void:
+	b.set_meta("tip", MENU_TIPS.get(which, ""))
+	b.mouse_entered.connect(func() -> void: _menu_tip(b.get_meta("tip"), b))
+	b.mouse_exited.connect(func() -> void: _menu_tip(""))
+	var on_down = func() -> void:
+		held = b
+		held_t = time
+		tip_held = false
+	b.button_down.connect(on_down)
+	var on_up = func() -> void:
+		if held == b:
+			held = null
+	b.button_up.connect(on_up)
+
+func _menu_tip(text: String, b: Button = null) -> void:
+	if not w.has("menu-tip") or not is_instance_valid(w["menu-tip"]):
+		return
+	var tip: PanelContainer = w["menu-tip"]
+	tip.visible = text != "" and state == "menu"
+	if not tip.visible:
+		return
+	w["menu-tip-text"].text = text
+	tip.reset_size()
+	if b != null:                                    # beside the button, its top level with the button's
+		tip.position = Vector2(a(M + 236 + 6), b.get_global_rect().position.y)
+
+## Where the next Run illimitée starts: any of the four sceneries. The home screen shows it already,
+## the temple standing in it.
+func _roll_biome() -> void:
+	endless_biome = randi() % Game.BIOME_COUNT
+	if still != null:
+		still.biome = endless_biome
+		still.prev_biome = endless_biome
+
+## A HUD button pressed: tnt, boots, slow or dash.
+func _act(k: String) -> void:
+	match k:
+		"dash": input.dash = true
+		"slow": input.slow = true
+		"boots": input.stomp = true
+		"tnt": input.tnt = true
 
 func _coins_pill() -> PanelContainer:
 	var p = _box()
@@ -1313,7 +1395,7 @@ func _build_score(name: String) -> void:
 	if name == "over":
 		_actions(s, [_button("Menu", "", func() -> void: go("menu")), _button("Rejouer", "big", func() -> void: go("play"))])
 	else:
-		_actions(s, [_button("Abandonner", "", func() -> void: go("menu")), _button("Réglages", "", func() -> void: go("settings")), _button("Reprendre", "big", resume)], 150)
+		_actions(s, [_button("Abandonner", "stop", func() -> void: go("menu")), _button("Réglages", "", func() -> void: go("settings")), _button("Reprendre", "go", resume)], 150)
 
 # ---------- moving between screens ----------
 
@@ -1457,7 +1539,7 @@ func _slot_info(id: String) -> void:
 	var col = _vbox(2)
 	var name_l = _label(u["name"] + ("  " + "●".repeat(lvl) + "○".repeat(u["costs"].size() - lvl) if u["costs"].size() > 1 else ""), ts("m"), GOLD, 0)
 	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var d = _label(u["desc"], ts("s"), INK, 0)
+	var d = _label(u["desc"] + ("\n" + u["how"] if u.has("how") else ""), ts("s"), INK, 0)
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	d.custom_minimum_size.x = a(280)
@@ -1712,7 +1794,8 @@ func refresh_shop(just_bought: String = "") -> void:
 	for ch in w["card-actions"].get_children():
 		ch.queue_free()
 	w["card-pips"].text = ""
-	if tab == "mount":                               # the animals, each on or off, then what makes them better
+	if tab == "mount":                               # the animals, each on or off; under the one picked, its own two upgrades
+		var open_k: String = picked_mount if picked_mount in Game.MOUNT_KINDS else str(SaveData.upgrade(picked_mount).get("mount", "gorilla"))
 		for k in Game.MOUNT_KINDS:
 			var mk: String = k
 			var off_k: bool = k in save["mountsOff"]
@@ -1723,6 +1806,10 @@ func refresh_shop(just_bought: String = "") -> void:
 			if off_k:
 				mrow.modulate = Color(0.7, 0.7, 0.75)
 			list.add_child(mrow)
+			if k == open_k:
+				for u in SaveData.UPGRADES:
+					if u.get("mount", "") == k:
+						list.add_child(_up_row(u, picked_mount, just_bought))
 		if picked_mount in Game.MOUNT_KINDS:
 			var mk: String = picked_mount
 			var off_m: bool = mk in save["mountsOff"]
@@ -1736,6 +1823,7 @@ func refresh_shop(just_bought: String = "") -> void:
 				SaveData.store(save)
 				refresh_shop()
 			w["card-actions"].add_child(_button("Activer" if off_m else "Désactiver", "small on" if off_m else "small plain", on_toggle))
+			return                                   # an animal's card
 	if tab == "skin":
 		var l = _label("Bientôt : la tenue, les cheveux, la cape et les baskets du héros, à changer séparément.", ts("s"), DIM, 0)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1749,36 +1837,9 @@ func refresh_shop(just_bought: String = "") -> void:
 	if tab != "mount" and not shown.any(func(u): return u["id"] == picked):
 		picked = shown[0]["id"]
 	var sel_id: String = picked_mount if tab == "mount" else picked
-	for u in shown:
-		var st = _state_of(u)
-		var right: Control
-		var gated = not SaveData.unlocked(save, u)
-		if gated:
-			right = _note("", DIM)                   # the blue ribbon says it
-		elif st["lvl"] == 0:
-			right = _price(st["cost"], GOLD if not st["locked"] else DIM)
-		elif u.get("power", false):
-			right = _note("Coupé" if st["off"] else "Actif", DIM if st["off"] else RELIC)
-		elif st["on"]:
-			right = _note("Équipé", RELIC)
-		else:
-			right = _note(_pips(u, st["lvl"]) if u["costs"].size() > 1 else "Possédé", DIM)
-		var id: String = u["id"]
-		var on_pick = func() -> void:
-			if tab == "mount":
-				picked_mount = id
-			else:
-				picked = id
-			refresh_shop()
-		var row = _row(icon("ico-" + u["icon"]), u["name"], right, id == sel_id, u["unlock"] if gated else 0, on_pick)
-		if st["locked"] and not gated:
-			row.modulate = Color(0.7, 0.7, 0.75)
-		if id == just_bought:
-			row.modulate = GOLD
-			create_tween().tween_property(row, "modulate", Color.WHITE, 0.5)
-		list.add_child(row)
-	if tab == "mount" and picked_mount in Game.MOUNT_KINDS:
-		return                                       # an animal's card, made above
+	if tab != "mount":                               # (the animals' upgrades are listed under them, above)
+		for u in shown:
+			list.add_child(_up_row(u, sel_id, just_bought))
 	var u = SaveData.upgrade(sel_id)
 	var st = _state_of(u)
 	var status = ""
@@ -1794,7 +1855,9 @@ func refresh_shop(just_bought: String = "") -> void:
 		status = "Possédé. Les 3 emplacements sont pris." if full else "Possédé."
 	else:
 		status = "Bouton en jeu." if u["kind"] == "actif" else "Toujours actif une fois équipé."
-	_card(u["name"], status, u["desc"])
+	if u.has("how") and status in ["Bouton en jeu.", "Toujours actif une fois équipé."]:
+		status = ""                                   # what it does says it already: room for its text
+	_card(u["name"], status, u["desc"] + ("\n" + u["how"] if u.has("how") else ""))
 	if u["costs"].size() > 1:
 		w["card-pips"].text = _pips(u, st["lvl"])
 	_show_demo(u["id"], st["lvl"])
@@ -1820,6 +1883,36 @@ func refresh_shop(just_bought: String = "") -> void:
 		var b = _button("Retirer" if st["on"] else "Équiper", "small plain" if st["on"] else "small on", on_equip)
 		b.disabled = not st["on"] and full
 		acts.add_child(b)
+
+## A row of the shop's list for an upgrade: its picture, its name, its price or its state.
+func _up_row(u: Dictionary, sel_id: String, just_bought: String) -> Button:
+	var st = _state_of(u)
+	var right: Control
+	var gated = not SaveData.unlocked(save, u)
+	if gated:
+		right = _note("", DIM)                       # the blue ribbon says it
+	elif st["lvl"] == 0:
+		right = _price(st["cost"], GOLD if not st["locked"] else DIM)
+	elif u.get("power", false):
+		right = _note("Coupé" if st["off"] else "Actif", DIM if st["off"] else RELIC)
+	elif st["on"]:
+		right = _note("Équipé", RELIC)
+	else:
+		right = _note(_pips(u, st["lvl"]) if u["costs"].size() > 1 else "Possédé", DIM)
+	var id: String = u["id"]
+	var on_pick = func() -> void:
+		if tab == "mount":
+			picked_mount = id
+		else:
+			picked = id
+		refresh_shop()
+	var row = _row(icon("ico-" + u["icon"]), u.get("short", u["name"]), right, id == sel_id, u["unlock"] if gated else 0, on_pick)
+	if st["locked"] and not gated:
+		row.modulate = Color(0.7, 0.7, 0.75)
+	if id == just_bought:
+		row.modulate = GOLD
+		create_tween().tween_property(row, "modulate", Color.WHITE, 0.5)
+	return row
 
 func _pips(u: Dictionary, lvl: int) -> String:
 	return "●".repeat(lvl) + "○".repeat(u["costs"].size() - lvl)
@@ -1952,6 +2045,7 @@ func bank() -> void:
 	if run == null or run.banked:
 		return
 	run.banked = true
+	_roll_biome()                                    # the next Run illimitée, somewhere else maybe
 	save["coins"] += run.gold
 	save["loops"] += 1
 	if not run.debug and Net.enabled():              # the friends' board (once the server is up)
@@ -1973,6 +2067,7 @@ func go(name: String) -> void:
 			Audio.duck(true)
 			return
 	Audio.duck(false)
+	_menu_tip("")
 	if name == "settings" and state == "pause":
 		in_run = true
 	if name == "play":
@@ -1986,6 +2081,9 @@ func go(name: String) -> void:
 		run = Game.new_run(SaveData.loadout(save), save["mode"])   # only the three equipped upgrades come along
 		run.mounts = Game.MOUNT_KINDS.filter(func(k): return not k in save["mountsOff"])   # Montures: on / off
 		run.view_w = render.view_w * Game.PIXEL
+		if run.mode == "endless":                   # Jouer: in the scenery the home screen showed
+			run.biome = endless_biome
+			run.prev_biome = endless_biome
 		levels_due.clear()
 		over_info = {}
 		Game.launch(run)                             # rumble, then the doorway blows out
@@ -2134,7 +2232,7 @@ func resume() -> void:
 		Audio.duck(false)
 
 ## Feeds the objectives and the level with what just happened. Experience: a point every
-## Progress.cfg.mpp metres (assets/progression.txt), plus what each completed objective pays. The levels
+## Progress.cfg.mpp metres (reglages/progression.txt), plus what each completed objective pays. The levels
 ## gained wait for the end of the run (levels_due), where a panel shows them with what they bring.
 func progress(stats: Dictionary) -> void:
 	var done = Progress.feed(save, stats)
@@ -2290,8 +2388,8 @@ func hud() -> void:
 			create_tween().tween_property(h, "modulate", Color(0.35, 0.35, 0.35, 0.5) if lost else Color.WHITE, 0.2)
 			create_tween().tween_property(h, "scale", Vector2(0.8, 0.8) if lost else Vector2.ONE, 0.2)
 			i += 1
-	for k in ["dash", "slow"]:
-		var act = run.dash if k == "dash" else run.slow
+	for k in ACTS:
+		var act = {"dash": run.dash, "slow": run.slow, "boots": run.boots, "tnt": run.tnt}[k]
 		var cool: Cooldown = w["cd-" + k]
 		var v: float = act.cd / act.full if act.full > 0 else 0.0
 		if absf(cool.k - v) > 0.005 or (v == 0 and cool.k != 0):
@@ -2308,7 +2406,7 @@ func press() -> void:
 
 ## Which of the HUD's buttons is under a spot, if any.
 func _hud_button_at(pos: Vector2) -> String:
-	for k in ["btn-pause", "btn-dash", "btn-slow"]:
+	for k in ["btn-pause", "btn-dash", "btn-slow", "btn-boots", "btn-tnt"]:
 		var b: Control = w.get(k)
 		if b != null and is_instance_valid(b) and b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
 			return k
@@ -2323,13 +2421,20 @@ func _input(event: InputEvent) -> void:
 			"btn-pause":
 				pause()
 				get_viewport().set_input_as_handled()
-			"btn-dash":
-				input.dash = true
-				get_viewport().set_input_as_handled()
-			"btn-slow":
-				input.slow = true
+
+			"btn-slow", "btn-boots", "btn-tnt", "btn-dash":
+				_act(_hud_button_at(event.position).substr(4))
 				get_viewport().set_input_as_handled()
 	var down = (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION)
+	if down and state == "menu" and w.has("menu-tip") and w["menu-tip"].visible:
+		var on_button = false                          # a touch elsewhere puts the panel away
+		for b in w["menu-tip"].get_parent().get_children():
+			if b is VBoxContainer:
+				for bb in b.get_children():
+					if bb is Button and bb.get_global_rect().has_point(event.position):
+						on_button = true
+		if not on_button:
+			_menu_tip("")
 	if down and state == "menu" and w.has("menu-info") and w["menu-info"].visible:
 		var on_slot = false
 		for sl in w["menu-loadout"].get_children():
@@ -2388,6 +2493,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			input.dash = true
 		elif label == KEY_A or label == KEY_Q:
 			input.slow = true
+		elif k.keycode == KEY_DOWN or label == KEY_S:
+			input.stomp = true
+		elif label == KEY_F or label == KEY_T:
+			input.tnt = true
 		elif k.keycode == KEY_ESCAPE or label == KEY_P:
 			if state == "play":
 				pause()
@@ -2471,6 +2580,11 @@ func _process(delta: float) -> void:
 	input.pressed = false
 	input.dash = false
 	input.slow = false
+	input.stomp = false
+	input.tnt = false
+	if held != null and is_instance_valid(held) and state == "menu" and not tip_held and time - held_t > 0.45:
+		tip_held = true                             # held long enough: its panel, and no launch on release
+		_menu_tip(held.get_meta("tip", ""), held)
 	if banner_timer > 0:
 		banner_timer -= dt
 		if banner_timer <= 0:

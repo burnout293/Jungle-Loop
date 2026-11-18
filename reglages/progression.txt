@@ -1,0 +1,56 @@
+# Jungle Loop — la progression : niveaux, améliorations, défis
+#
+# Ce fichier règle ce que coûtent les améliorations, à quel niveau elles se débloquent, et ce que
+# rapportent les niveaux et les défis. Change les nombres, puis réexporte le jeu (le jeu le lit à
+# chaque lancement). Ce que fait chaque objet (portée, durée, recharge…) : equilibrage.txt, à côté. Une ligne par élément, colonnes séparées par | ; tout ce qui suit # est ignoré.
+# Une ligne absente ou mal écrite garde la valeur d'origine du jeu.
+
+[niveaux]
+metres par point  | 20      # un point d'expérience tous les 20 m courus
+points par niveau | 1000    # le même nombre de points pour chaque niveau
+pieces par niveau | 20      # un niveau rapporte ce nombre × le niveau atteint (niveau 5 : 100 pièces)
+
+[ameliorations]
+# identifiant  | niveau requis | prix de chaque niveau, séparés par /
+doubleJump     | 2  | 480                  # Double saut
+spring         | 3  | 1000 / 2400          # Ressort
+magnet         | 2  | 600 / 1600 / 3600    # Aimant
+lucky          | 4  | 1200 / 3200          # Trèfle
+scatter        | 6  | 2000 / 4800 / 10000  # Gemmes dispersées
+breaker        | 3  | 1400                 # Brise-tout
+heart          | 7  | 5000 / 12000 / 25000 # Vitalité : 2, 3 puis 4 cœurs
+drunk          | 5  | 1600 / 3600 / 7200   # Relique altérée
+nature         | 4  | 1200 / 2800 / 6000   # Ami de la nature
+dash           | 5  | 1200 / 2800 / 5600   # Esquive
+boots          | 6  | 2500 / 5500          # Bottes de métal
+tnt            | 9  | 3000 / 6000 / 12000  # Fana de TNT
+slow           | 7  | 1800 / 4000          # Sablier
+lastLeap       | 6  | 1600 / 3600 / 7200   # Dernier élan
+flight         | 10 | 4800 / 7000 / 10000  # Vol : montée 12, 13,5 puis 15 m/s
+sprint         | 8  | 4000                 # Sprint
+sphere         | 10 | 6000                 # Sphère
+rewind         | 12 | 10000                # Rembobinage
+# les montures, chacune les siennes (onglet Montures)
+gorillaTamed     | 3 | 1200 / 2800        # Gorille dompté
+gorillaMagnet    | 4 | 1500 / 3500        # Aimant du gorille
+rhinoTamed       | 3 | 1200 / 2800        # Rhino dompté
+rhinoMagnet      | 4 | 1500 / 3500        # Aimant du rhino
+dragonflyTamed   | 3 | 1200 / 2800        # Libellule domptée
+dragonflyMagnet  | 4 | 1500 / 3500        # Aimant de la libellule
+
+[defis]
+# identifiant | objectif | pièces | expérience (en points : 1000 = un niveau)
+dist1    | 800   | 40  | 120     # Cours … m en une seule course
+distT    | 3000  | 60  | 200     # Cours … m en tout
+coins1   | 60    | 40  | 120     # Ramasse … pièces en une seule course
+coinsT   | 300   | 60  | 200     # Ramasse … pièces en tout
+gems     | 4     | 50  | 150     # Trouve … gemmes
+jumps    | 80    | 40  | 120     # Saute … fois
+plats    | 8     | 40  | 120     # Atterris sur … plateformes
+safe     | 300   | 60  | 180     # Cours … m sans te faire toucher
+runs     | 5     | 30  | 100     # Lance … courses
+shrooms  | 10    | 40  | 120     # Frôle … champignons bleus
+monkeys  | 3     | 50  | 150     # Salue … singes en une seule course
+breaks   | 10    | 50  | 150     # Casse … obstacles (Brise-tout, Esquive, Bottes, TNT)
+mounts   | 2     | 60  | 180     # Chevauche … montures
+dodges   | 3     | 60  | 180     # Esquive … nuées

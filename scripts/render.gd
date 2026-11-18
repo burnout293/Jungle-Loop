@@ -38,6 +38,8 @@ const ROLE := {
 	"swarm": ["mosquito", "wasp", "drone-big", "wisp"],
 }
 const DIGITS := {1: "010110010010111", 2: "111001111100111", 3: "111001111001111"}
+# Dangers drawn lower than their picture's foot: the dungeon's trap trails its chain below its jaws.
+const SINK := {"beartrap": 4}
 
 class Layer extends Node2D:
 	var paint: Callable
@@ -328,6 +330,52 @@ func mosaic(c: CanvasItem, edge: float) -> void:
 		x += TILE
 	for p in lit:
 		rect(c, p.x, p.y, TILE, TILE, Color(210 / 255.0, 1, 250 / 255.0, 0.8))
+
+## Relique altérée: where on screen the strip of the scenery that only goes by is (empty if none).
+func strip_clip() -> Rect2:
+	if run == null or run.strip_biome < 0:
+		return Rect2()
+	var x0 = clampf(sx(run.strip_x0), 0, view_w)
+	var x1 = clampf(sx(run.strip_x1), 0, view_w)
+	return Rect2(x0, -8, x1 - x0, VH + 16) if x1 > x0 else Rect2()
+
+## The strip, its two ends changing tile by tile like a scenery coming and going (mosaic, closer).
+func ghost_mosaic(c: CanvasItem, clip: Rect2) -> void:
+	var G: Dictionary = Art.scene[run.strip_biome]
+	var a = sx(run.strip_x0)
+	var b = sx(run.strip_x1)
+	var spread = 28.0
+	var inner = Rect2(a + spread, -8, b - a - 2 * spread, VH + 16).intersection(clip)
+	if inner.has_area():
+		paint(c, G, inner, true)
+	for end in [a, b]:
+		var left = maxf(0, floorf((end - spread) / TILE) * TILE)
+		var right = minf(view_w, ceilf((end + spread) / TILE) * TILE)
+		var x = left
+		while x < right:
+			var y = 0.0
+			while y < VH:
+				var at = end + (h01(x / TILE + 31 * (y / TILE), 5) - 0.5) * 2 * spread
+				var inside = x > at if end == a else x + TILE < at
+				if inside and x + TILE > a - spread and x < b + spread:
+					paint(c, G, Rect2(x, y, TILE, TILE), true)
+				elif absf(x - at) < 10:
+					rect(c, x, y, TILE, TILE, Color(210 / 255.0, 1, 250 / 255.0, 0.7))
+				y += TILE
+			x += TILE
+
+## Fana de TNT: a red stick turning in the air, its fuse burning.
+func _draw_shots(c: CanvasItem) -> void:
+	for sh in run.shots:
+		var x = sx(sh.x)
+		var y = n(sh.y)
+		c.draw_set_transform(Vector2(x, y), sh.spin, Vector2.ONE)
+		c.draw_rect(Rect2(-4, -8, 8, 16), INK)
+		c.draw_rect(Rect2(-3, -7, 6, 14), Color("#d8202a"))
+		c.draw_rect(Rect2(-3, -2, 6, 3), Color("#f4f0e0"))
+		c.draw_rect(Rect2(-1, -11, 1, 4), Color("#3a2a1a"))
+		c.draw_set_transform(Vector2.ZERO)
+		glow(c, x, y - 10, 6, Color(1, 0.8, 0.3, 0.8))
 
 # ---------- Vorace ----------
 # The queen flower in three layers cut from one picture (tools/import_vorace.py), drawn back to front:
@@ -1024,6 +1072,9 @@ func _draw_back(c: CanvasItem) -> void:
 
 	rect(c, 0, -8, view_w, VH + 16, now["sky"])
 	mosaic(c, edge)
+	var ghost = strip_clip()                         # Relique altérée: the scenery that only goes by
+	if ghost.has_area():
+		ghost_mosaic(c, ghost)
 	Ambient.draw_sky(c, t, view_w)
 
 	draw_hills(c)                                    # dark hills behind the path
@@ -1050,6 +1101,8 @@ func _draw_back(c: CanvasItem) -> void:
 	if changing:
 		draw_ground(c, Art.scene[run.prev_biome]["ground"], 0, cut, VH + 8)
 	draw_ground(c, now["ground"], cut if changing else 0.0, view_w, VH + 8)
+	if ghost.has_area():
+		draw_ground(c, Art.scene[run.strip_biome]["ground"], ghost.position.x, ghost.end.x, VH + 8)
 	Ambient.draw_life(c, cam, t, view_w, floor_px)
 	draw_dirt(c)
 
@@ -1275,6 +1328,13 @@ func _draw_bonuses(c: CanvasItem) -> void:
 		var y = n(it.y)
 		var life = it.kind == "life"
 		var tint = Color(1, 0.3, 0.42) if life else Color(0.45, 0.85, 1)
+		if not life:                                 # the hourglass: bigger, out of any bubble, rocking
+			glow(c, x, y, 22 + 2 * sin(t * 5), Color(tint.r, tint.g, tint.b, 0.35))
+			if slow_icon != null:
+				c.draw_set_transform(Vector2(x, y), 0.18 * sin(t * 3 + it.ph), Vector2.ONE)
+				c.draw_texture_rect(slow_icon, Rect2(-12, -12, 24, 24), false)
+				c.draw_set_transform(Vector2.ZERO)
+			continue
 		glow(c, x, y, 20 + 2 * sin(t * 5), Color(tint.r, tint.g, tint.b, 0.45))
 		c.draw_circle(Vector2(x, y), 10, Color(1, 1, 1, 0.16))
 		c.draw_arc(Vector2(x, y), 10, 0, TAU, 24, Color(1, 1, 1, 0.75), 1)
@@ -1393,7 +1453,7 @@ func _draw_obstacles(c: CanvasItem) -> void:
 			var shut = name == "beartrap" and absf(cx - n(run.sx)) < 30    # the trap snaps as he goes over it
 			var hop = -1.0 if (name == "spiky" and sin(t * 6 + o.x) > 0.6) else 0.0
 			shadow(c, cx, foot - 1, fw - 2 * pad)
-			sheet(c, im, frames, 1 if shut else 0, snap(cx - fw / 2), foot - im.get_height() + pad + hop, mod)
+			sheet(c, im, frames, 1 if shut else 0, snap(cx - fw / 2), foot - im.get_height() + pad + hop + SINK.get(name, 0), mod)
 			if name == "spikebot" and sin(t * 8 + o.x) > 0:   # its eye, blinking
 				glow(c, cx, foot - im.get_height() + 3, 9, Color(90 / 255.0, 240 / 255.0, 1, 0.8))
 		elif o.kind == "dart":                       # a "!" at the edge, at its height; then across in one go
@@ -1475,6 +1535,10 @@ func _draw_front(c: CanvasItem) -> void:
 	else:
 		var S: Dictionary = Art.scene[run.prev_biome] if edge >= view_w else Art.scene[run.biome]
 		edges(c, S["fore"], Rect2(0, -8, view_w, VH + 16), mod)
+	var ghost = strip_clip()
+	if ghost.has_area():
+		edges(c, Art.scene[run.strip_biome]["fore"], Rect2(ghost.position.x, -8, ghost.size.x, VH + 16), mod)
+	_draw_shots(c)                                   # Fana de TNT: the sticks in the air
 	if hitbox and not run.dead:
 		_draw_hitboxes(c)
 
@@ -1585,7 +1649,7 @@ func _draw_over(c: CanvasItem) -> void:
 		return
 	if run.boom > 0:
 		rect(c, 0, 0, view_w, VH, Color(1, 244 / 255.0, 214 / 255.0, run.boom * 0.8))
-	if run.flash > 0:
+	if run.flash > 0 and not show_dead:                 # (not in the photo of the fall)
 		rect(c, 0, 0, view_w, VH, Color(1, 70 / 255.0, 90 / 255.0, run.flash * 0.3))
 	if run.slow.t > 0:                               # the Sablier: the world tinted blue; in its last seconds the tint
 		var left = run.slow.t                       # blinks faster and faster, the edges flash and a count rises over him

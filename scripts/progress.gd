@@ -3,7 +3,7 @@ extends RefCounted
 ## Long-term progress: the player's level and the objectives (port of js/progress.js). Both live in the
 ## save and are fed with what happened during the last frame of a run.
 
-# ---------- the progression file (assets/progression.txt) ----------
+# ---------- the progression file (reglages/progression.txt) ----------
 # What the player may change without touching the code: the points per metre and per level, what a
 # level pays, each upgrade's level and prices, each objective's goal and rewards. load_config reads it
 # over these defaults; a missing or wrong line keeps the default.
@@ -82,7 +82,7 @@ const KINDS := {
 	"runs": {"stat": "runs", "base": 3, "step": 1, "text": "Lance %d courses"},
 	"shrooms": {"stat": "shrooms", "base": 5, "step": 3, "text": "Frôle %d champignons bleus"},
 	"monkeys": {"stat": "monkeys", "single": true, "base": 2, "step": 1, "text": "Salue %d singes en une seule course"},
-	"breaks": {"stat": "breaks", "base": 4, "step": 3, "needs": ["breaker", "dash"], "text": "Casse %d obstacles"},
+	"breaks": {"stat": "breaks", "base": 4, "step": 3, "needs": ["breaker", "dash", "boots", "tnt"], "text": "Casse %d obstacles"},
 	"mounts": {"stat": "mounts", "base": 1, "step": 1, "text": "Chevauche %d montures", "one": "Chevauche une monture"},
 	"dodges": {"stat": "dodges", "base": 2, "step": 1, "text": "Esquive %d nuées"},
 }

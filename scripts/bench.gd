@@ -187,7 +187,7 @@ func _tour() -> void:
 		[7.7, "toggle", "tg-font"], [8.6, "shot", "09-settings-pixel-again"],
 		[8.7, "confirm", ""], [9.2, "shot", "10-confirm"], [9.3, "close", ""],
 		[9.4, "go", "menu"], [10.2, "equip", "magnet"], [10.4, "slot", "magnet"], [10.8, "shot", "11-menu-slot"],
-		[11.0, "play", ""],
+		[11.0, "play", ""], [11.05, "give", "tnt boots slow dash"],
 		[12.0, "touch", "0 down game"], [12.05, "check", "hold"], [12.3, "touch", "1 down btn-pause"], [12.35, "check", "state"],
 		[12.4, "touch", "0 up game"], [12.45, "check", "hold"], [12.5, "resume", ""], [13.5, "shot", "12-play"],
 		[13.6, "pause", ""], [14.4, "shot", "13-pause"],
@@ -196,9 +196,14 @@ func _tour() -> void:
 		[16.3, "resume", ""], [16.35, "levels", "4"], [16.4, "die", ""], [18.6, "shot", "16-over-record"],
 		[18.62, "close", ""], [18.64, "rebuild", ""], [18.95, "shot", "16b-over-rebuilt"],
 		[19.0, "photo", ""], [19.6, "shot", "17-photo-full"], [19.65, "close", ""],
-		[19.7, "go", "shop"], [19.75, "tab", "mount"], [19.8, "mpick", "tamed"], [21.0, "shot", "18-shop-tamed"],
+		[19.7, "go", "shop"], [19.75, "tab", "mount"], [19.8, "mpick", "rhinoTamed"], [21.0, "shot", "18-shop-tamed"],
 		[21.1, "moff", "rhino"], [21.15, "mpick", "rhino"], [22.2, "shot", "19-shop-rhino-off"], [22.3, "moff", "rhino"],
-		[22.5, "quit", ""],
+		[22.4, "tab", "up"], [22.45, "pick", "boots"], [24.2, "shot", "20-shop-boots"],
+		[24.3, "pick", "tnt"], [25.6, "shot", "21-shop-tnt"], [25.7, "pick", "dash"], [26.7, "shot", "22-shop-dash"],
+		[26.8, "pick", "drunk"], [28.9, "shot", "23-shop-relic"],
+		[29.0, "go", "menu"], [29.9, "tip", "endless"], [30.0, "shot", "24-menu-tip"], [30.05, "tip", ""],
+		[30.2, "play", ""], [31.6, "scene", "1"], [32.0, "shot", "25-ruins"], [32.2, "scene", "3"], [32.6, "shot", "26-dungeon"],
+		[32.8, "quit", ""],
 	]
 	while tour_i < steps.size() and t >= steps[tour_i][0]:
 		var st = steps[tour_i]
@@ -255,6 +260,27 @@ func _tour() -> void:
 				main.save["best"] = 0
 				main.go("play")
 				main.run.god = true
+			"give":                                     # the actives on the HUD, for its picture
+				for k in arg.split(" "):
+					main.run.up[k] = 1
+				main.run.dash.full = Game.DASH_CD[1]
+				main.run.boots.full = Game.BOOTS_CD[1]
+				main.run.tnt.full = Game.TNT_CD[1]
+				main._fill_hud()
+			"tip": main._menu_tip(main.MENU_TIPS.get(arg, ""))
+			"scene":                                    # a scenery, a danger on the floor and an hourglass in view
+				var r = main.run
+				r.biome = int(arg)
+				r.prev_biome = int(arg)
+				r.biome_x = -1e9
+				r.god = true
+				var x = r.cam + r.sx + 520
+				Game.add_spiky(r, x)
+				var it = Game.Item.new()
+				it.kind = "brake"
+				it.x = x + 260
+				it.y = Game.GROUND - 140
+				r.bonuses.append(it)
 			"pause": main.pause()
 			"resume": main.resume()
 			"die":

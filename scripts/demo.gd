@@ -101,10 +101,12 @@ func build_breaker(r: Game.Run, x: float) -> void:
 	Game.add_decor(r, x + 950)
 	Game.add_decor(r, x + 1400)
 
-func build_dash(r: Game.Run, x: float) -> void:
-	Game.add_spiky(r, x + 760)
-	Game.add_spiky(r, x + 860)
-	Game.add_spiky(r, x + 960)
+func build_dash(r: Game.Run, x: float) -> void:        # the Esquive: 40 m in a flash, everything on the way broken
+	for k in 6:
+		Game.add_spiky(r, x + 600 + k * 260)
+		Game.add_decor(r, x + 730 + k * 260)
+	Game.coin_line(r, x + 560, Game.GROUND - 40, 34)
+	_no_ghosts(r)
 
 func play_dash(_r: Game.Run, ahead: float, _t: float, inp: Game.Controls) -> void:
 	if ahead < 130:
@@ -176,12 +178,13 @@ func build_heart(r: Game.Run, x: float) -> void:
 	Game.add_spiky(r, x + 600)
 	Game.add_spiky(r, x + 1500)
 
-func build_drunk(r: Game.Run, x: float) -> void:
+func build_drunk(r: Game.Run, x: float) -> void:        # harmless ghosts, and a scenery that only goes by
 	Game.add_spiky(r, x + 600)
 	Game.add_spiky(r, x + 1000)
 	Game.add_hover(r, x + 1700, Game.LOW)
 	for o in r.obs:
 		o.ghost = true
+	r.next_biome_at = START / Game.PPM + 1
 
 func build_nature(r: Game.Run, x: float) -> void:
 	_ride(r, x + 520, "rhino")
@@ -223,27 +226,98 @@ func build_m_dragonfly(r: Game.Run, x: float) -> void:
 func play_m_dragonfly(_r: Game.Run, _ahead: float, t: float, inp: Game.Controls) -> void:
 	inp.hold = sin(t * 3.2 - 1.4) > 0
 
-func build_mountMagnet(r: Game.Run, x: float) -> void:   # on the rhino, the coins above come down to him
-	_ride(r, x + 300, "rhino")
-	Game.coin_line(r, x + 800, Game.GROUND - 170, 10)
-	Game.coin_line(r, x + 1350, Game.GROUND - 40, 8)
+# each mount's own two upgrades: the hero already on it for the magnet, waiting for it for Dompté
+
+func _riding(r: Game.Run, kind: String) -> void:
+	var mt = Game.Mount.new()
+	mt.kind = kind
+	r.mount = mt
+	if Game.MOUNTS[kind].get("fly", false):
+		r.p.ground = false
+		r.p.y = Game.GROUND - 160
+
+func build_gorillaMagnet(r: Game.Run, x: float) -> void:  # on the gorilla, the coins come to him from afar
+	_riding(r, "gorilla")
+	Game.coin_line(r, x + 500, Game.GROUND - 150, 10)
+	Game.coin_line(r, x + 1050, Game.GROUND - 40, 8)
+
+func build_rhinoMagnet(r: Game.Run, x: float) -> void:    # on the rhino, the coins above come down to him
+	_riding(r, "rhino")
+	Game.coin_line(r, x + 500, Game.GROUND - 190, 10)
+	Game.coin_line(r, x + 1050, Game.GROUND - 40, 8)
 	_no_ghosts(r)
 
-func build_tamed(r: Game.Run, x: float) -> void:         # the rhino caught though he jumps over it
+func build_dragonflyMagnet(r: Game.Run, x: float) -> void:   # on the dragonfly, the coins off its path
+	_riding(r, "dragonfly")
+	for i in 20:
+		Game.coin(r, x + 500 + i * 44, Game.GROUND - 120 - (i % 2) * 180)
+
+func play_dragonflyMagnet(_r: Game.Run, _ahead: float, t: float, inp: Game.Controls) -> void:
+	inp.hold = sin(t * 2.0) > 0
+
+func build_gorillaTamed(r: Game.Run, x: float) -> void:   # the gorilla caught from lower, with a double jump
+	r.up["doubleJump"] = 1
+	_ride(r, x + 420, "gorilla")
+	Game.coin_line(r, x + 300, Game.GROUND - 40, 4)
+
+func play_gorillaTamed(r: Game.Run, _ahead: float, t: float, inp: Game.Controls) -> void:
+	for pair in [["a", 0.55], ["b", 0.85]]:
+		if r.mount == null and t > pair[1] and not done.has(pair[0]):
+			done[pair[0]] = true
+			inp.pressed = true
+	inp.hold = r.mount == null and t > 0.5 and t < 1.4
+
+func build_rhinoTamed(r: Game.Run, x: float) -> void:     # the rhino caught though he jumps over it
 	_ride(r, x + 300, "rhino")
 	Game.add_decor(r, x + 1100)
 	Game.coin_line(r, x + 800, Game.GROUND - 40, 14)
 	_no_ghosts(r)
 
-func play_tamed(r: Game.Run, _ahead: float, t: float, inp: Game.Controls) -> void:
+func play_rhinoTamed(r: Game.Run, _ahead: float, t: float, inp: Game.Controls) -> void:
 	if r.mount == null and t > 0.3 and not done.has("hop"):
 		done["hop"] = true
 		inp.pressed = true
 
-func build_jammer(r: Game.Run, x: float) -> void:        # the one change of scenery, the relic flickering
-	r.next_biome_at = START / Game.PPM + 1
-	Game.coin_line(r, x + 450, Game.GROUND - 40, 10)
-	Game.coin_line(r, x + 1300, Game.GROUND - 40, 10)
+func build_dragonflyTamed(r: Game.Run, x: float) -> void:   # the dragonfly caught though he jumps beside its height
+	_ride(r, x + 360, "dragonfly")
+	Game.coin_line(r, x + 300, Game.GROUND - 40, 4)
+
+func play_dragonflyTamed(r: Game.Run, _ahead: float, t: float, inp: Game.Controls) -> void:
+	if r.mount == null and t > 0.45 and not done.has("hop"):
+		done["hop"] = true
+		inp.pressed = true
+	if r.mount != null:
+		inp.hold = sin(t * 3.2) > 0
+
+func build_boots(r: Game.Run, x: float) -> void:          # a jump, the dive, the quake: the crates and the creatures go
+	Game.add_spiky(r, x + 760)
+	Game.add_decor(r, x + 860)
+	Game.add_hover(r, x + 700, Game.LOW)
+	Game.add_spiky(r, x + 1500)
+	Game.add_decor(r, x + 1420)
+	_no_ghosts(r)
+
+func play_boots(r: Game.Run, ahead: float, _t: float, inp: Game.Controls) -> void:
+	var p = r.p
+	if p.ground and ahead < 260 and ahead > 120:
+		inp.pressed = true
+		inp.hold = true
+	elif not p.ground and not p.diving and ahead < 40:
+		inp.stomp = true
+
+func build_tnt(r: Game.Run, x: float) -> void:            # one stick: everything ahead blows up
+	Game.add_spiky(r, x + 700)
+	Game.add_hover(r, x + 820, Game.HEAD)
+	Game.add_decor(r, x + 920)
+	Game.add_spiky(r, x + 1000)
+	Game.add_hover(r, x + 1080, Game.LOW)
+	Game.coin_line(r, x + 640, Game.GROUND - 40, 12)
+	_no_ghosts(r)
+
+func play_tnt(_r: Game.Run, _ahead: float, t: float, inp: Game.Controls) -> void:
+	if t > 0.5 and not done.has("tnt"):
+		done["tnt"] = true
+		inp.tnt = true
 
 func build_rewind(r: Game.Run, x: float) -> void:
 	r.hearts = 1

@@ -9,8 +9,9 @@ const PREFIX := "JL1."
 # costs[n] = price of level n+1. icon = assets/img/ico-<icon>.png. unlock = the player's level from which
 # it can be bought. Only three upgrades can be equipped; powers are bought once and then on, unless
 # switched off (save.powersOff).
-# family: "up" (Équipements, to equip), "power" (Pouvoirs), "mount" (Montures). Levels and prices can be
-# changed in assets/progression.txt (Progress.load_config), hence a var.
+# family: "up" (Équipements, to equip), "power" (Pouvoirs), "mount" (Montures: each animal its own two,
+# "mount" says whose; "short" is the name in its list). "how": what it does, under the story ("desc").
+# Levels and prices can be changed in reglages/progression.txt (Progress.load_config), hence a var.
 static var UPGRADES := [
 	{"id": "doubleJump", "unlock": 2, "icon": "jump", "kind": "passif", "name": "Double saut", "desc": "Un second saut en l'air.", "costs": [480]},
 	{"id": "spring", "unlock": 3, "icon": "spring", "kind": "passif", "name": "Ressort", "desc": "Saute plus haut.", "costs": [1000, 2400]},
@@ -18,20 +19,29 @@ static var UPGRADES := [
 	{"id": "lucky", "unlock": 4, "icon": "lucky", "kind": "passif", "name": "Trèfle", "desc": "Avec Gemmes dispersées, les gemmes apparaissent plus souvent.", "costs": [1200, 3200]},
 	{"id": "scatter", "unlock": 6, "icon": "gems", "kind": "passif", "name": "Gemmes dispersées", "desc": "De temps en temps, une gemme prend la place d'une pièce. Jaune : 5 pièces, rouge : 10, bleue : 20.", "costs": [2000, 4800, 10000]},
 	{"id": "breaker", "unlock": 3, "icon": "break", "kind": "passif", "name": "Brise-tout", "desc": "Les caisses, jarres et tonneaux du décor volent en éclats sur ton passage et lâchent 4 pièces.", "costs": [1400]},
-	{"id": "heart", "unlock": 7, "icon": "heart", "kind": "passif", "name": "Cœur en plus", "desc": "Un second cœur : le premier coup ne t'arrête plus.", "costs": [3600]},
-	{"id": "drunk", "unlock": 5, "icon": "drunk", "kind": "passif", "name": "Faune alcoolisée", "desc": "De rares créatures deviennent éthérées : pâles et titubantes, elles ne font aucun dégât.", "costs": [1600, 3600, 7200]},
+	{"id": "heart", "unlock": 7, "icon": "heart", "kind": "passif", "name": "Vitalité", "desc": "Un cœur de plus à chaque niveau, jusqu'à 4 cœurs.", "costs": [5000, 12000, 25000]},
+	{"id": "drunk", "unlock": 5, "icon": "relic", "kind": "passif", "name": "Relique altérée", "desc": "Les pouvoirs de la relique sont altérés car vous l'avez endommagée en sortant du temple. Quelle idée d'utiliser de la TNT aussi.", "how": "Des créatures deviennent éthérées et inoffensives, et le décor ne change plus.", "costs": [1600, 3600, 7200]},
 	{"id": "nature", "unlock": 4, "icon": "nature", "kind": "passif", "name": "Ami de la nature", "desc": "Les montures, rares, se montrent un peu plus souvent.", "costs": [1200, 2800, 6000]},
-	{"id": "jammer", "unlock": 8, "icon": "jammer", "kind": "passif", "name": "Gros sac à dos", "desc": "Pépito a prévu un sac plus grand pour la relique. Ça réduira peut-être ses effets… ou pas.", "costs": [2400]},
-	{"id": "dash", "unlock": 5, "icon": "dash", "kind": "actif", "name": "Ruée", "desc": "Fonce, invincible, en pulvérisant tout. Recharge plus vite à chaque niveau.", "costs": [1200, 2800, 5600]},
+	{"id": "dash", "unlock": 5, "icon": "dash", "kind": "actif", "name": "Esquive", "desc": "Une force étrange vous permet une accélération soudaine en détruisant tout ce qui se trouve sur votre chemin.", "how": "Le bouton te projette 40 m plus loin en un éclair. Recharge plus vite à chaque niveau.", "costs": [1200, 2800, 5600]},
+	{"id": "boots", "unlock": 6, "icon": "boots", "kind": "actif", "name": "Bottes de métal", "desc": "Plus lourd que le cuir et plus solide que le bois. Vous ferez des ravages avec ces bottes.", "how": "Tu retombes plus vite. Le bouton te fait plonger : la secousse casse les caisses et écrase les créatures autour de toi.", "costs": [2500, 5500]},
+	{"id": "tnt", "unlock": 9, "icon": "tnt", "kind": "actif", "name": "Fana de TNT", "desc": "Faire sauter l'entrée du temple à chaque nouvelle tentative ne vous suffit plus. Vous allez répandre le chaos dans cette jungle maudite !", "how": "Le bouton lance un bâton de TNT : tout ce qui est devant toi saute. Les boss résistent.", "costs": [3000, 6000, 12000]},
 	{"id": "slow", "unlock": 7, "icon": "slow", "kind": "actif", "name": "Sablier", "desc": "Ralentit le temps quelques secondes.", "costs": [1800, 4000]},
 	{"id": "lastLeap", "unlock": 6, "icon": "leap", "kind": "passif", "name": "Dernier élan", "desc": "Au dernier cœur perdu, tu rebondis encore pour gagner quelques mètres.", "costs": [1600, 3600, 7200]},
-	{"id": "flight", "unlock": 10, "icon": "flight", "kind": "passif", "power": true, "name": "Vol", "desc": "En l'air, chaque appui te fait remonter d'un coup d'hélice. Relâche : tu retombes.", "costs": [4800]},
+	{"id": "flight", "unlock": 10, "icon": "flight", "kind": "passif", "power": true, "name": "Vol", "desc": "En l'air, chaque appui te fait remonter d'un coup d'hélice. Relâche : tu retombes. Niveaux 2 et 3 : tu montes plus vite.", "costs": [4800, 7000, 10000]},
 	{"id": "sprint", "unlock": 8, "icon": "shoes", "kind": "passif", "power": true, "name": "Sprint", "desc": "Cours plus vite dès le départ, les jambes en tourbillon.", "costs": [4000]},
 	{"id": "sphere", "unlock": 10, "icon": "sphere", "kind": "passif", "power": true, "name": "Sphère", "desc": "Roule en boule dans les endroits exigus, troncs creux et galeries : il n'y a que des trésors là-dedans.", "costs": [6000]},
 	{"id": "rewind", "unlock": 12, "icon": "rewind", "kind": "passif", "name": "Rembobinage", "desc": "Une fois par course, la relique annule ta chute.", "costs": [10000]},
-	{"id": "mountMagnet", "unlock": 4, "icon": "magnet", "kind": "passif", "power": true, "family": "mount", "name": "Aimant de monture", "desc": "Sur une monture, les pièces viennent à toi, de plus en plus loin à chaque niveau.", "costs": [1500, 3500]},
-	{"id": "tamed", "unlock": 3, "icon": "saddle", "kind": "passif", "power": true, "family": "mount", "name": "Dompté", "desc": "Les montures t'attendent et se laissent attraper de plus loin : plus de monture manquée.", "costs": [1200, 2800]},
+	{"id": "gorillaTamed", "unlock": 3, "icon": "saddle", "kind": "passif", "power": true, "family": "mount", "mount": "gorilla", "name": "Gorille dompté", "short": "Dompté", "desc": "Le gorille t'attend et se laisse attraper de plus loin, même un peu plus bas que lui.", "costs": [1200, 2800]},
+	{"id": "gorillaMagnet", "unlock": 4, "icon": "magnet", "kind": "passif", "power": true, "family": "mount", "mount": "gorilla", "name": "Aimant du gorille", "short": "Aimant", "desc": "Sur le gorille, les pièces viennent à toi, de plus en plus loin à chaque niveau.", "costs": [1500, 3500]},
+	{"id": "rhinoTamed", "unlock": 3, "icon": "saddle", "kind": "passif", "power": true, "family": "mount", "mount": "rhino", "name": "Rhino dompté", "short": "Dompté", "desc": "Le rhino se laisse attraper de plus loin, même si tu sautes au-dessus de lui.", "costs": [1200, 2800]},
+	{"id": "rhinoMagnet", "unlock": 4, "icon": "magnet", "kind": "passif", "power": true, "family": "mount", "mount": "rhino", "name": "Aimant du rhino", "short": "Aimant", "desc": "Sur le rhino, les pièces viennent à toi, de plus en plus loin à chaque niveau.", "costs": [1500, 3500]},
+	{"id": "dragonflyTamed", "unlock": 3, "icon": "saddle", "kind": "passif", "power": true, "family": "mount", "mount": "dragonfly", "name": "Libellule domptée", "short": "Domptée", "desc": "La libellule t'attend et se laisse attraper de plus loin, même un peu à côté de sa hauteur.", "costs": [1200, 2800]},
+	{"id": "dragonflyMagnet", "unlock": 4, "icon": "magnet", "kind": "passif", "power": true, "family": "mount", "mount": "dragonfly", "name": "Aimant de la libellule", "short": "Aimant", "desc": "Sur la libellule, les pièces viennent à toi, de plus en plus loin à chaque niveau.", "costs": [1500, 3500]},
 ]
+
+# Taken out of the shop in 0.34 (Dompté and Aimant de monture are now one per animal; the Gros sac à dos is
+# gone): a save that had them gets back what they cost.
+const REMOVED := {"tamed": [1200, 2800], "mountMagnet": [1500, 3500], "jammer": [2400]}
 
 ## Which family of the shop an upgrade belongs to.
 static func family(u: Dictionary) -> String:
@@ -102,6 +112,11 @@ static func sanitize(raw) -> Dictionary:
 	if on is Dictionary and on.get("id") is String and on.get("secret") is String and on.get("code") is String:
 		s["online"] = {"id": on["id"], "secret": on["secret"], "code": on["code"], "name": str(on.get("name", ""))}
 	var ups = raw.get("upgrades")
+	if ups is Dictionary:
+		for id in REMOVED:
+			var had = mini(_int(ups.get(id)), REMOVED[id].size())
+			for i in had:
+				s["coins"] += REMOVED[id][i]
 	for u in UPGRADES:
 		var lvl = _int(ups.get(u["id"]) if ups is Dictionary else 0)
 		if lvl > 0:
@@ -134,7 +149,7 @@ static func sanitize(raw) -> Dictionary:
 			s["quests"].append({"k": q["k"], "goal": _int(q["goal"]), "p": minf(_int(q["goal"]), float(p) if (p is int or p is float) and p > 0 else 0.0),
 				"reward": _int(q.get("reward")), "xp": _int(q.get("xp")) if _int(q.get("xp")) > 0 else 40})
 	# experience: since 0.33 a point is 20 m (it was a metre). An older save is brought to the new scale,
-	# and its objectives under way pay what assets/progression.txt says.
+	# and its objectives under way pay what reglages/progression.txt says.
 	if raw.get("xpv") != 2:
 		s["xp"] = s["xp"] / 20.0
 		for q in s["quests"]:

@@ -8,7 +8,8 @@
 # Le jeu ne pose un dessin que si son sommet est atteignable : 5 rangées à pied,
 # 9 avec le Double saut, 13 avec le Vol. 14 rangées et 40 colonnes au plus.
 # Sans le Vol, un dessin peut aussi apparaître haut dans le ciel, hors d'atteinte : c'est l'envie de l'avoir.
-# Les lignes qui commencent par # sont ignorées. Recharge la page pour voir tes changements.
+# Les lignes qui commencent par # sont ignorées. Réexporte le jeu pour voir tes changements
+# (il lit ce fichier à chaque lancement). Les autres réglages : equilibrage.txt et progression.txt, à côté.
 
 = coeur
 .oo.oo.

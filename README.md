@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.33.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.34.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -51,11 +51,13 @@ Dans un navigateur, sur ce PC seulement (`localhost`), les mêmes options passen
 | `scripts/ambient.gd` | oiseaux, papillons, lucioles, vent, pluie | `js/ambient.js` |
 | `scripts/audio.gd` | musiques et bruitages (le même petit synthétiseur, rendu en échantillons au démarrage) | `js/audio.js` |
 | `scripts/save.gd` | sauvegarde, boutique, codes d'export (compatibles avec la version web) | `js/save.js` |
-| `scripts/progress.gd` | niveau et défis, lecture de `assets/progression.txt` | `js/progress.js` |
-| `assets/progression.txt` | **à régler soi-même** : points par mètre et par niveau, pièces d'un niveau, niveau requis et prix de chaque amélioration, objectif et récompenses de chaque défi | — |
+| `scripts/progress.gd` | niveau et défis, lecture de `reglages/progression.txt` | `js/progress.js` |
+| `scripts/tune.gd` | lecture de `reglages/equilibrage.txt` : chaque ligne y règle un `static var` de `game.gd`, en mètres, secondes, m/s et % | — |
+| `reglages/` | **à régler soi-même**, lus à chaque lancement : `equilibrage.txt` (vitesses, sauts, Vol, objets, montures, araignées, volants, nuées, Vorace), `progression.txt` (points par mètre et par niveau, pièces d'un niveau, niveau requis et prix de chaque amélioration, défis), `patterns.txt` (dessins de pièces) | — |
 | `scripts/main.gd` | écrans, HUD, commandes, boucle, qualité d'image | `js/main.js`, `index.html`, `style.css` |
 | `scripts/demo.gd` | aperçus animés de la boutique : une vraie petite course scriptée | `js/demo.js` |
-| `assets/` | images, `meta.json`, `patterns.txt`, les deux musiques utilisées | `assets/` |
+| `assets/` | images, `meta.json`, les deux musiques utilisées | `assets/` |
+| `tools/make_ui_colours.py` | les boutons dorés, verts et rouges, recolorés à partir de ceux du kit | — |
 
 Les unités sont celles de la version web : 1 pixel d'art = 2,25 unités, écran de 1280 × 720 unités
 (569 × 320 pixels d'art), en 16:9 avec des bandes noires autour.
@@ -99,6 +101,32 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.34.0
+
+- Dossier `reglages/` : `equilibrage.txt` (nouveau, lu par `tune.gd`), `progression.txt` et `patterns.txt`
+  (venus d'`assets/`). Les nombres de `game.gd` qu'il règle sont des `static var`.
+- Histoire : +0,18 m/s par seconde (`STORY_GAIN` 7,2) ; `ZONE_SPEED` remplace `ZONE_EXTRA`.
+- Vol : montée 12 m/s au niveau 1, 13,5 et 15 aux niveaux 2 et 3 (`FLAP_LV`, `flap()`), chute ×1,2.
+- Araignées : jamais plus de 2 dans une colonne (`SPIDER_COLUMN`, `add_hover` refuse la troisième) ; rideau à
+  deux araignées et deux places libres ; porte et tour de la libellule à deux.
+- Montures : Dompté et Aimant pour chacune (`gorillaTamed`, `rhinoMagnet`…, champ `mount`), listés sous elle
+  dans l'onglet (`_up_row`) ; l'ancien Dompté / Aimant de monture et le Gros sac à dos sont remboursés
+  (`SaveData.REMOVED`).
+- Objets : Bottes de métal (`boots`, `quake`, plongeon `p.diving`), Fana de TNT (`tnt`, `Shot`, `blast`),
+  Esquive (`dash` : +200 m/s 0,2 s, balayage de tout le chemin parcouru, `px0`), Relique altérée (`drunk` :
+  éthérées + décor bloqué, bande de l'autre décor `strip_*`, dessinée par `ghost_mosaic`), Vitalité
+  (`heart`, 3 niveaux). Icônes `ico-boots`, `ico-tnt`, `ico-relic` (PixelLab).
+- Sablier ramassé : −20 % de la vitesse, plus gros, sans bulle, avance à 90 % de la vitesse une fois à l'écran.
+- Boule de ronces recolorée en vert (`thornball.png`) ; piège à loup posé au sol (`SINK`).
+- Accueil : Jouer (Run illimitée, cadre doré, 58 px), Histoire assombri, panneaux d'explication au survol ou
+  à l'appui long (`MENU_TIPS`) ; la Run illimitée part d'un décor au hasard, déjà derrière l'accueil
+  (`endless_biome`, `_roll_biome`). Pause : Reprendre vert, Abandonner rouge orangé.
+- HUD : jusqu'à quatre boutons (`ACTS`) ; clavier S / ↓ Bottes, F / T TNT.
+- Photo de la chute sans le filtre rouge (`show_dead` dans `_draw_over`).
+- Même graine, même parcours : la limite des colonnes compte ce que la route a posé (`spider_xs`), pas ce
+  qui reste, et l'espacement suit la vitesse sans sablier (`road_speed`). Comme une monture, un sablier
+  ramassé change la vitesse du joueur : en coop, les deux sont à couper. Vérifié : 993 éléments identiques.
 
 ## 0.33.0
 

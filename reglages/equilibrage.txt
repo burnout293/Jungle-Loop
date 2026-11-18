@@ -1,0 +1,101 @@
+# Jungle Loop — l'équilibrage : vitesses, sauts, Vol, objets, montures, araignées, volants, Vorace
+#
+# Change les nombres, puis réexporte le jeu : il lit ce fichier à chaque lancement. Une ligne par
+# valeur : son nom | sa valeur. Plusieurs valeurs (une par niveau d'un objet, ou « de … à … ») sont
+# séparées par /. Unités : m (mètres), s (secondes), m/s, % ; une pièce fait à peu près 1 m.
+# Virgule ou point pour les décimales (0,18 ou 0.18). Tout ce qui suit # est ignoré. Une ligne absente
+# ou mal écrite garde la valeur d'origine du jeu.
+#
+# Attention : le parcours est construit pour les sauts et le Vol d'origine. Des sauts plus bas ou un
+# Vol plus lent peuvent rendre des passages impossibles.
+#
+# Les prix et les niveaux requis : progression.txt. Les dessins de pièces : patterns.txt.
+
+[course]
+vitesse au depart             | 9        # m/s : la Run illimitée, et la forêt en Histoire
+acceleration run illimitee    | 0.125    # m/s gagnés chaque seconde
+acceleration histoire         | 0.18     # m/s gagnés chaque seconde, depuis le début du décor
+vitesse des ruines            | 10       # m/s : en Histoire, chaque décor repart de sa vitesse
+vitesse du donjon             | 11
+vitesse de la cite            | 12
+sprint                        | 4        # m/s de plus avec le Sprint
+nouveau decor run illimitee   | 800      # m : un décor tous les …
+nouveau decor histoire        | 2000     # m : un décor tous les …, après Vorace
+
+[saut]
+gravite                       | 60       # m/s par seconde
+elan du saut                  | 19       # m/s : 3 m de haut tapé, 4,8 m tenu
+elan du double saut           | 17.5     # m/s : 2,6 m de plus
+gravite en montee bouton tenu | 37.5     # m/s par seconde, tant que le bouton est tenu
+ressort                       | 10       # % d'élan en plus par niveau
+
+[vol]
+montee                        | 12 / 13.5 / 15   # m/s, niveau 1 / 2 / 3
+arret au relache              | 1        # 1 : la montée s'arrête net ; 0 : il monte sur sa lancée
+chute apres le vol            | 1.2      # fois la gravité, jusqu'au sol
+
+[vies]
+coeurs au depart              | 1        # Vitalité en ajoute un par niveau
+invincible apres un coup      | 1.6      # s
+
+[objets]
+aimant                        | 2.75 / 4.25 / 6  # m de portée, par niveau
+gemmes dispersees             | 1.2 / 2.2 / 3.5  # % des pièces qui deviennent des gemmes
+valeur des gemmes             | 5 / 10 / 20      # pièces : jaune / rouge / bleue
+relique alteree, creatures etherees | 6 / 10 / 15   # % des créatures, inoffensives
+relique alteree, decor fantome      | 12       # m : le décor qui passe sans rester
+ami de la nature              | 25       # % : les montures arrivent plus tôt, par niveau
+esquive, vitesse en plus      | 200      # m/s
+esquive, duree                | 0.2      # s (200 m/s pendant 0,2 s : 40 m)
+esquive, recharge             | 14 / 10 / 7      # s, par niveau
+esquive, invincible apres     | 0.3      # s
+sablier, duree                | 3 / 4.5  # s, par niveau
+sablier, recharge             | 20       # s
+sablier, vitesse du monde     | 45       # % de sa vitesse
+bottes, chute                 | 1.25     # fois la gravité quand il retombe
+bottes, plongeon              | 37.5     # m/s vers le bas
+bottes, portee de la secousse | 3 / 4.5  # m autour de lui, par niveau
+bottes, recharge              | 8 / 5    # s, par niveau
+tnt, recharge                 | 25 / 18 / 12     # s, par niveau
+tnt, temps de vol             | 0.55     # s avant l'explosion
+
+[objets rares]
+un tous les                   | 1400 / 2400      # m, de … à …
+sablier, ralentissement       | 20       # % de ta vitesse en moins quand tu le ramasses
+sablier, vitesse              | 90       # % de ta vitesse, une fois à l'écran : il reste longtemps en vue
+
+[montures]
+premiere                      | 700 / 1000       # m, de … à …
+suivantes                     | 1300 / 1800      # m après la précédente, de … à …
+duree du rhino                | 8        # s
+dompte, portee                | 2.9 / 4  # m, par niveau (1,75 m sans)
+dompte, ralentit              | 30       # % de moins par niveau : sa vitesse devant toi
+dompte, gorille et libellule  | 1        # m de plus par niveau autour de leur hauteur
+dompte, rhino                 | 1.75     # m au-dessus de lui par niveau
+aimant de monture             | 4.25 / 6 # m de portée, par niveau
+
+[araignees]
+des                           | 150      # m : les premières
+a hauteur de tete des         | 1500     # m
+par colonne au plus           | 2        # araignées l'une au-dessus de l'autre
+montee et descente            | 2.5      # m de chaque côté (les rouges)
+aller-retour                  | 2.4      # s
+
+[volants]
+avertissement                 | 1        # s : le « ! » avant qu'il traverse
+vitesse                       | 20       # m/s de plus que toi
+vagues                        | 2 / 10   # volants : à 9 m/s / à 30 m/s
+ecart dans les vagues         | 0.9 / 0.3        # s : à 9 m/s / à 30 m/s
+campement                     | 2.6      # s à la même hauteur (Vol) avant qu'un volant te vise
+campement encore              | 1.6      # s, si tu y restes
+
+[nuees]
+premiere                      | 150 / 230        # m, de … à …
+suivantes                     | 170 / 300        # m après la précédente
+
+[vorace]
+arrivee                       | 2000     # m (à 100 m près), Histoire seulement
+vitesse                       | 14       # m/s pendant le combat
+duree                         | 26       # s d'attaques
+recul                         | 3.5      # m plus à droite qu'avant la 0.33
+hauteur des boules prise en   | 0.25     # s : le temps qu'une boule prenne sa hauteur

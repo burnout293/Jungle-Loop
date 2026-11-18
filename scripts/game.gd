@@ -16,18 +16,20 @@ const BIOME_COUNT := 4
 # dungeon, city, and back to the forest.
 const NEXT_BIOME := [1, 3, 0, 2]
 # The scenery changes after the boss (the ruins), then while there is no other boss every ZONE metres.
-const ZONE := 2000.0
-const ZONE_ENDLESS := 800.0     # Run illimitée: a new scenery every 800 m (the Gros sac à dos may skip one)
-const ZONE_ACCEL := 2.0         # (no longer used: see ZONE_EXTRA and STORY_GAIN)
-# Histoire: each scenery starts from its own speed, SPEED_BASE plus this (forest 9, ruins 10, dungeon 11,
-# city 12 m/s), and the speed grows by STORY_GAIN (0.25 m/s every second; the Run illimitée: SPEED_GAIN).
-const ZONE_EXTRA := {0: 0.0, 1: 40.0, 3: 80.0, 2: 120.0}
-const STORY_GAIN := 10.0
+# Most of the numbers below are static vars, not consts: reglages/equilibrage.txt sets them at launch
+# (tune.gd), in metres, seconds and m/s; these are the game's own when a line is missing there.
+static var ZONE := 2000.0
+static var ZONE_ENDLESS := 800.0    # Run illimitée: a new scenery every 800 m
+# Histoire: each scenery starts from its own speed (forest 9, ruins 10, dungeon 11, city 12 m/s, Sprint
+# added) and the speed grows by STORY_GAIN (0.18 m/s every second; the Run illimitée: SPEED_GAIN).
+static var ZONE_SPEED := {1: 400.0, 3: 440.0, 2: 480.0}   # (the forest: SPEED_BASE)
+static var STORY_GAIN := 7.2
 # Vorace stands this far right of where she used to (part of her off the screen): her balls are seen
 # sooner, and take their height within BALL_SETTLE of leaving her mouth.
-const BOSS_BACK := 140.0
-const BALL_SETTLE := 12.0
-const HEARTS := 1              # one life: the first blow ends the run (Cœur en plus gives a second)
+static var BOSS_BACK := 140.0
+static var BALL_SETTLE := 12.0
+static var HEARTS := 1              # one life: the first blow ends the run (Vitalité adds up to three)
+static var HURT_INV := 1.6          # invincible this long after a blow
 
 const HERO_H := 80.0
 const HERO_HALF := 14.0        # hitbox, smaller than the sprite: forgiving
@@ -44,31 +46,54 @@ const LOG_W := 520.0
 const TOUCH_H := 130.0         # scenery only reacts to a hero running past, not flying far above
 const MONKEY_H := 230.0        # how high the hero must be to greet a monkey
 
-const DASH_CD := [0.0, 14.0, 10.0, 7.0]
-const SLOW_TIME := [0.0, 3.0, 4.5]
-const SLOW_CD := 20.0
+# Esquive (the "dash" of old saves): DODGE_SPEED more for DODGE_TIME (200 m/s for 0.2 s: 40 m), breaking
+# whatever can be broken on the way and passing through the rest; then DODGE_INV of safety.
+static var DASH_CD := [0.0, 14.0, 10.0, 7.0]
+static var DODGE_SPEED := 8000.0
+static var DODGE_TIME := 0.2
+static var DODGE_INV := 0.3
+static var SLOW_TIME := [0.0, 3.0, 4.5]
+static var SLOW_CD := 20.0
+static var SLOW_PACE := 0.45            # the Sablier: the world at 45 % of its pace
 # The Sablier's end is announced: the last SLOW_WARN seconds tick and blink, then the world eases back.
 const SLOW_WARN := 2.0
 const SLOW_TICKS := [2.0, 1.5, 1.0, 0.65, 0.4, 0.2]
 const SLOW_EASE := 0.35
-const MAGNET := [0.0, 110.0, 170.0, 240.0]
-const DRUNK := [0.0, 0.06, 0.1, 0.15]   # Faune alcoolisée: share of the creatures that are harmless
-const FLAP := 600.0                     # how fast the leaf rotor climbs (430 before 0.33: too slow to dodge)
-const VOL_DROP := 1.4                   # with the Vol, once released: gravity this many times stronger
-# (static, not const: the debug menu may change these, see debug.gd)
+static var MAGNET := [0.0, 110.0, 170.0, 240.0]
+static var DRUNK := [0.0, 0.06, 0.1, 0.15]   # Relique altérée: share of the creatures that are harmless
+# Relique altérée also stops the sceneries from changing: where one would begin, a strip of the next
+# one RELIC_STRIP long goes by, and the scenery comes back.
+static var RELIC_STRIP := 480.0
+static var SPRING_K := 0.1              # Ressort: this much more push per level
+# The Vol: how fast the leaf rotor climbs, by level (12, 13.5, 15 m/s); once released the climb stops
+# (VOL_STOP: 1 at once, 0 not at all) and gravity is VOL_DROP times stronger until he lands.
+static var FLAP_LV := [0.0, 480.0, 540.0, 600.0]
+static var VOL_DROP := 1.2
+static var VOL_STOP := 1.0
+# Bottes de métal: he falls BOOTS_FALL times faster; the button dives him down at BOOTS_DIVE (on the
+# floor: at once) and the quake breaks the crates and kills the creatures within BOOTS_RANGE of him.
+static var BOOTS_FALL := 1.25
+static var BOOTS_DIVE := 1500.0
+static var BOOTS_RANGE := [0.0, 120.0, 180.0]
+static var BOOTS_CD := [0.0, 8.0, 5.0]
+# Fana de TNT: the button throws a stick that lands TNT_FLIGHT later and blows up everything ahead of him
+# up to the right edge (not the bosses, nor their acid).
+static var TNT_CD := [0.0, 25.0, 18.0, 12.0]
+static var TNT_FLIGHT := 0.55
+# (the debug menu may change these too, see debug.gd)
 static var SPEED_BASE := 360.0
 static var SPEED_GAIN := 5.0
 static var SPEED_SPRINT := 160.0
 const RAMP := 70.0
-const JUMP_V := 760.0
-const JUMP_DOUBLE := 700.0
-const JUMP_GRAVITY := 2400.0
-const JUMP_HELD := 1500.0
+static var JUMP_V := 760.0
+static var JUMP_DOUBLE := 700.0
+static var JUMP_GRAVITY := 2400.0
+static var JUMP_HELD := 1500.0
 # The flyer: a "!" at the right edge shows its height DART_WARN seconds before it crosses the screen.
 const DART_W := 64.0
 const DART_H := 40.0
-const DART_WARN := 1.0
-const DART_SPEED := 800.0
+static var DART_WARN := 1.0
+static var DART_SPEED := 800.0
 const GAP_DIST := 420.0
 const GAP_TIME := 0.72
 const GAP_MARGIN := 110.0
@@ -82,12 +107,23 @@ static var FROM_MID := 1500.0
 
 # Mounts. `half` and `tall`: the hitbox with the hero on its back; `base` and `gain`: its pace;
 # `ahead`: how fast it moves on while waiting, as a share of the hero's speed.
-const MOUNTS := {
+static var MOUNTS := {
 	"gorilla": {"name": "Gorille", "jump": -820.0, "half": 34.0, "tall": 118.0, "base": 300.0, "gain": 24.0, "ahead": 0.45},
 	"rhino": {"name": "Rhino", "jump": -560.0, "half": 34.0, "tall": 104.0, "smash": true, "tough": true, "time": 8.0, "grab_w": 78.0, "grab_h": 150.0, "mul": 2.0, "ramp": 420.0, "ahead": 0.0},   # mul: twice the hero's own speed, reached within a second or two (ramp)
 	"dragonfly": {"name": "Libellule", "fly": true, "half": 28.0, "tall": 92.0, "base": 320.0, "gain": 56.0, "ahead": 0.5},   # gain: twice the acceleration it had
 }
 const MOUNT_KINDS := ["gorilla", "rhino", "dragonfly"]
+static var MOUNT_FIRST := [700.0, 1000.0]   # metres: the first one, then the next ones after the last
+static var MOUNT_NEXT := [1300.0, 1800.0]
+static var FRIEND_K := 0.25                 # Ami de la nature: that much sooner per level
+# Each mount has its own two upgrades, "<kind>Tamed" and "<kind>Magnet" (bought and switched apart).
+# Dompté: caught from TAME_REACH away, waiting TAME_SLOW less fast per level, the gorilla and the
+# dragonfly TAME_UP further from their height per level, the rhino TAME_RHINO above it (even jumping).
+static var TAME_REACH := [70.0, 115.0, 160.0]
+static var TAME_SLOW := 0.3
+static var TAME_UP := 40.0
+static var TAME_RHINO := 70.0
+static var MOUNT_MAGNET := [0.0, 170.0, 240.0]
 
 # Vorace's end, slowed down to be seen: the run drops to DEATH_PACE of the fight's speed while she goes
 # down (DEATH_TIME seconds), then DEATH_CALM units of coins only and DEATH_EASY of a gentle road.
@@ -96,8 +132,8 @@ const DEATH_TIME := 2.9
 const DEATH_CALM := 900.0
 const DEATH_EASY := 2600.0
 static var BOSS_AT := 2000.0
-const BOSS_SPEED := 560.0
-const BOSS_FIGHT := 26.0
+static var BOSS_SPEED := 560.0
+static var BOSS_FIGHT := 26.0
 const BOSS_W := 446.0
 const BOSS_MOUTH_X := 50.0
 const BOSS_MOUTH_Y := 223.0
@@ -118,26 +154,34 @@ const CURTAIN := [128.0, 232.0, 336.0, 440.0]   # red spiders moving together: f
 const CURTAIN_SHIFT := 2
 const CURTAIN_LEAD := 360.0
 const SKY_HOVERS := [272.0, 376.0, 466.0]
+# Never more than SPIDER_COLUMN spiders one above the other (a column): a third is not laid.
+static var SPIDER_COLUMN := 2
 # The spiders: the yellow ones (low, LOW) keep still; the red ones (any higher) go up and down SPIDER_AMP
 # each way of their height (5 m in all) in SPIDER_PERIOD seconds, never past the floor or the ceiling.
-const SPIDER_AMP := 100.0
-const SPIDER_PERIOD := 2.4
+static var SPIDER_AMP := 100.0
+static var SPIDER_PERIOD := 2.4
 const SPIDER_TOP := 566.0       # the highest a spider's middle goes: its back under the ceiling
 # Waves of flyers: 2 at 9 m/s up to 10 at 30 m/s, 0.9 s apart down to 0.3 s. On foot they come at head
 # height (stay down) or just over his head (Double saut); a low one (jump it) only with WAVE_JUMP seconds
 # before the next. With the Vol each one aims at his height. Nothing else on the road while they pass.
-const WAVE_N := [2, 10]
-const WAVE_GAP := [0.9, 0.3]
+static var WAVE_N := [2, 10]
+static var WAVE_GAP := [0.9, 0.3]
 const WAVE_JUMP := 0.8
-# Rare floating things, zigzagging a little within reach of a jump: a life, or a brake (-4 m/s for good).
-const BONUS_EVERY := [1400.0, 2400.0]   # metres between two
+# Rare floating things, zigzagging a little within reach of a jump: a life, or an hourglass (a brake: 20 %
+# of his speed off, for the rest of the run, or of the scenery in Histoire). The hourglass, once on the
+# screen, goes on ahead at BRAKE_PACE of his speed: it stays in sight a long time.
+static var BONUS_EVERY := [1400.0, 2400.0]   # metres between two
 const BONUS_LOW := 110.0
 const BONUS_HIGH := 180.0
-const BRAKE := 160.0
+static var BRAKE_SHARE := 0.2
+static var BRAKE_PACE := 0.9
 const DART_TOP := 560.0                  # the highest a flyer can come: the hero's middle just under the ceiling
 const CAMP_BAND := 70.0
-const CAMP_TIME := 2.6
-const CAMP_AGAIN := 1.6
+static var CAMP_TIME := 2.6
+static var CAMP_AGAIN := 1.6
+# The swarms: the first one between FM_FIRST metres, the next ones FM_NEXT after the last.
+static var FM_FIRST := [150.0, 230.0]
+static var FM_NEXT := [170.0, 300.0]
 # Dernier élan: knocked out on the last heart, he is thrown ahead (LEAP_KICK x his speed, more per
 # level) and up (more the faster he ran), slows down gently and bounces once per level.
 const LEAP_KICK := 1.3
@@ -167,8 +211,8 @@ const LASER_OFF := 0.7
 const LASER_END := 0.95
 const LASER_H := 40.0
 
-const GEMS := {"y": 5, "r": 10, "b": 20}
-const SCATTER := [0.0, 0.012, 0.022, 0.035]
+static var GEMS := {"y": 5, "r": 10, "b": 20}
+static var SCATTER := [0.0, 0.012, 0.022, 0.035]
 const HEART_GOLD := 25
 # Picking up: one box, COIN_HALF to each side of him, from just under his feet to COIN_TOP above his head
 # (the leaves on his head reach well above his hitbox). Rolled into a ball, as high as the ball (BALL_REACH).
@@ -195,7 +239,7 @@ const HEAD := 165.0
 const DECOR_W := 70.0
 const PLAT_KIND := ["isle", "isle", "hover", "walk"]
 
-# Groups of coins drawn as text in assets/patterns.txt.
+# Groups of coins drawn as text in reglages/patterns.txt.
 static var shapes: Array = []
 
 # ---------- the things in a run ----------
@@ -220,6 +264,7 @@ class Player:
 	var vine_leap := false
 	var ball = null
 	var balled := 0.0
+	var diving := false     # Bottes de métal: plunging down, the quake when he lands
 
 class Obs:
 	var x := 0.0
@@ -377,6 +422,15 @@ class Leap:
 	var n := 0
 	var v := 0.0
 
+## A stick of TNT in the air (Fana de TNT): it blows up when its time is out.
+class Shot:
+	var x := 0.0
+	var y := 0.0
+	var vx := 0.0
+	var vy := 0.0
+	var t := 0.0
+	var spin := 0.0
+
 class Box:
 	var l := 0.0
 	var r := 0.0
@@ -389,6 +443,8 @@ class Controls:
 	var hold := false
 	var dash := false
 	var slow := false
+	var stomp := false       # Bottes de métal
+	var tnt := false         # Fana de TNT
 
 class Shape:
 	var name := ""
@@ -406,6 +462,7 @@ class Run:
 	var sx := 10.0
 	var base := 280.0
 	var speed := 280.0
+	var road_speed := 280.0           # the speed without the hourglasses: the road's spacing (the same seed, the same road)
 	var dist := 0.0
 	var gold := 0
 	var gems := 0
@@ -428,6 +485,9 @@ class Run:
 	var easy_until := 0.0
 	var dash := Active.new()
 	var slow := Active.new()
+	var boots := Active.new()
+	var tnt := Active.new()
+	var shots: Array = []          # the sticks of TNT in the air
 	var rewind_left := 0
 	var dead := false
 	var shake := 0.0
@@ -475,6 +535,10 @@ class Run:
 	var camp_t := 0.0
 	var last_gap := -1             # the gap of the last column of spiders
 	var fatal := false             # the blow that ends the run has been dealt ("fatal" event: the photo)
+	var spider_xs: Array = []         # where the road laid its spiders (the columns, see add_hover)
+	var strip_biome := -1          # Relique altérée: a short strip of another scenery, from strip_x0 to strip_x1
+	var strip_x0 := 0.0
+	var strip_x1 := 0.0
 
 	func lvl(id: String) -> int:
 		return int(up.get(id, 0))
@@ -515,7 +579,11 @@ static func h01(i: float, s: float) -> float:
 	return x - floor(x)
 
 static func friend(run: Run) -> float:          # Ami de la nature: mounts come that much sooner
-	return 1.0 + 0.25 * run.lvl("nature")
+	return 1.0 + FRIEND_K * run.lvl("nature")
+
+## The Vol's climb at the level owned.
+static func flap(run: Run) -> float:
+	return FLAP_LV[clampi(run.lvl("flight"), 1, FLAP_LV.size() - 1)]
 
 static func gem_kind() -> String:
 	return pick(["y", "y", "y", "y", "y", "y", "r", "r", "r", "b"])
@@ -604,13 +672,16 @@ static func new_run(upgrades: Dictionary, mode: String = "story", seed_: int = -
 	run.up = upgrades
 	run.base = SPEED_BASE + (SPEED_SPRINT if run.lvl("sprint") > 0 else 0.0)
 	run.speed = SPEED_BASE
-	run.hearts = HEARTS + (1 if run.lvl("heart") > 0 else 0)
+	run.road_speed = SPEED_BASE
+	run.hearts = HEARTS + run.lvl("heart")          # Vitalité: a heart more per level
 	run.max_hearts = run.hearts
-	run.dash.full = DASH_CD[run.lvl("dash")]
+	run.dash.full = DASH_CD[mini(run.lvl("dash"), DASH_CD.size() - 1)]
 	run.slow.full = SLOW_CD
+	run.boots.full = BOOTS_CD[mini(run.lvl("boots"), BOOTS_CD.size() - 1)]
+	run.tnt.full = TNT_CD[mini(run.lvl("tnt"), TNT_CD.size() - 1)]
 	run.rewind_left = 1 if run.lvl("rewind") > 0 else 0
-	run.next_mount = wrnd(700, 1000) / friend(run)
-	run.next_fm = wrnd(150, 230)
+	run.next_mount = wrnd(MOUNT_FIRST[0], MOUNT_FIRST[1]) / friend(run)
+	run.next_fm = wrnd(FM_FIRST[0], FM_FIRST[1])
 	run.boss_at = BOSS_AT + wrnd(-100, 100)
 	run.next_bonus = wrnd(BONUS_EVERY[0], BONUS_EVERY[1]) * 0.5
 	if mode == "endless":                    # no boss: the sceneries come with the marks
@@ -643,6 +714,8 @@ static func flat_at(run: Run, x: float, w: float) -> bool:
 
 ## Which scenery a spot belongs to: the new one begins at run.biome_x and scrolls in.
 static func biome_at(run: Run, x: float) -> int:
+	if run.strip_biome >= 0 and x >= run.strip_x0 and x < run.strip_x1:
+		return run.strip_biome                   # Relique altérée: the scenery that nearly came
 	return run.biome if x >= run.biome_x else run.prev_biome
 
 ## The hero starts shut inside the temple: a short rumble, then the doorway blows out and he runs.
@@ -749,6 +822,15 @@ static func add_spiky(run: Run, x: float) -> void:
 ## A hanging spider whose middle is `h` above the floor. A red one (higher than LOW) goes up and down
 ## round that height; spiders of one column share `ph` so its opening moves as a whole.
 static func add_hover(run: Run, x: float, h: float, ph: float = -1.0) -> Obs:
+	var above = 0                                # never a third spider in one column (counted on what the road
+	for qx in run.spider_xs:                     # laid, never on what the player broke: the same seed, the same road)
+		if absf(qx - x) < HOVER_W:
+			above += 1
+	if above >= SPIDER_COLUMN:
+		return null
+	run.spider_xs.append(x)
+	if run.spider_xs.size() > 64:
+		run.spider_xs = run.spider_xs.filter(func(q): return q > x - 3000)
 	var o = add_obs(run, x, floor_at(run, x) - h - HOVER_H / 2, HOVER_W, HOVER_H, "hover", false)
 	o.biome = biome_at(run, x)
 	o.ph = ph if ph >= 0 else wrnd(0, TAU)
@@ -763,10 +845,10 @@ static func add_hover(run: Run, x: float, h: float, ph: float = -1.0) -> Obs:
 ## seconds before the next: a jump lasts 0.63 s, a flyer at head height must find him back on the floor.
 ## With the Vol, each takes his height when its "!" shows. Returns the stretch of road it takes.
 static func _wave(run: Run, x: float, tier: int) -> float:
-	var k = clampf((run.speed - SPEED_BASE) / (1200.0 - SPEED_BASE), 0, 1)
+	var k = clampf((run.road_speed - SPEED_BASE) / (1200.0 - SPEED_BASE), 0, 1)
 	var n = clampi(roundi(lerpf(WAVE_N[0], WAVE_N[1], k) * wrnd(0.6, 1.0)), WAVE_N[0], WAVE_N[1])
 	var dt_ = lerpf(WAVE_GAP[0], WAVE_GAP[1], k)
-	var v = maxf(run.speed, 1.0)
+	var v = maxf(run.road_speed, 1.0)
 	var at = 0.0
 	for i in n:
 		var alt = 170.0
@@ -911,8 +993,8 @@ static func spawn_pattern(run: Run) -> void:
 			var n = 2 + W.randi() % 2
 			for i in n:
 				var h = LOW if i % 2 == 0 else (wpick([HEAD] + SKY_HOVERS) if tier >= 2 else HEAD)
-				add_hover(run, x + i * maxf(320, run.speed * 0.9), h)
-			extent = (n - 1) * maxf(320, run.speed * 0.9) + HOVER_W
+				add_hover(run, x + i * maxf(320, run.road_speed * 0.9), h)
+			extent = (n - 1) * maxf(320, run.road_speed * 0.9) + HOVER_W
 		"lowhover":                                # a low spider: jump it
 			add_hover(run, x, LOW)
 			coin_arc(run, x - 40, 150, 5, 160)
@@ -922,21 +1004,21 @@ static func spawn_pattern(run: Run) -> void:
 			add_hover(run, x + 120, h)
 			coin_line(run, x, floor_at(run, x) - (h - 110), 7)
 			extent = 400
-		"curtain":                                 # a column of red spiders moving together, one place empty: through there
-			var g = W.randi() % CURTAIN.size()
+		"curtain":                                 # a column of two red spiders moving together, two places empty: through there
+			var g = W.randi() % (CURTAIN.size() - 1)   # the lower of the two free places
 			if run.last_gap >= 0:
 				g = clampi(g, run.last_gap - CURTAIN_SHIFT, run.last_gap + CURTAIN_SHIFT)
 			run.last_gap = g
 			var cx = x + CURTAIN_LEAD
 			var ph = wrnd(0, TAU)
 			for k in CURTAIN.size():
-				if k != g:
+				if k != g and k != g + 1:
 					add_hover(run, cx, CURTAIN[k], ph)
 			for i in 5:                            # coins where the gap is in the middle of its course
-				coin(run, cx - 140 + i * 70, floor_at(run, cx) - CURTAIN[g])
+				coin(run, cx - 140 + i * 70, floor_at(run, cx) - (CURTAIN[g] + CURTAIN[g + 1]) / 2)
 			extent = CURTAIN_LEAD + HOVER_W + 120
 		"double":
-			var d = run.speed + 90
+			var d = run.road_speed + 90
 			add_spiky(run, x)
 			add_spiky(run, x + d)
 			extent = d + SPIKY_W
@@ -1085,7 +1167,7 @@ static func spawn_pattern(run: Run) -> void:
 			it.ph = wrnd(0, ZIG_PERIOD * 2)
 			it.y = G - ZIG_LOW
 			run.items.append(it)
-			run.next_mount = x / PPM + wrnd(1300, 1800) / friend(run)
+			run.next_mount = x / PPM + wrnd(MOUNT_NEXT[0], MOUNT_NEXT[1]) / friend(run)
 			extent = 460
 	# Under a roof nobody can jump, so nothing there may have to be jumped over.
 	for pl in run.plats:
@@ -1098,7 +1180,7 @@ static func spawn_pattern(run: Run) -> void:
 
 	# The gap to the next pattern is set in distance (GAP_DIST), so the road keeps its density as the
 	# speed grows; only where a jump would no longer have room to land does it widen with the speed.
-	var gap = maxf(GAP_DIST, run.speed * GAP_TIME + GAP_MARGIN) * wrnd(0.85, 1.3) * (1.3 if kind == "coins" else 1.0)
+	var gap = maxf(GAP_DIST, run.road_speed * GAP_TIME + GAP_MARGIN) * wrnd(0.85, 1.3) * (1.3 if kind == "coins" else 1.0)
 	var clear = run.fm == null and not run.fm_due and run.boss == null and kind != "wave"
 	if clear and x / PPM >= run.next_bonus and x / PPM > 300:   # a life or a brake, floating in the gap
 		add_bonus(run, x + extent + gap * 0.5)
@@ -1252,16 +1334,20 @@ static func spawn_ride(run: Run) -> void:
 				for k in mixed.size():
 					add_hover(run, x + k * 200, mixed[k])
 				extent = mixed.size() * 200
-			"gate":                                      # a column of creatures with a wide opening
+			"gate":                                      # two creatures in a column, a wide opening next to them
 				var open = W.randi() % 4
 				var gph = wrnd(0, TAU)
+				var closed: Array = []
 				for k in lanes.size():
 					if k != open and k != open + 1:
-						add_hover(run, x + 200, lanes[k], gph)
+						closed.append(k)
+				wshuffle(closed)
+				for k in closed.slice(0, SPIDER_COLUMN):
+					add_hover(run, x + 200, lanes[k], gph)
 				coin_line(run, x, G - (lanes[open] + lanes[open + 1]) / 2, 8)
 				extent = 360
 			"tower":                                     # a column of creatures from the floor up: over the top
-				var count = 2 + W.randi() % 3
+				var count = SPIDER_COLUMN
 				var tph = wrnd(0, TAU)
 				for k in count:
 					add_hover(run, x + 110, 60 + k * 110, tph)
@@ -1316,7 +1402,7 @@ static func _boss_lob(run: Run, mouth: Vector2, ahead: float, T: float = 0.9) ->
 # runs into). A ball up high passes over a short jump: it never decides anything. A new attack is only
 # thrown if, with the dangers already on their way, a short jump (TAP_AIR in the air) still gets him
 # through everything, with REACT seconds to spare between two moves.
-const TAP_AIR := 0.63                # JUMP_V up, JUMP_GRAVITY down
+static var TAP_AIR := 0.6333          # JUMP_V up, JUMP_GRAVITY down (tune.gd works it out again)
 const REACT := 0.2
 const WIND := 0.45                   # her jaws open this long before she fires
 const FAN_LANES := [64.0, 168.0, 272.0, 376.0, 480.0, 560.0]   # up to the ceiling
@@ -1569,13 +1655,9 @@ static func boss(run: Run, d: float) -> void:
 		run.calm_until = g0 + 16 * 48 + DEATH_CALM
 		run.easy_until = run.calm_until + DEATH_EASY
 		run.next_x = maxf(run.next_x, g0)
-		# the world moves on after the gems, unless the Gros sac à dos muffles the relic (one time in two)
-		if not (run.lvl("jammer") > 0 and randf() < 0.5):
-			run.next_biome_at = run.dist + (g0 + 16 * 48 - run.cam - run.sx) / PPM
-			run.by_mark = false
-		else:
-			run.next_biome_at = maxf(2 * ZONE, (floorf(run.dist / ZONE) + 1) * ZONE)
-			run.by_mark = true
+		# the world moves on after the gems (with the Relique altérée, another scenery only goes by)
+		run.next_biome_at = run.dist + (g0 + 16 * 48 - run.cam - run.sx) / PPM
+		run.by_mark = false
 		run.events.append("bossdown")
 
 # ---------- blows, breaks, mounts ----------
@@ -1587,7 +1669,7 @@ static func loot(run: Run, x: float, y: float) -> void:
 	c.vy = rnd(-560, -260)
 	c.loot = 0
 
-# Breaking a creature (in a Ruée): a burst, and a coin.
+# Breaking a creature (Esquive, boots, TNT): a burst, and a coin.
 static func destroy(run: Run, o: Obs) -> void:
 	o.gone = true
 	var cx = o.x + o.w / 2
@@ -1613,6 +1695,78 @@ static func smash(run: Run, dc: Decor) -> void:
 	burst(run, cx, cy, Color("#e8c890"), 12, 420)    # splinters
 	run.shake = maxf(run.shake, 0.3)
 	run.events.append("crate")
+
+# Bottes de métal: the quake where the boots hit the floor. Crates within BOOTS_RANGE break; creatures
+# down there (on the floor or low above it) are crushed. Nothing up high, nor a boss, nor her acid.
+static func quake(run: Run, x: float, fy: float) -> void:
+	var R: float = BOOTS_RANGE[mini(run.lvl("boots"), BOOTS_RANGE.size() - 1)]
+	for o in run.obs:
+		if o.gone or o.kind == "acid" or absf(o.x + o.w / 2 - x) > R + o.w / 2:
+			continue
+		if o.kind == "spiky" or o.y + o.h > fy - 150:
+			destroy(run, o)
+	for dc in run.decor:
+		if not dc.broken and absf(dc.x + DECOR_W / 2 - x) < R + 40:
+			smash(run, dc)
+	for i in 22:                                     # stones and dust thrown along the floor both ways
+		var side = -1.0 if i % 2 == 0 else 1.0
+		part(run, x + side * rnd(0, R), fy - rnd(2, 14), side * rnd(80, 420), rnd(-420, -120), rnd(0.35, 0.7), colour_of(["#8a8fa8", "#cfd3e6", "#e9dcc0", "#6a6f8c"]), rnd(5, 12), 1600)
+	run.shake = maxf(run.shake, 0.7)
+	run.events.append("quake")
+
+# Fana de TNT: a stick thrown ahead in an arc; it lands TNT_FLIGHT later, a few metres ahead of him.
+static func throw_tnt(run: Run) -> void:
+	var sh = Shot.new()
+	sh.x = run.cam + run.sx + 10
+	sh.y = run.p.y - 60
+	var land = sh.x + run.speed * TNT_FLIGHT + 320
+	var g = 2000.0
+	sh.vx = (land - sh.x) / TNT_FLIGHT
+	sh.vy = (floor_at(run, land) - 24 - sh.y - 0.5 * g * TNT_FLIGHT * TNT_FLIGHT) / TNT_FLIGHT
+	run.shots.append(sh)
+	run.events.append("throw")
+
+static func shots(run: Run, d: float) -> void:
+	for sh in run.shots:
+		sh.t += d
+		sh.vy += 2000 * d
+		sh.x += sh.vx * d
+		sh.y += sh.vy * d
+		sh.spin += d * 14
+		if randf() < 0.7:                            # the fuse sparks
+			part(run, sh.x, sh.y - 12, rnd(-60, 60), rnd(-120, -20), 0.25, colour_of(["#ffd35c", "#fff3a8", "#ff7a2a"]), rnd(3, 6), 300)
+		if sh.t >= TNT_FLIGHT:
+			blast(run, sh.x, sh.y)
+	run.shots = run.shots.filter(func(q): return q.t < TNT_FLIGHT)
+
+## The stick blows up: every creature and obstacle ahead of him, up to past the right edge, goes (a swarm
+## too); the bosses and their acid stand.
+static func blast(run: Run, x: float, y: float) -> void:
+	var px = run.cam + run.sx
+	var far = run.cam + run.view_w + 160
+	for o in run.obs:
+		if not o.gone and o.kind != "acid" and o.x + o.w > px + 20 and o.x < far:
+			destroy(run, o)
+	for dc in run.decor:
+		if not dc.broken and dc.x + DECOR_W > px + 20 and dc.x < far:
+			smash(run, dc)
+	var f = run.fm
+	if f != null and not f.hit and f.sx < run.view_w + 120:
+		f.hit = true
+		f.waves = 1
+		f.phase = "rush"                             # gone at once, whatever it was doing
+		f.t = 1.0
+		f.sx = -999
+		for k in FM_LANES:
+			if f.act[k]:
+				burst(run, run.cam + run.view_w - 110, GROUND - (k + 0.5) * FM_STEP, Color("#7fe0c8"), 10, 300)
+	for i in 40:                                     # the fireball
+		var a = rnd(0, TAU)
+		var v = rnd(120, 640)
+		part(run, x, y, cos(a) * v, sin(a) * v - 120, rnd(0.35, 0.8), colour_of(["#ff2e1f", "#ff7a1a", "#ffd23c", "#fff3a0", "#4a4f6c"]), rnd(8, 20), 500)
+	run.boom = maxf(run.boom, 0.55)
+	run.shake = 1
+	run.events.append("tnt")
 
 # Hit on a mount: the animal takes the blow in the hero's place and vanishes in a puff. `ended`: its
 # time is up (the rhino), it trots off and nothing is lost.
@@ -1667,7 +1821,7 @@ static func hit(run: Run, o: Obs) -> void:
 	run.shake = 0.6
 	run.flash = 1
 	if run.hearts > 0 or run.god:
-		run.p.inv = 1.6
+		run.p.inv = HURT_INV
 		burst(run, run.cam + run.sx, run.p.y - 40, Color("#ff4d6d"), 12, 300)
 		run.events.append("hurt")
 		return
@@ -1834,7 +1988,7 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 		return
 	run.fm = null
 	run.fm_due = false
-	run.next_fm = run.dist + wrnd(170, 300)
+	run.next_fm = run.dist + wrnd(FM_NEXT[0], FM_NEXT[1])
 	run.next_x = maxf(run.next_x, run.cam + run.view_w + 150)   # obstacles come back from beyond the screen
 
 # ---------- update ----------
@@ -1885,6 +2039,11 @@ static func hitboxes(run: Run) -> Dictionary:
 				box.call(x0 + 8, x0 + FM_W - 8, y1 + 6, y1 + FM_H - 6, "danger" if f.phase == "rush" else "waiting")
 	return {"boxes": out, "coin": null}
 
+static func _ease_speed(v: float, pace: float, ramp: float, dt: float) -> float:
+	if pace > v:
+		return minf(pace, v + ramp * dt)
+	return v + (pace - v) * minf(1, dt * 3)
+
 static func update(run: Run, dt: float, input: Controls) -> void:
 	W = run.rng                                      # this run's road dice (the shop's preview has its own)
 	# Particles and screen effects keep living after death.
@@ -1896,7 +2055,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	run.blend = minf(1, run.blend + dt / 1.2)
 	var ts = 1.0
 	if run.slow.t > 0:                               # the Sablier slows the world, not the timers
-		ts = 0.45 + 0.55 * maxf(0, 1 - run.slow.t / SLOW_EASE)
+		ts = SLOW_PACE + (1 - SLOW_PACE) * maxf(0, 1 - run.slow.t / SLOW_EASE)
 	var d = dt * ts
 	if run.gone != null:
 		run.gone.t += dt
@@ -1948,8 +2107,13 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			pl.y = pl.y0 + sin(run.t * PAD_SPEED + pl.ph) * pl.bob
 
 	# --- actives ---
+	var was_dashing = run.dash.t > 0
 	run.dash.t = maxf(0, run.dash.t - dt)
 	run.dash.cd = maxf(0, run.dash.cd - dt)
+	run.boots.cd = maxf(0, run.boots.cd - dt)
+	run.tnt.cd = maxf(0, run.tnt.cd - dt)
+	if was_dashing and run.dash.t == 0:
+		p.inv = maxf(p.inv, DODGE_INV)              # out of the Esquive: a moment to find his feet
 	var slow_was = run.slow.t
 	run.slow.t = maxf(0, run.slow.t - dt)
 	run.slow.cd = maxf(0, run.slow.cd - dt)
@@ -1959,8 +2123,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				run.events.append("slowtick")
 		if run.slow.t == 0:
 			run.events.append("slowend")
+	if run.leap == null and input.tnt and run.lvl("tnt") > 0 and run.tnt.cd == 0:
+		run.tnt.cd = run.tnt.full
+		throw_tnt(run)
 	if run.leap == null and input.dash and run.lvl("dash") > 0 and run.dash.cd == 0:
-		run.dash.t = 0.55
+		run.dash.t = DODGE_TIME
 		run.dash.cd = run.dash.full
 		run.events.append("dash")
 	if run.leap == null and input.slow and run.lvl("slow") > 0 and run.slow.cd == 0:
@@ -1974,22 +2141,24 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	# The hero's own speed grows for ever; a mount, then the boss, impose theirs while they last.
 	var own: float
 	if run.mode == "story":                          # each scenery from its own speed, gaining 0.25 m/s a second
-		own = run.base + ZONE_EXTRA.get(run.biome, 0.0) + (run.t - run.zone_t) * STORY_GAIN
+		own = run.base + ZONE_SPEED.get(run.biome, SPEED_BASE) - SPEED_BASE + (run.t - run.zone_t) * STORY_GAIN
 	else:
 		own = run.base + run.t * SPEED_GAIN
+	var raw = maxf(SPEED_BASE * 0.6, own)           # without the hourglasses picked up: what the road is laid for
 	own = maxf(SPEED_BASE * 0.6, own - run.brake)
 	var pace = own
+	var road_pace = raw
 	if run.boss != null:
 		pace = BOSS_SPEED * (DEATH_PACE if run.boss.phase == "fall" else 1.0)
+		road_pace = pace
 	elif run.mount != null:
 		var R: Dictionary = MOUNTS[run.mount.kind]
 		pace = own * R["mul"] if R.has("mul") else R["base"] + R["gain"] * run.mount.t
+		road_pace = raw * R["mul"] if R.has("mul") else pace
 	# Slowing down is quick; speeding back up (after a mount or the boss) is gradual.
-	if pace > run.speed:
-		var ramp = MOUNTS[run.mount.kind].get("ramp", RAMP) if run.mount != null and run.boss == null else RAMP
-		run.speed = minf(pace, run.speed + ramp * dt)
-	else:
-		run.speed = run.speed + (pace - run.speed) * minf(1, dt * 3)
+	var ramp = MOUNTS[run.mount.kind].get("ramp", RAMP) if run.mount != null and run.boss == null else RAMP
+	run.speed = _ease_speed(run.speed, pace, ramp, dt)
+	run.road_speed = _ease_speed(run.road_speed, road_pace, ramp, dt)
 	run.own = own
 	run.relic = maxf(0, run.relic - dt * 0.6)
 	var gorilla_on = run.mount != null and run.mount.kind == "gorilla"
@@ -2001,7 +2170,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	if run.leap != null:
 		move = run.leap.v * d
 	else:
-		move = run.speed * (1.7 if dashing else 1.0) * (1.8 if run.exploded and run.sx < PX else 1.0) * d
+		move = (run.speed + (DODGE_SPEED if dashing else 0.0)) * (1.8 if run.exploded and run.sx < PX else 1.0) * d
+	var px0 = run.cam + run.sx                      # where he was: the Esquive sweeps everything between
 	if run.sx < PX:
 		run.sx = minf(PX, run.sx + move)
 	else:
@@ -2032,7 +2202,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		var M: Dictionary = MOUNTS[run.mount.kind] if run.mount != null else {}
 		var mounted = run.mount != null
 		var gorilla = gorilla_on
-		var spring = 1.0 + 0.1 * run.lvl("spring")
+		var spring = 1.0 + SPRING_K * run.lvl("spring")
 		p.inv = maxf(0, p.inv - dt)
 		p.buf = maxf(0, p.buf - dt)
 		p.spin = maxf(0, p.spin - dt)
@@ -2098,7 +2268,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				p.cruise = 0
 				p.rotor = input.pressed or input.hold
 				if input.pressed:
-					p.vy = minf(p.vy, -FLAP)
+					p.vy = minf(p.vy, -flap(run))
 					run.events.append("flap")
 		elif p.hang:
 			# the gorilla under the vines: it swings from one to the next until a press lets go
@@ -2111,6 +2281,15 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				p.jumps = 1
 				run.events.append("drop")
 		else:
+			if input.stomp and run.lvl("boots") > 0 and run.boots.cd == 0 and not mounted and run.boss == null:
+				run.boots.cd = run.boots.full        # Bottes de métal: on the floor the quake comes at once,
+				if p.ground:                         # in the air he plunges down and it comes as he lands
+					quake(run, px, p.y)
+				else:
+					p.diving = true
+					p.rotor = false
+					p.vy = maxf(p.vy, BOOTS_DIVE)
+					run.events.append("dive")
 			if input.pressed:
 				if p.ground:                         # on foot, a press is a plain jump
 					jump(run, (M["jump"] if mounted else -JUMP_V) * spring)
@@ -2122,16 +2301,16 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 					jump(run, -JUMP_DOUBLE * spring)
 					burst(run, px, p.y, Color.WHITE, 6, 120)
 					p.rotor = run.lvl("flight") > 0
-				elif not mounted and run.lvl("flight") > 0:   # in the air, every press lifts him at once
+				elif not mounted and run.lvl("flight") > 0 and not p.diving:   # in the air, every press lifts him at once
 					p.rotor = true
 					p.spin = 0.22
-					p.vy = minf(p.vy, -FLAP)
+					p.vy = minf(p.vy, -flap(run))
 					run.events.append("flap")
 				else:
 					p.buf = 0.12                     # pressed just before landing: remembered
 			if not input.hold:
 				if p.rotor and p.vy < 0:
-					p.vy = 0.0                       # the climb stops at once
+					p.vy *= 1.0 - VOL_STOP           # the climb stops (at once with VOL_STOP 1)
 				p.rotor = false                      # released: he drops straight away
 			if p.ground and p.plat != null and (px < p.plat.x - HERO_HALF or px > p.plat.x + p.plat.w + HERO_HALF):
 				p.ground = false                     # ran off the end of a ledge
@@ -2147,13 +2326,16 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 					p.y = fl
 			if not p.ground:
 				var before = p.y
-				if p.rotor:
+				var heavy = BOOTS_FALL if run.lvl("boots") > 0 and p.vy > 0 and not mounted else 1.0   # Bottes de métal: he falls faster
+				if p.diving:
+					p.vy = maxf(p.vy, BOOTS_DIVE)
+				elif p.rotor:
 					p.flew = true
-					p.vy = minf(-FLAP, p.vy + 2400 * d)   # the leaf rotor: a steady climb while held
+					p.vy = minf(-flap(run), p.vy + JUMP_GRAVITY * d)   # the leaf rotor: a steady climb while held
 				elif p.flew:
-					p.vy += JUMP_GRAVITY * VOL_DROP * d    # released after flying: down quickly
+					p.vy += JUMP_GRAVITY * VOL_DROP * heavy * d    # released after flying: down quickly
 				else:
-					p.vy += (JUMP_HELD if (input.hold and p.vy < 0 and not p.vine_leap) else JUMP_GRAVITY) * d
+					p.vy += (JUMP_HELD if (input.hold and p.vy < 0 and not p.vine_leap) else JUMP_GRAVITY * heavy) * d
 				p.flying = p.rotor or p.spin > 0
 				if p.flying and randf() < 0.25:
 					_leaves(run, px, p.y)
@@ -2195,6 +2377,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 					p.flew = false
 					p.spin = 0
 					p.vine_leap = false
+					if p.diving:                         # the boots hit the floor: the quake
+						p.diving = false
+						quake(run, px, land)
 					for i in 5:
 						part(run, px + rnd(-16, 16), land - 2, rnd(-140, 140), rnd(-70, -20), 0.3, Color("#f4f0e0"), rnd(4, 8), 0)
 					if on != null:
@@ -2215,10 +2400,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				o.y = o.y0 - sin(run.t * TAU / SPIDER_PERIOD + o.ph) * o.amp
 		# --- the rare floating things: they zigzag a little; touched, they are his ---
 		for it in run.bonuses:
+			if it.kind == "brake" and it.x < run.cam + run.view_w - 30:
+				it.x += run.speed * BRAKE_PACE * d          # the hourglass, once in sight, keeps ahead of him
 			var fb = floor_at(run, it.x)
 			var zk = fmod(run.t / 1.6 + it.ph, 2.0)
 			it.y = fb - BONUS_LOW - (BONUS_HIGH - BONUS_LOW) * (zk if zk < 1 else 2 - zk)
-			if it.gone or absf(px - it.x) > 40:
+			if it.gone or absf(px - it.x) > (52.0 if it.kind == "brake" else 40.0):
 				continue
 			var tall_b: float = MOUNTS[run.mount.kind]["tall"] if run.mount != null else HERO_H
 			if it.y < p.y - tall_b - 30 or it.y > p.y + 10:
@@ -2229,7 +2416,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				run.max_hearts = maxi(run.max_hearts, run.hearts)
 				burst(run, it.x, it.y, Color("#ff4d6d"), 16, 260)
 			else:
-				run.brake += BRAKE
+				run.brake += run.own * BRAKE_SHARE              # 20 % of his speed, now
 				burst(run, it.x, it.y, Color("#7fd8ff"), 16, 260)
 			run.events.append(it.kind)
 		run.bonuses = run.bonuses.filter(func(b_): return not b_.gone and b_.x > run.cam - 200)
@@ -2241,21 +2428,21 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			if time > 0 and run.mount.t >= time:
 				dismount(run, true)
 		for it in run.items:
-			var tame = run.lvl("tamed")                    # Dompté: they wait for him, and reach out
-			it.x += run.speed * MOUNTS[it.kind]["ahead"] * (1.0 - 0.3 * tame) * d
+			var tame = run.lvl(it.kind + "Tamed")           # Dompté (each animal its own): it waits for him, and reaches out
+			it.x += run.speed * MOUNTS[it.kind]["ahead"] * maxf(0, 1.0 - TAME_SLOW * tame) * d
 			var f = floor_at(run, it.x)
 			if it.kind == "dragonfly":
 				var k = fmod((run.t + it.ph) / ZIG_PERIOD, 2.0)
 				it.y = f - ZIG_LOW - (ZIG_HIGH - ZIG_LOW) * (k if k < 1 else 2 - k)
-			if run.mount != null or absf(px - it.x) > 70 + 45 * tame:
+			if run.mount != null or absf(px - it.x) > TAME_REACH[mini(tame, TAME_REACH.size() - 1)]:
 				continue
 			var reach = false
 			if it.kind == "gorilla":
-				reach = p.y - HERO_H < f - PERCH + 24 + 40 * tame  # up to the gorilla: a high jump
+				reach = p.y - HERO_H < f - PERCH + 24 + TAME_UP * tame  # up to the gorilla: a high jump
 			elif it.kind == "rhino":
-				reach = p.y > f - 50 - 70 * tame                   # the rhino: at its level, not over it
+				reach = p.y > f - 50 - TAME_RHINO * tame           # the rhino: at its level, not over it
 			else:
-				reach = absf(p.y - HERO_H / 2 - it.y) < 64 + 40 * tame   # the dragonfly: where it flies
+				reach = absf(p.y - HERO_H / 2 - it.y) < 64 + TAME_UP * tame   # the dragonfly: where it flies
 			if not reach:
 				continue
 			var mt = Mount.new()
@@ -2266,6 +2453,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			p.flew = false
 			p.hang = false
 			p.vine_leap = false
+			p.diving = false
 			p.inv = maxf(p.inv, 0.5)
 			if MOUNTS[it.kind].get("fly", false):
 				p.ground = false
@@ -2283,7 +2471,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 
 		# --- obstacles ---
 		var box = Box.new()
-		box.l = px - half
+		box.l = (minf(px0, px) if dashing else px) - half   # the Esquive: all the way he went
 		box.r = px + half
 		box.t = p.y - tall + 6
 		box.b = p.y - 2
@@ -2342,8 +2530,10 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 						run.events.append("splash")
 			if o.gone or o.x + 6 > box.r or o.x + o.w - 6 < box.l or o.y + 6 > box.b or o.y + o.h - 6 < box.t:
 				continue
-			if dashing:
-				destroy(run, o)
+			if dashing and o.kind == "acid":
+				continue                             # the Esquive passes through what cannot be broken
+			if dashing or (p.diving and o.kind != "acid"):
+				destroy(run, o)                      # broken by the Esquive, or crushed by the boots
 			elif o.ghost:
 				if not o.passed:
 					o.passed = true
@@ -2353,11 +2543,14 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				if run.dead:
 					return
 				break
-		# scenery that can be smashed, run past with Brise-tout, on the rhino, or in a Ruée
+		# scenery that can be smashed, run past with Brise-tout, on the rhino, or in an Esquive
 		if run.lvl("breaker") > 0 or dashing or M.get("smash", false):
+			var from_x = (minf(px0, px) if dashing else px) - 50
 			for dc in run.decor:
-				if not dc.broken and absf(px - (dc.x + DECOR_W / 2)) < 50 and p.y > floor_at(run, dc.x) - 160:
+				var dcx = dc.x + DECOR_W / 2
+				if not dc.broken and dcx > from_x and dcx < px + 50 and p.y > floor_at(run, dc.x) - 160:
 					smash(run, dc)
+		shots(run, d)                            # Fana de TNT: the sticks in the air
 		if run.leap == null:
 			followers(run, d, box, dashing)
 		if run.dead:
@@ -2410,19 +2603,30 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 
 	# --- scenery change ---
 	var Z = ZONE_ENDLESS if run.mode == "endless" else ZONE
-	if run.dist >= run.next_biome_at and run.by_mark and run.lvl("jammer") > 0 and randf() < 0.5:
-		run.next_biome_at = maxf(2 * Z, (floorf(run.dist / Z) + 1) * Z) if run.mode != "endless" else (floorf(run.dist / Z) + 1) * Z   # the Gros sac à dos muffles the relic: not this time
-	elif run.dist >= run.next_biome_at:
+	if run.dist >= run.next_biome_at:
 		run.by_mark = true                           # from now on the changes come with the distance marks
-		run.prev_biome = run.biome
-		run.biome = NEXT_BIOME[run.biome]
-		run.biome_x = run.cam + run.view_w + 400     # the new scenery starts ahead, off screen, and scrolls in
 		run.next_biome_at = maxf(2 * Z, (floorf(run.dist / Z) + 1) * Z) if run.mode != "endless" else (floorf(run.dist / Z) + 1) * Z
-		if run.mode == "story":                      # a new place: its own speed (ZONE_EXTRA), gaining STORY_GAIN
+		var at = run.cam + run.view_w + 400          # the new scenery starts ahead, off screen, and scrolls in
+		if run.lvl("drunk") > 0:                     # Relique altérée: the next scenery only goes by, and this one comes back
+			run.strip_biome = NEXT_BIOME[run.biome]
+			run.strip_x0 = at
+			run.strip_x1 = at + RELIC_STRIP
+		else:
+			run.prev_biome = run.biome
+			run.biome = NEXT_BIOME[run.biome]
+			run.biome_x = at
+		if run.mode == "story":                      # a new place: its own speed (ZONE_SPEED), gaining STORY_GAIN
 			run.zone_t = run.t
+			run.brake = 0.0                          # (the hourglasses picked up count for one place)
 		run.relic = 1
 		run.glitch = maxf(run.glitch, 0.5)           # the relic flares: it is what moves the world
 		run.events.append("biome")
+	if run.strip_biome >= 0:
+		if run.strip_x1 < run.cam + run.view_w and run.strip_x1 > run.cam + run.view_w - run.speed * dt * 1.5:
+			run.relic = 1                            # the way back comes into sight: the relic flickers again
+			run.glitch = maxf(run.glitch, 0.4)
+		if run.strip_x1 < run.cam - 400:
+			run.strip_biome = -1
 
 	if run.leap == null:
 		# --- scenery reacting as he runs past: it shivers and lets something go ---
@@ -2455,8 +2659,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 
 	# --- coins and gems ---
 	var reach: float = MAGNET[run.lvl("magnet")]
-	if run.mount != null and run.lvl("mountMagnet") > 0:      # Aimant de monture
-		reach = maxf(reach, MAGNET[mini(MAGNET.size() - 1, 1 + run.lvl("mountMagnet"))])
+	var mm = run.lvl(run.mount.kind + "Magnet") if run.mount != null else 0   # the mount's own Aimant
+	if mm > 0:
+		reach = maxf(reach, MOUNT_MAGNET[mini(mm, MOUNT_MAGNET.size() - 1)])
 	var cy = p.y - (20.0 if p.ball != null else 40.0)
 	var grab_w = 0.0
 	var grab_h = 0.0
@@ -2501,7 +2706,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				c.y += dy / dist * 1000 * d
 				continue
 		var caught = false
-		if grab_w > 0:                               # a mount's own reach
+		if dashing and c.x > minf(px0, px) - COIN_HALF and c.x < px + COIN_HALF and c.y < p.y + COIN_UNDER and c.y > p.y - tall_now - COIN_TOP:
+			caught = true                            # the Esquive went through it
+		elif grab_w > 0:                             # a mount's own reach
 			caught = absf(dx) < grab_w and c.y > p.y - grab_h and c.y < p.y + 10
 		elif p.ball != null:
 			caught = absf(dx) < COIN_HALF and c.y < p.y + BALL_UNDER and c.y > p.y - BALL_REACH
