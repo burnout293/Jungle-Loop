@@ -44,10 +44,24 @@ class Layer extends Node2D:
 	func _draw() -> void:
 		var t0 = Time.get_ticks_usec()
 		paint.call(self)
-		Render.draw_us += Time.get_ticks_usec() - t0
+		var spent = Time.get_ticks_usec() - t0
+		Render.draw_us += spent
+		Render.layer_us[name] = Render.layer_us.get(name, 0) + spent
 
 ## Time spent in the drawing code (microseconds, summed since the last read): the FPS corner shows it.
 static var draw_us := 0
+static var layer_us := {}                # the same, layer by layer (the bench prints it)
+
+## A picture drawn once by the same code that draws on screen: its draw_rect calls land in an Image
+## (cables and chains, which are drawn pixel by pixel: hundreds of rectangles each, every frame, otherwise).
+class Baker extends RefCounted:
+	var im: Image
+	var off := Vector2.ZERO
+	func draw_rect(r: Rect2, col: Color, _filled: bool = true, _width: float = -1.0, _aa: bool = false) -> void:
+		var ri = Rect2i(Vector2i(roundi(r.position.x + off.x), roundi(r.position.y + off.y)), Vector2i(roundi(r.size.x), roundi(r.size.y)))
+		ri = ri.intersection(Rect2i(Vector2i.ZERO, im.get_size()))
+		if ri.size.x > 0 and ri.size.y > 0:
+			im.fill_rect(ri, col)
 
 ## What the hero is drawn through: its children only show inside `rect` (he is hidden in the doorway).
 class Clip extends Node2D:
@@ -60,8 +74,11 @@ var view_w := 569.0
 var t := 0.0
 var q := 4.0                           # drawing steps per art pixel
 var shift := false                     # « Signalements décalés »: the fonceurs' warnings stand further in
+var show_dead := false                 # the photo of his fall: he is still drawn, the one frame it is taken
 var hitbox := false                    # the debug menu's « Hitbox »: the boxes the rules test, over everything
 var seat = null                        # where the hero sits on his mount this frame
+var baked := {}                        # the pictures made once by _bake, by name
+var _ti := -1                          # where _floor_from is in the floor's outline
 var dirt: Array = []
 var dirt_t := 0.0
 var back: Layer
@@ -81,6 +98,7 @@ func _ready() -> void:
 
 func _layer(fn: Callable, smooth: bool, parent: Node) -> Layer:
 	var l = Layer.new()
+	l.name = fn.get_method().trim_prefix("_draw_")
 	l.paint = fn
 	if smooth:
 		l.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -129,11 +147,60 @@ func _w(name: String) -> float:
 func sx(wx: float) -> float:
 	return snap(wx / PIXEL - run.cam / PIXEL)
 
+## Game.floor_at for spots taken from left to right (the ground's columns): the outline is walked forward
+## from the last spot instead of searched from its end every time. _ti = -1 starts again.
+func _floor_from(x: float) -> float:
+	var T: Array = run.terrain
+	if _ti < 0 or _ti >= T.size() or T[_ti].x > x:
+		_ti = T.size() - 1
+		while _ti > 0 and T[_ti].x > x:
+			_ti -= 1
+	while _ti + 1 < T.size() and T[_ti + 1].x <= x:
+		_ti += 1
+	var a: Vector2 = T[_ti]
+	if _ti + 1 >= T.size() or x <= a.x:
+		return a.y
+	var b: Vector2 = T[_ti + 1]
+	return a.y + (b.y - a.y) * (x - a.x) / (b.x - a.x)
+
 func floor_px(x: float) -> float:              # floor height under a screen x
 	return n(Game.floor_at(run, (run.cam / PIXEL + x) * PIXEL))
 
 func rect(c: CanvasItem, x: float, y: float, w: float, h: float, col: Color) -> void:
 	c.draw_rect(Rect2(x, y, w, h), col)
+
+## rect() for shapes that are also baked into pictures: `c` is the screen or a Baker.
+func pr(c, x: float, y: float, w: float, h: float, col: Color) -> void:
+	c.draw_rect(Rect2(x, y, w, h), col)
+
+## The picture `key`, painted once by `painter` (given a Baker whose (0, 0) is at `origin` in the picture).
+func _bake(key: String, size: Vector2i, origin: Vector2, painter: Callable) -> Texture2D:
+	if baked.has(key):
+		return baked[key]
+	var b = Baker.new()
+	b.im = Image.create_empty(maxi(1, size.x), maxi(1, size.y), false, Image.FORMAT_RGBA8)
+	b.off = origin
+	painter.call(b)
+	var tex = ImageTexture.create_from_image(b.im)
+	baked[key] = tex
+	return tex
+
+## Something hanging from its top that swings: the rows `r` pixels down are pushed sideways by
+## round(A x r / ln), A being the swing at the bottom now. The picture is drawn in as many bands as there
+## are different pushes (a handful), instead of one per row or per slice. The rows past `ln` (a hook, a
+## plug) keep the push of the bottom.
+func hang_bands(c: CanvasItem, tex: Texture2D, src_x: float, w: float, h: float, x: float, y: float, A: float, ln: float) -> void:
+	var n = absf(A)
+	var sgn = 1.0 if A >= 0 else -1.0
+	var top = 0.0
+	var v = 0
+	while top < h:
+		var bottom = h
+		if n > 0.0001 and v + 0.5 < n:
+			bottom = minf(h, maxf(top + 1, ceilf((v + 0.5) * ln / n)))
+		region(c, tex, src_x, top, w, bottom - top, x + sgn * v, y + top, w, bottom - top)
+		top = bottom
+		v += 1
 
 func blit(c: CanvasItem, tx: Texture2D, x: float, y: float, flip: bool = false, mod: Color = Color.WHITE) -> void:
 	if tx == null:
@@ -447,13 +514,7 @@ func draw_hanging_vines(c: CanvasItem) -> void:
 func hang(c: CanvasItem, im: Texture2D, H: Dictionary, which: int, x: float, y: float, seed: float) -> void:
 	var ln = float(H["len"][which])
 	var w = float(H["w"])
-	var s_x = which * w
-	var r = 0.0
-	while r < ln:
-		var sway = roundf(sin(t * 1.4 + seed) * 2.2 * r / ln)
-		var hh = minf(4, ln - r)
-		region(c, im, s_x, r, w, hh, x - floorf(w / 2) + sway, y + r, w, hh)
-		r += 4
+	hang_bands(c, im, which * w, w, ln, x - floorf(w / 2), y, sin(t * 1.4 + seed) * 2.2, ln)
 
 ## The vines the gorilla travels along: a braided liana across the top of the frame, short lianas hanging
 ## from it; in the dungeon an iron chain, in the city a power cable. `k` slides them in from above.
@@ -496,104 +557,133 @@ const CABLE := {"bright": [Color("#120c2c"), Color("#2a2f52"), Color("#5866a8"),
 
 ## A chain hanging from (x, y), `ln` pixels long, swinging a little from its top, a hook or a ring at its end.
 func hang_chain(c: CanvasItem, x: float, y: float, ln: float, seed: float, P: Array) -> void:
+	var hook = h01(seed, 29) < 0.5
+	var key = "chain:%d:%d:%s" % [ln, int(hook), P[1].to_html()]
+	var painter = func(b) -> void: _chain_shape(b, 0, 0, ln, hook, P)
+	var tex = _bake(key, Vector2i(14, int(ln) + 16), Vector2(7, 0), painter)
+	hang_bands(c, tex, 0, 14, tex.get_height(), x - 7, y, sin(t * 1.1 + seed) * 1.8, ln)
+
+## The chain at rest (baked once): links seen flat and edge-on in turn, then the hook or the ring.
+func _chain_shape(c, x: float, y: float, ln: float, hook: bool, P: Array) -> void:
 	var r = 0.0
 	var k = 0
 	while r < ln:
-		var cx = x + roundf(sin(t * 1.1 + seed) * 1.8 * r / ln)
 		var yy = y + r
 		if k % 2 == 1:
-			rect(c, cx - 1, yy, 3, 7, P[0])
-			rect(c, cx, yy + 1, 1, 5, P[3])
+			pr(c, x - 1, yy, 3, 7, P[0])
+			pr(c, x, yy + 1, 1, 5, P[3])
 		else:
-			rect(c, cx - 3, yy, 7, 7, P[0])
-			rect(c, cx - 2, yy + 1, 5, 5, P[1])
-			rect(c, cx - 1, yy + 2, 3, 3, P[0])
-			rect(c, cx - 2, yy + 1, 2, 1, P[2])
+			pr(c, x - 3, yy, 7, 7, P[0])
+			pr(c, x - 2, yy + 1, 5, 5, P[1])
+			pr(c, x - 1, yy + 2, 3, 3, P[0])
+			pr(c, x - 2, yy + 1, 2, 1, P[2])
 		r += 5
 		k += 1
-	var ex = x + roundf(sin(t * 1.1 + seed) * 1.8)
+	var ex = x
 	var ey = y + ln + 4
-	if h01(seed, 29) < 0.5:                          # a hook
-		rect(c, ex - 1, ey, 3, 8, P[0])
-		rect(c, ex, ey + 1, 1, 6, P[1])
-		rect(c, ex - 5, ey + 6, 6, 3, P[0])
-		rect(c, ex - 4, ey + 7, 4, 1, P[1])
-		rect(c, ex - 6, ey + 2, 3, 6, P[0])
-		rect(c, ex - 5, ey + 3, 1, 4, P[1])
-		rect(c, ex - 5, ey + 3, 1, 1, P[2])
+	if hook:                                         # a hook
+		pr(c, ex - 1, ey, 3, 8, P[0])
+		pr(c, ex, ey + 1, 1, 6, P[1])
+		pr(c, ex - 5, ey + 6, 6, 3, P[0])
+		pr(c, ex - 4, ey + 7, 4, 1, P[1])
+		pr(c, ex - 6, ey + 2, 3, 6, P[0])
+		pr(c, ex - 5, ey + 3, 1, 4, P[1])
+		pr(c, ex - 5, ey + 3, 1, 1, P[2])
 	else:                                            # a heavy ring
 		for q in [[-2, 0, 5, 1], [-3, 1, 7, 1], [-4, 2, 9, 5], [-3, 7, 7, 1], [-2, 8, 5, 1]]:
-			rect(c, ex + q[0], ey + q[1], q[2], q[3], P[0])
+			pr(c, ex + q[0], ey + q[1], q[2], q[3], P[0])
 		for q in [[-2, 1, 5, 1], [-3, 2, 7, 5], [-2, 7, 5, 1]]:
-			rect(c, ex + q[0], ey + q[1], q[2], q[3], P[1])
-		rect(c, ex - 1, ey + 3, 3, 3, P[0])
-		rect(c, ex - 2, ey + 1, 2, 1, P[2])
-		rect(c, ex - 3, ey + 2, 1, 2, P[2])
+			pr(c, ex + q[0], ey + q[1], q[2], q[3], P[1])
+		pr(c, ex - 1, ey + 3, 3, 3, P[0])
+		pr(c, ex - 2, ey + 1, 2, 1, P[2])
+		pr(c, ex - 3, ey + 2, 1, 2, P[2])
 
 ## The chain across the top of the screen: big links lying flat and edge-on in turn.
 func chain_across(c: CanvasItem, x0: float, x1: float, y: float, P: Array) -> void:
+	var w = x1 - x0
+	var painter = func(b) -> void: _chain_across_shape(b, 0, w, 0, P)
+	var tex = _bake("chainx:%d:%s" % [w, P[1].to_html()], Vector2i(int(w) + 10, 11), Vector2(0, 5), painter)
+	blit(c, tex, x0, y - 5)
+
+func _chain_across_shape(c, x0: float, x1: float, y: float, P: Array) -> void:
 	var x = x0
 	var k = 0
 	while x < x1:
 		if k % 2 == 1:
-			rect(c, x, y - 2, 10, 4, P[0])
-			rect(c, x + 1, y - 1, 8, 2, P[3])
-			rect(c, x + 1, y - 1, 8, 1, P[2])
+			pr(c, x, y - 2, 10, 4, P[0])
+			pr(c, x + 1, y - 1, 8, 2, P[3])
+			pr(c, x + 1, y - 1, 8, 1, P[2])
 		else:
-			rect(c, x + 1, y - 5, 8, 1, P[0])
-			rect(c, x, y - 4, 10, 8, P[0])
-			rect(c, x + 1, y + 4, 8, 1, P[0])
-			rect(c, x + 1, y - 4, 8, 8, P[1])
-			rect(c, x + 3, y - 2, 4, 4, P[0])
-			rect(c, x + 1, y - 4, 4, 1, P[2])
-			rect(c, x + 1, y - 3, 1, 2, P[2])
+			pr(c, x + 1, y - 5, 8, 1, P[0])
+			pr(c, x, y - 4, 10, 8, P[0])
+			pr(c, x + 1, y + 4, 8, 1, P[0])
+			pr(c, x + 1, y - 4, 8, 8, P[1])
+			pr(c, x + 3, y - 2, 4, 4, P[0])
+			pr(c, x + 1, y - 4, 4, 1, P[2])
+			pr(c, x + 1, y - 3, 1, 2, P[2])
 		x += 7
 		k += 1
 
 ## A cable hanging from (x, y), swinging a little, a plug with a blinking light at its end.
 func hang_cable(c: CanvasItem, x: float, y: float, ln: float, seed: float, P: Array) -> void:
-	var swing = func(r: float) -> float: return roundf(sin(t * 1.3 + seed) * 2 * r / ln)
+	var sheen = fposmod(seed * 4, 14)
+	var painter = func(b) -> void: _cable_shape(b, 0, 0, ln, sheen, P)
+	var tex = _bake("cable:%d:%d:%s" % [ln, roundi(sheen * 10), P[1].to_html()], Vector2i(8, int(ln) + 9), Vector2(3, 1), painter)
+	var A = sin(t * 1.3 + seed) * 2
+	hang_bands(c, tex, 0, 8, tex.get_height(), x - 3, y - 1, A, ln + 1)
+	if sin(t * 3 + seed * 1.7) > -0.3:               # the plug's light blinks
+		rect(c, x + roundf(A), y + ln + 3, 2, 1, P[3])
+
+## The cable at rest (baked once): its sheath, a glint now and then, the plug.
+func _cable_shape(c, x: float, y: float, ln: float, sheen: float, P: Array) -> void:
 	var r = 0.0
 	while r < ln:
-		rect(c, x + swing.call(r) - 1, y + r, 4, 2, P[0])
+		pr(c, x - 1, y + r, 4, 2, P[0])
 		r += 2
 	r = 0.0
 	while r < ln:
-		var cx = x + swing.call(r)
-		rect(c, cx, y + r, 2, 2, P[1])
-		if fposmod(r + seed * 4, 14) < 2:
-			rect(c, cx, y + r, 1, 2, P[2])
+		pr(c, x, y + r, 2, 2, P[1])
+		if fposmod(r + sheen, 14) < 2:
+			pr(c, x, y + r, 1, 2, P[2])
 		r += 2
-	var ex = x + swing.call(ln)
 	var ey = y + ln
-	rect(c, ex - 2, ey - 1, 6, 8, P[0])
-	rect(c, ex - 1, ey, 4, 6, P[2])
-	rect(c, ex, ey + 1, 3, 5, P[1])
-	if sin(t * 3 + seed * 1.7) > -0.3:
-		rect(c, ex, ey + 3, 2, 1, P[3])
+	pr(c, x - 2, ey - 1, 6, 8, P[0])
+	pr(c, x - 1, ey, 4, 6, P[2])
+	pr(c, x, ey + 1, 3, 5, P[1])
 
 ## A cable sagging between two points along the top of the screen.
 func sag_cable(c: CanvasItem, x: float, span: float, y0: float, sag: float, P: Array) -> void:
+	var painter = func(b) -> void: _sag_shape(b, span, sag, P)
+	var tex = _bake("sag:%d:%d:%s" % [span, sag, P[1].to_html()], Vector2i(int(span) + 1, int(sag) + 5), Vector2(0, 1), painter)
+	blit(c, tex, x, y0 - 1)
+
+func _sag_shape(c, span: float, sag: float, P: Array) -> void:
 	for k in int(span) + 1:
 		var u = k / span
-		rect(c, x + k, roundf(y0 + 4 * sag * u * (1 - u)) - 1, 1, 4, P[0])
+		pr(c, k, roundf(4 * sag * u * (1 - u)) - 1, 1, 4, P[0])
 	for k in int(span) + 1:
 		var u = k / span
-		rect(c, x + k, roundf(y0 + 4 * sag * u * (1 - u)), 1, 2, P[2] if k % 9 == 4 else P[1])
+		pr(c, k, roundf(4 * sag * u * (1 - u)), 1, 2, P[2] if k % 9 == 4 else P[1])
 
 ## The power cable across the top of the screen: a thick sheath, a clamp now and then with its light.
 func cable_across(c: CanvasItem, x0: float, x1: float, y: float, seed: float, P: Array) -> void:
 	var w = x1 - x0
-	rect(c, x0, y - 2, w, 6, P[0])
-	rect(c, x0, y - 1, w, 4, P[1])
-	rect(c, x0, y - 1, w, 1, P[2])
-	for at in [40.0, 150.0]:
-		var cx = roundf(x0 + at)
-		rect(c, cx - 3, y - 4, 7, 10, P[0])
-		rect(c, cx - 2, y - 3, 5, 8, Color("#5c6280"))
-		rect(c, cx - 2, y - 3, 5, 1, Color("#8a92b8"))
+	var painter = func(b) -> void: _cable_across_shape(b, w, P)
+	var tex = _bake("cablex:%d:%s" % [w, P[1].to_html()], Vector2i(int(w), 10), Vector2(0, 4), painter)
+	blit(c, tex, x0, y - 4)
+	for at in [40.0, 150.0]:                         # the clamps' lights blink
 		if sin(t * 4 + seed + at) > 0:
-			rect(c, cx, y, 1, 2, P[3])
+			rect(c, roundf(x0 + at), y, 1, 2, P[3])
+
+func _cable_across_shape(c, w: float, P: Array) -> void:
+	pr(c, 0, -2, w, 6, P[0])
+	pr(c, 0, -1, w, 4, P[1])
+	pr(c, 0, -1, w, 1, P[2])
+	for at in [40.0, 150.0]:
+		var cx = roundf(at)
+		pr(c, cx - 3, -4, 7, 10, P[0])
+		pr(c, cx - 2, -3, 5, 8, Color("#5c6280"))
+		pr(c, cx - 2, -3, 5, 1, Color("#8a92b8"))
 
 ## An iron chain from (x, y) up to the top of the screen: links seen flat and edge-on in turn.
 func chain(c: CanvasItem, x: float, y: float) -> void:
@@ -645,6 +735,7 @@ func draw_ground(c: CanvasItem, G: Dictionary, x0: float, x1: float, bottom: flo
 			# Columns standing at the same height are drawn as one block: on the flat, which is nearly
 			# everywhere, a whole piece goes down in a single call instead of one per column.
 			var a = maxi(0, floori((x0 - px) / SLICE) * SLICE)
+			_ti = -1
 			var ya = 0.0
 			var has_ya = false
 			var k = a
@@ -652,9 +743,17 @@ func draw_ground(c: CanvasItem, G: Dictionary, x0: float, x1: float, bottom: flo
 				var out = k >= w or px + k >= x1
 				var y = 0.0
 				if not out:
-					y = n(Game.floor_at(run, (cam + px + k + mini(SLICE, w - k) / 2.0) * PIXEL)) - top
+					y = n(_floor_from((cam + px + k + mini(SLICE, w - k) / 2.0) * PIXEL)) - top
 					if has_ya and y == ya:
-						k += SLICE
+						# on a flat stretch of the outline: straight to the first column past its end
+						var T: Array = run.terrain
+						if _ti + 1 < T.size() and T[_ti].y == T[_ti + 1].y:
+							var end_x = T[_ti + 1].x / PIXEL - cam - px
+							k = maxi(k + SLICE, ceili((end_x - SLICE / 2.0) / SLICE) * SLICE)
+						elif _ti + 1 >= T.size():
+							k = maxi(k + SLICE, w)
+						else:
+							k += SLICE
 						continue
 				if has_ya:
 					var cw = float(mini(k, w) - a)
@@ -717,7 +816,7 @@ func stride(th: float) -> Dictionary:
 	return {"x": -1 - 8 * cos(th), "y": -4.5 - 6 * up, "r": 0.5 * sin(2 * th) if up > 0 else 0.0}
 
 func _draw_hero_layer(c: CanvasItem) -> void:
-	if run == null or not Art.ready or run.dead:
+	if run == null or not Art.ready or (run.dead and not show_dead):
 		return
 	draw_hero(c, seat)
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
@@ -887,7 +986,7 @@ func draw_hang(c: CanvasItem, frame: int, x: float):
 ## The pose of the ridden mount this frame, and so where the hero sits (`c` null: only worked out).
 func _mount(c: CanvasItem):
 	var M = run.mount
-	if M == null or run.dead or not Art.ready:
+	if M == null or (run.dead and not show_dead) or not Art.ready:
 		return null
 	var p = run.p
 	var hx = n(run.sx)
@@ -972,7 +1071,7 @@ func _draw_back(c: CanvasItem) -> void:
 	_draw_items(c)
 	_draw_obstacles(c)
 
-	if not run.dead:
+	if not run.dead or show_dead:
 		var p = run.p
 		var hx = n(run.sx)
 		var floor_y = n(p.plat.y) if p.plat != null else floor_px(hx)

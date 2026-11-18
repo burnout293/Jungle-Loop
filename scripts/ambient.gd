@@ -25,6 +25,7 @@ static var stones: Array = []
 static var next_stone := 4.0
 static var floor_y := Callable()                                     # floor height at a screen x, given by the renderer
 static var q := 1.0                                                  # drawing steps per art pixel, set by the renderer
+static var lite := false                                             # the Éco quality: fewer little creatures, less weather
 
 static func fy(x: float) -> float:
 	return floor_y.call(x) if floor_y.is_valid() else GN
@@ -155,7 +156,8 @@ static func fireflies(c: CanvasItem, cam: float, t: float, w: float) -> void:
 static func draw_life(c: CanvasItem, cam: float, t: float, w: float, floor_fn: Callable) -> void:
 	floor_y = floor_fn
 	tick(t, cam, w)
-	fireflies(c, cam, t, w)
+	if not lite:
+		fireflies(c, cam, t, w)
 	for s in stones:
 		var x = snap(s.x - cam)
 		var y = roundf(s.y)
@@ -165,15 +167,16 @@ static func draw_life(c: CanvasItem, cam: float, t: float, w: float, floor_fn: C
 			var dust = Color(0.91, 0.894, 0.83, 0.5)
 			rect(c, x - 3, y + 1, 2, 1, dust)
 			rect(c, x + 3, y, 2, 1, dust)
-	critters(c, cam, t, w)
-	butterflies(c, cam, t, w)
+	if not lite:
+		critters(c, cam, t, w)
+		butterflies(c, cam, t, w)
 
 # ---------- in front of everything: leaves on the wind, gusts, rain ----------
 static func draw_weather(c: CanvasItem, cam: float, t: float, w: float) -> void:
 	var g = gust(t)
 	var r = rain(t)
 	var span = w + 40
-	for i in 18:
+	for i in (6 if lite else 18):
 		var x = snap(fposmod(h01(i, 23) * span - wind * (0.6 + h01(i, 29)) - cam * 1.1, span) + sin(t * 2 + i) * 4) - 20
 		var y = roundf(fposmod(h01(i, 31) * (GN + 10) + t * (9 + h01(i, 37) * 9), GN + 10))
 		var col = Color(LEAVES[i % LEAVES.size()])
@@ -193,7 +196,7 @@ static func draw_weather(c: CanvasItem, cam: float, t: float, w: float) -> void:
 		rect(c, 0, 0, w, VH, Color(22 / 255.0, 36 / 255.0, 78 / 255.0, 0.26 * r))   # the light drops under the clouds
 		var col = Color(205 / 255.0, 228 / 255.0, 1, 0.6)
 		var H = VH + 20
-		var n = roundi(110 * r)
+		var n = roundi((40 if lite else 110) * r)
 		for i in n:
 			var qy = fposmod(h01(i, 53) * H + t * (380 + h01(i, 59) * 140), H)
 			var x = roundf(fposmod(h01(i, 61) * (w + 90) - qy * 0.28 - cam * 0.4, w + 90)) - 10
@@ -211,9 +214,17 @@ static func sway_blit(c: CanvasItem, im: Texture2D, x: float, y: float, flip: bo
 	var k = amp * (1 + 2.5 * gust(t))
 	var w = im.get_width()
 	var h = im.get_height()
+	# bands pushed alike are drawn together: near the foot, where the push is nil, in one go
 	var b = 0
-	while b < h:
-		var dx = roundf(sin(t * 1.7 + seed + b * 0.06) * k * pow(1.0 - float(b) / h, 1.5))
-		var bh = mini(band, h - b)
-		c.draw_texture_rect_region(im, Rect2(x + dx, y + b, -w if flip else w, bh), Rect2(0, b, w, bh), mod)
-		b += band
+	var top = 0
+	var push = INF
+	while b <= h:
+		var dx = roundf(sin(t * 1.7 + seed + b * 0.06) * k * pow(1.0 - float(b) / h, 1.5)) if b < h else INF
+		if dx != push:
+			if b > top:
+				c.draw_texture_rect_region(im, Rect2(x + push, y + top, -w if flip else w, b - top), Rect2(0, top, w, b - top), mod)
+			top = b
+			push = dx
+		if b == h:
+			break
+		b = mini(b + band, h)

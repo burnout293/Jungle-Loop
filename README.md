@@ -1,7 +1,8 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.29.0** (17/11/2026) : à parité avec la version web 0.28, aperçus de la boutique et menus compris. Le jeu
+**0.30.0** (18/11/2026) : à parité avec la version web 0.28, puis ses propres changements (plus bas, « Depuis
+la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
 environ 1 ms de calcul, 60 images/s). Pas encore essayé à la main sur téléphone.
@@ -55,9 +56,17 @@ Les unités sont celles de la version web : 1 pixel d'art = 2,25 unités, écran
 (569 × 320 pixels d'art), en 16:9 avec des bandes noires autour.
 
 Le jeu se dessine dans une image de q × q pixels par pixel d'art (`SubViewport`), ajustée ensuite à
-l'écran, comme le canevas de la version web. Réglage « Lissage » : « Auto » commence à 4 sur PC et 3 sur
-téléphone et descend d'un cran si les images ralentissent (ce qu'il a trouvé est gardé dans
-`user://jungle-loop-cap.txt`), « Maximum » prend ce que l'écran peut montrer, « Net » s'arrête à 2.
+l'écran, comme le canevas de la version web. Réglage « Qualité » (il remplace « Lissage ») :
+
+| Qualité | Image | Images/s | Détails |
+|---|---|---|---|
+| Max (défaut sur PC) | ce que l'écran peut montrer (q jusqu'à 4), adoucie | celles de l'écran (120 sur certains téléphones) | tout |
+| Perf (défaut sur téléphone) | q = 2 au plus, carrés nets | tenue à 60 : régulière, là où un écran 120 Hz oscillait entre 45 et 65 | tout |
+| Éco | q = 2 au plus | 30 | moins de petites bêtes, de feuilles et de pluie (`Ambient.lite`) |
+
+Les cordes, chaînes et câbles dessinés au pixel sont cuits une fois en images (`_bake`, classe `Baker`
+dans `render.gd`) puis dessinés par bandes d'égal balancement (`hang_bands`) ; le sol saute les longueurs
+plates de son tracé. Mesuré sur PC : dessin du décor du fond 0,9 → 0,5 ms par image.
 
 Tactile : chaque doigt compte (le saut reste tenu tant qu'un doigt est posé) et un second doigt peut
 toucher Pause, Ruée ou Sablier, ce que les boutons de Godot ne voient pas seuls.
@@ -69,6 +78,22 @@ police pixel est gardée à des tailles multiples de sa grille, recalculées qua
 
 Le menu de debug (`scripts/debug.gd`) s'ouvre comme dans la version web : cinq touches sur le badge de
 niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.json`.
+
+## Depuis la parité (0.30.0)
+
+- **Boutique en liste** : une ligne par objet (image, nom, prix avec la pièce ou état) ; nom, aperçu,
+  description, prix et boutons à droite. Les objets pas encore débloqués portent un bandeau bleu en biais
+  « NIV. 3 ». La pièce remplace le losange partout (prix, défis, gains).
+- **Dernier élan** : lancé à 1,3 × sa vitesse (+0,15 par niveau), plus haut selon la vitesse, freiné
+  doucement, un rebond par niveau (`LEAP_*` dans `game.gd`). Au niveau 1 à 14 m/s : 31 m au lieu de 13.
+- **Photo de la chute** : prise l'image où il tombe (le héros encore dessiné, `Render.show_dead`), montrée
+  à l'écran de fin ; une touche l'affiche en grand.
+- **Pièces de l'explosion du temple** : elles suivent le sol posé après leur atterrissage (corniches et
+  creux), au lieu de rester dedans.
+- **Vorace équitable** : chaque danger demande d'être en l'air (flaque, boule basse) ou au sol (boule à
+  hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
+  avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
+  simulés : aucune paire impossible.
 
 ## Export
 

@@ -29,7 +29,10 @@ const UPGRADES := [
 	{"id": "rewind", "unlock": 12, "icon": "rewind", "kind": "passif", "name": "Rembobinage", "desc": "Une fois par course, la relique annule ta chute.", "costs": [10000]},
 ]
 
-const QUALITIES := ["auto", "smooth", "sharp"]
+## Qualité (Réglages): the finest picture, a lighter one held at 60 images a second, or 30 to save the
+## battery. "" until chosen: main.gd picks Max on a PC, Perf on a phone. (The web version's "smooth" and
+## "sharp", in an imported code, become Max and Perf.)
+const QUALITIES := ["max", "perf", "eco"]
 const MAX_EQUIPPED := 3
 
 ## "--bac" on the command line plays on a separate, throw-away save: for trying things without
@@ -50,7 +53,7 @@ static func is_power(id: String) -> bool:
 static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
-		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "auto", "full": true, "seenIntro": false,
+		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
 		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "lastQuest": ""}
 
 static func _int(x) -> int:
@@ -79,7 +82,8 @@ static func sanitize(raw) -> Dictionary:
 	s["dangerRim"] = raw.get("dangerRim") == true
 	s["alertShift"] = raw.get("alertShift") == true
 	s["showFps"] = raw.get("showFps") == true
-	s["quality"] = raw.get("quality") if raw.get("quality") in QUALITIES else "auto"
+	var ql = {"smooth": "max", "sharp": "perf"}.get(raw.get("quality"), raw.get("quality"))
+	s["quality"] = ql if ql in QUALITIES else ""
 	s["full"] = raw.get("full") != false
 	s["seenIntro"] = raw.get("seenIntro") == true
 	var ups = raw.get("upgrades")

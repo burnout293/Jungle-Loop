@@ -98,6 +98,15 @@ const ISLE_W := [170.0, 240.0, 330.0]
 const CRUISE_H := 150.0
 const CRUISE_TIME := 4.0
 const DART_ALTS := [[46.0, 170.0], [46.0, 170.0, 290.0], [46.0, 170.0, 290.0, 400.0, 510.0]]
+# Dernier élan: knocked out on the last heart, he is thrown ahead (LEAP_KICK x his speed, more per
+# level) and up (more the faster he ran), slows down gently and bounces once per level.
+const LEAP_KICK := 1.3
+const LEAP_KICK_LVL := 0.15
+const LEAP_UP := 820.0
+const LEAP_UP_SPEED := 0.25
+const LEAP_UP_MAX := 1150.0
+const LEAP_DRAG := 0.12
+const LEAP_BOUNCE := 0.8
 const ACID_BALL := 36.0
 const ACID_PUDDLE := 120.0
 const ACID_CLOSING := 650.0
@@ -186,6 +195,7 @@ class Obs:
 	var t := 0.0
 	var ball := false
 	var lob := false
+	var land := 0.0          # a blob in the air: where it will land (Vorace's fairness check)
 	var drop := false
 	var puddle := false
 	var lane := 0.0
@@ -206,6 +216,7 @@ class Coin:
 	var vx := 0.0
 	var vy := 0.0
 	var gone := false
+	var blast := false       # thrown out of the temple: it follows the floor once it rests
 	func _init(px: float, py: float) -> void:
 		x = px
 		y = py
@@ -294,6 +305,8 @@ class Boss:
 	var wx := 0.0
 	var crushed := false
 	var last_step := -1
+	var ahead := 0.0         # the next puddle's distance ahead of the hero, chosen with the attack
+	var pair_lane := 0.0     # the second ball of the next "pair"
 
 class Swarm:
 	var biome := 0
@@ -1130,9 +1143,108 @@ static func _boss_lob(run: Run, mouth: Vector2, ahead: float, T: float = 0.9) ->
 	var o = add_obs(run, mouth.x, mouth.y, ACID_BALL, ACID_BALL, "acid", false)
 	o.ghost = false
 	o.lob = true
+	o.land = land
 	o.vx = (land - mouth.x) / T
 	o.vy = (GROUND - ACID_BALL - mouth.y - 0.5 * g * T * T) / T
 	o.g = g
+
+# ---------- Vorace's fairness ----------
+# Every danger she sends is met by the hero over a span of time, and asks him either to be off the ground
+# then ("air": a puddle, a low ball) or to stay on it ("ground": a ball at middle height, which a jump
+# runs into). A ball up high passes over a short jump: it never decides anything. A new attack is only
+# thrown if, with the dangers already on their way, a short jump (TAP_AIR in the air) still gets him
+# through everything, with REACT seconds to spare between two moves.
+const TAP_AIR := 0.63                # JUMP_V up, JUMP_GRAVITY down
+const REACT := 0.2
+const WIND := 0.45                   # her jaws open this long before she fires
+const SLACK := 0.06
+
+## When the hero will meet what lies from x0 to x1 (world units), closing in at `rel`, `delay` seconds from now.
+static func _span(run: Run, x0: float, x1: float, rel: float, delay: float, need: String) -> Array:
+	var hx = run.cam + run.sx
+	return [delay + (x0 - hx - HERO_HALF) / rel, delay + (x1 - hx + HERO_HALF) / rel, need]
+
+static func _ball_need(h: float) -> String:
+	if h < 60:
+		return "air"                             # at his feet: jump it
+	if h < 200:
+		return "ground"                          # at his head: a jump runs into it
+	return ""
+
+## What is already on its way.
+static func _threats(run: Run) -> Array:
+	var v = maxf(run.speed, BOSS_SPEED)          # the speed he settles at in the fight: the tightest timing
+	var out: Array = []
+	for o in run.obs:
+		if o.kind != "acid" or o.gone:
+			continue
+		if o.puddle:
+			out.append(_span(run, o.x, o.x + o.w, v, 0, "air"))
+		elif o.lob:
+			out.append(_span(run, o.land - (ACID_PUDDLE - ACID_BALL) / 2, o.land + (ACID_PUDDLE + ACID_BALL) / 2, v, 0, "air"))
+		elif o.drop:
+			out.append(_span(run, o.x - 27, o.x + 63, v, 0, "air"))
+		elif o.ball:
+			var need = _ball_need(GROUND - o.lane - ACID_BALL / 2)
+			if need != "":
+				out.append(_span(run, o.x, o.x + o.w, ACID_CLOSING, 0, need))
+	return out.filter(func(t): return t[1] > 0)
+
+## What an attack would add, thrown WIND seconds from now (b.ahead and b.pair_lane already chosen).
+static func _attack_threats(run: Run, b: Boss, move: String) -> Array:
+	var v = maxf(run.speed, BOSS_SPEED)          # the speed he settles at in the fight: the tightest timing
+	var at = run.cam + run.sx + run.speed * WIND     # where he will be when she fires
+	var rel_mouth = run.cam + b.sx + BOSS_MOUTH_X     # the balls leave from her mouth
+	var out: Array = []
+	var puddle_at = func(ahead: float, w: float, left: float) -> void:
+		var land = at + ahead + v * 0.9
+		out.append(_span(run, land - left, land - left + w, v, 0, "air"))
+	var ball = func(h: float) -> void:
+		var need = _ball_need(h)
+		if need != "":
+			out.append(_span(run, rel_mouth, rel_mouth + ACID_BALL, ACID_CLOSING, WIND, need))
+	match move:
+		"puddle": puddle_at.call(b.ahead, ACID_PUDDLE, (ACID_PUDDLE - ACID_BALL) / 2)
+		"spray":
+			puddle_at.call(320.0, ACID_PUDDLE, (ACID_PUDDLE - ACID_BALL) / 2)
+			puddle_at.call(760.0, ACID_PUDDLE, (ACID_PUDDLE - ACID_BALL) / 2)
+		"rain":
+			puddle_at.call(420.0, 90.0, 27.0)
+			puddle_at.call(860.0, 90.0, 27.0)
+		"low", "mid", "high": ball.call(LANE[move])
+		"pair":
+			ball.call(LANE["high"])
+			ball.call(b.pair_lane)
+	return out
+
+## Whether one short jump, or staying down, gets him through both. `slack` widens the room asked for:
+## an attack is only thrown with some to spare (where it lands is a prediction).
+static func _fits(a: Array, c: Array, slack: float = 0.0) -> bool:
+	var first = a if a[0] <= c[0] else c
+	var second = c if a[0] <= c[0] else a
+	var gap = REACT + slack
+	if first[2] == "ground" and second[2] == "ground":
+		return true                              # stay down for both
+	if first[2] == "air" and second[2] == "air":  # room to land between them, or both under one easy jump
+		return second[0] >= first[1] + gap or second[1] - first[0] <= TAP_AIR - 2 * gap
+	var air = first if first[2] == "air" else second
+	var low = second if first[2] == "air" else first
+	if low[1] <= air[0]:
+		return low[1] + gap <= air[0]            # the head-high ball goes by, then the jump
+	if low[0] >= air[1]:
+		return air[1] + gap <= low[0]            # the jump lands, then the ball goes by
+	return false
+
+static func _attack_fits(run: Run, b: Boss, move: String, now: Array) -> bool:
+	var adds = _attack_threats(run, b, move)
+	for i in adds.size():
+		for t in now:
+			if not _fits(adds[i], t, SLACK):
+				return false
+		for j in range(i + 1, adds.size()):
+			if not _fits(adds[i], adds[j], SLACK):
+				return false
+	return true
 
 static func boss(run: Run, d: float) -> void:
 	var p = run.p
@@ -1169,7 +1281,7 @@ static func boss(run: Run, d: float) -> void:
 				b.open = 0.35
 				match b.attack:
 					"puddle":
-						_boss_lob(run, mouth, rnd(380, 640))
+						_boss_lob(run, mouth, b.ahead)
 						run.events.append("spit")
 					"spray":                         # two puddles, room to land between them
 						_boss_lob(run, mouth, 320)
@@ -1180,7 +1292,7 @@ static func boss(run: Run, d: float) -> void:
 						run.events.append("acid")
 					"pair":                          # a short jump or staying down gets through
 						_boss_ball(run, mouth, LANE["high"])
-						_boss_ball(run, mouth, pick([LANE["low"], LANE["mid"]]))
+						_boss_ball(run, mouth, b.pair_lane)
 						run.events.append("acid")
 					"fan":                           # on the dragonfly: every lane but two neighbours
 						var gap_k = randi() % 4
@@ -1213,9 +1325,22 @@ static func boss(run: Run, d: float) -> void:
 					moves = ["puddle", "spray", "low", "low", "mid", "high", "pair", "rain"]
 					if p.hang:
 						moves.append_array(["vine", "vine"])
-				b.attack = pick(moves)
-				b.wind = 0.45
-				b.next = maxf(0.7, 1.2 - b.t * 0.025)     # more and more often
+				# the first one, in a shuffled list, that leaves a way through (on foot: see _fits)
+				b.ahead = rnd(380, 640)
+				b.pair_lane = pick([LANE["low"], LANE["mid"]])
+				moves.shuffle()
+				var now = _threats(run)
+				var chosen = ""
+				for mv in moves:
+					if M != "" or _attack_fits(run, b, mv, now):
+						chosen = mv
+						break
+				if chosen == "":
+					b.next = 0.2                         # nothing fair right now: she waits a moment
+				else:
+					b.attack = chosen
+					b.wind = WIND
+					b.next = maxf(0.7, 1.2 - b.t * 0.025)     # more and more often
 		if b.t > BOSS_FIGHT and b.wind <= 0:           # a tree comes down on it
 			b.phase = "fall"
 			b.t = 0
@@ -1363,9 +1488,9 @@ static func hit(run: Run, o: Obs) -> void:
 		var p = run.p
 		var lp = Leap.new()
 		lp.n = run.lvl("lastLeap")
-		lp.v = maxf(420, run.speed)
+		lp.v = maxf(420, run.speed) * (LEAP_KICK + LEAP_KICK_LVL * lp.n)   # thrown ahead faster than he ran
 		run.leap = lp
-		p.vy = -640
+		p.vy = -minf(LEAP_UP_MAX, LEAP_UP + LEAP_UP_SPEED * run.speed)     # and higher the faster he went
 		p.ground = false
 		p.plat = null
 		p.rotor = false
@@ -1601,6 +1726,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		for i in BLAST_COINS:                        # the temple's gold flies out: real coins, which bounce and wait
 			var c = coin(run, rnd(70, 130), GROUND - rnd(50, 200))
 			c.toss = true
+			c.blast = true
 			c.tvx = rnd(420, 1500)
 			c.tvy = rnd(-820, -120)
 		run.events.append("boom")
@@ -1653,7 +1779,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	var gorilla_on = run.mount != null and run.mount.kind == "gorilla"
 	run.vine = clampf(run.vine + (1.0 if gorilla_on else -1.0) * dt * 2.5, 0, 1)
 	if run.leap != null:
-		run.leap.v = maxf(160, run.leap.v - 170 * d)   # knocked out: he only slows down
+		run.leap.v = maxf(160, run.leap.v * (1 - LEAP_DRAG * d))   # knocked out: he only slows down, slowly
 	# he is thrown out of the temple faster than he runs
 	var move: float
 	if run.leap != null:
@@ -1679,7 +1805,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				part(run, px + rnd(-20, 20), fl - 2, rnd(-160, 160), rnd(-110, -20), 0.35, Color("#f4f0e0"), rnd(4, 9), 0)
 			run.leap.n -= 1
 			if run.leap.n >= 0:
-				p.vy = -520 - 50 * run.leap.n
+				p.vy = minf(-420, p.vy * -LEAP_BOUNCE)     # each bounce a little lower than the last
 				run.shake = maxf(run.shake, 0.3)
 				run.events.append("bounce")
 			else:
@@ -2072,11 +2198,19 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	for c in run.coins:
 		if c.tight != "" and p.ball == null:
 			continue                                 # inside a tight place: for the ball only
+		if c.blast and not c.toss:                   # it landed before the road under it was laid: it follows the floor
+			var under = floor_at(run, c.x) - 40
+			if under < c.y - 1:
+				c.y = under                          # a ledge was built there: up on it
+			elif under > c.y + 1:
+				c.toss = true                        # a hollow: it drops in
+				c.tvx = 0
+				c.tvy = 0
 		if c.toss:                                   # thrown by the blast: it falls, bounces lower each time, then stays
-			var f = floor_at(run, c.x) - 40
 			c.tvy += 1000 * d
 			c.x += c.tvx * d
 			c.y += c.tvy * d
+			var f = floor_at(run, c.x) - 40
 			if c.y > f and c.tvy > 0:
 				c.y = f
 				c.tvy *= -0.45

@@ -7,7 +7,7 @@ extends Node
 
 var main: Node
 var tour_i := 0
-var opts := {"tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false}
+var opts := {"quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -38,6 +38,8 @@ func _ready() -> void:
 			"still": opts["still"] = true
 			"hitbox": opts["hitbox"] = true
 			"tour": opts["tour"] = true
+			"prof": opts["prof"] = true
+			"quality": opts["quality"] = kv[1]
 	if opts["shots"] != "":
 		DirAccess.make_dir_recursive_absolute(opts["shots"])
 	print("bench: ", opts)
@@ -56,6 +58,9 @@ func _start() -> void:
 		s["upgrades"][id] = u["costs"].size()
 		if not u.get("power", false) and s["equipped"].size() < SaveData.MAX_EQUIPPED:
 			s["equipped"].append(id)
+	if opts["quality"] != "":
+		s["quality"] = opts["quality"]
+		main.fit()
 	main.go("play")
 	var r: Game.Run = main.run
 	r.god = opts["god"]
@@ -131,6 +136,12 @@ func _process(delta: float) -> void:
 	next_print -= delta
 	if next_print <= 0:
 		next_print = 1.0
+		if opts["prof"]:                              # where the drawing time goes, and the draw calls
+			var parts = []
+			for k in Render.layer_us:
+				parts.append("%s %.2f" % [k, Render.layer_us[k] / 1000.0 / maxf(1, Engine.get_frames_per_second())])
+			Render.layer_us = {}
+			print("   ms/image: ", ", ".join(parts), "  appels de dessin ", Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), "  objets ", Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
 		print("%5.1fs run %d  %6.0f m  %4.1f m/s  biome %d  obs %d  coins %d  gold %d  boss %s  mount %s  fps %d  %s" % [
 			t, runs, r.dist, r.speed / Game.PPM, r.biome, r.obs.size(), r.coins.size(), r.gold,
 			r.boss.phase if r.boss != null else "-", r.mount.kind if r.mount != null else "-", Engine.get_frames_per_second(), main.perf["text"]])
@@ -158,6 +169,7 @@ func _tour() -> void:
 		[2.1, "pick", "magnet"], [3.6, "shot", "04-shop-magnet"],
 		[3.7, "buy", "magnet"], [4.0, "shot", "05-buy-confetti"],
 		[4.2, "tab", "mount"], [5.6, "shot", "06-shop-mounts"],
+		[5.62, "xp", "300"], [5.64, "tab", "up"], [5.68, "shot", "06b-shop-locked"], [5.69, "xp", "back"], [5.695, "tab", "power"], [5.698, "shot", "06c-shop-powers"],
 		[5.7, "go", "settings"], [6.6, "shot", "07-settings"],
 		[6.7, "toggle", "tg-font"], [7.6, "shot", "08-settings-rounded-font"],
 		[7.7, "toggle", "tg-font"], [8.6, "shot", "09-settings-pixel-again"],
@@ -170,7 +182,8 @@ func _tour() -> void:
 		[14.5, "go", "settings"], [15.3, "shot", "14-settings-in-run"],
 		[15.4, "go", "menu"], [16.2, "shot", "15-back-to-pause"],
 		[16.3, "resume", ""], [16.4, "die", ""], [18.6, "shot", "16-over-record"],
-		[19.0, "quit", ""],
+		[18.7, "photo", ""], [19.3, "shot", "17-photo-full"],
+		[19.5, "quit", ""],
 	]
 	while tour_i < steps.size() and t >= steps[tour_i][0]:
 		var st = steps[tour_i]
@@ -191,6 +204,13 @@ func _tour() -> void:
 				main.tab = arg
 				main.refresh_shop()
 			"toggle": main._toggle(arg)
+			"xp":
+				if arg == "back":
+					main.save["xp"] = main.get_meta("xp_kept", main.save["xp"])
+				else:
+					main.set_meta("xp_kept", main.save["xp"])
+					main.save["xp"] = int(arg)
+			"photo": main._show_photo()
 			"confirm": main._confirm("Effacer toute la progression ? C'est définitif.", func() -> void: pass)
 			"close":
 				if main.modal != null:
@@ -212,7 +232,9 @@ func _tour() -> void:
 				main.run.god = false
 				main.run.hearts = 1
 				main.run.p.inv = 0
-				main.run.dead = true
+				var o = Game.Obs.new()
+				o.kind = "spiky"
+				Game.hit(main.run, o)
 			"touch":                                    # a finger: "<index> <down|up> <game|button name>"
 				var parts = arg.split(" ")
 				var ev = InputEventScreenTouch.new()

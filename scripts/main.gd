@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.29.0"
+const VERSION := "0.30.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -39,9 +39,6 @@ var demo := Demo.new()                 # the shop's animated preview
 var demo_render: Render
 var demo_vp: SubViewport
 var q := 3                             # real pixels per art pixel of the game's picture (see fit)
-var cap := 4                           # the finest picture this device has proved it can keep up with
-var watch := {"n": 0, "sum": 0.0, "bad": 0, "before": 0.0, "locked": false}
-var CAP_FILE := "user://jungle-loop-cap" + ("-bac" if "--bac" in OS.get_cmdline_user_args() else "") + ".txt"
 var time := 0.0
 var dead_for := 0.0
 var banner_timer := 0.0
@@ -66,6 +63,8 @@ var hud_state := {"dist": -1, "gold": -1, "hearts": -1}
 var debug_layer: CanvasLayer
 var debug_panel: Control = null
 var taps: Array = []                   # touches on the level badge: five in a row open the debug menu
+var photo: ImageTexture = null          # the game as it was the moment he fell, for the end screen
+var photo_taken := false
 var touches := {}                     # fingers down on the game (not on a button): the jump is held while one stays
 var confetti_layer: Control
 var modal: CanvasLayer = null          # the in-game « Oui / Non » question, while one is asked
@@ -94,9 +93,6 @@ func _ready() -> void:
 	demo_render.view_w = Demo.W
 	demo_vp = _viewport(demo_render)
 	demo_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	cap = 3 if _touch() else 4                    # a phone's chip fills far fewer pixels than a PC's
-	if FileAccess.file_exists(CAP_FILE):
-		cap = clampi(int(FileAccess.get_file_as_string(CAP_FILE)), 1, 4)
 	get_window().size_changed.connect(fit)
 	fit()
 	still = Game.new_run({})
@@ -153,64 +149,35 @@ func _viewport(r: Render) -> SubViewport:
 func _touch() -> bool:
 	return OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
 
+## The quality chosen in Réglages, or the one that suits the device until one is.
+func quality() -> String:
+	var ql: String = save.get("quality", "")
+	return ql if ql in SaveData.QUALITIES else ("perf" if _touch() else "max")
+
 ## The game is always shown in 16:9 (569 x 320 art pixels). Its picture holds q x q real pixels per art
-## pixel: `want` is what the screen can show (4 at most). Sprites then move by fractions of an art pixel
-## and the picture is softened as it is fitted to the screen: "smooth". It costs: a phone has to fill up
-## to sixteen times the pixels. So "auto" starts there and comes down as far as it takes to keep the
-## frame rate (see _watch); "sharp" settles for 2 at most and shows hard squares, the lightest picture.
+## pixel, then is fitted to the screen. Qualité (Réglages):
+##   Max: as many as the screen can show (4 at most), softened as it is fitted; as many images a second
+##        as the screen refreshes (120 on some phones).
+##   Perf: 2 at most, shown as hard squares (a phone fills four times fewer pixels), held at 60 images a
+##        second: steady, where a 120 Hz screen would otherwise swing between 45 and 65.
+##   Éco: the same picture, 30 images a second, fewer little creatures and less weather: the battery.
 func fit() -> void:
 	var win = Vector2(get_window().size)
 	var real = U * minf(win.x / W, win.y / H)
-	var want = clampi(ceili(real - 0.01), 1, 4)
-	var mode = save["quality"] if save != null else "auto"
-	if mode == "sharp":
-		q = clampi(floori(real + 0.01), 1, 2)
-	elif mode == "smooth":
-		q = want
+	var mode = quality()
+	if mode == "max":
+		q = clampi(ceili(real - 0.01), 1, 4)
 	else:
-		q = mini(want, cap)
+		q = clampi(floori(real + 0.01), 1, 2)
 	game_vp.size = Vector2i(569 * q, 320 * q)
 	demo_vp.size = Vector2i(roundi(Demo.W * q), roundi(Demo.H * q))
 	# finer than the screen: fitted smoothly; coarser (2 or less): hard squares, smoothed it would only blur
-	var smooth = mode != "sharp" and (q >= real - 0.01 or q > 2)
+	var smooth = mode == "max" and (q >= real - 0.01 or q > 2)
 	game_view.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR if smooth else CanvasItem.TEXTURE_FILTER_NEAREST
 	if w.has("demo-view"):
 		w["demo-view"].texture_filter = game_view.texture_filter
-
-## "auto" quality: while playing, frames are timed. Two slow spells in a row (under 54 frames a second)
-## and the picture goes down one step. If that changed nothing, the device is simply capped (battery
-## saver, 30 Hz screen): the step is given back and nothing more is tried. What was found is kept.
-func _watch(ms: float) -> void:
-	if state != "play" or ms > 100 or run == null or run.t < 2:
-		return
-	watch["n"] += 1
-	watch["sum"] += ms
-	if watch["n"] < 90:
-		return
-	var avg = watch["sum"] / watch["n"]
-	watch["n"] = 0
-	watch["sum"] = 0.0
-	if save["quality"] != "auto" or watch["locked"]:
-		return
-	if watch["before"] > 0:                          # just came down a step: was it worth it?
-		if avg > watch["before"] * 0.9:
-			cap = q + 1
-			watch["locked"] = true
-		watch["before"] = 0.0
-		watch["bad"] = 0
-	elif avg > 18.5 and q > 1:
-		watch["bad"] += 1
-		if watch["bad"] < 2:
-			return
-		cap = q - 1
-		watch["before"] = avg
-	else:
-		watch["bad"] = 0
-		return
-	var f = FileAccess.open(CAP_FILE, FileAccess.WRITE)
-	if f != null:
-		f.store_string(str(cap))
-	fit()
+	Engine.max_fps = {"max": 0, "perf": 60, "eco": 30}[mode]
+	Ambient.lite = mode == "eco"
 
 func _tex(name: String) -> Texture2D:
 	var path = "res://assets/img/" + name + ".png"
@@ -876,8 +843,9 @@ func _quest_cards(holder: VBoxContainer) -> void:
 		txt.custom_minimum_size.x = a(130)
 		row.add_child(txt)
 		var rew = _vbox(0)
-		var r1 = _label("+%d ◈" % q["reward"], ts("s"), GOLD, 0)
-		r1.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		var r1 = _price(q["reward"], GOLD)
+		r1.alignment = BoxContainer.ALIGNMENT_END
+		(r1.get_child(0) as Label).text = "+%d" % q["reward"]
 		var r2 = _label("+%d XP" % q["xp"], ts("s"), RELIC, 0)
 		r2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		rew.add_child(r1)
@@ -910,12 +878,15 @@ func _build_intro() -> void:
 	s.add_child(p)
 	_actions(s, [_button("Fuir !", "big", func() -> void: go("play"))])
 
+## The shop: the four families down the left side, under the thumb; their items as a list in the middle;
+## on the right, the one picked: its name, its animated preview, what it does, its price and its buttons.
 func _build_shop() -> void:
 	var s = _screen("shop", true)
 	var side = _vbox(4)
-	_place(side, 6, 6, 50, 308)
+	_place(side, 6, 6, 54, 308)
 	var back = _button("Retour", "tab", func() -> void: go("menu"))
-	back.custom_minimum_size = Vector2(a(50), a(36))
+	back.custom_minimum_size = Vector2(a(54), a(36))
+	back.add_theme_font_size_override("font_size", roundi(7 * U))
 	side.add_child(back)
 	for spec in [["up", "magnet", "Équip."], ["power", "flight", "Pouvoirs"], ["mount", "nature", "Montures"], ["skin", "star", "Skins"]]:
 		var key: String = spec[0]
@@ -928,48 +899,42 @@ func _build_shop() -> void:
 		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 		b.add_theme_constant_override("icon_max_width", roundi(a(26)))
-		b.add_theme_font_size_override("font_size", roundi(6.5 * U))
+		b.clip_text = true
 		b.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		side.add_child(b)
 		w["tab-" + key] = b
 	s.add_child(side)
 	w["shop-title"] = _label("", ts("s"), RELIC, 1.5)
-	_place(w["shop-title"], 64, 11, 250, 14)
+	_place(w["shop-title"], 68, 11, 230, 14)
 	s.add_child(w["shop-title"])
 	w["shop-coins"] = _coins_pill()
 	_place(w["shop-coins"], 569 - M - 80, 4, 80, 22)
 	s.add_child(w["shop-coins"])
-	var scroll = ScrollContainer.new()
+	var scroll = ScrollContainer.new()               # dragged with a finger, or the wheel; no bar
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_place(scroll, 62, 30, 262, 196)
-	w["shop-list"] = GridContainer.new()
-	w["shop-list"].columns = 4
-	w["shop-list"].add_theme_constant_override("h_separation", roundi(a(4)))
-	w["shop-list"].add_theme_constant_override("v_separation", roundi(a(4)))
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_place(scroll, 66, 30, 236, 282)
+	w["shop-scroll"] = scroll
+	w["shop-list"] = _vbox(3)
+	w["shop-list"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	w["shop-list"].mouse_filter = Control.MOUSE_FILTER_PASS
 	scroll.add_child(w["shop-list"])
 	s.add_child(scroll)
-	var card = _box("pane")
-	_place(card, 62, 230, 262, 82)
-	var col = _vbox(3)
-	w["card-name"] = _label("", ts("m"), GOLD, 0)
-	w["card-status"] = _label("", ts("s"), DIM, 0)
-	w["card-status"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	w["card-status"].custom_minimum_size.x = a(240)
-	w["card-actions"] = _hbox(4)
-	w["card-actions"].alignment = BoxContainer.ALIGNMENT_END
-	w["card-actions"].size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_child(w["card-name"])
-	col.add_child(w["card-status"])
-	col.add_child(w["card-actions"])
-	card.add_child(col)
-	s.add_child(card)
 	var prev = PanelContainer.new()
 	var ps: StyleBoxFlat = styles["pane"].duplicate()
 	ps.set_content_margin_all(a(6))
 	prev.add_theme_stylebox_override("panel", ps)
-	_place(prev, 569 - M - 227, 30, 227, 282)
-	var pc = _vbox(6)
-	pc.alignment = BoxContainer.ALIGNMENT_BEGIN
+	prev.mouse_filter = Control.MOUSE_FILTER_STOP
+	_place(prev, 308, 30, 569 - M - 308, 282)
+	var pc = _vbox(5)
+	var head = _hbox(6)
+	w["card-name"] = _label("", ts("m"), GOLD, 0)
+	w["card-name"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	w["card-name"].clip_text = true
+	head.add_child(w["card-name"])
+	w["card-pips"] = _label("", ts("m"), GOLD, 0)
+	head.add_child(w["card-pips"])
+	pc.add_child(head)
 	# the animated preview: a tiny real run, drawn by a second renderer into its own picture
 	var frame = PanelContainer.new()
 	var fs = StyleBoxFlat.new()
@@ -981,16 +946,27 @@ func _build_shop() -> void:
 	view.texture = demo_vp.get_texture()
 	view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	view.stretch_mode = TextureRect.STRETCH_SCALE
-	view.custom_minimum_size = Vector2(a(212), a(212 * Demo.H / Demo.W))
+	view.custom_minimum_size = Vector2(a(238), a(238 * Demo.H / Demo.W))
 	view.texture_filter = game_view.texture_filter
 	view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(view)
 	pc.add_child(frame)
 	w["demo-view"] = view
-	w["demo-desc"] = _label("", ts("s"), DIM, 0)
+	w["demo-desc"] = _label("", ts("s"), INK, 0)
 	w["demo-desc"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	w["demo-desc"].custom_minimum_size.x = a(212)
+	w["demo-desc"].custom_minimum_size.x = a(238)
 	pc.add_child(w["demo-desc"])
+	w["card-status"] = _label("", ts("s"), DIM, 0)
+	w["card-status"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	w["card-status"].custom_minimum_size.x = a(238)
+	pc.add_child(w["card-status"])
+	var fill = Control.new()
+	fill.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pc.add_child(fill)
+	w["card-actions"] = _hbox(6)
+	w["card-actions"].alignment = BoxContainer.ALIGNMENT_END
+	pc.add_child(w["card-actions"])
 	prev.add_child(pc)
 	s.add_child(prev)
 
@@ -1030,7 +1006,7 @@ func _build_settings() -> void:
 		row.add_child(vol)
 		main.add_child(row)
 	main.add_child(_label("AFFICHAGE", ts("s"), RELIC, 0))
-	for spec in [["Police pixel", "tg-font"], ["Lissage", "tg-smooth"], ["Plein écran", "tg-full"], ["Images par seconde", "tg-fps"]]:
+	for spec in [["Police pixel", "tg-font"], ["Qualité", "tg-quality"], ["Plein écran", "tg-full"], ["Images par seconde", "tg-fps"]]:
 		var row = _toggle_row(spec[0])
 		var id: String = spec[1]
 		var b = _button("", "small on", func() -> void: _toggle(id))
@@ -1040,6 +1016,12 @@ func _build_settings() -> void:
 		main.add_child(row)
 		if id == "tg-full":
 			row.visible = _can_full()
+		if id == "tg-quality":
+			var sub = _label("", ts("s"), DIM, 0)
+			sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			sub.custom_minimum_size.x = a(240)
+			w["q-sub"] = sub
+			main.add_child(sub)
 	w["panel-main"] = main
 	col.add_child(main)
 	var access = _vbox(6)
@@ -1124,14 +1106,50 @@ func _build_score(name: String) -> void:
 	var s = _screen(name, true)
 	w[name + "-title"] = _head(s, "Pause" if name == "pause" else DEATHS[0])
 	var left = _pane(s, false)
-	var col = _vbox(8)
+	var col = _vbox(6 if name == "over" else 8)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	w[name + "-dist"] = _label("0 m", ts("huge"), INK, 3)
-	w[name + "-gold"] = _label("", ts("xl"), GOLD)
+	if name == "over":                               # the photo of the fall: a touch shows it in full
+		var shot = Button.new()
+		shot.focus_mode = Control.FOCUS_NONE
+		shot.flat = true
+		shot.custom_minimum_size = Vector2(a(128), a(72))
+		shot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		var sb = StyleBoxFlat.new()
+		sb.bg_color = Color("#0a0f14")
+		sb.border_color = Color("#fff8e6")
+		sb.set_border_width_all(roundi(a(2)))
+		for st in ["normal", "hover", "pressed", "focus"]:
+			shot.add_theme_stylebox_override(st, sb)
+		var pic = TextureRect.new()
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_SCALE
+		pic.set_anchors_preset(Control.PRESET_FULL_RECT)
+		pic.offset_left = a(2)
+		pic.offset_top = a(2)
+		pic.offset_right = -a(2)
+		pic.offset_bottom = -a(2)
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		shot.add_child(pic)
+		shot.rotation = -0.03
+		var on_shot = func() -> void:
+			Audio.sfx("click")
+			_show_photo()
+		shot.pressed.connect(on_shot)
+		w["over-shot"] = shot
+		w["over-pic"] = pic
+		col.add_child(shot)
+	w[name + "-dist"] = _label("0 m", ts("huge") if name == "pause" else roundi(ts("huge") * 0.8), INK, 3)
 	w[name + "-best"] = _label("", ts("s"), DIM, 0)
-	for k in ["dist", "gold", "best"]:
-		w[name + "-" + k].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		col.add_child(w[name + "-" + k])
+	w[name + "-dist"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(w[name + "-dist"])
+	var gain = _hbox(5)                              # the coins of the run, with the coin
+	gain.alignment = BoxContainer.ALIGNMENT_CENTER
+	w[name + "-gold"] = _label("", ts("xl"), GOLD)
+	gain.add_child(w[name + "-gold"])
+	gain.add_child(_icon_rect(icon("coin-icon"), 20))
+	col.add_child(gain)
+	w[name + "-best"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(w[name + "-best"])
 	left.add_child(col)
 	var right = _pane(s, true)
 	var rc = _vbox(6)
@@ -1297,7 +1315,10 @@ func refresh_settings() -> void:
 		var b: Button = w[pair[0]]
 		b.text = "Oui" if pair[1] else "Non"
 		_style_button(b, "small on" if pair[1] else "small plain")
-	w["tg-smooth"].text = {"auto": "Auto", "smooth": "Maximum", "sharp": "Net"}[save["quality"]]
+	w["tg-quality"].text = {"max": "Max", "perf": "Perf", "eco": "Éco"}[quality()]
+	w["q-sub"].text = {"max": "L'image la plus fine, autant d'images par seconde que l'écran.",
+		"perf": "Une image plus légère, tenue à 60 images par seconde : plus fluide.",
+		"eco": "30 images par seconde et moins de petits détails : la batterie dure plus."}[quality()]
 	for key in ["musicVol", "sfxVol"]:
 		set_bar(w["vol-" + key], save[key] / 10.0)
 	for key in ["main", "access"]:
@@ -1325,11 +1346,8 @@ func _toggle(id: String) -> void:
 			SaveData.store(save)
 			_rebuild()
 			return
-		"tg-smooth":                                 # choosing again also forgets what "auto" had settled for
-			save["quality"] = SaveData.QUALITIES[(SaveData.QUALITIES.find(save["quality"]) + 1) % SaveData.QUALITIES.size()]
-			cap = 3 if _touch() else 4
-			watch = {"n": 0, "sum": 0.0, "bad": 0, "before": 0.0, "locked": false}
-			DirAccess.remove_absolute(CAP_FILE)
+		"tg-quality":                                # Max, Perf, Éco in turn
+			save["quality"] = SaveData.QUALITIES[(SaveData.QUALITIES.find(quality()) + 1) % SaveData.QUALITIES.size()]
 			fit()
 		"tg-full":
 			save["full"] = not _is_full()
@@ -1380,7 +1398,7 @@ func _import(code: String) -> void:
 		SaveData.store(save)
 		_after_load()
 		_msg("Partie importée.")
-	_confirm("Remplacer la partie actuelle par celle-ci ?\n◈ %d · record %d m · %d courses" % [s["coins"], s["best"], s["loops"]], do_import)
+	_confirm("Remplacer la partie actuelle par celle-ci ?\n%d pièces · record %d m · %d courses" % [s["coins"], s["best"], s["loops"]], do_import)
 
 func _after_load() -> void:
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
@@ -1529,27 +1547,28 @@ func refresh_shop(just_bought: String = "") -> void:
 	_set_coins(w["shop-coins"], save["coins"])
 	for k in TABS:
 		_style_button(w["tab-" + k], "tab sel" if k == tab else "tab")
-		w["tab-" + k].add_theme_font_size_override("font_size", roundi(6.5 * U))
+		w["tab-" + k].add_theme_font_size_override("font_size", roundi(5.5 * U))
 	w["shop-title"].text = (TABS[tab] + (" · %d / %d" % [save["equipped"].size(), SaveData.MAX_EQUIPPED] if tab == "up" else "")).to_upper()
-	var list: GridContainer = w["shop-list"]
+	var list: VBoxContainer = w["shop-list"]
 	for ch in list.get_children():
 		ch.queue_free()
 	for ch in w["card-actions"].get_children():
 		ch.queue_free()
+	w["card-pips"].text = ""
 	if tab == "mount":                               # nothing to buy here yet: what each animal does
 		for k in Game.MOUNT_KINDS:
 			var mk: String = k
 			var on_mount = func() -> void:
 				picked_mount = mk
 				refresh_shop()
-			list.add_child(_tile(icon("mount-" + k), Game.MOUNTS[k]["name"], k == picked_mount, DIM, on_mount, 4))
+			list.add_child(_row(_frame_of(icon("mount-" + k), 4), Game.MOUNTS[k]["name"], _note("Rare", DIM), k == picked_mount, 0, on_mount))
 		_card(Game.MOUNTS[picked_mount]["name"], "Rare. Elle attend sur le chemin : touche-la pour monter. Au premier coup, elle s'en va à ta place.", MOUNT_TEXT[picked_mount])
 		_show_demo("m-" + picked_mount, 1)
 		return
 	if tab == "skin":
 		var l = _label("Bientôt : la tenue, les cheveux, la cape et les baskets du héros, à changer séparément.", ts("s"), DIM, 0)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l.custom_minimum_size.x = a(250)
+		l.custom_minimum_size.x = a(226)
 		list.add_child(l)
 		_card("Skins", "À venir.", "")
 		_show_demo("sprint", 1)
@@ -1560,32 +1579,31 @@ func refresh_shop(just_bought: String = "") -> void:
 		picked = shown[0]["id"]
 	for u in shown:
 		var st = _state_of(u)
-		var label = ""
-		if not SaveData.unlocked(save, u):
-			label = "Niv. %d" % u["unlock"]
+		var right: Control
+		var gated = not SaveData.unlocked(save, u)
+		if gated:
+			right = _note("", DIM)                   # the blue ribbon says it
 		elif st["lvl"] == 0:
-			label = "◈ %d" % st["cost"]
+			right = _price(st["cost"], GOLD if not st["locked"] else DIM)
 		elif u.get("power", false):
-			label = "Coupé" if st["off"] else "Actif"
+			right = _note("Coupé" if st["off"] else "Actif", DIM if st["off"] else RELIC)
 		elif st["on"]:
-			label = "Équipé"
+			right = _note("Équipé", RELIC)
 		else:
-			label = "Niv. %d" % st["lvl"] if u["costs"].size() > 1 else "Possédé"
-		var colour = GOLD if st["lvl"] == 0 else (RELIC if st["active"] else DIM)
+			right = _note(_pips(u, st["lvl"]) if u["costs"].size() > 1 else "Possédé", DIM)
 		var id: String = u["id"]
 		var on_pick = func() -> void:
 			picked = id
 			refresh_shop()
-		var t = _tile(icon("ico-" + u["icon"]), label, id == picked, colour, on_pick)
-		if st["locked"]:
-			t.modulate = Color(0.6, 0.6, 0.6)
+		var row = _row(icon("ico-" + u["icon"]), u["name"], right, id == picked, u["unlock"] if gated else 0, on_pick)
+		if st["locked"] and not gated:
+			row.modulate = Color(0.7, 0.7, 0.75)
 		if id == just_bought:
-			t.modulate = GOLD
-			create_tween().tween_property(t, "modulate", Color.WHITE, 0.5)
-		list.add_child(t)
+			row.modulate = GOLD
+			create_tween().tween_property(row, "modulate", Color.WHITE, 0.5)
+		list.add_child(row)
 	var u = SaveData.upgrade(picked)
 	var st = _state_of(u)
-	var pips = "  " + "●".repeat(st["lvl"]) + "○".repeat(u["costs"].size() - st["lvl"]) if u["costs"].size() > 1 else ""
 	var status = ""
 	if not SaveData.unlocked(save, u):
 		status = "Se débloque au niveau %d, puis s'achète." % u["unlock"]
@@ -1599,15 +1617,18 @@ func refresh_shop(just_bought: String = "") -> void:
 		status = "Possédé. Les 3 emplacements sont pris." if full else "Possédé."
 	else:
 		status = "Bouton en jeu." if u["kind"] == "actif" else "Toujours actif une fois équipé."
-	_card(u["name"] + pips, status, u["desc"])
+	_card(u["name"], status, u["desc"])
+	if u["costs"].size() > 1:
+		w["card-pips"].text = _pips(u, st["lvl"])
 	_show_demo(u["id"], st["lvl"])
 	var acts: HBoxContainer = w["card-actions"]
 	if st["lvl"] > 0 and st["cost"] >= 0:
-		var b = _button("Niv. %d · ◈ %d" % [st["lvl"] + 1, st["cost"]], "small gold", func() -> void: _buy(u))
+		var b = _coin_button("Niv. %d · %d" % [st["lvl"] + 1, st["cost"]], func() -> void: _buy(u))
+		b.custom_minimum_size.x = a(132)
 		b.disabled = save["coins"] < st["cost"]
 		acts.add_child(b)
 	if st["lvl"] == 0:
-		var b = _button("◈ %d" % st["cost"], "small gold", func() -> void: _buy(u))
+		var b = _coin_button(str(st["cost"]), func() -> void: _buy(u))
 		b.disabled = st["locked"] or save["coins"] < st["cost"]
 		acts.add_child(b)
 	elif u.get("power", false):
@@ -1623,42 +1644,107 @@ func refresh_shop(just_bought: String = "") -> void:
 		b.disabled = not st["on"] and full
 		acts.add_child(b)
 
+func _pips(u: Dictionary, lvl: int) -> String:
+	return "●".repeat(lvl) + "○".repeat(u["costs"].size() - lvl)
+
+## A short word on the right of a row.
+func _note(text: String, colour: Color) -> Control:
+	var l = _label(text, ts("s"), colour, 0)
+	return l
+
+## A price: the number and the coin, the same coin as at the top of the screen.
+func _price(n: int, colour: Color) -> Control:
+	var h = _hbox(3)
+	h.add_child(_label(str(n), ts("s"), colour, 0))
+	h.add_child(_icon_rect(icon("coin-icon"), 10))
+	return h
+
+## A gold button whose text ends with the coin.
+func _coin_button(text: String, fn: Callable) -> Button:
+	var b = _button(text, "small gold", fn)
+	b.icon = icon("coin-icon")
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	b.add_theme_constant_override("icon_max_width", roundi(a(11)))
+	b.add_theme_constant_override("h_separation", roundi(a(3)))
+	b.custom_minimum_size.x = a(110)
+	return b
+
+## The first picture of a sheet of `frames` (a mount).
+func _frame_of(tex: Texture2D, frames: int) -> Texture2D:
+	if tex == null:
+		return null
+	var at = AtlasTexture.new()
+	at.atlas = tex
+	at.region = Rect2(0, 0, tex.get_width() / float(frames), tex.get_height())
+	return at
+
+## A row of the list: the picture, the name, a word or the price on the right. `gate` > 0: not unlocked
+## yet, a blue ribbon across it says at which level.
+func _row(tex: Texture2D, name: String, right: Control, sel: bool, gate: int, fn: Callable) -> Button:
+	var b = Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_filter = Control.MOUSE_FILTER_PASS        # a finger dragging over the rows scrolls the list
+	b.custom_minimum_size = Vector2(a(236), a(30))
+	_style_button(b, "tab sel" if sel else "tab")
+	var h = _hbox(6)
+	h.set_anchors_preset(Control.PRESET_FULL_RECT)
+	h.offset_left = a(5)
+	h.offset_right = -a(6)
+	h.alignment = BoxContainer.ALIGNMENT_BEGIN
+	var r = TextureRect.new()
+	r.texture = tex
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.custom_minimum_size = Vector2(a(26), a(24))
+	r.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if gate > 0:
+		r.modulate = Color(0.45, 0.45, 0.5)
+	h.add_child(r)
+	var l = _label(name, ts("s"), (GOLD if sel else INK) if gate == 0 else DIM, 0)
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	l.clip_text = true
+	h.add_child(l)
+	right.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(right)
+	b.add_child(h)
+	if gate > 0:
+		b.add_child(_ribbon("NIV. %d" % gate))
+	var on_row = func() -> void:
+		Audio.sfx("click")
+		fn.call()
+	b.pressed.connect(on_row)
+	return b
+
+## The blue ribbon across a locked row, tilted, at its right end: « NIV. 3 ».
+func _ribbon(text: String) -> Control:
+	var p = PanelContainer.new()
+	var sb = StyleBoxFlat.new()
+	sb.bg_color = Color("#2f6fe0")
+	sb.border_color = LINE
+	sb.set_border_width_all(roundi(a(1.5)))
+	sb.content_margin_left = a(8)
+	sb.content_margin_right = a(8)
+	sb.content_margin_top = a(1)
+	sb.content_margin_bottom = a(1)
+	p.add_theme_stylebox_override("panel", sb)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var l = _label(text, ts("s"), Color.WHITE, 1)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	p.add_child(l)
+	p.size = Vector2(a(70), a(15))
+	p.position = Vector2(a(236 - 78), a(7.5))
+	p.pivot_offset = p.size / 2
+	p.rotation = -0.21
+	return p
+
 func _state_of(u: Dictionary) -> Dictionary:
 	var lvl = SaveData.level(save, u["id"])
 	var on: bool = u["id"] in save["equipped"]
 	var off: bool = u["id"] in save["powersOff"]
 	var locked: bool = (u.has("needs") and SaveData.level(save, u["needs"]) == 0) or not SaveData.unlocked(save, u)
 	return {"lvl": lvl, "on": on, "off": off, "cost": SaveData.next_cost(save, u), "locked": locked, "active": on or (u.get("power", false) and lvl > 0 and not off)}
-
-func _tile(tex: Texture2D, text: String, sel: bool, colour: Color, fn: Callable, frames: int = 1) -> Button:
-	var b = Button.new()
-	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(a(62), a(62))
-	_style_button(b, "tab sel" if sel else "tab")
-	var col = _vbox(2)
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var r = TextureRect.new()
-	if tex != null and frames > 1:                     # a mount: the first picture of its sheet
-		var at = AtlasTexture.new()
-		at.atlas = tex
-		at.region = Rect2(0, 0, tex.get_width() / float(frames), tex.get_height())
-		tex = at
-	r.texture = tex
-	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	r.custom_minimum_size = Vector2(a(52), a(34))
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	col.add_child(r)
-	var l = _label(text, roundi(6.5 * U), colour, 0)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(l)
-	b.add_child(col)
-	var on_tile = func() -> void:
-		Audio.sfx("click")
-		fn.call()
-	b.pressed.connect(on_tile)
-	return b
 
 func _card(name: String, status: String, desc: String) -> void:
 	w["card-name"].text = name
@@ -1724,6 +1810,8 @@ func go(name: String) -> void:
 		Debug.debug_run(run)                         # what the debug menu asks for, if anything
 		dead_for = 0
 		_fill_hud()
+		photo = null
+		photo_taken = false
 		last_dist = 0
 		for ch in w["toasts"].get_children():
 			ch.queue_free()
@@ -1752,10 +1840,52 @@ func go(name: String) -> void:
 		return
 	show_screen(name)
 
+## The game as it is on screen now (the world only, without the HUD), once this frame is drawn.
+func _take_photo() -> void:
+	render.show_dead = true                          # he vanishes as he falls: in the photo he is still there
+	await RenderingServer.frame_post_draw
+	render.show_dead = false
+	var im = game_vp.get_texture().get_image()
+	if im != null:
+		photo = ImageTexture.create_from_image(im)
+		if w.has("over-pic"):
+			w["over-pic"].texture = photo
+
+## The photo of the fall over the whole screen; a touch anywhere puts it away.
+func _show_photo() -> void:
+	if photo == null:
+		return
+	var layer = CanvasLayer.new()
+	layer.layer = 45
+	add_child(layer)
+	var shade = ColorRect.new()
+	shade.color = Color(0, 0, 0, 0.8)
+	shade.size = Vector2(W, H)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(shade)
+	var pic = TextureRect.new()
+	pic.texture = photo
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.texture_filter = game_view.texture_filter
+	pic.position = Vector2(W * 0.06, H * 0.06)
+	pic.size = Vector2(W * 0.88, H * 0.88)
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pic.pivot_offset = pic.size / 2
+	pic.scale = Vector2(0.4, 0.4)
+	layer.add_child(pic)
+	create_tween().tween_property(pic, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var close = func(ev: InputEvent) -> void:
+		if (ev is InputEventMouseButton or ev is InputEventScreenTouch) and ev.pressed:
+			layer.queue_free()
+	shade.gui_input.connect(close)
+
 func game_over() -> void:
 	var record = not run.debug and floori(run.dist) > best_of(run.mode)
 	bank()
 	w["over-title"].text = Game.pick(DEATHS)
+	w["over-pic"].texture = photo
+	w["over-shot"].visible = true
 	hint(0)
 	_set_level(w["over-level"], true)
 	_quest_cards(w["over-quests"])
@@ -1768,7 +1898,7 @@ func game_over() -> void:
 		if w["over-dist"].text != "%d m" % shown and shown % 3 == 0:
 			Audio.sfx("tick")
 		w["over-dist"].text = "%d m" % shown
-		w["over-gold"].text = "+%d ◈" % roundi(gold * (v / dist if dist > 0 else 1.0))
+		w["over-gold"].text = "+%d" % roundi(gold * (v / dist if dist > 0 else 1.0))
 	tw.tween_method(count, 0.0, float(dist), dur).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	w["over-best"].text = "Debug : record non enregistré" if run.debug else ("★ Nouveau record ! ★" if record else "Record : %d m" % best_of(run.mode))
 	_set_colour(w["over-best"], GOLD if record else DIM)
@@ -1793,7 +1923,7 @@ func pause() -> void:
 
 func pause_view() -> void:
 	w["pause-dist"].text = "%d m" % floori(run.dist)
-	w["pause-gold"].text = "+%d ◈" % run.gold
+	w["pause-gold"].text = "+%d" % run.gold
 	w["pause-best"].text = "Debug : record non enregistré" if run.debug else "Record : %d m" % best_of(run.mode)
 	_set_level(w["pause-level"], true)
 	_quest_cards(w["pause-quests"])
@@ -2010,8 +2140,7 @@ func _notification(what: int) -> void:
 # ---------- loop ----------
 
 func _process(delta: float) -> void:
-	var dt = minf(0.033, delta)
-	_watch(delta * 1000.0)
+	var dt = minf(0.034, delta)                  # (30 images a second, in Éco, still run at full speed)
 	if rebuild_due and state != "play" and state != "loading" and state != "pause":
 		rebuild_t -= delta
 		if rebuild_t <= 0:
@@ -2054,6 +2183,9 @@ func _process(delta: float) -> void:
 				hint(0)
 		hud()
 		if state == "play" and run.dead:
+			if not photo_taken:
+				photo_taken = true
+				_take_photo()
 			dead_for += dt
 			if dead_for > 0.9:
 				game_over()
@@ -2087,7 +2219,7 @@ func _process(delta: float) -> void:
 	if w.has("fps"):                                 # the frame rate in a corner (Réglages, Affichage)
 		w["fps"].visible = save["showFps"] or fps_param
 		if w["fps"].visible and Engine.get_process_frames() % 15 == 0:
-			w["fps"].text = "%d i/s · x%d · %dx%d · %s · %s" % [Engine.get_frames_per_second(), q, game_vp.size.x, game_vp.size.y, save["quality"], perf["text"]]
+			w["fps"].text = "%d i/s · x%d · %dx%d · %s · %s" % [Engine.get_frames_per_second(), q, game_vp.size.x, game_vp.size.y, quality(), perf["text"]]
 	_measure()
 	if w.has("info"):                                # the debug menu's « Mesures en jeu »
 		w["info"].visible = Debug.dbg["info"] and run != null
