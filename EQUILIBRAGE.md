@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.34.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 18/11/2026, **version Godot 0.35.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -254,6 +254,19 @@ valeur d'origine. Après un changement : réexporter le jeu.
 | Nuées esquivées | 3 | 60 | 180 |
 
 Un défi absent du fichier garde l'ancienne règle des paliers (+1 palier tous les 3 défis réussis).
+
+## 10 bis. Jouer à deux (coop)
+
+| Valeur | Aujourd'hui | Où |
+|---|---|---|
+| Où | navigateur seulement (WebRTC), deux téléphones, un salon de 4 lettres sur le serveur (10 min au plus) ; l'écran Amis n'apparaît qu'une fois l'adresse du serveur dans `reglages/reseau.txt` | `coop.gd`, `net.gd` |
+| La course | Jouer (Run illimitée), même graine, même décor de départ (celui de l'hôte), route faite pour le moins équipé des deux (à pied, Double saut ou Vol) | `run.coop`, `road_tier` |
+| Coupé en coop | montures, sablier ramassable, Esquive, Sablier, pause : ils changeraient l'allure d'un seul joueur, donc sa route | main.gd |
+| Départ | l'hôte part 0,8 s après « Partir ! », l'invité 0,8 s moins la moitié du ping après le message (ping mesuré toutes les 2 s) | `_coop_go`, `_coop_begin` |
+| Le partenaire | Pépito aux couleurs tournées (feuilles rouges), l'invité 1,75 m derrière l'hôte sur les deux écrans ; sa position arrive 15 fois par seconde | `MATE_SHADER`, `run.home` |
+| Bulle | au dernier cœur perdu (après le Rembobinage s'il reste) : une bulle de 1,25 m de rayon, 3,75 m au-dessus du sol sous l'autre, 0,5 m derrière lui, qui ondule ; il faut sauter dedans (au sol, rien) ; ramené : 1 s d'invincibilité, un cœur | `BUBBLE_*`, `to_bubble`, `_rescue_check`, `back` |
+| Fin | quand les deux sont dans une bulle (ou que l'autre est parti et qu'on flotte) ; chacun garde sa distance et ses pièces | `_float` |
+| Connexion | 30 s pour se trouver, sinon « réseau trop fermé » (il faudra un relais TURN) | `LINK_TIME` |
 
 ## 10. Affichage et son
 
