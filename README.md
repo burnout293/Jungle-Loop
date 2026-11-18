@@ -18,8 +18,9 @@ paysage et peut s'installer sur l'écran d'accueil.
 
 Pour essayer sans toucher à sa sauvegarde : ajouter `?bac` à l'adresse.
 
-Une version Godot remplacera celle-ci (branche `godot`, dossier `Projects/Jungle-Loop-Godot`). En 0.29.0 elle est à
-parité avec cette version, aperçus de la boutique et menus compris. Son export web est publié à l'essai dans
+Une version Godot remplacera celle-ci (branche `godot`, dossier `Projects/Jungle-Loop-Godot`). En 0.30.0 elle a
+dépassé cette version (boutique en liste, réglage Qualité Max / Perf / Éco, Vorace équitable, Dernier élan
+plus long, photo de la chute). Son export web est publié à l'essai dans
 `godot/` : https://burnout293.github.io/Jungle-Loop/godot/ (44 Mo, installable sur l'écran d'accueil ; sa sauvegarde
 est à part : exporter le code ici et l'importer là-bas). Le cache hors ligne de cette version (`sw.js`) ignore tout
 ce qui est sous `godot/`, qui a le sien.
