@@ -210,96 +210,6 @@ def mirror(v, n):
     v = v % (2 * n); return np.where(v < n, v, 2 * n - 1 - v)
 
 
-def stretch_cols(band, bad, lo, hi, n_add, donor=None, dbad=None, tol=1):
-    """The columns lo..hi-1 of `band` with n_add more (or fewer, if negative), and for each new
-    column the old one it comes from (-1 for an added one). `bad` marks what must never be
-    repeated nor cut (leaves, glyphs, gems, patched stone).
-    Fewer: columns equal to their neighbour go, or whole runs between two look-alike columns.
-    More: copies of runs of wall that start and end on look-alike columns (both joins invisible),
-    spread over distinct places; if the band has none, runs borrowed from `donor`."""
-    sub = band[:, lo:hi]; n = hi - lo; badc = bad[:, lo:hi].any(0)
-    if n_add == 0: return sub, list(range(lo, hi))
-    for t in range(tol, 6):
-        clean = [c for c in plain_lines(sub, t) if not badc[c]]
-        if n_add > 0 or len(clean) >= -n_add: break
-    if n_add < 0:
-        if len(clean) >= -n_add:               # enough columns equal to their neighbour
-            drop = {clean[int(i * len(clean) / -n_add)] for i in range(-n_add)}
-        else:                                  # whole runs between two look-alike columns
-            drop, need = set(), -n_add
-            cand = sorted((differ(sub[:, i], sub[:, j]), -(j - i), i, j) for i in clean for j in clean
-                          if 1 <= j - i <= need)
-            for cost, _, i, j in cand:
-                run = set(range(i + 1, j + 1))
-                if cost > 3 or run & drop or len(run) > need: continue
-                drop |= run; need -= len(run)
-                if not need: break
-            if need: raise ValueError(f'cannot take {-n_add} lines out of {n}: {need} left')
-        keep = [c for c in range(n) if c not in drop]
-        return sub[:, keep], [lo + c for c in keep]
-
-    def find_runs(src, srcbad):
-        out = []
-        for i in range(src.shape[1]):
-            if srcbad[i]: continue
-            for j in range(i + 8, min(src.shape[1], i + 41)):     # whole blocks, joints included
-                if srcbad[j]: break
-                cost = differ(src[:, i], src[:, j])
-                if cost <= 1: out.append((cost, j - i, i, j))
-        return out
-
-    runs = [(c, l, sub[:, i + 1:j + 1], j, (i, j)) for c, l, i, j in find_runs(sub, badc)]
-    if donor is not None and not runs:         # nothing to repeat here: borrow from the other side
-        spots = [p for p in range(n - 1) if not badc[p] and not badc[p + 1]
-                 and differ(sub[:, p], sub[:, p + 1]) <= 2]
-        for c, l, i, j in find_runs(donor, dbad.any(0)):
-            for p in spots:
-                cost = max(differ(sub[:, p], donor[:, i]), differ(sub[:, p], donor[:, j]))
-                if cost <= 2: runs.append((cost, l, donor[:, i + 1:j + 1], p, None))
-    runs.sort(key=lambda r: (r[0], -r[1]))
-    chosen, used, spots_used = [], set(), set()
-    for r in runs:                             # distinct places, no overlap
-        span = set(range(r[4][0], r[4][1] + 1)) if r[4] else {r[3]}
-        if span & used or r[3] in spots_used: continue
-        chosen.append(r); used |= span; spots_used.add(r[3])
-    after, left, k = {}, n_add, 0
-    chosen.sort(key=lambda r: r[3])
-    while chosen and left >= min(r[1] for r in chosen):
-        r = chosen[k % len(chosen)]; k += 1
-        if r[1] > left: continue
-        after.setdefault(r[3], []).append(r[2]); left -= r[1]
-    if left > 0:                               # the last few: single plain columns, spread out
-        pool = clean or [c for c in range(n) if not badc[c]] or list(range(n))
-        for i in range(left):
-            c = pool[int((i + .5) * len(pool) / left)]
-            after.setdefault(c, []).append(sub[:, c:c + 1])
-    out, src = [], []
-    for c in range(n):
-        out.append(sub[:, c:c + 1]); src.append(lo + c)
-        for piece in after.get(c, []):
-            out.append(piece); src.extend([-1] * piece.shape[1])
-    res = np.concatenate(out, 1)
-    assert res.shape[1] == n + n_add
-    return res, src
-
-
-def resize_band(band, bad, target, lo, hi, split, donor=None, dbad=None):
-    """Brings `band` (rows, columns) to `target` columns, keeping 0..lo and hi.. untouched, half
-    of the change on each side of `split` (the ornament in the middle stays in the middle).
-    Returns the band and, for each old column, where it now is."""
-    n = band.shape[1]; add = target - n; a1 = add // 2; a2 = add - a1
-    m1, s1 = stretch_cols(band, bad, lo, split, a1, donor, dbad)
-    m2, s2 = stretch_cols(band, bad, split, hi, a2, donor, dbad)
-    out = np.concatenate([band[:, :lo], m1, m2, band[:, hi:]], 1)
-    src = list(range(lo)) + s1 + s2 + list(range(hi, n))
-    assert out.shape[1] == target, (out.shape[1], target)
-    where, last = np.zeros(n, int), 0
-    pos = {s: k for k, s in enumerate(src) if s >= 0}
-    for x in range(n):                          # a removed column: where its neighbour went
-        last = pos.get(x, last); where[x] = last
-    return out, where
-
-
 def dilate(m):
     g = m.copy(); g[1:] |= m[:-1]; g[:-1] |= m[1:]; g[:, 1:] |= m[:, :-1]; g[:, :-1] |= m[:, 1:]
     return g
@@ -510,8 +420,8 @@ def fill_face(out, tex=None, flat=None):
 
 
 # ---------- Build ----------
-def main():
-    for f in glob.glob(os.path.join(OUT, '*.png')): os.remove(f)
+def load_crops():
+    """Every element of the sheet, words and icon wiped where needed (also used by import_shop_v2.py)."""
     sheet = np.asarray(Image.open(SRC).convert('RGBA'))
     crop = {n: sheet[y0:y1, x0:x1].copy() for n, (x0, y0, x1, y1) in BOXES.items()}
     crop['btn-normal'] = wipe_middle(crop['btn-normal'], (0.16, 0.88), side_w=8)   # longest word
@@ -521,6 +431,12 @@ def main():
     r = crop.pop('round'); cols = np.nonzero((r[..., 3] > 128).any(0))[0]
     cut = cols[np.argmax(np.diff(cols))] + 1
     crop['round-up'], crop['round-down'] = r[:, :cut], r[:, cut:]
+    return crop
+
+
+def main():
+    for f in glob.glob(os.path.join(OUT, '*.png')): os.remove(f)
+    crop = load_crops()
     meta = {'buttons': {}, 'squares': {}, 'bars': {}, 'panels': {}}
 
     # text buttons: one cap width per height, for the four states
