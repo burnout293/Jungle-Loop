@@ -40,10 +40,10 @@ def main():
     for f in glob.glob(os.path.join(src_dir, '*.png')) + [os.path.join(src_dir, 'meta.json')]:
         shutil.copy(f, OUT)
     shop = os.path.join(OUT, 'shop')                 # the shop's buttons (tools/import_shop_v2.py), as they are
-    if os.path.isdir(shop):
-        shutil.rmtree(shop)
+    for f in glob.glob(os.path.join(shop, '*.png')):  # Godot's .import files stay (their ids are in git)
+        os.remove(f)
     if os.path.isdir(os.path.join(src_dir, 'shop')):
-        os.makedirs(shop)
+        os.makedirs(shop, exist_ok=True)
         for f in glob.glob(os.path.join(src_dir, 'shop', '*.png')) + glob.glob(os.path.join(src_dir, 'shop', 'meta.json')):
             shutil.copy(f, shop)
     meta = json.load(open(os.path.join(OUT, 'meta.json')))
@@ -66,7 +66,45 @@ def main():
         meta['panels'][name] = {'width': W2, 'height': H2, 'from': best, 'godot': True}
         print(f'{name}: {out.shape[1]}x{out.shape[0]} from {best}')
     json.dump(meta, open(os.path.join(OUT, 'meta.json'), 'w'), indent=1)
+    if os.path.isdir(shop):
+        plain_rows(shop)
+    slot_squares()
     print('copied and made:', len(glob.glob(os.path.join(OUT, '*.png'))), 'pictures in', OUT)
+
+
+def slot_squares():
+    """The blank stone square at 42 (the menu's three slots), made as import_ui_v2.py makes its squares."""
+    crop = K.load_crops()
+    names = K.ICONS + ('blank',)
+    canv = K.aligned([crop['sq-' + n] for n in names], both=True)
+    blank = canv[-1]
+    for S in (42,):
+        Image.fromarray(K.shrink(blank, S / blank.shape[0])).save(os.path.join(OUT, f'sq-blank-{S}.png'))
+        print(f'sq-blank-{S}')
+
+
+def plain_rows(shop):
+    """The shop's item rows without the sunken square for the picture (0.33: the icon sits on the stone,
+    a dark square behind it looked like a hole). Same making as tools/import_shop_v2.py there, minus
+    sunken_slot."""
+    import import_shop_v2 as S
+    W, H = S.ITEM
+    crop = K.load_crops()
+    canv = dict(zip(K.STATES, K.aligned([crop['btn-' + s] for s in K.STATES], both=False)))
+    small = {s: K.shrink(c, H / c.shape[0]) for s, c in canv.items()}
+    cuts = {s: K.cut_caps(b) for s, b in small.items()}
+    cap = max(max(l, r) for _, l, r in cuts.values())
+    meta_p = os.path.join(shop, 'meta.json')
+    meta = json.load(open(meta_p)) if os.path.exists(meta_p) else {'item': {}}
+    for name, kit in S.TAB_STATES.items():
+        b = small[kit]
+        plain, l, r = cuts[kit]
+        img = K.three_parts(b, plain, l, r, cap, cap, mid=W - 2 * cap)
+        Image.fromarray(img).save(os.path.join(shop, f'item-{name}.png'))
+        meta.setdefault('item', {})[name] = {'cap': cap, 'face': S.face_box(img)}
+        print(f'item-{name}: {img.shape[1]}x{img.shape[0]}, caps {cap}, no sunken square')
+    meta['item']['slot'] = None
+    json.dump(meta, open(meta_p, 'w'), indent=1)
 
 
 if __name__ == '__main__':

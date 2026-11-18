@@ -223,6 +223,23 @@ func build_m_dragonfly(r: Game.Run, x: float) -> void:
 func play_m_dragonfly(_r: Game.Run, _ahead: float, t: float, inp: Game.Controls) -> void:
 	inp.hold = sin(t * 3.2 - 1.4) > 0
 
+func build_mountMagnet(r: Game.Run, x: float) -> void:   # on the rhino, the coins above come down to him
+	_ride(r, x + 300, "rhino")
+	Game.coin_line(r, x + 800, Game.GROUND - 170, 10)
+	Game.coin_line(r, x + 1350, Game.GROUND - 40, 8)
+	_no_ghosts(r)
+
+func build_tamed(r: Game.Run, x: float) -> void:         # the rhino caught though he jumps over it
+	_ride(r, x + 300, "rhino")
+	Game.add_decor(r, x + 1100)
+	Game.coin_line(r, x + 800, Game.GROUND - 40, 14)
+	_no_ghosts(r)
+
+func play_tamed(r: Game.Run, _ahead: float, t: float, inp: Game.Controls) -> void:
+	if r.mount == null and t > 0.3 and not done.has("hop"):
+		done["hop"] = true
+		inp.pressed = true
+
 func build_jammer(r: Game.Run, x: float) -> void:        # the one change of scenery, the relic flickering
 	r.next_biome_at = START / Game.PPM + 1
 	Game.coin_line(r, x + 450, Game.GROUND - 40, 10)

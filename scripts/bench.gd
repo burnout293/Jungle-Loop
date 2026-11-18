@@ -193,9 +193,12 @@ func _tour() -> void:
 		[13.6, "pause", ""], [14.4, "shot", "13-pause"],
 		[14.5, "go", "settings"], [15.3, "shot", "14-settings-in-run"],
 		[15.4, "go", "menu"], [16.2, "shot", "15-back-to-pause"],
-		[16.3, "resume", ""], [16.4, "die", ""], [18.6, "shot", "16-over-record"],
-		[18.7, "photo", ""], [19.3, "shot", "17-photo-full"],
-		[19.5, "quit", ""],
+		[16.3, "resume", ""], [16.35, "levels", "4"], [16.4, "die", ""], [18.6, "shot", "16-over-record"],
+		[18.62, "close", ""], [18.64, "rebuild", ""], [18.95, "shot", "16b-over-rebuilt"],
+		[19.0, "photo", ""], [19.6, "shot", "17-photo-full"], [19.65, "close", ""],
+		[19.7, "go", "shop"], [19.75, "tab", "mount"], [19.8, "mpick", "tamed"], [21.0, "shot", "18-shop-tamed"],
+		[21.1, "moff", "rhino"], [21.15, "mpick", "rhino"], [22.2, "shot", "19-shop-rhino-off"], [22.3, "moff", "rhino"],
+		[22.5, "quit", ""],
 	]
 	while tour_i < steps.size() and t >= steps[tour_i][0]:
 		var st = steps[tour_i]
@@ -215,6 +218,17 @@ func _tour() -> void:
 			"tab":
 				main.tab = arg
 				main.refresh_shop()
+			"mpick":                                    # the Montures tab: an animal or a mount upgrade
+				main.picked_mount = arg
+				main.refresh_shop()
+			"moff":
+				if arg in main.save["mountsOff"]:
+					main.save["mountsOff"].erase(arg)
+				else:
+					main.save["mountsOff"].append(arg)
+				main.refresh_shop()
+			"levels": main.levels_due = [int(arg)]      # as if this level had been reached during the run
+			"rebuild": main._rebuild()                  # what a turn of the phone does
 			"toggle": main._toggle(arg)
 			"xp":
 				if arg == "back":
@@ -228,6 +242,9 @@ func _tour() -> void:
 				if main.modal != null:
 					main.modal.queue_free()
 					main.modal = null
+				for ch in main.get_children():          # the photo in full, too
+					if ch is CanvasLayer and ch.layer == 45:
+						ch.queue_free()
 			"equip":
 				if not (arg in main.save["equipped"]):
 					SaveData.toggle_equip(main.save, arg)

@@ -3,23 +3,57 @@ extends RefCounted
 ## Long-term progress: the player's level and the objectives (port of js/progress.js). Both live in the
 ## save and are fed with what happened during the last frame of a run.
 
-# ---------- level: one point of experience per metre run, plus what the objectives pay ----------
+# ---------- the progression file (assets/progression.txt) ----------
+# What the player may change without touching the code: the points per metre and per level, what a
+# level pays, each upgrade's level and prices, each objective's goal and rewards. load_config reads it
+# over these defaults; a missing or wrong line keeps the default.
 
-const LEVEL_BASE := 200       # level 1 -> 2 takes 200 points, each next level 150 more
-const LEVEL_STEP := 150
+static var cfg := {"mpp": 20.0, "per_level": 1000.0, "level_coins": 20}
+static var quest_cfg := {}                   # kind -> {"goal", "reward", "xp"}
+
+static func load_config(text: String) -> void:
+	var section = ""
+	for raw in text.split("\n"):
+		var line: String = raw.split("#")[0].strip_edges()
+		if line == "":
+			continue
+		if line.begins_with("[") and line.ends_with("]"):
+			section = line.substr(1, line.length() - 2).strip_edges().to_lower()
+			continue
+		var cols: Array = Array(line.split("|")).map(func(c): return c.strip_edges())
+		if cols.size() < 2:
+			continue
+		match section:
+			"niveaux":
+				var v = float(cols[1])
+				if v <= 0:
+					continue
+				match cols[0].to_lower():
+					"metres par point", "mètres par point": cfg["mpp"] = v
+					"points par niveau": cfg["per_level"] = v
+					"pieces par niveau", "pièces par niveau": cfg["level_coins"] = int(v)
+			"ameliorations", "améliorations":
+				var u = SaveData.upgrade(cols[0])
+				if u.is_empty() or cols.size() < 3:
+					continue
+				if cols[1].is_valid_int():
+					u["unlock"] = int(cols[1])
+				var costs = Array(cols[2].split("/")).map(func(c): return int(c.strip_edges())).filter(func(c): return c > 0)
+				if costs.size() > 0:
+					u["costs"] = costs
+			"defis", "défis":
+				if KINDS.has(cols[0]) and cols.size() >= 4 and cols[1].is_valid_float():
+					quest_cfg[cols[0]] = {"goal": maxi(1, int(cols[1])), "reward": maxi(0, int(cols[2])), "xp": maxi(0, int(cols[3]))}
+
+# ---------- level: a point of experience every cfg.mpp metres, plus what the objectives pay ----------
 
 static func level_info(xp: float) -> Dictionary:
-	var level = 1
-	var need = LEVEL_BASE
-	var into = xp
-	while into >= need:
-		into -= need
-		level += 1
-		need += LEVEL_STEP
-	return {"level": level, "into": floori(into), "need": need}
+	var need = cfg["per_level"]
+	var level = 1 + floori(xp / need)
+	return {"level": level, "into": floori(fmod(xp, need)), "need": int(need)}
 
 static func level_reward(level: int) -> int:
-	return 20 * level
+	return int(cfg["level_coins"]) * level
 
 ## Adds experience; returns the levels reached on the way (usually none), their coins already paid.
 static func add_xp(save: Dictionary, points: float) -> Array:
@@ -84,7 +118,8 @@ static func fill(save: Dictionary) -> void:
 					continue
 			free.append(k)
 		var chosen: String = free[randi() % free.size()]
-		save["quests"].append({"k": chosen, "goal": KINDS[chosen]["base"] + KINDS[chosen]["step"] * tier, "p": 0, "reward": 30 + 15 * tier, "xp": 40 + 20 * tier})
+		var qc: Dictionary = quest_cfg.get(chosen, {"goal": KINDS[chosen]["base"] + KINDS[chosen]["step"] * tier, "reward": 30 + 15 * tier, "xp": 40 + 20 * tier})
+		save["quests"].append({"k": chosen, "goal": qc["goal"], "p": 0, "reward": qc["reward"], "xp": qc["xp"]})
 
 static func start_run(save: Dictionary) -> void:
 	for q in save["quests"]:

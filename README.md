@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.32.1** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.33.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -51,7 +51,8 @@ Dans un navigateur, sur ce PC seulement (`localhost`), les mêmes options passen
 | `scripts/ambient.gd` | oiseaux, papillons, lucioles, vent, pluie | `js/ambient.js` |
 | `scripts/audio.gd` | musiques et bruitages (le même petit synthétiseur, rendu en échantillons au démarrage) | `js/audio.js` |
 | `scripts/save.gd` | sauvegarde, boutique, codes d'export (compatibles avec la version web) | `js/save.js` |
-| `scripts/progress.gd` | niveau et défis | `js/progress.js` |
+| `scripts/progress.gd` | niveau et défis, lecture de `assets/progression.txt` | `js/progress.js` |
+| `assets/progression.txt` | **à régler soi-même** : points par mètre et par niveau, pièces d'un niveau, niveau requis et prix de chaque amélioration, objectif et récompenses de chaque défi | — |
 | `scripts/main.gd` | écrans, HUD, commandes, boucle, qualité d'image | `js/main.js`, `index.html`, `style.css` |
 | `scripts/demo.gd` | aperçus animés de la boutique : une vraie petite course scriptée | `js/demo.js` |
 | `assets/` | images, `meta.json`, `patterns.txt`, les deux musiques utilisées | `assets/` |
@@ -98,6 +99,27 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.33.0
+
+- Histoire : chaque décor a sa vitesse de départ (forêt 9 m/s, ruines 10, donjon 11, cité 12 : `ZONE_EXTRA`)
+  et l'accélération est de 0,25 m/s par seconde (`STORY_GAIN`) ; la Run illimitée garde 9 m/s et 0,125.
+- Montures : chacune s'active ou se désactive dans l'onglet Montures (`save.mountsOff`, `run.mounts`) ; deux
+  améliorations de la famille « mount » : Dompté (attrapée de plus loin, même en sautant ; elle t'attend) et
+  Aimant de monture (`tamed`, `mountMagnet`, aperçus dans `demo.gd`).
+- Vol plus réactif : montée 600 u/s (430), arrêt net au relâché, puis chute ×1,4 (`FLAP`, `VOL_DROP`, `flew`).
+- Vorace 140 u plus à droite (`BOSS_BACK`), boules à leur hauteur en 0,25 s (`BALL_SETTLE`), éventail à trois
+  couloirs libres, à une place au plus du précédent. Banc : 12 combats en vol, toutes les façons de voler
+  (tenu / relâché à chaque image, vraie gravité) : aucun moment sans passage.
+- Niveaux : 1 point tous les 20 m, 1000 points par niveau, plus de paliers ; défis réglés un par un ; tout
+  dans `assets/progression.txt` (`Progress.load_config`). Anciennes sauvegardes : expérience ÷ 20 (`xpv`).
+- Plus d'annonce de niveau pendant la course : un panneau à la fin (`show_levels`) avec le niveau, les pièces
+  et ce qui se débloque.
+- Écran de fin gardé quand le téléphone tourne (`over_info`, `over_view`).
+- iPhone : page épinglée (fixe, sans défilement) et remise à 0,0 après chaque rotation ou changement de la
+  zone visible, puis le jeu remesuré (`html/head_include` de l'export web).
+- Boutique : lignes sans case creusée (l'icône posée sur la pierre, `tools/import_ui_v2_godot.py`,
+  `plain_rows`) ; emplacements du menu en carré de pierre du kit (`sq-blank-42`).
 
 ## 0.32.1
 

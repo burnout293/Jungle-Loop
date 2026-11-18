@@ -18,7 +18,15 @@ const NEXT_BIOME := [1, 3, 0, 2]
 # The scenery changes after the boss (the ruins), then while there is no other boss every ZONE metres.
 const ZONE := 2000.0
 const ZONE_ENDLESS := 800.0     # Run illimitée: a new scenery every 800 m (the Gros sac à dos may skip one)
-const ZONE_ACCEL := 2.0         # Histoire: each new scenery starts again from the base speed, gaining twice as fast
+const ZONE_ACCEL := 2.0         # (no longer used: see ZONE_EXTRA and STORY_GAIN)
+# Histoire: each scenery starts from its own speed, SPEED_BASE plus this (forest 9, ruins 10, dungeon 11,
+# city 12 m/s), and the speed grows by STORY_GAIN (0.25 m/s every second; the Run illimitée: SPEED_GAIN).
+const ZONE_EXTRA := {0: 0.0, 1: 40.0, 3: 80.0, 2: 120.0}
+const STORY_GAIN := 10.0
+# Vorace stands this far right of where she used to (part of her off the screen): her balls are seen
+# sooner, and take their height within BALL_SETTLE of leaving her mouth.
+const BOSS_BACK := 140.0
+const BALL_SETTLE := 12.0
 const HEARTS := 1              # one life: the first blow ends the run (Cœur en plus gives a second)
 
 const HERO_H := 80.0
@@ -45,7 +53,8 @@ const SLOW_TICKS := [2.0, 1.5, 1.0, 0.65, 0.4, 0.2]
 const SLOW_EASE := 0.35
 const MAGNET := [0.0, 110.0, 170.0, 240.0]
 const DRUNK := [0.0, 0.06, 0.1, 0.15]   # Faune alcoolisée: share of the creatures that are harmless
-const FLAP := 430.0                     # how fast the leaf rotor climbs
+const FLAP := 600.0                     # how fast the leaf rotor climbs (430 before 0.33: too slow to dodge)
+const VOL_DROP := 1.4                   # with the Vol, once released: gravity this many times stronger
 # (static, not const: the debug menu may change these, see debug.gd)
 static var SPEED_BASE := 360.0
 static var SPEED_GAIN := 5.0
@@ -202,6 +211,7 @@ class Player:
 	var phase := 0.0
 	var flying := false
 	var rotor := false
+	var flew := false        # the rotor was used since he left the ground: he drops faster (VOL_DROP)
 	var spin := 0.0
 	var roll := 0.0
 	var inv := 0.0
@@ -456,7 +466,8 @@ class Run:
 	var seed := 0                  # the road's seed (the same seed, the same road)
 	var rng := RandomNumberGenerator.new()
 	var zone_t := 0.0              # Histoire: when the current scenery began (the speed starts again)
-	var zone_k := 1.0              # and how fast it grows there
+	var zone_k := 1.0              # (unused)
+	var mounts: Array = ["gorilla", "rhino", "dragonfly"]   # the animals that may wait on the road (Montures: on / off)
 	var brake := 0.0               # what the brakes picked up take off his speed, for good
 	var bonuses: Array = []        # the rare floating things (Item: kind "life" or "brake")
 	var next_bonus := 0.0          # metres
@@ -876,7 +887,7 @@ static func spawn_pattern(run: Run) -> void:
 		opts = ["coins"]
 	elif run.boss != null:
 		opts = ["plat", "plat", "steps", "padchain", "coins"]
-	elif not riding and x > 70 * PPM and x / PPM >= run.next_mount:
+	elif not riding and x > 70 * PPM and x / PPM >= run.next_mount and run.mounts.size() > 0:
 		opts = ["mount"]
 	var kind: String = wpick(opts)
 	var extent = 0.0
@@ -1070,7 +1081,7 @@ static func spawn_pattern(run: Run) -> void:
 			coin_line(run, x, G - 40, 5)
 			var it = Item.new()
 			it.x = x + 330
-			it.kind = wpick(MOUNT_KINDS)
+			it.kind = wpick(run.mounts)
 			it.ph = wrnd(0, ZIG_PERIOD * 2)
 			it.y = G - ZIG_LOW
 			run.items.append(it)
@@ -1452,7 +1463,7 @@ static func boss(run: Run, d: float) -> void:
 	b.t += d
 	b.open = maxf(0, b.open - d)
 	if b.phase == "enter":                           # it slides in from the right edge
-		b.sx += (run.view_w - BOSS_W - b.sx) * minf(1, d * 2.5)
+		b.sx += (run.view_w - BOSS_W + BOSS_BACK - b.sx) * minf(1, d * 2.5)
 		if b.t > 1.6:
 			b.phase = "fight"
 			b.t = 0
@@ -1479,12 +1490,12 @@ static func boss(run: Run, d: float) -> void:
 						run.events.append("acid")
 					"fan":                           # in the air (dragonfly, Vol): every lane up to the ceiling but two neighbours
 						var hs = FAN_LANES
-						var gap_k = W.randi() % (hs.size() - 1)
+						var gap_k = W.randi() % (hs.size() - 2)   # three lanes free
 						if b.last_gap >= 0:              # within reach of the last opening
-							gap_k = clampi(gap_k, b.last_gap - 2, b.last_gap + 2)
+							gap_k = clampi(gap_k, b.last_gap - 1, b.last_gap + 1)
 						b.last_gap = gap_k
 						for k in hs.size():
-							if k != gap_k and k != gap_k + 1:
+							if k < gap_k or k > gap_k + 2:
 								_boss_ball(run, mouth, hs[k])
 						run.events.append("acid")
 					"rain":                          # drops from the sky, their shadows on the floor first
@@ -1682,6 +1693,7 @@ static func hit(run: Run, o: Obs) -> void:
 		p.ground = false
 		p.plat = null
 		p.rotor = false
+		p.flew = false
 		burst(run, run.cam + run.sx, p.y - 40, Color("#ff4d6d"), 14, 320)
 		run.events.append_array(["hurt", "bounce"])
 		return
@@ -1960,7 +1972,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	# --- scrolling: the hero first runs out of the temple, then the camera follows him ---
 	run.t += d
 	# The hero's own speed grows for ever; a mount, then the boss, impose theirs while they last.
-	var own = maxf(SPEED_BASE * 0.6, run.base + (run.t - run.zone_t) * SPEED_GAIN * run.zone_k - run.brake)
+	var own: float
+	if run.mode == "story":                          # each scenery from its own speed, gaining 0.25 m/s a second
+		own = run.base + ZONE_EXTRA.get(run.biome, 0.0) + (run.t - run.zone_t) * STORY_GAIN
+	else:
+		own = run.base + run.t * SPEED_GAIN
+	own = maxf(SPEED_BASE * 0.6, own - run.brake)
 	var pace = own
 	if run.boss != null:
 		pace = BOSS_SPEED * (DEATH_PACE if run.boss.phase == "fall" else 1.0)
@@ -2040,9 +2057,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			var z: Zone = p.ball
 			var k = minf(1, minf((px - z.x) / 70, (z.x + z.w - px) / 70))
 			p.ground = true
+			p.flew = false
 			p.plat = null
 			p.vy = 0
 			p.rotor = false
+			p.flew = false
 			p.jumps = 0
 			p.y = fl + (GALLERY * maxf(0, k) if z.kind == "gallery" else 0.0)
 			p.roll += run.speed * d / 26
@@ -2052,6 +2071,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			p.ground = false
 			p.plat = null
 			p.rotor = false
+			p.flew = false
 			p.vy += ((-480.0 if input.hold else 440.0) - p.vy) * minf(1, d * 16)
 			p.y += p.vy * d
 			if p.y > fl - 12:
@@ -2110,6 +2130,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				else:
 					p.buf = 0.12                     # pressed just before landing: remembered
 			if not input.hold:
+				if p.rotor and p.vy < 0:
+					p.vy = 0.0                       # the climb stops at once
 				p.rotor = false                      # released: he drops straight away
 			if p.ground and p.plat != null and (px < p.plat.x - HERO_HALF or px > p.plat.x + p.plat.w + HERO_HALF):
 				p.ground = false                     # ran off the end of a ledge
@@ -2126,7 +2148,10 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			if not p.ground:
 				var before = p.y
 				if p.rotor:
+					p.flew = true
 					p.vy = minf(-FLAP, p.vy + 2400 * d)   # the leaf rotor: a steady climb while held
+				elif p.flew:
+					p.vy += JUMP_GRAVITY * VOL_DROP * d    # released after flying: down quickly
 				else:
 					p.vy += (JUMP_HELD if (input.hold and p.vy < 0 and not p.vine_leap) else JUMP_GRAVITY) * d
 				p.flying = p.rotor or p.spin > 0
@@ -2162,10 +2187,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 					p.y = land
 					p.vy = 0
 					p.ground = true
+					p.flew = false
 					p.plat = on
 					p.jumps = 0
 					p.squash = 1
 					p.rotor = false
+					p.flew = false
 					p.spin = 0
 					p.vine_leap = false
 					for i in 5:
@@ -2214,20 +2241,21 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			if time > 0 and run.mount.t >= time:
 				dismount(run, true)
 		for it in run.items:
-			it.x += run.speed * MOUNTS[it.kind]["ahead"] * d
+			var tame = run.lvl("tamed")                    # Dompté: they wait for him, and reach out
+			it.x += run.speed * MOUNTS[it.kind]["ahead"] * (1.0 - 0.3 * tame) * d
 			var f = floor_at(run, it.x)
 			if it.kind == "dragonfly":
 				var k = fmod((run.t + it.ph) / ZIG_PERIOD, 2.0)
 				it.y = f - ZIG_LOW - (ZIG_HIGH - ZIG_LOW) * (k if k < 1 else 2 - k)
-			if run.mount != null or absf(px - it.x) > 70:
+			if run.mount != null or absf(px - it.x) > 70 + 45 * tame:
 				continue
 			var reach = false
 			if it.kind == "gorilla":
-				reach = p.y - HERO_H < f - PERCH + 24              # up to the gorilla: a high jump
+				reach = p.y - HERO_H < f - PERCH + 24 + 40 * tame  # up to the gorilla: a high jump
 			elif it.kind == "rhino":
-				reach = p.y > f - 50                               # the rhino: at its level, not over it
+				reach = p.y > f - 50 - 70 * tame                   # the rhino: at its level, not over it
 			else:
-				reach = absf(p.y - HERO_H / 2 - it.y) < 64         # the dragonfly: where it flies
+				reach = absf(p.y - HERO_H / 2 - it.y) < 64 + 40 * tame   # the dragonfly: where it flies
 			if not reach:
 				continue
 			var mt = Mount.new()
@@ -2235,6 +2263,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			run.mount = mt
 			it.gone = true
 			p.rotor = false
+			p.flew = false
 			p.hang = false
 			p.vine_leap = false
 			p.inv = maxf(p.inv, 0.5)
@@ -2298,7 +2327,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 							part(run, o.x + rnd(10, o.w - 10), f - 6, rnd(-160, 160), rnd(-320, -80), rnd(0.3, 0.6), colour_of(["#a8ff3c", "#5cf25c", "#e8ffb0"]), rnd(5, 10), 1200)
 						run.events.append("splash")
 				elif o.ball:
-					o.y += (o.lane - o.y) * minf(1, d * 4)
+					o.y += (o.lane - o.y) * minf(1, d * BALL_SETTLE)
 				elif o.drop:                         # a drop from the sky: a small puddle where it lands
 					o.vy += o.g * d
 					o.y += o.vy * d
@@ -2354,6 +2383,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				p.y = GROUND
 				p.vy = 0
 				p.ground = true
+				p.flew = false
 				p.jumps = 0
 			else:
 				p.y = floor_at(run, run.cam + run.sx)
@@ -2388,9 +2418,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.biome = NEXT_BIOME[run.biome]
 		run.biome_x = run.cam + run.view_w + 400     # the new scenery starts ahead, off screen, and scrolls in
 		run.next_biome_at = maxf(2 * Z, (floorf(run.dist / Z) + 1) * Z) if run.mode != "endless" else (floorf(run.dist / Z) + 1) * Z
-		if run.mode == "story":                      # a new place: back to the base speed, gaining twice as fast
+		if run.mode == "story":                      # a new place: its own speed (ZONE_EXTRA), gaining STORY_GAIN
 			run.zone_t = run.t
-			run.zone_k = ZONE_ACCEL
 		run.relic = 1
 		run.glitch = maxf(run.glitch, 0.5)           # the relic flares: it is what moves the world
 		run.events.append("biome")
@@ -2426,6 +2455,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 
 	# --- coins and gems ---
 	var reach: float = MAGNET[run.lvl("magnet")]
+	if run.mount != null and run.lvl("mountMagnet") > 0:      # Aimant de monture
+		reach = maxf(reach, MAGNET[mini(MAGNET.size() - 1, 1 + run.lvl("mountMagnet"))])
 	var cy = p.y - (20.0 if p.ball != null else 40.0)
 	var grab_w = 0.0
 	var grab_h = 0.0

@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.32.1"
+const VERSION := "0.33.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -70,6 +70,8 @@ var photo_taken := false
 var touches := {}                     # fingers down on the game (not on a button): the jump is held while one stays
 var confetti_layer: Control
 var modal: CanvasLayer = null          # the in-game « Oui / Non » question, while one is asked
+var levels_due: Array = []             # levels gained during the run, shown in a panel once it is over
+var over_info := {}                    # what the end screen shows, kept to fill it again after a turn
 var web_cbs := []                      # the browser's callbacks, kept alive (web only)
 var rebuild_due := false               # the window changed size: the pixel typeface's sizes are worked out again
 var rebuild_t := 0.0
@@ -79,6 +81,7 @@ var perf := {"n": 0, "game": 0, "draw": 0, "text": ""}   # what a frame costs, a
 # ---------- start ----------
 
 func _ready() -> void:
+	Progress.load_config(FileAccess.get_file_as_string("res://assets/progression.txt"))   # prices, levels, objectives
 	save = SaveData.load_save()
 	Net.set_from_args()
 	net = Net.new()
@@ -709,6 +712,8 @@ func _rebuild() -> void:
 		show_screen(name)
 	if state == "pause":
 		pause_view()
+	if state == "over":
+		over_view(false)
 
 func _on_resized() -> void:
 	_check_turn()
@@ -1385,9 +1390,13 @@ func refresh_menu() -> void:
 		var slot = Button.new()
 		slot.focus_mode = Control.FOCUS_NONE
 		slot.custom_minimum_size = Vector2(a(42), a(42))
-		var st: StyleBox = styles["slot-full"] if id != "" else styles["slot"]
-		for k in ["normal", "hover", "pressed"]:
-			slot.add_theme_stylebox_override(k, st)
+		if id != "":                                 # filled: the kit's stone square, the picture inside its frame
+			slot.add_theme_stylebox_override("normal", _kit_box("sq-blank-42", [0, 0, 0, 0], [7, 7, 7, 7]))
+			slot.add_theme_stylebox_override("hover", _kit_box("sq-blank-42", [0, 0, 0, 0], [7, 7, 7, 7], Color(1.12, 1.12, 1.12)))
+			slot.add_theme_stylebox_override("pressed", _down(_kit_box("sq-blank-42", [0, 0, 0, 0], [7, 7, 7, 7], Color(0.85, 0.85, 0.85))))
+		else:
+			for k in ["normal", "hover", "pressed"]:
+				slot.add_theme_stylebox_override(k, styles["slot"])
 		slot.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		if id != "":
 			slot.icon = icon("ico-" + SaveData.upgrade(id)["icon"])
@@ -1703,16 +1712,30 @@ func refresh_shop(just_bought: String = "") -> void:
 	for ch in w["card-actions"].get_children():
 		ch.queue_free()
 	w["card-pips"].text = ""
-	if tab == "mount":                               # nothing to buy here yet: what each animal does
+	if tab == "mount":                               # the animals, each on or off, then what makes them better
 		for k in Game.MOUNT_KINDS:
 			var mk: String = k
+			var off_k: bool = k in save["mountsOff"]
 			var on_mount = func() -> void:
 				picked_mount = mk
 				refresh_shop()
-			list.add_child(_row(_frame_of(icon("mount-" + k), 4), Game.MOUNTS[k]["name"], _note("Rare", DIM), k == picked_mount, 0, on_mount))
-		_card(Game.MOUNTS[picked_mount]["name"], "Rare. Elle attend sur le chemin : touche-la pour monter. Au premier coup, elle s'en va à ta place.", MOUNT_TEXT[picked_mount])
-		_show_demo("m-" + picked_mount, 1)
-		return
+			var mrow = _row(_frame_of(icon("mount-" + k), 4), Game.MOUNTS[k]["name"], _note("Désactivée" if off_k else "Activée", DIM if off_k else RELIC), k == picked_mount, 0, on_mount)
+			if off_k:
+				mrow.modulate = Color(0.7, 0.7, 0.75)
+			list.add_child(mrow)
+		if picked_mount in Game.MOUNT_KINDS:
+			var mk: String = picked_mount
+			var off_m: bool = mk in save["mountsOff"]
+			_card(Game.MOUNTS[mk]["name"], "Désactivée : elle ne t'attend plus sur le chemin." if off_m else "Rare. Elle attend sur le chemin : touche-la pour monter. Au premier coup, elle s'en va à ta place.", MOUNT_TEXT[mk])
+			_show_demo("m-" + mk, 1)
+			var on_toggle = func() -> void:
+				if mk in save["mountsOff"]:
+					save["mountsOff"].erase(mk)
+				else:
+					save["mountsOff"].append(mk)
+				SaveData.store(save)
+				refresh_shop()
+			w["card-actions"].add_child(_button("Activer" if off_m else "Désactiver", "small on" if off_m else "small plain", on_toggle))
 	if tab == "skin":
 		var l = _label("Bientôt : la tenue, les cheveux, la cape et les baskets du héros, à changer séparément.", ts("s"), DIM, 0)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1722,9 +1745,10 @@ func refresh_shop(just_bought: String = "") -> void:
 		_show_demo("sprint", 1)
 		return
 	var full: bool = save["equipped"].size() >= SaveData.MAX_EQUIPPED
-	var shown: Array = SaveData.UPGRADES.filter(func(u): return u.get("power", false) == (tab == "power"))
-	if not shown.any(func(u): return u["id"] == picked):
+	var shown: Array = SaveData.UPGRADES.filter(func(u): return SaveData.family(u) == tab)
+	if tab != "mount" and not shown.any(func(u): return u["id"] == picked):
 		picked = shown[0]["id"]
+	var sel_id: String = picked_mount if tab == "mount" else picked
 	for u in shown:
 		var st = _state_of(u)
 		var right: Control
@@ -1741,16 +1765,21 @@ func refresh_shop(just_bought: String = "") -> void:
 			right = _note(_pips(u, st["lvl"]) if u["costs"].size() > 1 else "Possédé", DIM)
 		var id: String = u["id"]
 		var on_pick = func() -> void:
-			picked = id
+			if tab == "mount":
+				picked_mount = id
+			else:
+				picked = id
 			refresh_shop()
-		var row = _row(icon("ico-" + u["icon"]), u["name"], right, id == picked, u["unlock"] if gated else 0, on_pick)
+		var row = _row(icon("ico-" + u["icon"]), u["name"], right, id == sel_id, u["unlock"] if gated else 0, on_pick)
 		if st["locked"] and not gated:
 			row.modulate = Color(0.7, 0.7, 0.75)
 		if id == just_bought:
 			row.modulate = GOLD
 			create_tween().tween_property(row, "modulate", Color.WHITE, 0.5)
 		list.add_child(row)
-	var u = SaveData.upgrade(picked)
+	if tab == "mount" and picked_mount in Game.MOUNT_KINDS:
+		return                                       # an animal's card, made above
+	var u = SaveData.upgrade(sel_id)
 	var st = _state_of(u)
 	var status = ""
 	if not SaveData.unlocked(save, u):
@@ -1834,9 +1863,9 @@ func _row(tex: Texture2D, name: String, right: Control, sel: bool, gate: int, fn
 	b.mouse_filter = Control.MOUSE_FILTER_PASS        # a finger dragging over the rows scrolls the list
 	b.custom_minimum_size = Vector2(a(236), a(30))
 	_shop_skin(b, "item", sel)
-	var h = _hbox(6)                                # the picture in the row's sunken square (x 5, 26 x 24), the name
-	h.set_anchors_preset(Control.PRESET_FULL_RECT)  # from x 37, the price or state 9 px off the right end
-	h.offset_left = a(5)
+	var h = _hbox(6)                                # the picture straight on the stone (no dark square since
+	h.set_anchors_preset(Control.PRESET_FULL_RECT)  # 0.33), the name, the price or state 9 px off the right end
+	h.offset_left = a(8)
 	h.offset_right = -a(9)
 	h.alignment = BoxContainer.ALIGNMENT_BEGIN
 	var r = TextureRect.new()
@@ -1955,7 +1984,10 @@ func go(name: String) -> void:
 			Audio.music("")
 			return
 		run = Game.new_run(SaveData.loadout(save), save["mode"])   # only the three equipped upgrades come along
+		run.mounts = Game.MOUNT_KINDS.filter(func(k): return not k in save["mountsOff"])   # Montures: on / off
 		run.view_w = render.view_w * Game.PIXEL
+		levels_due.clear()
+		over_info = {}
 		Game.launch(run)                             # rumble, then the doorway blows out
 		Debug.debug_run(run)                         # what the debug menu asks for, if anything
 		dead_for = 0
@@ -1977,6 +2009,8 @@ func go(name: String) -> void:
 	hint(0)
 	if name == "menu":
 		refresh_menu()
+		if not levels_due.is_empty():                # a run left from the pause: its levels, now
+			show_levels.call_deferred()
 	if name == "shop":
 		refresh_shop()
 	if name == "settings":
@@ -2033,33 +2067,48 @@ func _show_photo() -> void:
 func game_over() -> void:
 	var record = not run.debug and floori(run.dist) > best_of(run.mode)
 	bank()
-	w["over-title"].text = Game.pick(DEATHS)
-	w["over-pic"].texture = photo
-	w["over-shot"].visible = true
+	over_info = {"title": Game.pick(DEATHS), "record": record, "dist": floori(run.dist), "gold": run.gold, "debug": run.debug, "mode": run.mode}
 	hint(0)
-	_set_level(w["over-level"], true)
-	_quest_cards(w["over-quests"])
-	var dist = floori(run.dist)
-	var gold = run.gold
-	var dur = minf(1.1, 0.25 + dist * 0.012)
-	var tw = create_tween()
-	var count = func(v: float) -> void:            # counts up on screen, with a tick
-		var shown = roundi(v)
-		if w["over-dist"].text != "%d m" % shown and shown % 3 == 0:
-			Audio.sfx("tick")
-		w["over-dist"].text = "%d m" % shown
-		w["over-gold"].text = "+%d" % roundi(gold * (v / dist if dist > 0 else 1.0))
-	tw.tween_method(count, 0.0, float(dist), dur).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	w["over-best"].text = "Debug : record non enregistré" if run.debug else ("★ Nouveau record ! ★" if record else "Record : %d m" % best_of(run.mode))
-	_set_colour(w["over-best"], GOLD if record else DIM)
-	w["over-best"].label_settings.font_size = ts("m") if record else ts("s")
-	w["over-best"].set_meta("hop", record)
+	over_view(true)
 	if record:
 		confetti(60)
 		Audio.sfx("record")
 	Audio.music("over")                              # the run's music winds down, the menu's comes in
 	state = "over"
 	show_screen("over")
+	if not levels_due.is_empty():                    # the levels gained, once the end screen is up
+		get_tree().create_timer(1.3).timeout.connect(show_levels)
+
+## Fills the end screen from over_info: counting up the first time, at once when the screen is built
+## again (the phone turned: the screens are made anew at the new size).
+func over_view(count_up: bool) -> void:
+	if over_info.is_empty():
+		return
+	var record: bool = over_info["record"]
+	w["over-title"].text = over_info["title"]
+	w["over-pic"].texture = photo
+	w["over-shot"].visible = true
+	_set_level(w["over-level"], true)
+	_quest_cards(w["over-quests"])
+	var dist: int = over_info["dist"]
+	var gold: int = over_info["gold"]
+	if count_up:
+		var dur = minf(1.1, 0.25 + dist * 0.012)
+		var tw = create_tween()
+		var count = func(v: float) -> void:        # counts up on screen, with a tick
+			var shown = roundi(v)
+			if w["over-dist"].text != "%d m" % shown and shown % 3 == 0:
+				Audio.sfx("tick")
+			w["over-dist"].text = "%d m" % shown
+			w["over-gold"].text = "+%d" % roundi(gold * (v / dist if dist > 0 else 1.0))
+		tw.tween_method(count, 0.0, float(dist), dur).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	else:
+		w["over-dist"].text = "%d m" % dist
+		w["over-gold"].text = "+%d" % gold
+	w["over-best"].text = "Debug : record non enregistré" if over_info["debug"] else ("★ Nouveau record ! ★" if record else "Record : %d m" % best_of(over_info["mode"]))
+	_set_colour(w["over-best"], GOLD if record else DIM)
+	w["over-best"].label_settings.font_size = ts("m") if record else ts("s")
+	w["over-best"].set_meta("hop", record)
 
 func pause() -> void:
 	if state != "play" or run == null or run.dead:
@@ -2084,23 +2133,94 @@ func resume() -> void:
 		show_screen("hud")
 		Audio.duck(false)
 
-## Feeds the objectives and the level with what just happened, and announces what it unlocked.
-## Experience: one point per metre, plus what each completed objective pays.
+## Feeds the objectives and the level with what just happened. Experience: a point every
+## Progress.cfg.mpp metres (assets/progression.txt), plus what each completed objective pays. The levels
+## gained wait for the end of the run (levels_due), where a panel shows them with what they bring.
 func progress(stats: Dictionary) -> void:
 	var done = Progress.feed(save, stats)
-	var xp: float = stats.get("dist", 0.0)
+	var xp: float = stats.get("dist", 0.0) / float(Progress.cfg["mpp"])
 	for q in done:
 		toast("ico-target", "Défi réussi !", q["reward"], q["xp"])
 		xp += q["xp"]
 	var levels: Array = Progress.add_xp(save, xp) if xp > 0 else []
+	levels_due.append_array(levels)
+	if done.size() > 0:
+		Audio.sfx("quest")
+	if done.size() > 0 or levels.size() > 0:
+		SaveData.store(save)
+
+## The levels gained during the run, in a panel: the level reached, the coins it paid, and what can now
+## be bought in the shop. Shown once the run is over (end screen, or back at the menu).
+func show_levels() -> void:
+	if levels_due.is_empty():
+		return
+	var levels: Array = levels_due.duplicate()
+	levels_due.clear()
+	if modal != null:
+		modal.queue_free()
+	var layer = CanvasLayer.new()
+	layer.layer = 40
+	add_child(layer)
+	var root = Control.new()
+	root.size = Vector2(W, H)
+	root.theme = ui.theme
+	layer.add_child(root)
+	var shade = ColorRect.new()
+	shade.color = Color(8 / 255.0, 10 / 255.0, 24 / 255.0, 0.7)
+	shade.size = Vector2(W, H)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(shade)
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	var col = _vbox(6)
+	var last: int = levels[-1]
+	var title = _label(("Niveau %d !" % last) if levels.size() == 1 else ("Niveaux %d à %d !" % [levels[0], last]), ts("l"), GOLD, 1)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+	var coins = 0
+	var unlocked: Array = []
 	for l in levels:
-		toast("ico-star", "Niveau %d !" % l, Progress.level_reward(l), 0)
+		coins += Progress.level_reward(l)
 		for u in SaveData.UPGRADES:
 			if u["unlock"] == l:
-				toast("ico-" + u["icon"], "Débloqué : " + u["name"], 0, 0)   # now for sale in the shop
-	if done.size() > 0 or levels.size() > 0:
-		Audio.sfx("level" if levels.size() > 0 else "quest")
-		SaveData.store(save)
+				unlocked.append(u)
+	var pay = _hbox(5)
+	pay.alignment = BoxContainer.ALIGNMENT_CENTER
+	pay.add_child(_label("Récompense : +%d" % coins, ts("m"), INK, 0))
+	pay.add_child(_icon_rect(icon("coin-icon"), 13))
+	col.add_child(pay)
+	if unlocked.is_empty():
+		var none = _label("Rien de nouveau à débloquer cette fois.", ts("s"), DIM, 0)
+		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(none)
+	else:
+		var head = _label("Débloqué dans la boutique :", ts("s"), DIM, 0)
+		head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		col.add_child(head)
+		for u in unlocked.slice(0, 4):
+			var row = _hbox(6)
+			row.alignment = BoxContainer.ALIGNMENT_CENTER
+			row.add_child(_icon_rect(icon("ico-" + u["icon"]), 16))
+			row.add_child(_label(u["name"], ts("m"), INK, 0))
+			col.add_child(row)
+		if unlocked.size() > 4:
+			var more = _label("et %d autre(s)" % (unlocked.size() - 4), ts("s"), DIM, 0)
+			more.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			col.add_child(more)
+	var close = func() -> void:
+		layer.queue_free()
+		modal = null
+	var row_b = _hbox(10)
+	row_b.alignment = BoxContainer.ALIGNMENT_CENTER
+	row_b.add_child(_button("Super !", "small gold", close))
+	col.add_child(row_b)
+	p.add_child(col)
+	_place(p, 569 / 2.0 - 150, 40, 300, 110)
+	root.add_child(p)
+	modal = layer
+	Audio.sfx("level")
+	confetti(30)
 
 ## A short notice at the top of the screen: objective done, level gained.
 func toast(ico: String, text: String, coins: int, xp: int) -> void:

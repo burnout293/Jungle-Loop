@@ -9,7 +9,9 @@ const PREFIX := "JL1."
 # costs[n] = price of level n+1. icon = assets/img/ico-<icon>.png. unlock = the player's level from which
 # it can be bought. Only three upgrades can be equipped; powers are bought once and then on, unless
 # switched off (save.powersOff).
-const UPGRADES := [
+# family: "up" (Équipements, to equip), "power" (Pouvoirs), "mount" (Montures). Levels and prices can be
+# changed in assets/progression.txt (Progress.load_config), hence a var.
+static var UPGRADES := [
 	{"id": "doubleJump", "unlock": 2, "icon": "jump", "kind": "passif", "name": "Double saut", "desc": "Un second saut en l'air.", "costs": [480]},
 	{"id": "spring", "unlock": 3, "icon": "spring", "kind": "passif", "name": "Ressort", "desc": "Saute plus haut.", "costs": [1000, 2400]},
 	{"id": "magnet", "unlock": 2, "icon": "magnet", "kind": "passif", "name": "Aimant", "desc": "Attire les pièces proches.", "costs": [600, 1600, 3600]},
@@ -27,7 +29,13 @@ const UPGRADES := [
 	{"id": "sprint", "unlock": 8, "icon": "shoes", "kind": "passif", "power": true, "name": "Sprint", "desc": "Cours plus vite dès le départ, les jambes en tourbillon.", "costs": [4000]},
 	{"id": "sphere", "unlock": 10, "icon": "sphere", "kind": "passif", "power": true, "name": "Sphère", "desc": "Roule en boule dans les endroits exigus, troncs creux et galeries : il n'y a que des trésors là-dedans.", "costs": [6000]},
 	{"id": "rewind", "unlock": 12, "icon": "rewind", "kind": "passif", "name": "Rembobinage", "desc": "Une fois par course, la relique annule ta chute.", "costs": [10000]},
+	{"id": "mountMagnet", "unlock": 4, "icon": "magnet", "kind": "passif", "power": true, "family": "mount", "name": "Aimant de monture", "desc": "Sur une monture, les pièces viennent à toi, de plus en plus loin à chaque niveau.", "costs": [1500, 3500]},
+	{"id": "tamed", "unlock": 3, "icon": "saddle", "kind": "passif", "power": true, "family": "mount", "name": "Dompté", "desc": "Les montures t'attendent et se laissent attraper de plus loin : plus de monture manquée.", "costs": [1200, 2800]},
 ]
+
+## Which family of the shop an upgrade belongs to.
+static func family(u: Dictionary) -> String:
+	return u.get("family", "power" if u.get("power", false) else "up")
 
 ## Qualité (Réglages): the finest picture, a lighter one held at 60 images a second, or 30 to save the
 ## battery. "" until chosen: main.gd picks Max on a PC, Perf on a phone. (The web version's "smooth" and
@@ -54,7 +62,7 @@ static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
 		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
-		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "lastQuest": "", "online": {}}
+		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "lastQuest": "", "online": {}, "mountsOff": [], "xpv": 2}
 
 static func _int(x) -> int:
 	if (x is int or x is float) and x > 0 and is_finite(float(x)):
@@ -86,6 +94,9 @@ static func sanitize(raw) -> Dictionary:
 	s["quality"] = ql if ql in QUALITIES else ""
 	s["full"] = raw.get("full") != false
 	s["seenIntro"] = raw.get("seenIntro") == true
+	var mo = raw.get("mountsOff")
+	if mo is Array:
+		s["mountsOff"] = mo.filter(func(k): return k in ["gorilla", "rhino", "dragonfly"])
 	# the server's identity (net.gd): kept as given, if it has its four strings (it travels in the codes)
 	var on = raw.get("online")
 	if on is Dictionary and on.get("id") is String and on.get("secret") is String and on.get("code") is String:
@@ -122,6 +133,15 @@ static func sanitize(raw) -> Dictionary:
 			var p = q.get("p")
 			s["quests"].append({"k": q["k"], "goal": _int(q["goal"]), "p": minf(_int(q["goal"]), float(p) if (p is int or p is float) and p > 0 else 0.0),
 				"reward": _int(q.get("reward")), "xp": _int(q.get("xp")) if _int(q.get("xp")) > 0 else 40})
+	# experience: since 0.33 a point is 20 m (it was a metre). An older save is brought to the new scale,
+	# and its objectives under way pay what assets/progression.txt says.
+	if raw.get("xpv") != 2:
+		s["xp"] = s["xp"] / 20.0
+		for q in s["quests"]:
+			if Progress.quest_cfg.has(q["k"]):
+				q["reward"] = Progress.quest_cfg[q["k"]]["reward"]
+				q["xp"] = Progress.quest_cfg[q["k"]]["xp"]
+	s["xpv"] = 2
 	Progress.fill(s)
 	return s
 
