@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 17/11/2026, version 0.28.0. Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 18/11/2026, version Godot 0.32.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -15,8 +15,8 @@ Tous ont un contour sombre et un bord éclairé (lisibilité 5) ; le décor de f
 | Rôle (comment l'éviter) | Forêt | Ruines | Donjon | Cité |
 |---|---|---|---|---|
 | **Au sol** : sauter | hérisson violet | boule de ronces | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
-| **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur, puis il traverse l'écran | coléoptère | vautour | flèche | missile |
-| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m, à hauteur de tête (rester au sol) dès 1500 m | araignée jaune (bas), rouge (tête) | les mêmes araignées | chauve-souris | drone |
+| **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur (avec le Vol : la tienne, et il vient si tu restes trop à la même hauteur), puis il traverse l'écran | coléoptère | vautour | flèche enflammée | missile |
+| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m, à hauteur de tête (rester au sol) dès 1500 m ; avec le Vol aussi plus haut, et en rideaux (une colonne avec un seul passage) | araignée jaune (basse, immobile), rouge (plus haut, monte et descend de 5 m) | les mêmes araignées | chauve-souris | drone |
 | **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | guêpes | feux follets | gros drones qui tirent un laser au lieu de foncer |
 
 Faune alcoolisée (objet) : une partie des créatures et des nuées deviennent inoffensives (pâles, bleutées).

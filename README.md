@@ -18,9 +18,13 @@ paysage et peut s'installer sur l'écran d'accueil.
 
 Pour essayer sans toucher à sa sauvegarde : ajouter `?bac` à l'adresse.
 
-Une version Godot remplacera celle-ci (branche `godot`, dossier `Projects/Jungle-Loop-Godot`). En 0.30.0 elle a
-dépassé cette version (boutique en liste, réglage Qualité Max / Perf / Éco, Vorace équitable, Dernier élan
-plus long, photo de la chute). Son export web est publié à l'essai dans
-`godot/` : https://burnout293.github.io/Jungle-Loop/godot/ (44 Mo, installable sur l'écran d'accueil ; sa sauvegarde
-est à part : exporter le code ici et l'importer là-bas). Le cache hors ligne de cette version (`sw.js`) ignore tout
-ce qui est sous `godot/`, qui a le sien.
+**Depuis le 18/11/2026, le jeu est la version Godot** (0.32.0) : son code est dans la branche `godot`
+(dossier `Projects/Jungle-Loop-Godot`), son export web est à la racine de cette branche `main` (`index.html`,
+`index.js`, `index.wasm`, `index.pck`… avec son propre cache hors ligne, `index.service.worker.js`).
+Au premier lancement dans le navigateur, la partie de l'ancienne version (même adresse) est reprise si elle
+est plus avancée.
+
+L'ancienne version web (0.28.1, `js/`, `style.css`) reste jouable sur `web.html`, en ligne seulement :
+`sw.js` n'est plus qu'un nettoyeur qui efface son ancien cache hors ligne et recharge la page vers le jeu
+Godot. `godot/` (l'essai) renvoie à l'adresse principale. Les règles et chiffres du jeu sont dans
+[EQUILIBRAGE.md](EQUILIBRAGE.md) et [BESTIAIRE.md](BESTIAIRE.md).

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a0f14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Jungle Loop</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Fredoka:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- The whole game lives in this 16:9 frame: main.js sizes it to fit the window and everything inside scales with it.
+     Each screen is a layer over the canvas. Its "fly" blocks slide in from, and out to, the edge of the
+     frame they are closest to (main.js works out which one). -->
+<div id="stage">
+<canvas id="c"></canvas>
+
+<div id="hud" class="screen">
+  <div class="hud-top fly">
+    <span class="hud-pill"><img src="assets/img/coin-icon.png" alt=""><span id="hud-coins">0</span></span>
+    <span id="hud-dist">0 m</span>
+    <span id="hud-hearts" aria-label="Vies"></span>
+    <button id="btn-pause" class="square" aria-label="Pause"><i></i><i></i></button>
+  </div>
+  <div id="toasts"></div>
+  <div id="banner"></div>
+  <div id="hint" hidden></div>
+  <div id="actives" class="fly">
+    <button id="btn-slow" class="act" hidden aria-label="Sablier"><img src="assets/img/ico-slow.png" alt=""></button>
+    <button id="btn-dash" class="act" hidden aria-label="Ruée"><img src="assets/img/ico-dash.png" alt=""></button>
+  </div>
+</div>
+
+<section id="screen-menu" class="screen">
+  <button class="fly square" id="menu-settings" data-go="settings" aria-label="Réglages"><img src="assets/img/ui-gear.png" alt=""></button>
+  <h1 id="title" class="fly" aria-label="Jungle Loop"></h1>
+  <div class="fly" id="menu-status">
+    <div id="menu-level" class="level"></div>
+    <div id="menu-coins" class="pill"></div>
+  </div>
+  <div class="fly" id="menu-buttons">
+    <button class="big" data-go="play" data-mode="story">Histoire</button>
+    <button class="big" data-go="play" data-mode="endless">Run illimitée</button>
+    <button data-go="shop">Améliorations</button>
+  </div>
+  <div class="fly" id="menu-quests-box">
+    <p class="label">Défis</p>
+    <div id="menu-quests" class="quests"></div>
+  </div>
+  <div class="pane" id="menu-info" hidden></div>
+  <div class="fly loadout" id="menu-loadout"></div>
+  <p class="fly" id="menu-version"></p>
+</section>
+
+<section id="screen-intro" class="screen dim">
+  <div class="fly pane" id="intro-pane">
+    <h2>La relique</h2>
+    <p>Pépito a dérobé la relique du temple et l'a glissée dans son sac à dos. Il ne reste qu'à sortir de la jungle.</p>
+    <p>Mais la relique plie le temps : à chaque chute, tout recommence devant le temple.</p>
+  </div>
+  <div class="fly actions"><button class="big" data-go="play">Fuir !</button></div>
+</section>
+
+<section id="screen-shop" class="screen dim">
+  <div class="fly" id="shop-side">
+    <button class="tab" id="shop-back" data-go="menu">Retour</button>
+    <button class="tab" data-tab="up"><img src="assets/img/ico-magnet.png" alt=""><span>Équip.</span></button>
+    <button class="tab" data-tab="power"><img src="assets/img/ico-flight.png" alt=""><span>Pouvoirs</span></button>
+    <button class="tab" data-tab="mount"><img src="assets/img/ico-nature.png" alt=""><span>Montures</span></button>
+    <button class="tab" data-tab="skin"><img src="assets/img/ico-star.png" alt=""><span>Skins</span></button>
+  </div>
+  <p class="fly label" id="shop-title"></p>
+  <div class="fly pill" id="shop-coins"></div>
+  <div class="fly" id="shop-list"></div>
+  <div class="fly pane" id="shop-card">
+    <b id="card-name"></b>
+    <small id="card-status"></small>
+    <div id="card-actions"></div>
+  </div>
+  <div class="fly pane" id="shop-preview">
+    <canvas id="demo"></canvas>
+    <p id="demo-desc" class="sub"></p>
+    <p id="demo-slots" class="label"></p>
+  </div>
+</section>
+
+<section id="screen-settings" class="screen dim">
+  <button class="fly" id="settings-back" data-go="menu">Retour</button>
+  <h2 class="fly head">Réglages</h2>
+  <div class="fly pane left">
+    <div class="set-tabs"><button class="tab sel" data-set="main">Général</button><button class="tab" data-set="access">Accessibilité</button></div>
+    <div class="set-panel" data-panel="main">
+    <p class="label">Son</p>
+    <div class="toggle">Musique<span class="vol" id="vol-music"><button class="square" data-d="-1">−</button><span class="bar"><i></i></span><button class="square" data-d="1">+</button></span></div>
+    <div class="toggle">Effets<span class="vol" id="vol-sfx"><button class="square" data-d="-1">−</button><span class="bar"><i></i></span><button class="square" data-d="1">+</button></span></div>
+    <p class="label">Affichage</p>
+    <div class="toggle">Police pixel<button id="tg-font"></button></div>
+    <div class="toggle">Lissage<button id="tg-smooth"></button></div>
+    <div class="toggle" id="row-full">Plein écran<button id="tg-full"></button></div>
+    <div class="toggle">Images par seconde<button id="tg-fps"></button></div>
+    </div>
+    <div class="set-panel" data-panel="access" hidden>
+    <div class="toggle">Contour rouge des dangers<button id="tg-rim"></button></div>
+    <p class="sub">Un liseré rouge autour de tout ce qui fait mal.</p>
+    <div class="toggle">Signalements décalés<button id="tg-shift"></button></div>
+    <p class="sub">Les alertes des Fonceurs apparaissent plus à gauche, loin du pouce.</p>
+    </div>
+  </div>
+  <div class="fly pane right">
+    <p class="label">Sauvegarde</p>
+    <p class="sub">Elle se fait toute seule. Pour changer d'appareil, exporte le code puis importe-le.</p>
+    <textarea id="save-code" spellcheck="false" placeholder="Code de sauvegarde"></textarea>
+    <div class="grid2">
+      <button id="save-copy" class="small">Exporter</button>
+      <button id="save-import" class="small">Importer</button>
+      <button id="save-file" class="small">Fichier</button>
+      <button id="save-open" class="small">Ouvrir</button>
+    </div>
+    <input type="file" id="save-input" accept=".txt,.json" hidden>
+    <p id="save-msg" class="sub"></p>
+    <button id="save-reset" class="small danger">Tout effacer</button>
+  </div>
+</section>
+
+<section id="screen-over" class="screen dim">
+  <h2 class="fly head" id="over-title">La boucle se referme…</h2>
+  <div class="fly pane left score">
+    <span class="huge" id="over-dist">0 m</span>
+    <span class="gain" id="over-gold"></span>
+    <span class="sub" id="over-best"></span>
+  </div>
+  <div class="fly pane right">
+    <div id="over-level" class="level"></div>
+    <div id="over-quests" class="quests"></div>
+  </div>
+  <div class="fly actions">
+    <button data-go="menu">Menu</button>
+    <button class="big" data-go="play">Rejouer</button>
+  </div>
+</section>
+
+<section id="screen-pause" class="screen dim">
+  <h2 class="fly head">Pause</h2>
+  <div class="fly pane left score">
+    <span class="huge" id="pause-dist">0 m</span>
+    <span class="gain" id="pause-gold"></span>
+    <span class="sub" id="pause-best"></span>
+  </div>
+  <div class="fly pane right">
+    <div id="pause-level" class="level"></div>
+    <div id="pause-quests" class="quests"></div>
+  </div>
+  <div class="fly actions">
+    <button data-go="menu">Abandonner</button>
+    <button data-go="settings">Réglages</button>
+    <button class="big" id="btn-resume">Reprendre</button>
+  </div>
+</section>
+</div>
+<p id="rotate">Tourne l'écran pour jouer en grand ↻</p>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

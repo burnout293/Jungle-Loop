@@ -677,7 +677,5 @@ loadAssets();
 requestAnimationFrame(frame);
 requestAnimationFrame(() => show('menu'));   // one frame later, so the menu slides in rather than pops
 
-// Offline support, only once published: a service worker on localhost would serve stale files while developing.
-if ('serviceWorker' in navigator && !['localhost', '127.0.0.1'].includes(location.hostname)) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
-}
+// This version is kept on web.html since the game became the Godot one (18/11/2026), online only:
+// no offline copy of its own (sw.js now only clears what it used to keep).
