@@ -54,7 +54,7 @@ static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
 		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
-		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "lastQuest": ""}
+		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "lastQuest": "", "online": {}}
 
 static func _int(x) -> int:
 	if (x is int or x is float) and x > 0 and is_finite(float(x)):
@@ -86,6 +86,10 @@ static func sanitize(raw) -> Dictionary:
 	s["quality"] = ql if ql in QUALITIES else ""
 	s["full"] = raw.get("full") != false
 	s["seenIntro"] = raw.get("seenIntro") == true
+	# the server's identity (net.gd): kept as given, if it has its four strings (it travels in the codes)
+	var on = raw.get("online")
+	if on is Dictionary and on.get("id") is String and on.get("secret") is String and on.get("code") is String:
+		s["online"] = {"id": on["id"], "secret": on["secret"], "code": on["code"], "name": str(on.get("name", ""))}
 	var ups = raw.get("upgrades")
 	for u in UPGRADES:
 		var lvl = _int(ups.get(u["id"]) if ups is Dictionary else 0)

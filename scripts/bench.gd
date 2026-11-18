@@ -7,7 +7,7 @@ extends Node
 
 var main: Node
 var tour_i := 0
-var opts := {"quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false}
+var opts := {"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -40,6 +40,7 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"prof": opts["prof"] = true
 			"quality": opts["quality"] = kv[1]
+			"showcase": opts["showcase"] = true
 	if opts["shots"] != "":
 		DirAccess.make_dir_recursive_absolute(opts["shots"])
 	print("bench: ", opts)
@@ -94,6 +95,17 @@ func _start() -> void:
 			r.vine = 1
 			r.p.hang = true
 			r.p.y = Game.HANG_Y
+	if opts["showcase"]:                             # the new things side by side, for a picture
+		var px = r.cam + r.sx
+		var o = Game.add_dart(r, px + 1500, 170)
+		o.state = "go"
+		o.biome = r.biome
+		Game.add_bonus(r, px + 330)
+		Game.add_bonus(r, px + 420)
+		r.bonuses[1].kind = "brake" if r.bonuses[0].kind == "life" else "life"
+		Game.add_hover(r, px + 760, Game.HEAD)
+		Game.add_hover(r, px + 900, Game.LOW)
+		r.wait = 0
 	runs += 1
 
 func _process(delta: float) -> void:

@@ -1263,7 +1263,41 @@ func coin_at(c: CanvasItem, co) -> void:
 	sheet(c, ct, f, floori(t * 10 + co.x * 0.01) % f, sx(co.x) - (fw >> 1), n(co.y) - (ct.get_height() >> 1) + (0.0 if f > 1 else bob))
 
 ## Mounts waiting on the path: a warm glow and a bouncing arrow say "come here", not "watch out".
+## The rare floating things: a life (a heart) or a brake (an hourglass) in a glowing bubble.
+var slow_icon: Texture2D = null
+func _draw_bonuses(c: CanvasItem) -> void:
+	if slow_icon == null and ResourceLoader.exists("res://assets/img/ico-slow.png"):
+		slow_icon = load("res://assets/img/ico-slow.png")
+	for it in run.bonuses:
+		var x = sx(it.x)
+		if x > view_w + 30 or x < -30:
+			continue
+		var y = n(it.y)
+		var life = it.kind == "life"
+		var tint = Color(1, 0.3, 0.42) if life else Color(0.45, 0.85, 1)
+		glow(c, x, y, 20 + 2 * sin(t * 5), Color(tint.r, tint.g, tint.b, 0.45))
+		c.draw_circle(Vector2(x, y), 10, Color(1, 1, 1, 0.16))
+		c.draw_arc(Vector2(x, y), 10, 0, TAU, 24, Color(1, 1, 1, 0.75), 1)
+		var im: Texture2D = Art.tex.get("heart") if life else slow_icon
+		if im != null:
+			c.draw_texture_rect(im, Rect2(x - 7, y - 7, 14, 14), false)
+		if sin(t * 6 + it.ph * 3) > 0.6:             # a glint
+			rect(c, x + 5, y - 8, 1, 3, Color.WHITE)
+			rect(c, x + 4, y - 7, 3, 1, Color.WHITE)
+
+## The fire round a flying arrow: a glow, flames streaming behind it, its shaft white-hot.
+func _flames(c: CanvasItem, x0: float, fw: float, cy: float, ph: float) -> void:
+	glow(c, x0 + fw * 0.6, cy, 22, Color(1, 0.45, 0.08, 0.55))
+	var flick = floori(t * 24 + ph * 7)
+	var cols = [Color("#ff2e1f"), Color("#ff7a1a"), Color("#ffd23c"), Color("#fff3a0")]
+	for k in 7:
+		var fh = maxf(2, 18 - k * 2.4 + float((flick + k) % 3) * 2)
+		var fx = snap(x0 + fw * 0.3 + k * 6)
+		rect(c, fx, snap(cy - fh / 2), 7, fh, cols[(k + flick) % 3])
+	rect(c, snap(x0 + 2), snap(cy - 1), fw * 0.8, 2, cols[3])
+
 func _draw_items(c: CanvasItem) -> void:
+	_draw_bonuses(c)
 	for it in run.items:
 		var x = sx(it.x)
 		var f = floor_px(x)
@@ -1372,6 +1406,8 @@ func _draw_obstacles(c: CanvasItem) -> void:
 					rect(c, x0 + fw - 4 + k * 6, snap(cy - 6 + k * 6), 14 + k * 4, 1, Color(1, 1, 1, 0.45))
 				if name == "missile":
 					rect(c, x0 + fw - 2, snap(cy - 2), 4 + roundf(randf() * 4), 4, Color("#ffd35c") if floori(t * 30) % 2 == 1 else Color("#ff7a2a"))
+				if name == "arrow":                  # the dungeon's arrows burn: taller and brighter against the dark
+					_flames(c, x0, fw, cy, o.ph)
 				sheet(c, im, frames, frame, x0, snap(cy - im.get_height() / 2.0), mod)
 		else:                                        # hanging still in mid-air, alive all the same
 			var bob = sin(t * 3 + o.ph) * 2

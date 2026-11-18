@@ -17,6 +17,8 @@ const BIOME_COUNT := 4
 const NEXT_BIOME := [1, 3, 0, 2]
 # The scenery changes after the boss (the ruins), then while there is no other boss every ZONE metres.
 const ZONE := 2000.0
+const ZONE_ENDLESS := 800.0     # Run illimitée: a new scenery every 800 m (the Gros sac à dos may skip one)
+const ZONE_ACCEL := 2.0         # Histoire: each new scenery starts again from the base speed, gaining twice as fast
 const HEARTS := 1              # one life: the first blow ends the run (Cœur en plus gives a second)
 
 const HERO_H := 80.0
@@ -45,7 +47,7 @@ const MAGNET := [0.0, 110.0, 170.0, 240.0]
 const DRUNK := [0.0, 0.06, 0.1, 0.15]   # Faune alcoolisée: share of the creatures that are harmless
 const FLAP := 430.0                     # how fast the leaf rotor climbs
 # (static, not const: the debug menu may change these, see debug.gd)
-static var SPEED_BASE := 280.0
+static var SPEED_BASE := 360.0
 static var SPEED_GAIN := 5.0
 static var SPEED_SPRINT := 160.0
 const RAMP := 70.0
@@ -74,7 +76,7 @@ static var FROM_MID := 1500.0
 const MOUNTS := {
 	"gorilla": {"name": "Gorille", "jump": -820.0, "half": 34.0, "tall": 118.0, "base": 300.0, "gain": 24.0, "ahead": 0.45},
 	"rhino": {"name": "Rhino", "jump": -560.0, "half": 34.0, "tall": 104.0, "smash": true, "tough": true, "time": 8.0, "grab_w": 78.0, "grab_h": 150.0, "mul": 2.0, "ramp": 420.0, "ahead": 0.0},   # mul: twice the hero's own speed, reached within a second or two (ramp)
-	"dragonfly": {"name": "Libellule", "fly": true, "half": 28.0, "tall": 92.0, "base": 320.0, "gain": 28.0, "ahead": 0.5},
+	"dragonfly": {"name": "Libellule", "fly": true, "half": 28.0, "tall": 92.0, "base": 320.0, "gain": 56.0, "ahead": 0.5},   # gain: twice the acceleration it had
 }
 const MOUNT_KINDS := ["gorilla", "rhino", "dragonfly"]
 
@@ -103,10 +105,26 @@ const DART_ALTS := [[46.0, 170.0], [46.0, 170.0, 290.0], [46.0, 170.0, 290.0, 40
 # can be reached in time); a flyer aims at his height when its "!" shows; and staying within CAMP_BAND
 # of one height for CAMP_TIME brings one (sooner again, CAMP_AGAIN, if he stays). On foot, without the
 # Vol, the ground is where he belongs: fewer flyers there, more hedgehogs and low spiders.
-const CURTAIN := [64.0, 168.0, 272.0, 376.0, 480.0]
+const CURTAIN := [128.0, 232.0, 336.0, 440.0]   # red spiders moving together: from the floor to the ceiling
 const CURTAIN_SHIFT := 2
 const CURTAIN_LEAD := 360.0
-const SKY_HOVERS := [272.0, 376.0, 480.0]
+const SKY_HOVERS := [272.0, 376.0, 466.0]
+# The spiders: the yellow ones (low, LOW) keep still; the red ones (any higher) go up and down SPIDER_AMP
+# each way of their height (5 m in all) in SPIDER_PERIOD seconds, never past the floor or the ceiling.
+const SPIDER_AMP := 100.0
+const SPIDER_PERIOD := 2.4
+const SPIDER_TOP := 566.0       # the highest a spider's middle goes: its back under the ceiling
+# Waves of flyers: 2 at 9 m/s up to 10 at 30 m/s, 0.9 s apart down to 0.3 s. On foot they come at head
+# height (stay down) or just over his head (Double saut); a low one (jump it) only with WAVE_JUMP seconds
+# before the next. With the Vol each one aims at his height. Nothing else on the road while they pass.
+const WAVE_N := [2, 10]
+const WAVE_GAP := [0.9, 0.3]
+const WAVE_JUMP := 0.8
+# Rare floating things, zigzagging a little within reach of a jump: a life, or a brake (-4 m/s for good).
+const BONUS_EVERY := [1400.0, 2400.0]   # metres between two
+const BONUS_LOW := 110.0
+const BONUS_HIGH := 180.0
+const BRAKE := 160.0
 const DART_TOP := 560.0                  # the highest a flyer can come: the hero's middle just under the ceiling
 const CAMP_BAND := 70.0
 const CAMP_TIME := 2.6
@@ -214,6 +232,8 @@ class Obs:
 	var land := 0.0          # a blob in the air: where it will land (Vorace's fairness check)
 	var drop := false
 	var aim := false         # a flyer that takes his height when its "!" shows (the Vol)
+	var y0 := 0.0            # a red spider: the middle of its course, and how far it goes each way
+	var amp := 0.0
 	var puddle := false
 	var lane := 0.0
 	var vx := 0.0
@@ -324,6 +344,7 @@ class Boss:
 	var last_step := -1
 	var ahead := 0.0         # the next puddle's distance ahead of the hero, chosen with the attack
 	var pair_lane := 0.0     # the second ball of the next "pair"
+	var last_gap := -1       # the free lanes of the last fan (the next stays within reach)
 
 class Swarm:
 	var biome := 0
@@ -434,6 +455,11 @@ class Run:
 	var debug := false             # started with something changed in the debug menu: no record
 	var seed := 0                  # the road's seed (the same seed, the same road)
 	var rng := RandomNumberGenerator.new()
+	var zone_t := 0.0              # Histoire: when the current scenery began (the speed starts again)
+	var zone_k := 1.0              # and how fast it grows there
+	var brake := 0.0               # what the brakes picked up take off his speed, for good
+	var bonuses: Array = []        # the rare floating things (Item: kind "life" or "brake")
+	var next_bonus := 0.0          # metres
 	var camp_y := 0.0              # the height he has kept (the Vol), and for how long
 	var camp_t := 0.0
 	var last_gap := -1             # the gap of the last column of spiders
@@ -456,6 +482,13 @@ static func wrnd(a: float, b: float) -> float:
 
 static func wpick(arr: Array):
 	return arr[W.randi() % arr.size()]
+
+static func wshuffle(arr: Array) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j = W.randi() % (i + 1)
+		var t = arr[i]
+		arr[i] = arr[j]
+		arr[j] = t
 
 static func rnd(a: float, b: float) -> float:
 	return a + randf() * (b - a)
@@ -568,9 +601,10 @@ static func new_run(upgrades: Dictionary, mode: String = "story", seed_: int = -
 	run.next_mount = wrnd(700, 1000) / friend(run)
 	run.next_fm = wrnd(150, 230)
 	run.boss_at = BOSS_AT + wrnd(-100, 100)
+	run.next_bonus = wrnd(BONUS_EVERY[0], BONUS_EVERY[1]) * 0.5
 	if mode == "endless":                    # no boss: the sceneries come with the marks
 		run.boss_at = INF
-		run.next_biome_at = ZONE
+		run.next_biome_at = ZONE_ENDLESS
 		run.by_mark = true
 	return run
 
@@ -701,12 +735,49 @@ static func add_spiky(run: Run, x: float) -> void:
 	add_obs(run, x, floor_at(run, x) - SPIKY_H, SPIKY_W, SPIKY_H, "spiky", false).biome = biome_at(run, x)
 
 ## A hanging danger, still in mid-air: low (`h` above the floor of its middle: jump it) or at head height.
-static func add_hover(run: Run, x: float, h: float) -> Obs:
+## A hanging spider whose middle is `h` above the floor. A red one (higher than LOW) goes up and down
+## round that height; spiders of one column share `ph` so its opening moves as a whole.
+static func add_hover(run: Run, x: float, h: float, ph: float = -1.0) -> Obs:
 	var o = add_obs(run, x, floor_at(run, x) - h - HOVER_H / 2, HOVER_W, HOVER_H, "hover", false)
 	o.biome = biome_at(run, x)
-	o.ph = wrnd(0, 6)
+	o.ph = ph if ph >= 0 else wrnd(0, TAU)
 	o.mid = h > 100
+	o.y0 = o.y
+	if o.mid:
+		o.amp = clampf(minf(h - HOVER_H / 2, SPIDER_TOP - h), 0, SPIDER_AMP)
 	return o
+
+## A wave of flyers from x: their number and spacing follow the speed (WAVE_*). On foot, at head height
+## (stay down) or, with Double saut, just over a jump; a low one (jump it) only first, with WAVE_JUMP
+## seconds before the next: a jump lasts 0.63 s, a flyer at head height must find him back on the floor.
+## With the Vol, each takes his height when its "!" shows. Returns the stretch of road it takes.
+static func _wave(run: Run, x: float, tier: int) -> float:
+	var k = clampf((run.speed - SPEED_BASE) / (1200.0 - SPEED_BASE), 0, 1)
+	var n = clampi(roundi(lerpf(WAVE_N[0], WAVE_N[1], k) * wrnd(0.6, 1.0)), WAVE_N[0], WAVE_N[1])
+	var dt_ = lerpf(WAVE_GAP[0], WAVE_GAP[1], k)
+	var v = maxf(run.speed, 1.0)
+	var at = 0.0
+	for i in n:
+		var alt = 170.0
+		if tier >= 2:
+			alt = wpick(DART_ALTS[2])
+		elif i == 0 and W.randf() < 0.5:
+			alt = 46.0                               # first: a low one, then room to land
+		elif tier == 1 and W.randf() < 0.4:
+			alt = 290.0                              # passes over a short jump, under nothing: never in the way
+		var o = add_dart(run, x + at * v, alt)
+		o.aim = tier >= 2
+		at += maxf(dt_, WAVE_JUMP) if alt == 46.0 else dt_
+	return at * v + DART_W + 200
+
+## A rare floating thing: a life or a brake, zigzagging a little within reach of a jump.
+static func add_bonus(run: Run, x: float) -> void:
+	var it = Item.new()
+	it.x = x
+	it.kind = "life" if W.randf() < 0.5 else "brake"
+	it.ph = wrnd(0, 2)
+	it.y = floor_at(run, x) - BONUS_LOW
+	run.bonuses.append(it)
 
 ## A flyer: it waits beyond the right edge until the screen reaches it, shows a "!" at its height, then crosses.
 static func add_dart(run: Run, x: float, alt: float) -> Obs:
@@ -781,13 +852,15 @@ static func spawn_pattern(run: Run) -> void:
 	else:
 		opts = ["spiky", "spiky", "double", "perch", "hop", "fly", "coins", "plat", "plat", "cave", "log", "gallery", "stairs", "ledge", "ledge", "hollow",
 			"hills", "hills", "hills", "padchain", "padchain", "padchain", "padzig", "padzig"]
-	if x / PPM >= FROM_LOW:
-		opts.append_array(["hover", "hover", "hover"])
+	if x / PPM >= FROM_LOW:                          # many spiders: dangers at every height
+		opts.append_array(["hover", "hover", "hover", "hover", "hover", "spiders", "spiders", "spiders"])
+	if x / PPM >= 150:                               # flyers come in waves too
+		opts.append("wave")
 	if tier < 2 and x >= 70 * PPM:                   # on foot: fewer flyers, more hedgehogs and low spiders
 		opts.erase("fly")
 		opts.append_array(["spiky", "lowhover", "lowhover"] if x / PPM >= FROM_LOW else ["spiky"])
 	if tier >= 2 and x >= 70 * PPM:                  # the Vol: dangers at every height
-		opts.append_array(["fly", "swarm", "swarm", "skyhover", "skyhover", "curtain", "curtain", "curtain"])
+		opts.append_array(["fly", "wave", "wave", "skyhover", "skyhover", "skyhover", "curtain", "curtain", "curtain", "curtain"])
 	var fit: Array = shapes.filter(func(s): return s.top <= REACH[tier])
 	if fit.size() > 0 and x >= 70 * PPM:
 		opts.append_array(["shape", "shape"])
@@ -815,7 +888,7 @@ static func spawn_pattern(run: Run) -> void:
 		"shape":
 			extent = lay_shape(run, wpick(fit), x)
 		"hover":
-			if tier >= 2 and x / PPM >= FROM_MID and W.randf() < 0.5:   # the Vol: any height
+			if tier >= 2 and x / PPM >= FROM_LOW and W.randf() < 0.5:   # the Vol: any height
 				add_hover(run, x + 88, wpick([LOW, HEAD] + SKY_HOVERS))
 			elif x / PPM < FROM_MID or W.randf() < 0.6:
 				add_hover(run, x, LOW)
@@ -823,6 +896,12 @@ static func spawn_pattern(run: Run) -> void:
 				add_hover(run, x + 88, HEAD)
 				coin_line(run, x, floor_at(run, x) - 40, 5)
 			extent = 220
+		"spiders":                                 # two or three spiders in a row: a still yellow one (jump it), red ones moving
+			var n = 2 + W.randi() % 2
+			for i in n:
+				var h = LOW if i % 2 == 0 else (wpick([HEAD] + SKY_HOVERS) if tier >= 2 else HEAD)
+				add_hover(run, x + i * maxf(320, run.speed * 0.9), h)
+			extent = (n - 1) * maxf(320, run.speed * 0.9) + HOVER_W
 		"lowhover":                                # a low spider: jump it
 			add_hover(run, x, LOW)
 			coin_arc(run, x - 40, 150, 5, 160)
@@ -832,18 +911,18 @@ static func spawn_pattern(run: Run) -> void:
 			add_hover(run, x + 120, h)
 			coin_line(run, x, floor_at(run, x) - (h - 110), 7)
 			extent = 400
-		"curtain":                                 # a column of spiders, one gap two places tall: through there
-			var g = W.randi() % (CURTAIN.size() - 1)
+		"curtain":                                 # a column of red spiders moving together, one place empty: through there
+			var g = W.randi() % CURTAIN.size()
 			if run.last_gap >= 0:
 				g = clampi(g, run.last_gap - CURTAIN_SHIFT, run.last_gap + CURTAIN_SHIFT)
 			run.last_gap = g
 			var cx = x + CURTAIN_LEAD
+			var ph = wrnd(0, TAU)
 			for k in CURTAIN.size():
-				if k != g and k != g + 1:
-					add_hover(run, cx, CURTAIN[k])
-			var mid = (CURTAIN[g] + CURTAIN[g + 1]) / 2
-			for i in 5:                            # coins through the gap
-				coin(run, cx - 140 + i * 70, floor_at(run, cx) - mid)
+				if k != g:
+					add_hover(run, cx, CURTAIN[k], ph)
+			for i in 5:                            # coins where the gap is in the middle of its course
+				coin(run, cx - 140 + i * 70, floor_at(run, cx) - CURTAIN[g])
 			extent = CURTAIN_LEAD + HOVER_W + 120
 		"double":
 			var d = run.speed + 90
@@ -853,9 +932,11 @@ static func spawn_pattern(run: Run) -> void:
 		"fly":
 			add_dart(run, x, wpick(DART_ALTS[tier])).aim = tier >= 2
 			extent = 120
+		"wave":                                      # a wave of flyers, more and closer together the faster he goes
+			extent = _wave(run, x, tier)
 		"swarm":                                     # two flyers, one after the other, at different heights
 			var alts: Array = DART_ALTS[2].duplicate()
-			alts.shuffle()
+			wshuffle(alts)
 			add_dart(run, x, alts[0]).aim = true
 			add_dart(run, x + 520, alts[1])
 			extent = 520
@@ -880,7 +961,7 @@ static func spawn_pattern(run: Run) -> void:
 			var y = G - 135
 			add_platform(run, x, y)
 			coin_line(run, x + 40, y - 40, 4)
-			if randf() < 0.35 + 0.2 * run.lvl("lucky"):
+			if W.randf() < 0.35 + 0.2 * run.lvl("lucky"):   # (the road's dice, always rolled: only the odds are his)
 				coin(run, x + PLAT_W / 2, y - 110, gem(run))
 			extent = PLAT_W
 		"cave":                                      # two ways: down through the hollow, or over its roof
@@ -958,7 +1039,7 @@ static func spawn_pattern(run: Run) -> void:
 					pl = add_platform(run, ix, iy)
 				coin_line(run, ix + 30, iy - 40, maxi(2, floori((pl.w - 60) / 44)))
 				ix += pl.w + wrnd(70, 150)
-			if randf() < 0.3 + 0.2 * run.lvl("lucky"):
+			if W.randf() < 0.3 + 0.2 * run.lvl("lucky"):
 				coin(run, ix - 120, G - 130 - (n - 1) * rise - 110, gem(run))
 			if x > 70 * PPM and W.randf() < 0.65:     # below, a hedgehog: up there is the safe way
 				add_spiky(run, x + wrnd(0.3, 0.6) * (ix - x))
@@ -1007,7 +1088,11 @@ static func spawn_pattern(run: Run) -> void:
 	# The gap to the next pattern is set in distance (GAP_DIST), so the road keeps its density as the
 	# speed grows; only where a jump would no longer have room to land does it widen with the speed.
 	var gap = maxf(GAP_DIST, run.speed * GAP_TIME + GAP_MARGIN) * wrnd(0.85, 1.3) * (1.3 if kind == "coins" else 1.0)
-	var clear = run.fm == null and not run.fm_due and run.boss == null
+	var clear = run.fm == null and not run.fm_due and run.boss == null and kind != "wave"
+	if clear and x / PPM >= run.next_bonus and x / PPM > 300:   # a life or a brake, floating in the gap
+		add_bonus(run, x + extent + gap * 0.5)
+		run.next_bonus = x / PPM + wrnd(BONUS_EVERY[0], BONUS_EVERY[1])
+		clear = false
 	# A wide gap gets something that asks no jump: a danger at head height, or a fonceur.
 	if gap > GAP_FILL and x / PPM >= FROM_MID and clear and W.randf() < 0.5:
 		add_hover(run, x + extent + gap * 0.5, HEAD)
@@ -1045,7 +1130,7 @@ static func spawn_pattern(run: Run) -> void:
 					coin(run, wx, f - h)
 					if style == "double":
 						coin(run, wx, f - 84)                           # two rows, both caught at a run (the top one by the leaves on his head)
-			if run.lvl("lucky") > 0 and run.lvl("scatter") > 0 and randf() < 0.12 * run.lvl("lucky"):
+			if W.randf() < 0.12 * run.lvl("lucky") and run.lvl("scatter") > 0:
 				coin(run, cx + n * 44 + 30, floor_at(run, cx + n * 44 + 30) - 110, gem(run))
 	run.next_x = x + extent + gap
 	scatter(run, laid)
@@ -1148,25 +1233,27 @@ static func spawn_ride(run: Run) -> void:
 				extent = 200
 	else:
 		var lanes = [70.0, 180.0, 290.0, 400.0, 510.0]   # heights above the floor
-		match wpick(["flyers", "flyers", "gate", "gate", "tower", "zigzag", "zigzag", "shape", "shape"]):
-			"flyers":
+		match wpick(["flyers", "flyers", "flyers", "gate", "gate", "gate", "tower", "zigzag", "shape"]):
+			"flyers":                                # (three times what it was: the dragonfly's sky is full)
 				var mixed: Array = lanes.duplicate()
-				mixed.shuffle()
-				mixed = mixed.slice(0, 3 if W.randf() < 0.4 else 2)
+				wshuffle(mixed)
+				mixed = mixed.slice(0, 5 if W.randf() < 0.4 else 4)
 				for k in mixed.size():
-					add_hover(run, x + k * 260, mixed[k])
-				extent = mixed.size() * 260
+					add_hover(run, x + k * 200, mixed[k])
+				extent = mixed.size() * 200
 			"gate":                                      # a column of creatures with a wide opening
 				var open = W.randi() % 4
+				var gph = wrnd(0, TAU)
 				for k in lanes.size():
 					if k != open and k != open + 1:
-						add_hover(run, x + 200, lanes[k])
+						add_hover(run, x + 200, lanes[k], gph)
 				coin_line(run, x, G - (lanes[open] + lanes[open + 1]) / 2, 8)
 				extent = 360
 			"tower":                                     # a column of creatures from the floor up: over the top
 				var count = 2 + W.randi() % 3
+				var tph = wrnd(0, TAU)
 				for k in count:
-					add_hover(run, x + 110, 60 + k * 110)
+					add_hover(run, x + 110, 60 + k * 110, tph)
 				coin_line(run, x, G - 60 - count * 110 - 30, 6)
 				extent = 260
 			"zigzag":                                    # each slope lasts over a second, whatever the speed
@@ -1190,7 +1277,7 @@ static func spawn_ride(run: Run) -> void:
 	for i in range(first, run.obs.size()):
 		run.obs[i].ride = true
 	run.block_end = x + extent
-	run.next_x = x + extent + (v * 0.7 + 220) * wrnd(0.9, 1.3)
+	run.next_x = x + extent + (v * 0.7 + 220) * wrnd(0.9, 1.3) * (0.4 if kind == "dragonfly" else 1.0)
 
 # ---------- the boss ----------
 
@@ -1221,6 +1308,8 @@ static func _boss_lob(run: Run, mouth: Vector2, ahead: float, T: float = 0.9) ->
 const TAP_AIR := 0.63                # JUMP_V up, JUMP_GRAVITY down
 const REACT := 0.2
 const WIND := 0.45                   # her jaws open this long before she fires
+const FAN_LANES := [64.0, 168.0, 272.0, 376.0, 480.0, 560.0]   # up to the ceiling
+const FLY_PACE := 1.3                # against a flyer she fires 1.3 times as often
 const SLACK := 0.06
 
 ## When the hero will meet what lies from x0 to x1 (world units), closing in at `rel`, `delay` seconds from now.
@@ -1388,9 +1477,12 @@ static func boss(run: Run, d: float) -> void:
 						_boss_ball(run, mouth, LANE["high"])
 						_boss_ball(run, mouth, b.pair_lane)
 						run.events.append("acid")
-					"fan":                           # on the dragonfly: every lane but two neighbours
-						var gap_k = W.randi() % 4
-						var hs = [70.0, 180.0, 290.0, 400.0, 510.0]
+					"fan":                           # in the air (dragonfly, Vol): every lane up to the ceiling but two neighbours
+						var hs = FAN_LANES
+						var gap_k = W.randi() % (hs.size() - 1)
+						if b.last_gap >= 0:              # within reach of the last opening
+							gap_k = clampi(gap_k, b.last_gap - 2, b.last_gap + 2)
+						b.last_gap = gap_k
 						for k in hs.size():
 							if k != gap_k and k != gap_k + 1:
 								_boss_ball(run, mouth, hs[k])
@@ -1411,8 +1503,9 @@ static func boss(run: Run, d: float) -> void:
 				# what it throws depends on how he gets about
 				var M: String = run.mount.kind if run.mount != null else ""
 				var moves: Array
-				if M == "dragonfly":
-					moves = ["fan", "fan", "rain", "low", "high", "mid"]
+				var flying = M == "dragonfly" or (M == "" and run.lvl("flight") > 0)
+				if flying:                               # up there nothing was safe from her: balls across the whole height
+					moves = ["fan", "fan", "fan", "rain", "low", "high", "mid"]
 				elif M == "rhino":
 					moves = ["puddle", "spray", "low", "low", "high", "rain"]
 				else:
@@ -1422,11 +1515,11 @@ static func boss(run: Run, d: float) -> void:
 				# the first one, in a shuffled list, that leaves a way through (on foot: see _fits)
 				b.ahead = wrnd(380, 640)
 				b.pair_lane = wpick([LANE["low"], LANE["mid"]])
-				moves.shuffle()
+				wshuffle(moves)
 				var now = _threats(run)
 				var chosen = ""
 				for mv in moves:
-					if M != "" or _attack_fits(run, b, mv, now):
+					if M != "" or flying or _attack_fits(run, b, mv, now):
 						chosen = mv
 						break
 				if chosen == "":
@@ -1434,7 +1527,7 @@ static func boss(run: Run, d: float) -> void:
 				else:
 					b.attack = chosen
 					b.wind = WIND
-					b.next = maxf(0.7, 1.2 - b.t * 0.025)     # more and more often
+					b.next = maxf(0.7, 1.2 - b.t * 0.025) / (FLY_PACE if flying else 1.0)    # more and more often
 		if b.t > BOSS_FIGHT and b.wind <= 0:           # a tree comes down on it
 			b.phase = "fall"
 			b.t = 0
@@ -1632,7 +1725,7 @@ static func wave(run: Run) -> void:
 	f.act.fill(false)
 	if level < 2:                                    # one or two lanes, among those he is likely to be in
 		var low: Array = [0, 1, 2].filter(func(k): return k != safe)
-		low.shuffle()
+		wshuffle(low)
 		for k in low.slice(0, level + 1):
 			f.act[k] = true
 	else:
@@ -1867,7 +1960,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	# --- scrolling: the hero first runs out of the temple, then the camera follows him ---
 	run.t += d
 	# The hero's own speed grows for ever; a mount, then the boss, impose theirs while they last.
-	var own = run.base + run.t * SPEED_GAIN
+	var own = maxf(SPEED_BASE * 0.6, run.base + (run.t - run.zone_t) * SPEED_GAIN * run.zone_k - run.brake)
 	var pace = own
 	if run.boss != null:
 		pace = BOSS_SPEED * (DEATH_PACE if run.boss.phase == "fall" else 1.0)
@@ -2089,6 +2182,31 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		if dashing and randf() < 0.8:
 			part(run, px - 20, p.y - rnd(5, 75), -300, 0, 0.25, Color("#ffd35c"), rnd(4, 8), 0)
 
+		# --- the red spiders go up and down ---
+		for o in run.obs:
+			if o.kind == "hover" and o.amp > 0:
+				o.y = o.y0 - sin(run.t * TAU / SPIDER_PERIOD + o.ph) * o.amp
+		# --- the rare floating things: they zigzag a little; touched, they are his ---
+		for it in run.bonuses:
+			var fb = floor_at(run, it.x)
+			var zk = fmod(run.t / 1.6 + it.ph, 2.0)
+			it.y = fb - BONUS_LOW - (BONUS_HIGH - BONUS_LOW) * (zk if zk < 1 else 2 - zk)
+			if it.gone or absf(px - it.x) > 40:
+				continue
+			var tall_b: float = MOUNTS[run.mount.kind]["tall"] if run.mount != null else HERO_H
+			if it.y < p.y - tall_b - 30 or it.y > p.y + 10:
+				continue
+			it.gone = true
+			if it.kind == "life":
+				run.hearts += 1
+				run.max_hearts = maxi(run.max_hearts, run.hearts)
+				burst(run, it.x, it.y, Color("#ff4d6d"), 16, 260)
+			else:
+				run.brake += BRAKE
+				burst(run, it.x, it.y, Color("#7fd8ff"), 16, 260)
+			run.events.append(it.kind)
+		run.bonuses = run.bonuses.filter(func(b_): return not b_.gone and b_.x > run.cam - 200)
+
 		# --- mounts: the ones ahead wait to be touched, and may be missed ---
 		if run.mount != null:
 			run.mount.t += dt
@@ -2261,14 +2379,18 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		spawn_pattern(run)
 
 	# --- scenery change ---
+	var Z = ZONE_ENDLESS if run.mode == "endless" else ZONE
 	if run.dist >= run.next_biome_at and run.by_mark and run.lvl("jammer") > 0 and randf() < 0.5:
-		run.next_biome_at = maxf(2 * ZONE, (floorf(run.dist / ZONE) + 1) * ZONE)   # the Gros sac à dos muffles the relic: not this time
+		run.next_biome_at = maxf(2 * Z, (floorf(run.dist / Z) + 1) * Z) if run.mode != "endless" else (floorf(run.dist / Z) + 1) * Z   # the Gros sac à dos muffles the relic: not this time
 	elif run.dist >= run.next_biome_at:
 		run.by_mark = true                           # from now on the changes come with the distance marks
 		run.prev_biome = run.biome
 		run.biome = NEXT_BIOME[run.biome]
 		run.biome_x = run.cam + run.view_w + 400     # the new scenery starts ahead, off screen, and scrolls in
-		run.next_biome_at = maxf(2 * ZONE, (floorf(run.dist / ZONE) + 1) * ZONE)
+		run.next_biome_at = maxf(2 * Z, (floorf(run.dist / Z) + 1) * Z) if run.mode != "endless" else (floorf(run.dist / Z) + 1) * Z
+		if run.mode == "story":                      # a new place: back to the base speed, gaining twice as fast
+			run.zone_t = run.t
+			run.zone_k = ZONE_ACCEL
 		run.relic = 1
 		run.glitch = maxf(run.glitch, 0.5)           # the relic flares: it is what moves the world
 		run.events.append("biome")

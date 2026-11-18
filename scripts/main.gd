@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.31.0"
+const VERSION := "0.32.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -63,6 +63,7 @@ var hud_state := {"dist": -1, "gold": -1, "hearts": -1}
 var debug_layer: CanvasLayer
 var debug_panel: Control = null
 var taps: Array = []                   # touches on the level badge: five in a row open the debug menu
+var net: Net                           # the server (net.gd): nothing is sent until it is deployed
 var adopted_note := ""                # said once on the menu: the web version's game was taken over
 var photo: ImageTexture = null          # the game as it was the moment he fell, for the end screen
 var photo_taken := false
@@ -79,6 +80,9 @@ var perf := {"n": 0, "game": 0, "draw": 0, "text": ""}   # what a frame costs, a
 
 func _ready() -> void:
 	save = SaveData.load_save()
+	Net.set_from_args()
+	net = Net.new()
+	add_child(net)
 	_adopt_web_save()
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
 	Debug.setup()
@@ -1904,6 +1908,8 @@ func bank() -> void:
 	run.banked = true
 	save["coins"] += run.gold
 	save["loops"] += 1
+	if not run.debug and Net.enabled():              # the friends' board (once the server is up)
+		net.send_score(save, run.mode, floori(run.dist))
 	if run.debug:
 		pass                                         # in debug: no record
 	elif run.mode == "endless":
@@ -2300,6 +2306,11 @@ func _process(delta: float) -> void:
 				"bossfall": banner("Écrasée !")
 				"bossdown": banner("Vorace est vaincue !")
 				"hurt", "rewind", "hit": stats["hurt"] = true
+				"life":                                 # a floating life picked up: one more heart
+					Audio.sfx("level")
+					_fill_hud()
+				"brake":                                # a floating brake: 4 m/s less, for good
+					Audio.sfx("slow")
 				"fatal":                                # the blow that ends the run: the photo, now
 					if not photo_taken:
 						photo_taken = true

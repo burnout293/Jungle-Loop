@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.31.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.32.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -98,6 +98,32 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.32.0
+
+- Vitesse de départ 9 m/s (`SPEED_BASE` 360). Histoire : chaque nouveau décor repart de cette vitesse et
+  accélère deux fois plus vite (`zone_t`, `zone_k`, `ZONE_ACCEL`). Run illimitée : un décor tous les 800 m
+  (`ZONE_ENDLESS`).
+- Araignées bien plus nombreuses (suspendu ×8 entrées, motif « spiders »). Jaunes immobiles ; rouges qui
+  montent et descendent de 2,5 m de chaque côté en 2,4 s (`SPIDER_*`), du sol au plafond ; les colonnes
+  (rideaux, portes de la libellule) bougent d'un bloc (`add_hover(…, ph)`).
+- Vagues de volants : 2 à 10, de 0,9 à 0,3 s d'écart selon la vitesse (`WAVE_*`, `_wave`) ; à pied à
+  hauteur de tête, un bas seulement en premier avec 0,8 s avant le suivant ; avec le Vol visés ; rien
+  d'autre sur la route pendant une vague.
+- Vorace contre le Vol (et la libellule) : éventail de boules jusqu'au plafond (`FAN_LANES`), ouverture à 2
+  places au plus de la précédente, tirs 1,3 fois plus fréquents (`FLY_PACE`).
+- Libellule : trois fois plus de créatures en l'air, accélération ×2.
+- Donjon : flèches enflammées (`_flames` dans render.gd).
+- Objets rares qui flottent en zigzag, à portée de saut (`add_bonus`, `BONUS_*`) : une vie, ou un frein
+  (-4 m/s pour le reste de la course, `brake`). Un tous les 1 400 à 2 400 m environ.
+- Photo de la chute prise au coup fatal (événement `fatal`), avant les rebonds du Dernier élan.
+- Toujours esquivable, vérifié par un banc qui essaie toutes les façons de jouer image par image (fair_bfs) :
+  à pied (vrais sauts, tap ou tenu) et avec le Vol (montée 430 u/s), 43 200 images chacun, aucun passage
+  impossible ; Vorace : 30 combats, aucune paire impossible.
+- Multijoueur préparé : le parcours a son propre dé (`W`, `wrnd`, `wpick`, `wshuffle` ; `run.rng` semé par
+  `new_run(…, seed)`) : même graine, même parcours (vérifié : 1 119 éléments identiques, joueur immobile
+  contre joueur qui saute). Serveur prêt dans `server/` (scores entre amis, salons de coop, testé), côté jeu
+  `scripts/net.gd` (inactif tant que `SERVER` est vide).
 
 ## 0.31.0
 

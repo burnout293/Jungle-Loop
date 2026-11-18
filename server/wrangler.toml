@@ -1,0 +1,12 @@
+# Cloudflare Workers settings for Jungle Loop's server (see README.md in this folder).
+name = "jungle-loop"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+ORIGIN = "https://burnout293.github.io"   # only the game's page may call it from a browser
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jungle-loop"
+database_id = "TO FILL IN"                 # given by: npx wrangler d1 create jungle-loop
