@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.32.0"
+const VERSION := "0.32.1"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -359,6 +359,22 @@ func _kit_square(b: Button, icon_name: String, size: int) -> void:
 	b.add_theme_stylebox_override("pressed", _down(_kit_box(n, [0, 0, 0, 0], [0, 0, 0, 0], Color(0.85, 0.85, 0.85))))
 	b.add_theme_stylebox_override("disabled", _kit_box(n, [0, 0, 0, 0], [0, 0, 0, 0], Color(0.6, 0.6, 0.65)))
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+## The shop's buttons (assets/img/ui-v2/shop, made at their boxes' exact sizes: Retour 54 x 36, the
+## families' tabs 54 x 64, the items' rows 236 x 30), one picture per state, shown whole. The one chosen
+## (a tab, a row) keeps its "selected" picture whatever the pointer does. `pad`: the room inside the stone.
+const SHOP_PAD := {"back": [8, 7, 8, 9], "tab": [8, 7, 8, 9], "item": [0, 0, 0, 0]}
+
+func _shop_skin(b: Button, kind: String, sel: bool) -> void:
+	var press = "pressed" if kind == "back" else "selected"
+	var pics = {"normal": press if sel else "normal", "hover": press if sel else "hover", "pressed": press, "disabled": "normal"}
+	for st in pics:
+		b.add_theme_stylebox_override(st, _kit_box("shop/%s-%s" % [kind, pics[st]], [0, 0, 0, 0], SHOP_PAD[kind]))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_font_override("font", bold)
+	var colour = GOLD if sel else (INK if kind == "back" else DIM)
+	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(k, colour)
 
 ## A plaque of temple stone, its gilded ends kept whole and only its middle stretched (border-image).
 func _plaque(name: String, h: float, cap: float, mod: Color = Color.WHITE, inset: float = 0.6) -> StyleBoxTexture:
@@ -1017,8 +1033,9 @@ func _build_shop() -> void:
 	var side = _vbox(4)
 	_place(side, 6, 6, 54, 308)
 	var back = _button("Retour", "tab", func() -> void: go("menu"))
+	_shop_skin(back, "back", false)
 	back.custom_minimum_size = Vector2(a(54), a(36))
-	back.add_theme_font_size_override("font_size", roundi(7 * U))
+	back.add_theme_font_size_override("font_size", roundi(6.5 * U))
 	side.add_child(back)
 	for spec in [["up", "magnet", "Équip."], ["power", "flight", "Pouvoirs"], ["mount", "nature", "Montures"], ["skin", "star", "Skins"]]:
 		var key: String = spec[0]
@@ -1032,7 +1049,7 @@ func _build_shop() -> void:
 		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 		b.add_theme_constant_override("icon_max_width", roundi(a(26)))
 		b.clip_text = true
-		b.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		b.custom_minimum_size = Vector2(a(54), a(64))  # the picture's exact size
 		side.add_child(b)
 		w["tab-" + key] = b
 	s.add_child(side)
@@ -1677,7 +1694,7 @@ func _on_pagehide(_args: Array) -> void:
 func refresh_shop(just_bought: String = "") -> void:
 	_set_coins(w["shop-coins"], save["coins"])
 	for k in TABS:
-		_style_button(w["tab-" + k], "tab sel" if k == tab else "tab")
+		_shop_skin(w["tab-" + k], "tab", k == tab)
 		w["tab-" + k].add_theme_font_size_override("font_size", roundi(5.5 * U))
 	w["shop-title"].text = (TABS[tab] + (" · %d / %d" % [save["equipped"].size(), SaveData.MAX_EQUIPPED] if tab == "up" else "")).to_upper()
 	var list: VBoxContainer = w["shop-list"]
@@ -1816,11 +1833,11 @@ func _row(tex: Texture2D, name: String, right: Control, sel: bool, gate: int, fn
 	b.focus_mode = Control.FOCUS_NONE
 	b.mouse_filter = Control.MOUSE_FILTER_PASS        # a finger dragging over the rows scrolls the list
 	b.custom_minimum_size = Vector2(a(236), a(30))
-	_style_button(b, "tab sel" if sel else "tab")
-	var h = _hbox(6)
-	h.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_shop_skin(b, "item", sel)
+	var h = _hbox(6)                                # the picture in the row's sunken square (x 5, 26 x 24), the name
+	h.set_anchors_preset(Control.PRESET_FULL_RECT)  # from x 37, the price or state 9 px off the right end
 	h.offset_left = a(5)
-	h.offset_right = -a(6)
+	h.offset_right = -a(9)
 	h.alignment = BoxContainer.ALIGNMENT_BEGIN
 	var r = TextureRect.new()
 	r.texture = tex

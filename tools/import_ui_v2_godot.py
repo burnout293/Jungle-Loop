@@ -6,6 +6,7 @@ the few panels whose size differs in the Godot version, with the very same funct
 size from the sheet's panel, no pixel resized):
     settings-left 262 x 262, settings-right 265 x 262   (Réglages: taller panes, nothing under them)
     shop-preview-wide 253 x 282                         (the shop as a list: the preview is wider)
+and copies the shop's buttons as they are (assets/ui-v2/shop/, made by tools/import_shop_v2.py there).
 
     python tools/import_ui_v2_godot.py [path of the Jungle-Loop repository]
 """
@@ -38,6 +39,13 @@ def main():
     src_dir = os.path.join(WEB, 'assets', 'ui-v2')
     for f in glob.glob(os.path.join(src_dir, '*.png')) + [os.path.join(src_dir, 'meta.json')]:
         shutil.copy(f, OUT)
+    shop = os.path.join(OUT, 'shop')                 # the shop's buttons (tools/import_shop_v2.py), as they are
+    if os.path.isdir(shop):
+        shutil.rmtree(shop)
+    if os.path.isdir(os.path.join(src_dir, 'shop')):
+        os.makedirs(shop)
+        for f in glob.glob(os.path.join(src_dir, 'shop', '*.png')) + glob.glob(os.path.join(src_dir, 'shop', 'meta.json')):
+            shutil.copy(f, shop)
     meta = json.load(open(os.path.join(OUT, 'meta.json')))
     sheet = np.asarray(Image.open(K.SRC).convert('RGBA'))
     crop = {n: sheet[y0:y1, x0:x1].copy() for n, (x0, y0, x1, y1) in K.BOXES.items() if n.startswith('panel')}
