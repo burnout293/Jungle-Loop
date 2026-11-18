@@ -536,6 +536,15 @@ class Run:
 	var last_gap := -1             # the gap of the last column of spiders
 	var fatal := false             # the blow that ends the run has been dealt ("fatal" event: the photo)
 	var spider_xs: Array = []         # where the road laid its spiders (the columns, see add_hover)
+	# Coop (coop.gd): two phones, two heroes, one road. No mount nor hourglass then (they change a
+	# player's speed, so his road), and the road is laid for road_tier, the lesser of the two players'.
+	var coop := false
+	var home := 200.0                  # where on screen he runs (PX; in coop the guest a little behind the host)
+	var road_tier := -1                # what the road may ask of him (-1: what his own upgrades allow)
+	var mate = null                    # the partner's last state: {x, y, vy, g, f, ph, b, d}, world units
+	var bubble := false                # fallen: he floats after the partner until rescued
+	var bubble_pos := Vector2.ZERO     # where his bubble is (world)
+	var mate_bubble := Vector2.ZERO    # where the partner's bubble is, following him (world)
 	var strip_biome := -1          # Relique altérée: a short strip of another scenery, from strip_x0 to strip_x1
 	var strip_x0 := 0.0
 	var strip_x1 := 0.0
@@ -867,7 +876,8 @@ static func _wave(run: Run, x: float, tier: int) -> float:
 static func add_bonus(run: Run, x: float) -> void:
 	var it = Item.new()
 	it.x = x
-	it.kind = "life" if W.randf() < 0.5 else "brake"
+	var roll = W.randf()
+	it.kind = "life" if roll < 0.5 or run.coop else "brake"   # (no hourglass in coop: it would change his speed)
 	it.ph = wrnd(0, 2)
 	it.y = floor_at(run, x) - BONUS_LOW
 	run.bonuses.append(it)
@@ -936,7 +946,7 @@ static func spawn_pattern(run: Run) -> void:
 		return
 	var x = run.next_x
 	var G = GROUND
-	var tier = 2 if run.lvl("flight") > 0 else (1 if run.lvl("doubleJump") > 0 else 0)
+	var tier = tier_of(run)
 	var riding = run.mount != null or run.items.size() > 0
 	# The first metres are a warm-up: one obstacle at a time, nothing in the air.
 	var opts: Array
@@ -1500,7 +1510,7 @@ static func _attack_fits(run: Run, b: Boss, move: String, now: Array) -> bool:
 ## a flyer is already on its way or something near that height is coming anyway (he must move for it).
 static func camp(run: Run, dt: float) -> void:
 	var p = run.p
-	if run.lvl("flight") == 0 or run.mount != null or run.boss != null or run.fm != null or run.fm_due or run.leap != null or run.dead or run.sx < PX:
+	if run.lvl("flight") == 0 or run.mount != null or run.boss != null or run.fm != null or run.fm_due or run.leap != null or run.dead or run.sx < run.home:
 		run.camp_t = 0
 		return
 	if absf(p.y - run.camp_y) > CAMP_BAND:
@@ -1836,6 +1846,9 @@ static func hit(run: Run, o: Obs) -> void:
 		run.next_fm = run.dist + rnd(170, 300)
 		run.events.append("rewind")
 		return
+	if run.coop:                                     # two players: he floats after the other, who can bring him back
+		to_bubble(run)
+		return
 	_fatal(run)
 	if run.lvl("lastLeap") > 0:                      # Dernier élan: knocked out, he still bounces a few metres further
 		var p = run.p
@@ -1852,6 +1865,84 @@ static func hit(run: Run, o: Obs) -> void:
 		run.events.append_array(["hurt", "bounce"])
 		return
 	die(run)
+
+## What the road may ask of him: 2 with the Vol, 1 with Double saut, 0 on foot (in coop: road_tier).
+static func tier_of(run: Run) -> int:
+	if run.road_tier >= 0:
+		return run.road_tier
+	return 2 if run.lvl("flight") > 0 else (1 if run.lvl("doubleJump") > 0 else 0)
+
+# ---------- coop: the bubble ----------
+# Whoever loses his last heart floats in a bubble just above the other, a little behind; the other jumps
+# into it and he is back (BUBBLE_BACK seconds safe, one heart). Each phone moves the partner's bubble after
+# its own hero, and its own bubble after the partner: the two pictures agree closely enough.
+const BUBBLE_UP := 150.0                 # the bubble's middle above the floor under the one it follows
+const BUBBLE_BEHIND := 20.0
+const BUBBLE_R := 50.0                 # (big enough to hold him: his leaves too)
+const BUBBLE_BACK := 1.0
+
+static func _bubble_target(run: Run, x: float, t: float) -> Vector2:
+	return Vector2(x - BUBBLE_BEHIND, floor_at(run, x) - BUBBLE_UP + sin(t * 2.4) * 10)
+
+static func to_bubble(run: Run) -> void:
+	var p = run.p
+	run.bubble = true
+	run.bubble_pos = Vector2(run.cam + run.sx, p.y - 40)
+	p.rotor = false
+	p.flew = false
+	p.diving = false
+	p.ball = null
+	p.inv = 0
+	run.shake = 0.6
+	run.flash = 0.6
+	burst(run, run.cam + run.sx, p.y - 40, Color("#c9f3ff"), 18, 300)
+	run.events.append("bubble")
+
+## Floating: the bubble eases after the partner. With nobody left to save him, the run is over.
+static func _float(run: Run, d: float, move: float) -> void:
+	var p = run.p
+	var px = run.cam + run.sx
+	var target = _bubble_target(run, float(run.mate.get("x", px)) if run.mate != null else px, run.t)
+	run.bubble_pos.x += move                         # carried along at the run's pace, then eased into place
+	run.bubble_pos += (target - run.bubble_pos) * minf(1, d * 2.5)
+	p.y = run.bubble_pos.y + 40
+	p.vy = 0
+	p.ground = false
+	p.flying = false
+	if run.mate == null or run.mate.get("b", false):
+		die(run)                                     # both in bubbles, or the partner gone: the run ends
+
+## The partner's bubble follows this hero; touching it brings him back (his phone is told: "rescue").
+static func _rescue_check(run: Run, px: float, box: Box, d: float, move: float) -> void:
+	run.mate_bubble.x += move                        # carried along at the run's pace, then eased into place
+	run.mate_bubble += (_bubble_target(run, px, run.t) - run.mate_bubble) * minf(1, d * 2.5)
+	if run.p.ground:
+		return                                       # he has to jump into it
+	var c = run.mate_bubble
+	var nx = clampf(c.x, box.l, box.r)
+	var ny = clampf(c.y, box.t, box.b)
+	if Vector2(nx, ny).distance_to(c) > BUBBLE_R:
+		return
+	run.mate["b"] = false
+	burst(run, c.x, c.y, Color("#c9f3ff"), 20, 320)
+	run.events.append("rescue")
+
+## Brought back by the partner: on his feet where he is, a moment safe, one heart.
+static func back(run: Run) -> void:
+	if not run.bubble or run.dead:
+		return
+	var p = run.p
+	var px = run.cam + run.sx
+	run.bubble = false
+	run.hearts = maxi(run.hearts, 1)
+	p.y = floor_at(run, px)
+	p.vy = 0
+	p.ground = true
+	p.plat = null
+	p.jumps = 0
+	p.inv = BUBBLE_BACK
+	burst(run, px, p.y - 40, Color("#c9f3ff"), 20, 320)
+	run.events.append("back")
 
 ## The blow that ends the run, the moment it lands (before Dernier élan's bounces, while he sinks into a
 ## hole): main.gd takes the photo of the fall then.
@@ -1883,7 +1974,8 @@ static func jump(run: Run, v: float) -> void:
 static func wave(run: Run) -> void:
 	var f: Swarm = run.fm
 	var N = FM_LANES
-	var reach = N if run.lvl("flight") > 0 else (3 if run.lvl("doubleJump") > 0 else 2)
+	var tr = tier_of(run)
+	var reach = N if tr == 2 else (3 if tr == 1 else 2)
 	var level = clampi(floori(run.dist / 450 + wrnd(-0.6, 0.6)), 0, 3)
 	var safe = W.randi() % reach
 	f.act = []
@@ -2170,10 +2262,10 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	if run.leap != null:
 		move = run.leap.v * d
 	else:
-		move = (run.speed + (DODGE_SPEED if dashing else 0.0)) * (1.8 if run.exploded and run.sx < PX else 1.0) * d
+		move = (run.speed + (DODGE_SPEED if dashing else 0.0)) * (1.8 if run.exploded and run.sx < run.home else 1.0) * d
 	var px0 = run.cam + run.sx                      # where he was: the Esquive sweeps everything between
-	if run.sx < PX:
-		run.sx = minf(PX, run.sx + move)
+	if run.sx < run.home:
+		run.sx = minf(run.home, run.sx + move)
 	else:
 		run.cam += move
 	run.dist = run.cam / PPM
@@ -2197,6 +2289,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			else:
 				die(run)
 				return
+	elif run.bubble:                                 # --- coop: fallen, he floats after the partner ---
+		_float(run, d, move)
 	else:
 		# --- player ---
 		var M: Dictionary = MOUNTS[run.mount.kind] if run.mount != null else {}
@@ -2558,8 +2652,10 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		if run.leap == null:
 			boss(run, d)
 			camp(run, d)
+		if run.coop and run.mate != null and run.mate.get("b", false):
+			_rescue_check(run, px, box, d, move)        # the partner's bubble: jump into it to bring him back
 		# sinking into a hole on his last heart, with nothing to save him: that is the fatal moment
-		if p.y > GROUND + 24 and not p.ground and run.hearts == 1 and not run.god and run.rewind_left == 0 and run.mount == null:
+		if p.y > GROUND + 24 and not p.ground and run.hearts == 1 and not run.god and run.rewind_left == 0 and run.mount == null and not run.coop:
 			for hp in run.pits:
 				if px > hp.x0 - 60 and px < hp.x1 + 60:
 					_fatal(run)
@@ -2670,6 +2766,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		grab_h = MOUNTS[run.mount.kind]["grab_h"]
 	var tall_now = MOUNTS[run.mount.kind]["tall"] if run.mount != null else HERO_H
 	for c in run.coins:
+		if run.bubble:
+			break                                    # floating: he picks up nothing
 		if c.tight != "" and p.ball == null:
 			continue                                 # inside a tight place: for the ball only
 		if c.blast and not c.toss:                   # it landed before the road under it was laid: it follows the floor

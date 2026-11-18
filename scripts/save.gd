@@ -10,7 +10,7 @@ const PREFIX := "JL1."
 # it can be bought. Only three upgrades can be equipped; powers are bought once and then on, unless
 # switched off (save.powersOff).
 # family: "up" (Équipements, to equip), "power" (Pouvoirs), "mount" (Montures: each animal its own two,
-# "mount" says whose; "short" is the name in its list). "how": what it does, under the story ("desc").
+# "mount" says whose; "short" is the name in its list).
 # Levels and prices can be changed in reglages/progression.txt (Progress.load_config), hence a var.
 static var UPGRADES := [
 	{"id": "doubleJump", "unlock": 2, "icon": "jump", "kind": "passif", "name": "Double saut", "desc": "Un second saut en l'air.", "costs": [480]},
@@ -20,11 +20,11 @@ static var UPGRADES := [
 	{"id": "scatter", "unlock": 6, "icon": "gems", "kind": "passif", "name": "Gemmes dispersées", "desc": "De temps en temps, une gemme prend la place d'une pièce. Jaune : 5 pièces, rouge : 10, bleue : 20.", "costs": [2000, 4800, 10000]},
 	{"id": "breaker", "unlock": 3, "icon": "break", "kind": "passif", "name": "Brise-tout", "desc": "Les caisses, jarres et tonneaux du décor volent en éclats sur ton passage et lâchent 4 pièces.", "costs": [1400]},
 	{"id": "heart", "unlock": 7, "icon": "heart", "kind": "passif", "name": "Vitalité", "desc": "Un cœur de plus à chaque niveau, jusqu'à 4 cœurs.", "costs": [5000, 12000, 25000]},
-	{"id": "drunk", "unlock": 5, "icon": "relic", "kind": "passif", "name": "Relique altérée", "desc": "Les pouvoirs de la relique sont altérés car vous l'avez endommagée en sortant du temple. Quelle idée d'utiliser de la TNT aussi.", "how": "Des créatures deviennent éthérées et inoffensives, et le décor ne change plus.", "costs": [1600, 3600, 7200]},
+	{"id": "drunk", "unlock": 5, "icon": "relic", "kind": "passif", "name": "Relique altérée", "desc": "Les pouvoirs de la relique sont altérés car vous l'avez endommagée en sortant du temple. Quelle idée d'utiliser de la TNT aussi.", "costs": [1600, 3600, 7200]},
 	{"id": "nature", "unlock": 4, "icon": "nature", "kind": "passif", "name": "Ami de la nature", "desc": "Les montures, rares, se montrent un peu plus souvent.", "costs": [1200, 2800, 6000]},
-	{"id": "dash", "unlock": 5, "icon": "dash", "kind": "actif", "name": "Esquive", "desc": "Une force étrange vous permet une accélération soudaine en détruisant tout ce qui se trouve sur votre chemin.", "how": "Le bouton te projette 40 m plus loin en un éclair. Recharge plus vite à chaque niveau.", "costs": [1200, 2800, 5600]},
-	{"id": "boots", "unlock": 6, "icon": "boots", "kind": "actif", "name": "Bottes de métal", "desc": "Plus lourd que le cuir et plus solide que le bois. Vous ferez des ravages avec ces bottes.", "how": "Tu retombes plus vite. Le bouton te fait plonger : la secousse casse les caisses et écrase les créatures autour de toi.", "costs": [2500, 5500]},
-	{"id": "tnt", "unlock": 9, "icon": "tnt", "kind": "actif", "name": "Fana de TNT", "desc": "Faire sauter l'entrée du temple à chaque nouvelle tentative ne vous suffit plus. Vous allez répandre le chaos dans cette jungle maudite !", "how": "Le bouton lance un bâton de TNT : tout ce qui est devant toi saute. Les boss résistent.", "costs": [3000, 6000, 12000]},
+	{"id": "dash", "unlock": 5, "icon": "dash", "kind": "actif", "name": "Esquive", "desc": "Une force étrange vous permet une accélération soudaine en détruisant tout ce qui se trouve sur votre chemin.", "costs": [1200, 2800, 5600]},
+	{"id": "boots", "unlock": 6, "icon": "boots", "kind": "actif", "name": "Bottes de métal", "desc": "Plus lourd que le cuir et plus solide que le bois. Vous ferez des ravages avec ces bottes.", "costs": [2500, 5500]},
+	{"id": "tnt", "unlock": 9, "icon": "tnt", "kind": "actif", "name": "Fana de TNT", "desc": "Faire sauter l'entrée du temple à chaque nouvelle tentative ne vous suffit plus. Vous allez répandre le chaos dans cette jungle maudite !", "costs": [3000, 6000, 12000]},
 	{"id": "slow", "unlock": 7, "icon": "slow", "kind": "actif", "name": "Sablier", "desc": "Ralentit le temps quelques secondes.", "costs": [1800, 4000]},
 	{"id": "lastLeap", "unlock": 6, "icon": "leap", "kind": "passif", "name": "Dernier élan", "desc": "Au dernier cœur perdu, tu rebondis encore pour gagner quelques mètres.", "costs": [1600, 3600, 7200]},
 	{"id": "flight", "unlock": 10, "icon": "flight", "kind": "passif", "power": true, "name": "Vol", "desc": "En l'air, chaque appui te fait remonter d'un coup d'hélice. Relâche : tu retombes. Niveaux 2 et 3 : tu montes plus vite.", "costs": [4800, 7000, 10000]},

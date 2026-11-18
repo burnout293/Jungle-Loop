@@ -84,6 +84,7 @@ var _ti := -1                          # where _floor_from is in the floor's out
 var dirt: Array = []
 var dirt_t := 0.0
 var back: Layer
+var mate_layer: Layer                  # coop: the partner, recoloured (MATE_HUE), behind the hero
 var hero_layer: Layer
 var hero_clip: Clip
 var front: Layer
@@ -94,6 +95,11 @@ func _ready() -> void:
 	hero_clip = Clip.new()
 	hero_clip.clip_children = CanvasItem.CLIP_CHILDREN_ONLY
 	add_child(hero_clip)
+	mate_layer = _layer(_draw_mate_layer, true, hero_clip)
+	var hue = ShaderMaterial.new()
+	hue.shader = Shader.new()
+	hue.shader.code = MATE_SHADER
+	mate_layer.material = hue
 	hero_layer = _layer(_draw_hero_layer, true, hero_clip)
 	front = _layer(_draw_front, false, self)
 	over = _layer(_draw_over, false, self)
@@ -127,7 +133,7 @@ func show_run(r: Game.Run, time: float, q_: int) -> void:
 	if rect != hero_clip.rect:
 		hero_clip.rect = rect
 		hero_clip.queue_redraw()
-	for l in [back, hero_layer, front, over]:
+	for l in [back, mate_layer, hero_layer, front, over]:
 		l.queue_redraw()
 
 # ---------- small helpers ----------
@@ -869,19 +875,82 @@ func stride(th: float) -> Dictionary:
 func _draw_hero_layer(c: CanvasItem) -> void:
 	if run == null or not Art.ready or (run.dead and not show_dead):
 		return
+	if run.bubble:                                   # coop: fallen, floating after the partner
+		draw_hero(c, null, run.p, sx(run.bubble_pos.x))
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		bubble(c, run.bubble_pos)
+		return
 	draw_hero(c, seat)
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
 
+# The partner is Pépito too, his colours turned round the wheel: green leaves go orange, the teal scarf gold.
+const MATE_SHADER := """
+shader_type canvas_item;
+uniform float hue = 0.72;
+vec3 to_hsv(vec3 c) {
+	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+	vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+	float d = q.x - min(q.w, q.y);
+	return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10)), d / (q.x + 1e-10), q.x);
+}
+vec3 to_rgb(vec3 c) {
+	vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
+	return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+void fragment() {
+	vec4 c = texture(TEXTURE, UV) * COLOR;
+	vec3 h = to_hsv(c.rgb);
+	h.x = fract(h.x + hue);
+	COLOR = vec4(to_rgb(h), c.a);
+}
+"""
+
+## Coop: the partner, where he says he is, in his pose; in his bubble when he has fallen.
+func _draw_mate_layer(c: CanvasItem) -> void:
+	if run == null or not Art.ready or run.mate == null:
+		return
+	var m: Dictionary = run.mate
+	var x = sx(float(m.get("x", 0.0)))
+	if x < -60 or x > view_w + 60:
+		return
+	var mp = Game.Player.new()
+	mp.y = float(m.get("y", Game.GROUND))
+	mp.vy = float(m.get("vy", 0.0))
+	mp.ground = bool(m.get("g", true))
+	mp.flying = bool(m.get("f", false))
+	mp.phase = float(m.get("ph", 0.0))
+	if m.get("b", false):
+		mp.y = run.mate_bubble.y + 40
+		draw_hero(c, null, mp, sx(run.mate_bubble.x))
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		bubble(c, run.mate_bubble)
+		return
+	draw_hero(c, null, mp, x)
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+## A soap bubble round a fallen hero (world position of its middle): it wobbles and shines.
+func bubble(c: CanvasItem, at: Vector2) -> void:
+	var cx = sx(at.x)
+	var cy = n(at.y)
+	var r = Game.BUBBLE_R / PIXEL + sin(t * 5) * 0.8
+	c.draw_circle(Vector2(cx, cy), r, Color(0.75, 0.95, 1, 0.16))
+	c.draw_arc(Vector2(cx, cy), r, 0, TAU, 40, Color(0.85, 0.97, 1, 0.85), 1.2)
+	c.draw_arc(Vector2(cx, cy), r - 2, -2.4, -1.5, 8, Color(1, 1, 1, 0.9), 1.5)
+	rect(c, snap(cx + r * 0.35), snap(cy - r * 0.55), 2, 2, Color.WHITE)
+
 ## `seat`: where he sits when he rides, {x, y, k} with k going 0 -> 1 while he hops into the saddle.
-func draw_hero(c: CanvasItem, st) -> void:
-	var p = run.p
+func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN) -> void:
+	var p = run.p if who == null else who                 # (who: the partner, at_x where he is on screen)
+	var me = who == null
+	var leap = run.leap if me else null
 	var R: Dictionary = Art.meta["rig"]
-	var dashing = run.dash.t > 0
-	var ox = n(run.sx)
+	var dashing = me and run.dash.t > 0
+	var ox = n(run.sx) if is_nan(at_x) else at_x
 	var oy = n(p.y)
 	if dashing:                                      # the relic's aura
 		glow(c, ox, oy - 18, 30 + sin(t * 30) * 2, Color(1, 211 / 255.0, 92 / 255.0, 0.6))
-	if p.inv > 0 and run.leap == null and not (st != null and st["k"] < 1) and floori(t * 14) % 2 == 1:
+	if me and p.inv > 0 and leap == null and not (st != null and st["k"] < 1) and floori(t * 14) % 2 == 1:
 		return                                       # blinking while invincible
 	if p.ball != null:                               # the Sphère: a ball of leaves, rolling, swelling out of a puff
 		var base: Texture2D = Art.tex.get("hero-ball")
@@ -909,7 +978,7 @@ func draw_hero(c: CanvasItem, st) -> void:
 		oy = lerpf(oy, st["y"] + 11, st["k"]) - hop
 		shoes = [null, {"x": 4.0, "y": -5.0, "r": 0.25}]
 		fists = [{"x": 8.0, "y": -19.0}, {"x": 10.0, "y": -18.0}]
-	elif p.flying and run.leap == null:              # the leaf rotor: he hangs under it, feet dangling
+	elif p.flying and leap == null:                  # the leaf rotor: he hangs under it, feet dangling
 		var sway = sin(t * 9) * 1.5
 		body = "hero-rotor"
 		B = R["rotor"]
@@ -929,11 +998,11 @@ func draw_hero(c: CanvasItem, st) -> void:
 		by += 1.5 * absf(sin(th)) + sq
 		shoes[0]["x"] -= sq
 		shoes[1]["x"] += sq
-		if run.lvl("sprint") > 0:
+		if me and run.lvl("sprint") > 0:
 			shoes = [null, null]                     # Sprint: no strides any more, a wheel of legs (below)
 
 	var xf = Transform2D(0, Vector2(ox, oy))
-	if run.leap != null:                             # knocked out: he tumbles
+	if leap != null:                                 # knocked out: he tumbles
 		xf = xf.translated_local(Vector2(0, -20)).rotated_local(p.roll).translated_local(Vector2(0, 20))
 	if shoes[0] != null:
 		part(c, xf, "far-shoe", shoes[0]["x"], shoes[0]["y"], shoes[0]["r"])

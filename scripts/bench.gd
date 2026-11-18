@@ -7,7 +7,7 @@ extends Node
 
 var main: Node
 var tour_i := 0
-var opts := {"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false}
+var opts := {"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": ""}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,9 @@ func _ready() -> void:
 			"prof": opts["prof"] = true
 			"quality": opts["quality"] = kv[1]
 			"showcase": opts["showcase"] = true
+			"coop": opts["coop"] = kv[1]           # host | join (in a browser, with ?net=)
+			"room": opts["room"] = kv[1]
+			"mate": opts["mate"] = kv[1]          # run | bubble: a pretend partner beside him (the coop's drawing)
 	if opts["shots"] != "":
 		DirAccess.make_dir_recursive_absolute(opts["shots"])
 	print("bench: ", opts)
@@ -115,6 +118,9 @@ func _process(delta: float) -> void:
 	if opts["tour"]:
 		await _tour()
 		return
+	if opts["coop"] != "":                           # two browsers, one run: see _coop_bench
+		_coop_bench(delta)
+		return
 	if opts["screen"] != "":                         # only a screen to look at: no run
 		if opts["screen"] == "debug" and main.debug_panel == null and t < 0.5:
 			main.open_debug()
@@ -136,6 +142,12 @@ func _process(delta: float) -> void:
 	var r: Game.Run = main.run
 	if r == null:
 		return
+	if opts["mate"] != "":
+		r.coop = true
+		var was = r.mate != null
+		r.mate = {"x": r.cam + r.sx - 110, "y": Game.floor_at(r, r.cam + r.sx - 110), "vy": 0.0, "g": true, "f": false, "ph": r.p.phase + 1.5, "b": opts["mate"] == "bubble", "d": r.dist}
+		if not was:
+			r.mate_bubble = Vector2(r.cam + r.sx, Game.GROUND - 150)
 	next_press -= delta
 	if next_press <= 0 and not opts["still"]:                              # a press now and then, held for a moment
 		next_press = randf_range(0.5, 1.4)
@@ -203,7 +215,10 @@ func _tour() -> void:
 		[26.8, "pick", "drunk"], [28.9, "shot", "23-shop-relic"],
 		[29.0, "go", "menu"], [29.9, "tip", "endless"], [30.0, "shot", "24-menu-tip"], [30.05, "tip", ""],
 		[30.2, "play", ""], [31.6, "scene", "1"], [32.0, "shot", "25-ruins"], [32.2, "scene", "3"], [32.6, "shot", "26-dungeon"],
-		[32.8, "quit", ""],
+		[32.7, "go", "shop"], [32.75, "tab", "up"], [32.8, "own", "tnt"], [32.85, "pick", "tnt"], [34.0, "shot", "27-shop-tnt-owned"],
+		[34.1, "own", "dash"], [34.15, "pick", "dash"], [35.2, "shot", "28-shop-dash-owned"],
+		[35.3, "tab", "power"], [35.35, "own", "flight"], [35.4, "pick", "flight"], [36.5, "shot", "29-shop-flight-owned"],
+		[36.7, "quit", ""],
 	]
 	while tour_i < steps.size() and t >= steps[tour_i][0]:
 		var st = steps[tour_i]
@@ -281,6 +296,11 @@ func _tour() -> void:
 				it.x = x + 260
 				it.y = Game.GROUND - 140
 				r.bonuses.append(it)
+			"own":                                      # bought at level 1, not equipped: its card shows both buttons
+				main.save["upgrades"][arg] = 1
+				main.save["equipped"].erase(arg)
+				main.save["coins"] = maxi(main.save["coins"], 20000)
+				main.refresh_shop()
 			"pause": main.pause()
 			"resume": main.resume()
 			"die":
@@ -305,3 +325,79 @@ func _tour() -> void:
 					"hold": print("touch check: hold ", main.input.hold, ", fingers ", main.touches.keys(), ", on ground ", main.run.p.ground)
 					"state": print("touch check: state ", main.state)
 			"quit": get_tree().quit()
+
+# ---------- coop: two browsers on this computer (node server/dev.mjs), ?test&net=…&coop=host|join&room=… ----------
+# The host opens a room and prints its letters; the guest, started with them, joins; the host starts the
+# run. Both run with the invincibility on, a bot jumping now and then. At 5 s the guest is put in a bubble
+# (the host jumps until he has brought him back); at 12 s both are (each brings the other back); from 20 s
+# nobody jumps and both are put in bubbles: the run ends on both sides.
+
+var coop_step := 0
+var coop_t := 0.0
+var coop_said := {}
+var coop_next := 1.0
+
+func _coop_bench(delta: float) -> void:
+	var c: Coop = main.coop
+	if coop_step == 0 and t > 0.5 and main.state == "menu":
+		main.save["seenIntro"] = true
+		main.friends_tab = "coop"
+		main.go("friends")
+		if opts["coop"] == "host":
+			main._coop_host()
+		else:
+			main.w["co-code"].text = opts["room"]
+			main._coop_join()
+		coop_step = 1
+	if c.room != "" and not coop_said.has("room"):
+		coop_said["room"] = true
+		print("COOP ROOM ", c.room)
+	if c.state == "failed" and not coop_said.has("fail"):
+		coop_said["fail"] = true
+		print("COOP FAILED ", c.info)
+	if c.state == "ready" and not coop_said.has("ready"):
+		coop_said["ready"] = true
+		coop_t = t
+		print("COOP READY ", c.role, " mate=", c.mate)
+	if coop_step == 1 and c.state == "ready" and opts["coop"] == "host" and t - coop_t > 1.5:
+		coop_step = 2
+		main._coop_go()
+	if main.state == "over" and not coop_said.has("over"):
+		coop_said["over"] = true
+		print("COOP OVER ", c.role, " dist=", floori(main.run.dist), " rtt=", c.rtt)
+	if main.state != "play" or main.run == null or not main.run.coop:
+		return
+	var r: Game.Run = main.run
+	r.god = true
+	var mate_b: bool = r.mate != null and r.mate.get("b", false)
+	next_press -= delta
+	var ending = r.t > 20.0
+	if next_press <= 0 and not ending:              # a jump now and then; often when the partner floats
+		next_press = 0.35 if mate_b else randf_range(0.6, 1.4)
+		hold_left = 0.25
+		main.press()
+	if hold_left > 0:
+		hold_left -= delta
+		if hold_left <= 0:
+			main.input.hold = false
+	var force = func() -> void:
+		r.god = false
+		r.hearts = 1
+		r.rewind_left = 0
+		r.p.inv = 0
+		Game.hit(r, null)
+		r.god = true
+	if opts["coop"] == "join" and r.t > 5.0 and not coop_said.has("b1"):
+		coop_said["b1"] = true
+		force.call()
+	if r.t > 12.0 and not coop_said.has("b2"):
+		if not r.bubble:
+			coop_said["b2"] = true
+			force.call()
+	if ending and not r.bubble and not r.dead:
+		main.input.hold = false
+		force.call()
+	coop_next -= delta
+	if coop_next <= 0:
+		coop_next = 1.0
+		print("COOP %s t=%.1f d=%.0f mate=%s bubble=%s" % [opts["coop"], r.t, r.dist, ("%.0f%s" % [float(r.mate.get("d", 0)), " (bulle)" if mate_b else ""]) if r.mate != null else "-", r.bubble])

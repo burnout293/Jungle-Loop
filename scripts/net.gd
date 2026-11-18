@@ -1,23 +1,66 @@
 class_name Net
 extends Node
-## The game's side of the server (server/worker.js): friends' scores now, the coop's meeting rooms later.
-## Nothing at all is sent while `url` is empty, which it is until the server is deployed (server/README.md):
-## then set SERVER below. "--net=<address>" on the command line points it elsewhere (the tests, at the
-## server running on this computer: node server/dev.mjs).
+## The game's side of the server (server/worker.js): friends, their scores, and the rooms where two
+## phones meet before a coop run (the coop itself: coop.gd). Nothing at all is sent while `url` is empty,
+## which it is until the server is deployed: its address goes in reglages/reseau.txt (load_config).
+## "--net=<address>" on the command line, or "?net=<address>" in the page's address, points it elsewhere
+## (the tests, at the server running on this computer: node server/dev.mjs).
 ##
 ## The player gets an identity the first time something is sent: a pseudonym, a friend code (PEPI-XXXX)
 ## and a secret only this device holds, kept in the save (save["online"]); it travels with the save code.
 
-const SERVER := ""                       # e.g. "https://jungle-loop.<account>.workers.dev"
-static var url := SERVER
+static var url := ""
+static var stun: Array = ["stun:stun.l.google.com:19302"]
+static var turn := {}                    # {"urls", "username", "credential"} when a relay is set
+
+## reglages/reseau.txt: « adresse | … » under [serveur], « stun | a / b » and the turn lines under [coop].
+static func load_config(text: String) -> void:
+	var section = ""
+	for raw in text.split("\n"):
+		var line: String = raw.split("#")[0].strip_edges()
+		if line == "":
+			continue
+		if line.begins_with("[") and line.ends_with("]"):
+			section = Tune.key(line.substr(1, line.length() - 2))
+			continue
+		var cols = line.split("|")
+		if cols.size() < 2:
+			continue
+		var k = Tune.key(cols[0])
+		var v: String = cols[1].strip_edges()
+		match [section, k]:
+			["serveur", "adresse"]:
+				url = v.trim_suffix("/")
+			["coop", "stun"]:
+				stun = Array(v.split("/")).map(func(s): return s.strip_edges()).filter(func(s): return s.begins_with("stun:"))
+			["coop", "turn"]:
+				if v.begins_with("turn"):
+					turn["urls"] = v
+			["coop", "turn identifiant"]:
+				turn["username"] = v
+			["coop", "turn mot de passe"]:
+				turn["credential"] = v
 
 static func set_from_args() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--net="):
 			url = a.trim_prefix("--net=")
+	if OS.has_feature("web"):
+		var q = JavaScriptBridge.eval("new URLSearchParams(location.search).get('net') || ''")
+		if q is String and q != "":
+			url = q.trim_suffix("/")
 
 static func enabled() -> bool:
 	return url != ""
+
+## What WebRTC is told to use to find the other phone (and to relay, if a TURN server is set).
+static func ice_servers() -> Array:
+	var out: Array = []
+	if not stun.is_empty():
+		out.append({"urls": stun})
+	if turn.has("urls"):
+		out.append({"urls": [turn["urls"]], "username": turn.get("username", ""), "credential": turn.get("credential", "")})
+	return out
 
 ## One request: POST /api/<route> with `body`; the answer's JSON, or {"error": ...}.
 func ask(route: String, body: Dictionary) -> Dictionary:
@@ -45,7 +88,7 @@ func identity(save: Dictionary, name: String = "") -> Dictionary:
 	var r = await ask("player", {"name": name if name != "" else "Pépito"})
 	if r.has("error"):
 		return {}
-	save["online"] = {"id": r["id"], "secret": r["secret"], "code": r["code"], "name": name}
+	save["online"] = {"id": r["id"], "secret": r["secret"], "code": r["code"], "name": name if name != "" else "Pépito"}
 	SaveData.store(save)
 	return save["online"]
 
@@ -57,36 +100,41 @@ func _with_me(save: Dictionary, body: Dictionary) -> Dictionary:
 	body["secret"] = me["secret"]
 	return body
 
+func _call(save: Dictionary, route: String, body: Dictionary) -> Dictionary:
+	var b = await _with_me(save, body)
+	return {"error": "off"} if b.is_empty() else await ask(route, b)
+
+## The pseudonym shown to friends (16 characters at most, the server cleans it).
+func rename(save: Dictionary, name: String) -> Dictionary:
+	var r = await _call(save, "player/name", {"name": name})
+	if r.has("name"):
+		save["online"]["name"] = r["name"]
+		SaveData.store(save)
+	return r
+
 ## A run's distance, for the friends' board (the best of all time and of the week are worked out there).
 func send_score(save: Dictionary, mode: String, dist: int) -> Dictionary:
-	var body = await _with_me(save, {"mode": mode, "dist": dist})
-	return {"error": "off"} if body.is_empty() else await ask("score", body)
+	return await _call(save, "score", {"mode": mode, "dist": dist})
 
 func add_friend(save: Dictionary, code: String) -> Dictionary:
-	var body = await _with_me(save, {"code": code})
-	return {"error": "off"} if body.is_empty() else await ask("friends/add", body)
+	return await _call(save, "friends/add", {"code": code})
 
 func friends(save: Dictionary) -> Dictionary:
-	var body = await _with_me(save, {})
-	return {"error": "off"} if body.is_empty() else await ask("friends", body)
+	return await _call(save, "friends", {})
 
-# ---------- the coop's meeting (the WebRTC connection itself comes with the coop) ----------
+# ---------- the coop's meeting (the connection itself: coop.gd) ----------
 
 ## The host opens a room with the run's seed: four letters to give the other player.
 func open_room(save: Dictionary, seed_: int) -> Dictionary:
-	var body = await _with_me(save, {"seed": seed_})
-	return {"error": "off"} if body.is_empty() else await ask("room", body)
+	return await _call(save, "room", {"seed": seed_})
 
 ## The guest joins with the four letters and gets the seed: both phones will run the same road.
 func join_room(save: Dictionary, room: String) -> Dictionary:
-	var body = await _with_me(save, {"room": room})
-	return {"error": "off"} if body.is_empty() else await ask("room/join", body)
+	return await _call(save, "room/join", {"room": room})
 
 ## The two halves of the WebRTC handshake (offer, answer, ICE candidates) pass through the room.
 func send_signal(save: Dictionary, room: String, data: String) -> Dictionary:
-	var body = await _with_me(save, {"room": room, "data": data})
-	return {"error": "off"} if body.is_empty() else await ask("signal", body)
+	return await _call(save, "signal", {"room": room, "data": data})
 
 func read_signals(save: Dictionary, room: String, since: int) -> Dictionary:
-	var body = await _with_me(save, {"room": room, "since": since})
-	return {"error": "off"} if body.is_empty() else await ask("signals", body)
+	return await _call(save, "signals", {"room": room, "since": since})

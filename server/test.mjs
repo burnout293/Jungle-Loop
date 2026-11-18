@@ -18,6 +18,10 @@ const b = await call('player', { name: 'Buly' });
 assert.notEqual(a.code, b.code);
 ok('two players, two codes');
 
+assert.equal((await call('player/name', { id: b.id, secret: b.secret, name: 'Buly!!' })).name, 'Buly');
+assert.equal((await call('player/name', { id: b.id, secret: 'nope', name: 'X' })).status, 403);
+ok('a player changes their pseudonym (cleaned), only with their secret');
+
 assert.equal((await call('score', { id: a.id, secret: 'wrong', mode: 'story', dist: 10 })).status, 403);
 ok('a wrong secret is refused');
 
@@ -59,6 +63,10 @@ const later = await call('signals', { id: b.id, secret: b.secret, room: room.roo
 assert.equal(later.items.length, 0);
 assert.equal((await call('signal', { id: c.id, secret: c.secret, room: room.room, data: 'x' })).error, 'unknown');
 ok('the handshake: each side reads only the other\'s messages, from where it left off; strangers are kept out');
+
+const pre = await worker.fetch(new Request('http://x/api/score', { method: 'OPTIONS' }), env);
+assert.equal(pre.status, 204); assert.equal(pre.headers.get('access-control-allow-origin'), '*'); assert.equal(await pre.text(), '');
+ok('a browser asking first (CORS) gets an empty 204');
 
 assert.equal(weekOf(Date.UTC(2026, 10, 18, 15)), '2026-11-16');
 assert.equal(weekOf(Date.UTC(2026, 10, 22, 23)), '2026-11-16');

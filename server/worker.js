@@ -7,6 +7,7 @@
 // creation (only its hash is kept). Nothing here is needed to play: the game works without it.
 //
 //   player        {name}                                  -> {id, code, secret}
+//   player/name   {id, secret, name}                       -> {name}
 //   score         {id, secret, mode, dist}                 -> {best, week}
 //   friends/add   {id, secret, code}                       -> {code, name}
 //   friends       {id, secret}                             -> {me, friends: [{code, name, best, week, endless, endless_week}]}
@@ -65,6 +66,12 @@ const routes = {
       return { id, code, secret };
     }
     return { error: 'busy' };
+  },
+
+  async 'player/name'(db, body, now, me) {
+    const name = cleanName(body.name);
+    await db.prepare('UPDATE players SET name = ? WHERE id = ?').bind(name, me.id).run();
+    return { name };
   },
 
   async 'score'(db, body, now, me) {
@@ -153,7 +160,9 @@ const routes = {
 export default {
   async fetch(request, env) {
     const origin = env.ORIGIN || '*';
-    if (request.method === 'OPTIONS') return json({}, 204, origin);
+    if (request.method === 'OPTIONS') {          // a browser asking first (CORS): a 204 has no body
+      return new Response(null, { status: 204, headers: { 'access-control-allow-origin': origin, 'access-control-allow-headers': 'content-type', 'access-control-allow-methods': 'POST', 'access-control-max-age': '86400' } });
+    }
     const url = new URL(request.url);
     const route = url.pathname.replace(/^\/api\//, '');
     if (request.method !== 'POST' || !routes[route]) return json({ error: 'not found' }, 404, origin);

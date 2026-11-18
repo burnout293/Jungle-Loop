@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.34.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.35.0** (18/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -53,7 +53,9 @@ Dans un navigateur, sur ce PC seulement (`localhost`), les mêmes options passen
 | `scripts/save.gd` | sauvegarde, boutique, codes d'export (compatibles avec la version web) | `js/save.js` |
 | `scripts/progress.gd` | niveau et défis, lecture de `reglages/progression.txt` | `js/progress.js` |
 | `scripts/tune.gd` | lecture de `reglages/equilibrage.txt` : chaque ligne y règle un `static var` de `game.gd`, en mètres, secondes, m/s et % | — |
-| `reglages/` | **à régler soi-même**, lus à chaque lancement : `equilibrage.txt` (vitesses, sauts, Vol, objets, montures, araignées, volants, nuées, Vorace), `progression.txt` (points par mètre et par niveau, pièces d'un niveau, niveau requis et prix de chaque amélioration, défis), `patterns.txt` (dessins de pièces) | — |
+| `scripts/net.gd` | le serveur (amis, scores, salons) : rien n'est envoyé tant que l'adresse est vide | — |
+| `scripts/coop.gd` | jouer à deux : le salon, la connexion WebRTC, les messages de la course | — |
+| `reglages/` | **à régler soi-même**, lus à chaque lancement : `reseau.txt` (l'adresse du serveur, STUN / TURN), `equilibrage.txt` (vitesses, sauts, Vol, objets, montures, araignées, volants, nuées, Vorace), `progression.txt` (points par mètre et par niveau, pièces d'un niveau, niveau requis et prix de chaque amélioration, défis), `patterns.txt` (dessins de pièces) | — |
 | `scripts/main.gd` | écrans, HUD, commandes, boucle, qualité d'image | `js/main.js`, `index.html`, `style.css` |
 | `scripts/demo.gd` | aperçus animés de la boutique : une vraie petite course scriptée | `js/demo.js` |
 | `assets/` | images, `meta.json`, les deux musiques utilisées | `assets/` |
@@ -101,6 +103,32 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.35.0
+
+- Boutique : les fiches ne disent plus que la description (plus d'explication en dessous) ; avec deux
+  boutons, celui du niveau suivant raccourcit son texte (`_fit_actions`) ; les anciens boutons sont retirés
+  tout de suite (sinon, libérés plus tard, ils élargissaient la fiche pour de bon : le bouton Équiper sortait
+  de l'écran) et la fiche reprend sa taille (`_card_size`).
+- Multijoueur, prêt sauf le serveur en ligne :
+  - `reglages/reseau.txt` : l'adresse du serveur (vide : rien n'est envoyé, pas de bouton Amis), les STUN,
+    un TURN éventuel ; `?net=` dans l'adresse ou `--net=` pour un autre serveur (les essais) ;
+  - écran **Amis** (bouton à côté de l'engrenage, icône `ico-friends`) : code ami, pseudo (route serveur
+    `player/name`), ajout d'un ami, classement de la semaine ; onglet **Jouer à deux** : créer un salon (4
+    lettres) ou le rejoindre, puis « Partir ! » chez l'hôte ;
+  - `coop.gd` : poignée de main WebRTC par le salon (offre, réponse, candidats ICE), deux canaux (`ctl`
+    fiable, `pos` sans renvoi), ping ; l'hôte envoie graine, décor de départ et niveau de route (le moins
+    équipé des deux), les deux partent ensemble (délai moins la moitié du ping) ;
+  - la course à deux (`run.coop`) : même route, ni monture, ni sablier, ni Esquive, ni Sablier (ils
+    changeraient l'allure d'un seul) ; chacun envoie où il est 15 fois par seconde ; le partenaire est
+    Pépito aux couleurs tournées (`MATE_SHADER`), l'invité court 1,75 m derrière l'hôte (`run.home`) ;
+  - bulle : le dernier cœur perdu met dans une bulle qui suit l'autre au-dessus de lui ; il saute dedans pour
+    le ramener (1 s d'invincibilité, un cœur) ; quand les deux flottent, la course s'arrête ; pas de pause ;
+  - essayé de bout en bout entre deux navigateurs sur ce PC (serveur local, banc `coop=host|join`) : salon,
+    connexion, départ ensemble (écart d'environ 3 m), bulles, sauvetages dans les deux sens, fin des deux côtés.
+- Serveur : réponse vide aux questions préalables des navigateurs (CORS : un 204 avec un corps faisait
+  planter le serveur, en local comme sur Cloudflare) ; `deploy.ps1` le met en ligne en une commande et écrit
+  son adresse dans `reglages/reseau.txt`.
 
 ## 0.34.0
 

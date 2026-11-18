@@ -224,7 +224,10 @@ func _recipes() -> Dictionary:
 		"dash": [T(200, 0.35, "sawtooth", 0.18, 0, 1200)],
 		"throw": [T(500, 0.12, "triangle", 0.12, 0, 900), N(0.3, 0.12, 4200, 0.05)],              # a stick thrown, its fuse hissing
 		"tnt": [T(120, 0.8, "sawtooth", 0.42, 0, 26), N(0.7, 0.6, 700), N(0.4, 0.35, 2600, 0.02)],   # the blast
-		"dive": [T(900, 0.22, "sawtooth", 0.1, 0, 220)],                                          # the boots plunging
+		"dive": [T(900, 0.22, "sawtooth", 0.1, 0, 220)],
+		"bubble": [T(700, 0.5, "sine", 0.16, 0, 300), N(0.25, 0.1, 5000, 0.05)],                    # coop: into a bubble
+		"rescue": arp([0, 7, 12, 19], 0.18, "triangle", 0.2, 0.06),                                 # the partner brought back
+		"back": [T(500, 0.3, "triangle", 0.16, 0, 1000)],                                          # the boots plunging
 		"quake": [T(70, 0.5, "sine", 0.5, 0, 30), N(0.45, 0.5, 380), T(140, 0.2, "square", 0.15, 0, 60)],   # metal on stone
 		"slow": [T(900, 0.6, "sine", 0.2, 0, 150)],
 		"hit": [T(240, 0.5, "sawtooth", 0.3, 0, 40)],

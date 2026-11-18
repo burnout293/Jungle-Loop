@@ -1,0 +1,18 @@
+# Jungle Loop — le réseau : l'adresse du serveur des amis et de la coop
+#
+# Tant que l'adresse est vide, le jeu n'envoie rien et le bouton « Amis » n'apparaît pas.
+# Une fois le serveur publié (server/README.md, ou server/deploy.ps1 qui remplit ce fichier tout seul),
+# mets ici l'adresse qu'il t'a donnée, puis réexporte le jeu.
+# Pour essayer sur ce PC : `node server/dev.mjs`, puis le jeu avec ?net=http://127.0.0.1:8787 dans l'adresse
+# (navigateur) ou -- --net=http://127.0.0.1:8787 (Godot).
+
+[serveur]
+adresse |                                   # par exemple https://jungle-loop.ton-compte.workers.dev
+
+[coop]
+# Les serveurs STUN aident deux téléphones à se trouver sur Internet (gratuits, publics), séparés par /.
+stun    | stun:stun.l.google.com:19302 / stun:stun.cloudflare.com:3478
+# Un serveur TURN relaie la partie quand la connexion directe échoue (certaines 4G) : vide pour l'instant.
+turn    |
+turn identifiant |
+turn mot de passe |

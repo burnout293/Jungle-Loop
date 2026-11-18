@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.34.0"
+const VERSION := "0.35.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -88,6 +88,12 @@ var endless_biome := 0                 # where the next Run illimitée (Jouer) s
 var held: Button = null                # a home screen button held down (a long press shows its panel)
 var held_t := 0.0
 var tip_held := false                  # its panel came from a long press: that press launches nothing
+var coop: Coop                         # two phones in one run (coop.gd)
+var coop_start := {}                   # a coop run about to start: {seed, biome, tier, at}
+var coop_send_t := 0.0
+var coop_last := false                 # the last run was for two: « Rejouer » goes back to the room
+var friends_tab := "friends"
+var board: Array = []                  # the friends' board, as the server sent it
 
 # ---------- start ----------
 
@@ -95,9 +101,16 @@ func _ready() -> void:
 	Progress.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))   # prices, levels, objectives
 	Tune.load_file()                              # reglages/equilibrage.txt: the game's numbers (before Debug takes its origin)
 	save = SaveData.load_save()
+	Net.load_config(FileAccess.get_file_as_string("res://reglages/reseau.txt"))   # the server's address, empty for now
 	Net.set_from_args()
 	net = Net.new()
 	add_child(net)
+	coop = Coop.new()
+	coop.net = net
+	coop.save = save
+	add_child(coop)
+	coop.changed.connect(func() -> void: refresh_friends())
+	coop.message.connect(_on_coop)
 	_adopt_web_save()
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
 	Debug.setup()
@@ -699,6 +712,7 @@ func _build_screens() -> void:
 	_build_settings()
 	_build_score("over")
 	_build_score("pause")
+	_build_friends()
 	var turn = _label("Tourne l'écran pour jouer en grand ↻", ts("m"), INK)   # a phone held upright
 	turn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_place(turn, 0, 74, 569, 20)
@@ -887,6 +901,21 @@ func _build_menu() -> void:
 		Audio.sfx("click")
 		go("settings")
 	gear.pressed.connect(on_gear)
+	var pals = Button.new()                          # Amis: only once a server is set (reglages/reseau.txt)
+	pals.focus_mode = Control.FOCUS_NONE
+	_kit_square(pals, "blank", 36)
+	pals.icon = icon("ico-friends")
+	pals.expand_icon = true
+	pals.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pals.add_theme_constant_override("icon_max_width", roundi(a(26)))
+	_place(pals, M + 42, M, 36, 36)
+	var on_pals = func() -> void:
+		Audio.sfx("click")
+		go("friends")
+	pals.pressed.connect(on_pals)
+	pals.visible = Net.enabled()
+	w["menu-friends"] = pals
+	s.add_child(pals)
 	s.add_child(gear)
 	# the stone plaque of the title, its letters hopping one after the other
 	var plaque = TextureRect.new()
@@ -1160,6 +1189,7 @@ func _build_shop() -> void:
 	prev.add_theme_stylebox_override("panel", _kit_panel("shop-preview-wide", 3))   # 253 x 282: off the corner leaves
 	prev.mouse_filter = Control.MOUSE_FILTER_STOP
 	_place(prev, 308, 30, 253, 282)
+	w["card-panel"] = prev
 	var pc = _vbox(5)
 	var head = _hbox(6)
 	w["card-name"] = _label("", ts("m"), GOLD, 0)
@@ -1393,7 +1423,7 @@ func _build_score(name: String) -> void:
 	rc.add_child(w[name + "-quests"])
 	right.add_child(_fixed(rc))
 	if name == "over":
-		_actions(s, [_button("Menu", "", func() -> void: go("menu")), _button("Rejouer", "big", func() -> void: go("play"))])
+		_actions(s, [_button("Menu", "", func() -> void: go("menu")), _button("Rejouer", "big", _replay)])
 	else:
 		_actions(s, [_button("Abandonner", "stop", func() -> void: go("menu")), _button("Réglages", "", func() -> void: go("settings")), _button("Reprendre", "go", resume)], 150)
 
@@ -1539,7 +1569,7 @@ func _slot_info(id: String) -> void:
 	var col = _vbox(2)
 	var name_l = _label(u["name"] + ("  " + "●".repeat(lvl) + "○".repeat(u["costs"].size() - lvl) if u["costs"].size() > 1 else ""), ts("m"), GOLD, 0)
 	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var d = _label(u["desc"] + ("\n" + u["how"] if u.has("how") else ""), ts("s"), INK, 0)
+	var d = _label(u["desc"], ts("s"), INK, 0)
 	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	d.custom_minimum_size.x = a(280)
@@ -1791,8 +1821,10 @@ func refresh_shop(just_bought: String = "") -> void:
 	var list: VBoxContainer = w["shop-list"]
 	for ch in list.get_children():
 		ch.queue_free()
-	for ch in w["card-actions"].get_children():
+	for ch in w["card-actions"].get_children():     # out at once: freed later, they would still widen the card
+		w["card-actions"].remove_child(ch)
 		ch.queue_free()
+	_card_size.call_deferred()
 	w["card-pips"].text = ""
 	if tab == "mount":                               # the animals, each on or off; under the one picked, its own two upgrades
 		var open_k: String = picked_mount if picked_mount in Game.MOUNT_KINDS else str(SaveData.upgrade(picked_mount).get("mount", "gorilla"))
@@ -1855,16 +1887,14 @@ func refresh_shop(just_bought: String = "") -> void:
 		status = "Possédé. Les 3 emplacements sont pris." if full else "Possédé."
 	else:
 		status = "Bouton en jeu." if u["kind"] == "actif" else "Toujours actif une fois équipé."
-	if u.has("how") and status in ["Bouton en jeu.", "Toujours actif une fois équipé."]:
-		status = ""                                   # what it does says it already: room for its text
-	_card(u["name"], status, u["desc"] + ("\n" + u["how"] if u.has("how") else ""))
+	_card(u["name"], status, u["desc"])
 	if u["costs"].size() > 1:
 		w["card-pips"].text = _pips(u, st["lvl"])
 	_show_demo(u["id"], st["lvl"])
 	var acts: HBoxContainer = w["card-actions"]
 	if st["lvl"] > 0 and st["cost"] >= 0:
 		var b = _coin_button("Niv. %d · %d" % [st["lvl"] + 1, st["cost"]], func() -> void: _buy(u))
-		b.custom_minimum_size.x = a(132)
+		b.custom_minimum_size.x = a(132)               # (alone; next to another button, see _fit_actions)
 		b.disabled = save["coins"] < st["cost"]
 		acts.add_child(b)
 	if st["lvl"] == 0:
@@ -1883,6 +1913,29 @@ func refresh_shop(just_bought: String = "") -> void:
 		var b = _button("Retirer" if st["on"] else "Équiper", "small plain" if st["on"] else "small on", on_equip)
 		b.disabled = not st["on"] and full
 		acts.add_child(b)
+	_fit_actions(acts, st, u)
+
+## The card back to its picture's size, once its new content is in (it never stretches).
+func _card_size() -> void:
+	if w.has("card-panel") and is_instance_valid(w["card-panel"]):
+		w["card-panel"].size = Vector2(a(253), a(282))
+
+## The card's buttons must fit inside it (210 art pixels): with two of them, the next level's button says
+## less and less (« Niv. 2 · 6000 », « Niv.2 6000 », « 6000 »), and « Désactiver » becomes « Couper ».
+func _fit_actions(acts: HBoxContainer, st: Dictionary, u: Dictionary) -> void:
+	var kids = acts.get_children()
+	if kids.size() < 2:
+		return
+	var up: Button = kids[0]
+	var other: Button = kids[1]
+	var room = a(210) - a(6)
+	up.custom_minimum_size.x = 0
+	for txt in ["Niv. %d · %d" % [st["lvl"] + 1, st["cost"]], "Niv.%d %d" % [st["lvl"] + 1, st["cost"]], str(st["cost"])]:
+		up.text = txt
+		if up.get_combined_minimum_size().x + other.get_combined_minimum_size().x <= room:
+			return
+	if other.text == "Désactiver":
+		other.text = "Couper"
 
 ## A row of the shop's list for an upgrade: its picture, its name, its price or its state.
 func _up_row(u: Dictionary, sel_id: String, just_bought: String) -> Button:
@@ -2071,15 +2124,31 @@ func go(name: String) -> void:
 	if name == "settings" and state == "pause":
 		in_run = true
 	if name == "play":
-		if not save["seenIntro"]:
+		if not save["seenIntro"] and coop_start.is_empty():
 			save["seenIntro"] = true
 			SaveData.store(save)
 			state = "intro"
 			show_screen("intro")
 			Audio.music("")
 			return
-		run = Game.new_run(SaveData.loadout(save), save["mode"])   # only the three equipped upgrades come along
-		run.mounts = Game.MOUNT_KINDS.filter(func(k): return not k in save["mountsOff"])   # Montures: on / off
+		var co = coop_start
+		coop_start = {}
+		coop_last = not co.is_empty()
+		var up = SaveData.loadout(save)                # only the three equipped upgrades come along
+		if coop_last:                                  # for two: the same road (seed, scenery, tier), and nothing
+			up.erase("dash")                           # that changes one player's pace: no Esquive, Sablier nor mount
+			up.erase("slow")
+			run = Game.new_run(up, "endless", int(co["seed"]))
+			run.coop = true
+			run.road_tier = int(co["tier"])
+			if coop.role == "guest":
+				run.home = Game.PX - 70                 # just behind the host, on both screens: both are seen
+			run.mounts = []
+			run.next_mount = INF
+			endless_biome = int(co["biome"])
+		else:
+			run = Game.new_run(up, save["mode"])
+			run.mounts = Game.MOUNT_KINDS.filter(func(k): return not k in save["mountsOff"])   # Montures: on / off
 		run.view_w = render.view_w * Game.PIXEL
 		if run.mode == "endless":                   # Jouer: in the scenery the home screen showed
 			run.biome = endless_biome
@@ -2111,6 +2180,9 @@ func go(name: String) -> void:
 			show_levels.call_deferred()
 	if name == "shop":
 		refresh_shop()
+	if name == "friends":
+		refresh_friends()
+		_load_friends()
 	if name == "settings":
 		w["save-code"].text = ""
 		_msg("")
@@ -2163,6 +2235,8 @@ func _show_photo() -> void:
 	shade.gui_input.connect(close)
 
 func game_over() -> void:
+	if run.coop:
+		coop.send({"t": "end"})
 	var record = not run.debug and floori(run.dist) > best_of(run.mode)
 	bank()
 	over_info = {"title": Game.pick(DEATHS), "record": record, "dist": floori(run.dist), "gold": run.gold, "debug": run.debug, "mode": run.mode}
@@ -2208,7 +2282,262 @@ func over_view(count_up: bool) -> void:
 	w["over-best"].label_settings.font_size = ts("m") if record else ts("s")
 	w["over-best"].set_meta("hop", record)
 
+## « Rejouer »: after a run for two, back to the room (the host starts the next one); alone, again.
+func _replay() -> void:
+	if coop_last and coop.state == "ready":
+		friends_tab = "coop"
+		go("friends")
+	else:
+		go("play")
+
+# ---------- Amis: the friend code, the week's board, and playing for two ----------
+
+func _field(hint_: String, length: int) -> LineEdit:
+	var f = LineEdit.new()
+	f.placeholder_text = hint_
+	f.max_length = length
+	f.custom_minimum_size = Vector2(a(140), a(24))
+	f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	f.add_theme_font_override("font", bold)
+	f.add_theme_font_size_override("font_size", ts("m"))
+	f.add_theme_color_override("font_color", INK)
+	f.add_theme_color_override("font_placeholder_color", Color(1, 1, 1, 0.35))
+	var sb = _flat(Color("#141a30"), LINE)
+	f.add_theme_stylebox_override("normal", sb)
+	f.add_theme_stylebox_override("focus", _flat(Color("#141a30"), GOLD))
+	return f
+
+func _wrap(text: String, colour: Color) -> Label:
+	var l = _label(text, ts("s"), colour, 0)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size.x = a(224)
+	return l
+
+func _build_friends() -> void:
+	var s = _screen("friends", true)
+	var back = _button("Retour", "", func() -> void: go("menu"))
+	_place(back, M, 6, 152, 38)
+	s.add_child(back)
+	_head(s, "Amis")
+	var left = _pane(s, false, 262)
+	var col = _vbox(6)
+	var tabs = _hbox(4)
+	for spec in [["friends", "Amis"], ["coop", "Jouer à deux"]]:
+		var key: String = spec[0]
+		var on_tab = func() -> void:
+			friends_tab = key
+			refresh_friends()
+		var b = _button(spec[1], "tab", on_tab)
+		b.custom_minimum_size = Vector2(a(110), a(22))
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tabs.add_child(b)
+		w["frtab-" + key] = b
+	col.add_child(tabs)
+	var fr = _vbox(5)                                   # the friend code, the pseudonym, adding a friend
+	fr.add_child(_label("TON CODE AMI", ts("s"), RELIC, 0))
+	w["fr-code"] = _label("…", ts("xl"), GOLD)
+	fr.add_child(w["fr-code"])
+	fr.add_child(_label("TON PSEUDO", ts("s"), RELIC, 0))
+	var name_row = _hbox(4)
+	w["fr-name"] = _field("Pépito", 16)
+	name_row.add_child(w["fr-name"])
+	name_row.add_child(_button("OK", "small", _rename))
+	fr.add_child(name_row)
+	fr.add_child(_label("AJOUTER UN AMI", ts("s"), RELIC, 0))
+	var add_row = _hbox(4)
+	w["fr-add"] = _field("PEPI-XXXX", 9)
+	add_row.add_child(w["fr-add"])
+	add_row.add_child(_button("Ajouter", "small", _add_friend))
+	fr.add_child(add_row)
+	w["fr-msg"] = _wrap("", DIM)
+	fr.add_child(w["fr-msg"])
+	w["panel-friends"] = fr
+	col.add_child(fr)
+	var co = _vbox(6)                                   # playing for two: a room, its four letters
+	w["co-room"] = _label("", ts("huge"), GOLD)
+	w["co-room"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	co.add_child(w["co-room"])
+	w["co-text"] = _wrap("", INK)
+	co.add_child(w["co-text"])
+	w["co-host"] = _button("Créer un salon", "small", _coop_host)
+	w["co-host"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	co.add_child(w["co-host"])
+	var join_row = _hbox(4)
+	w["co-code"] = _field("ABCD", 4)
+	join_row.add_child(w["co-code"])
+	join_row.add_child(_button("Rejoindre", "small", _coop_join))
+	w["co-join-row"] = join_row
+	co.add_child(join_row)
+	var go_row = _hbox(6)
+	w["co-go"] = _button("Partir !", "go", _coop_go)
+	go_row.add_child(w["co-go"])
+	w["co-leave"] = _button("Quitter", "small plain", func() -> void: coop.leave())
+	w["co-leave"].size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	go_row.add_child(w["co-leave"])
+	co.add_child(go_row)
+	w["panel-coop"] = co
+	col.add_child(co)
+	left.add_child(_fixed(col))
+	var right = _pane(s, true, 262)                       # the week's board
+	var rc = _vbox(4)
+	rc.add_child(_label("CETTE SEMAINE", ts("s"), RELIC, 0))
+	w["fr-board"] = _vbox(3)
+	rc.add_child(w["fr-board"])
+	var again = _button("Actualiser", "small", _load_friends)
+	again.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	rc.add_child(again)
+	right.add_child(_fixed(rc))
+
+func refresh_friends() -> void:
+	if not w.has("fr-code") or not is_instance_valid(w["fr-code"]):
+		return
+	if w.has("menu-friends") and is_instance_valid(w["menu-friends"]):
+		w["menu-friends"].visible = Net.enabled()
+	for key in ["friends", "coop"]:
+		_style_button(w["frtab-" + key], "tab sel" if key == friends_tab else "tab")
+		w["frtab-" + key].custom_minimum_size = Vector2(a(110), a(22))
+	w["panel-friends"].visible = friends_tab == "friends"
+	w["panel-coop"].visible = friends_tab == "coop"
+	var on: Dictionary = save.get("online", {})
+	w["fr-code"].text = on.get("code", "…")
+	if w["fr-name"].text == "" and on.get("name", "") != "":
+		w["fr-name"].text = on["name"]
+	coop.save = save
+	var st = coop.state
+	var can = Coop.supported()
+	var mate_name: String = coop.mate.get("name", "") if coop.mate.get("name", "") != "" else "ton ami"
+	var idle = st in ["idle", "failed"]
+	w["co-host"].visible = can and idle
+	w["co-join-row"].visible = can and idle
+	w["co-room"].text = coop.room if coop.role == "host" and st in ["waiting", "linking", "ready"] else ""
+	w["co-room"].visible = w["co-room"].text != ""
+	w["co-go"].visible = st == "ready" and coop.role == "host"
+	w["co-leave"].visible = not idle
+	var txt = ""
+	if not can:
+		txt = "Jouer à deux marche dans le navigateur, sur la page du jeu."
+	else:
+		match st:
+			"idle": txt = "Crée un salon et donne ses 4 lettres à ton ami, ou rejoins le sien. Vous courez la même route ; si l'un tombe, il flotte dans une bulle : l'autre saute dedans pour le ramener."
+			"opening": txt = "Ouverture du salon…"
+			"waiting": txt = "Donne ces 4 lettres à ton ami. En attente…"
+			"joining": txt = "Recherche du salon…"
+			"linking": txt = "Connexion avec %s…" % mate_name
+			"ready": txt = ("Connecté avec %s ! Lance la course quand vous êtes prêts." % mate_name) if coop.role == "host" else ("Connecté avec %s ! La course part quand il la lance." % mate_name)
+			"failed": txt = coop.info
+	w["co-text"].text = txt
+	var holder: VBoxContainer = w["fr-board"]
+	for ch in holder.get_children():
+		holder.remove_child(ch)
+		ch.queue_free()
+	if board.size() <= 1:
+		holder.add_child(_wrap("Ajoute un ami avec son code : vos meilleures distances de la semaine s'afficheront ici." if Net.enabled() else "Le serveur n'est pas encore en ligne.", DIM))
+	for e in board:
+		var row = _box()
+		var h = _hbox(6)
+		var me = e.get("me", false)
+		var nm = _label(str(e.get("name", "?")), ts("s"), GOLD if me else INK, 0)
+		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nm.clip_text = true
+		h.add_child(nm)
+		var dist = func(v) -> String: return ("%d m" % int(v)) if int(v) > 0 else "—"
+		h.add_child(_label("Jouer " + dist.call(e.get("endless_week", 0)), ts("s"), RELIC, 0))
+		h.add_child(_label("Hist. " + dist.call(e.get("week", 0)), ts("s"), DIM, 0))
+		row.add_child(h)
+		holder.add_child(row)
+
+func _load_friends() -> void:
+	if not Net.enabled():
+		refresh_friends()
+		return
+	w["fr-msg"].text = ""
+	var r = await net.friends(save)
+	if r.has("error"):
+		w["fr-msg"].text = "Pas de réponse du serveur."
+		refresh_friends()
+		return
+	board = [r["me"]] + r.get("friends", [])
+	refresh_friends()
+
+func _rename() -> void:
+	var name = w["fr-name"].text.strip_edges()
+	if name == "":
+		return
+	var r = await net.rename(save, name)
+	w["fr-msg"].text = "Pseudo : %s." % r["name"] if r.has("name") else "Pas de réponse du serveur."
+	_load_friends()
+
+func _add_friend() -> void:
+	var code = w["fr-add"].text.strip_edges().to_upper()
+	if not code.begins_with("PEPI-"):
+		code = "PEPI-" + code
+	var r = await net.add_friend(save, code)
+	if r.has("error"):
+		w["fr-msg"].text = {"unknown": "Aucun joueur n'a ce code.", "self": "C'est ton propre code !"}.get(r["error"], "Pas de réponse du serveur.")
+		return
+	w["fr-msg"].text = "%s est ton ami." % r["name"]
+	w["fr-add"].text = ""
+	_load_friends()
+
+func _coop_host() -> void:
+	coop.save = save
+	coop.host(randi() % 2147483647)
+
+func _coop_join() -> void:
+	var code = w["co-code"].text.strip_edges().to_upper()
+	if code.length() != 4:
+		w["co-text"].text = "Le code d'un salon a 4 lettres."
+		return
+	coop.save = save
+	coop.join(code)
+
+## The host starts the run for two: the same seed, scenery and road for both, a moment from now.
+func _coop_go() -> void:
+	if coop.state != "ready" or coop.role != "host":
+		return
+	var msg = {"t": "start", "seed": coop.seed, "biome": endless_biome, "tier": mini(Coop.tier(save), int(coop.mate.get("tier", 0))), "in": 0.8}
+	coop.send(msg)
+	_coop_begin(msg, 0.8)
+
+func _coop_begin(m: Dictionary, delay: float) -> void:
+	coop_start = {"seed": int(m["seed"]), "biome": int(m["biome"]), "tier": int(m["tier"]), "at": time + delay}
+	save["mode"] = "endless"
+	print("coop: start in %.2f s, seed %d, tier %d" % [delay, int(m["seed"]), int(m["tier"])])
+
+## What the partner says (coop.gd): where he is, his bubble, the run's start and end.
+func _on_coop(m: Dictionary) -> void:
+	var t = str(m.get("t", ""))
+	if t == "start" and coop.role == "guest":
+		_coop_begin(m, maxf(0.1, float(m.get("in", 0.8)) - coop.rtt / 2))         # (he started RTT/2 later)
+		return
+	if run == null or not run.coop:
+		return
+	match t:
+		"s":
+			var was = run.mate != null and run.mate.get("b", false)
+			run.mate = m
+			if m.get("b", false) and not was:
+				run.mate_bubble = Vector2(float(m["x"]), float(m["y"]) - 40)
+		"bubble":
+			if run.mate == null:
+				run.mate = {"x": run.cam + run.sx, "y": Game.GROUND}
+			if not run.mate.get("b", false):
+				run.mate_bubble = Vector2(float(run.mate["x"]), float(run.mate["y"]) - 40)
+			run.mate["b"] = true
+			print("coop: partner in a bubble")
+		"rescue":
+			Game.back(run)
+			print("coop: rescued")
+		"back":
+			if run.mate != null:
+				run.mate["b"] = false
+		"end", "bye":
+			run.mate = null                              # his run is over: alone now
+			print("coop: partner ", t)
+
 func pause() -> void:
+	if run != null and run.coop:
+		return                                       # for two the run cannot wait
 	if state != "play" or run == null or run.dead:
 		return
 	touches.clear()
@@ -2485,7 +2814,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if jump_key:
 			if state == "play":
 				press()
-			elif state == "menu" or state == "over" or state == "intro":
+			elif state == "over":
+				_replay()
+			elif state == "menu" or state == "intro":
 				go("play")
 			elif state == "pause":
 				resume()
@@ -2561,7 +2892,15 @@ func _process(delta: float) -> void:
 					if not photo_taken:
 						photo_taken = true
 						_take_photo()
+				"bubble", "rescue", "back":               # coop: the partner is told
+					print("coop: ", ev)
+					coop.send({"t": ev})
 		run.events.clear()
+		if run.coop and coop.state == "ready" and not run.dead:   # where he is, for the partner's screen
+			coop_send_t -= dt
+			if coop_send_t <= 0:
+				coop_send_t = 1.0 / 15
+				coop.send({"t": "s", "x": run.cam + run.sx, "y": run.p.y, "vy": run.p.vy, "g": run.p.ground, "f": run.p.flying, "ph": run.p.phase, "b": run.bubble, "d": run.dist}, false)
 		progress(stats)
 		if hint_step == 1 and stats["jumps"] > 0:
 			hint(2)
@@ -2577,6 +2916,8 @@ func _process(delta: float) -> void:
 			dead_for += dt
 			if dead_for > 0.9:
 				game_over()
+	if not coop_start.is_empty() and time >= coop_start["at"] and state != "play":
+		go("play")                                   # the coop run: both phones start together
 	input.pressed = false
 	input.dash = false
 	input.slow = false
