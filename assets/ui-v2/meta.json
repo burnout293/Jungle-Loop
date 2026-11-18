@@ -1,62 +1,88 @@
 {
- "panel-lg": [
-  240,
-  143
- ],
- "panel-md": [
-  175,
-  107
- ],
- "btn-normal": [
-  98,
-  51
- ],
- "btn-hover": [
-  99,
-  51
- ],
- "btn-pressed": [
-  96,
-  46
- ],
- "btn-disabled": [
-  101,
-  50
- ],
- "sq-gem": [
-  53,
-  56
- ],
- "sq-gear": [
-  52,
-  57
- ],
- "sq-play": [
-  51,
-  56
- ],
- "sq-close": [
-  51,
-  56
- ],
- "sq-check": [
-  50,
-  54
- ],
- "bar": [
-  116,
-  27
- ],
- "round-up": [
-  45,
-  37
- ],
- "round-down": [
-  44,
-  36
- ],
- "sq-blank": [
-  51,
-  56
- ]
+ "buttons": {
+  "30": {
+   "cap": 27,
+   "width": 58
+  },
+  "38": {
+   "cap": 33,
+   "width": 70
+  },
+  "50": {
+   "cap": 43,
+   "width": 90
+  }
+ },
+ "squares": {
+  "36": [
+   "gem",
+   "gear",
+   "play",
+   "close",
+   "check",
+   "blank"
+  ],
+  "28": [
+   "gem",
+   "gear",
+   "play",
+   "close",
+   "check",
+   "blank"
+  ]
+ },
+ "bars": {
+  "12": {
+   "left": 15,
+   "right": 17,
+   "width": 36,
+   "trough_rows": [
+    4,
+    8
+   ]
+  },
+  "8": {
+   "left": 12,
+   "right": 13,
+   "width": 29,
+   "trough_rows": [
+    2,
+    6
+   ]
+  }
+ },
+ "panels": {
+  "pane-left": {
+   "width": 262,
+   "height": 204,
+   "from": "panel-lg"
+  },
+  "pane-right": {
+   "width": 265,
+   "height": 204,
+   "from": "panel-lg"
+  },
+  "shop-card": {
+   "width": 262,
+   "height": 82,
+   "from": "panel-md"
+  },
+  "shop-preview": {
+   "width": 227,
+   "height": 282,
+   "from": "panel-lg"
+  },
+  "intro-pane": {
+   "width": 361,
+   "top": 51,
+   "bottom": 55,
+   "from": "panel-lg"
+  },
+  "menu-info": {
+   "width": 300,
+   "top": 51,
+   "bottom": 55,
+   "from": "panel-lg"
+  }
+ }
 }
