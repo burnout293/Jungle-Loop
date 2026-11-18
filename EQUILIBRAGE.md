@@ -1,10 +1,15 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.33.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 18/11/2026, **version Godot 0.34.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
+
+**Tout se règle sans toucher au code**, dans le dossier `reglages/` du dépôt Godot : `equilibrage.txt`
+(les chiffres de ce document : vitesses, sauts, Vol, objets, montures, araignées, volants, nuées, Vorace),
+`progression.txt` (prix, niveaux requis, récompenses, défis) et `patterns.txt` (dessins de pièces). Le jeu
+les lit à chaque lancement : changer un nombre, puis réexporter.
 
 **Unités.** Le jeu compte en « unités » : 40 unités = 1 m, 2,25 unités = 1 pixel du dessin.
 L'écran fait 720 unités de haut (18 m), le sol est à 630. Les vitesses sont données en m/s.
@@ -14,7 +19,7 @@ L'écran fait 720 unités de haut (18 m), le sol est à 630. Les vitesses sont d
 | Mode | Ce qui change | Où |
 |---|---|---|
 | Histoire | avec les boss (aujourd'hui Vorace vers 2000 m, dans la forêt) ; les ruines viennent après sa défaite, puis un décor tous les 2000 m dès 4000 m | `newRun(…, 'story')` |
-| Run illimitée | aucun boss : un nouveau décor à 2000, 4000, 6000, 8000 m… | `newRun(…, 'endless')` |
+| Run illimitée (bouton « Jouer ») | aucun boss : un nouveau décor tous les 800 m ; la course part d'un décor tiré au hasard, déjà visible derrière l'écran d'accueil (le temple y est, immobile) | `newRun(…, 'endless')`, `endless_biome` |
 | Records | un par mode (Histoire : l'ancien record ; Run illimitée : le sien) | `save.best`, `save.bestEndless` |
 
 L'accueil a un bouton par mode ; « Rejouer » relance le dernier mode choisi.
@@ -24,15 +29,15 @@ L'accueil a un bouton par mode ; « Rejouer » relance le dernier mode choisi.
 | Valeur | Aujourd'hui | Où (js/game.js) |
 |---|---|---|
 | Vitesse au départ | 9 m/s (360 u/s) ; en Histoire, chaque décor a la sienne (ligne « Nouveau décor ») | `SPEED_BASE` |
-| Accélération | Run illimitée : +0,125 m/s chaque seconde ; Histoire : +0,25 m/s chaque seconde | `SPEED_GAIN`, `STORY_GAIN` |
+| Accélération | Run illimitée : +0,125 m/s chaque seconde ; Histoire : +0,18 m/s chaque seconde | `SPEED_GAIN`, `STORY_GAIN` |
 | Vitesse maximale | aucune : 16,5 m/s après 1 min, 24 m/s après 2 min, 39 m/s après 4 min (Run illimitée ; en Histoire elle repart à chaque décor de la vitesse de ce décor) | |
 | **Sprint** | départ à 11 m/s : **+57 %** (+4 m/s, gardés toute la course) | `SPEED.sprint` |
 | Sortie du temple | vitesse × 1,8 jusqu'à sa place à l'écran | `update` |
-| Ruée | vitesse × 1,7 pendant 0,55 s | `update` |
+| Esquive | +200 m/s pendant 0,2 s, soit 40 m d'un coup : casse tout ce qui se casse sur le chemin (créatures, décor, nuée), traverse le reste (l'acide de Vorace), ramasse les pièces traversées ; 0,3 s d'invincibilité ensuite | `DODGE_*`, `update` |
 | Vol à la sortie du temple | avec le Vol, Pépito décolle tout seul à l'explosion et vole à 3,75 m jusqu'au premier appui (4 s au plus) | `CRUISE` |
 | Sablier | le monde tourne à 45 % ; ses 2 dernières secondes sont annoncées (6 tics de plus en plus rapprochés, teinte qui clignote, bords de l'écran qui flashent, « 2 » puis « 1 » au-dessus de Pépito), puis le monde reprend sa vitesse en douceur sur 0,35 s | `SLOW_WARN`, `SLOW_TICKS`, `SLOW_EASE` |
-| Nouveau décor (Histoire) | la vitesse repart de celle du décor : forêt 9 m/s, ruines 10, donjon 11, cité 12 (Sprint en plus, frein en moins), puis +0,25 m/s par seconde. Exemple : les ruines, de 10 m/s à environ 29 m/s 1450 m plus loin | `ZONE_EXTRA`, `STORY_GAIN`, `zone_t` |
-| Changement de décor | Run illimitée : un décor tous les **800 m** ; Histoire : les ruines juste après la victoire sur Vorace (après la ligne de gemmes bleues), puis tant qu'il n'y a pas d'autre boss : le donjon à 4000 m, la cité à 6000 m, la forêt à 8000 m, et ainsi de suite tous les 2000 m ; avec le Gros sac à dos, 1 fois sur 2 le décor reste jusqu'à la marque suivante | `boss`, `ZONE` |
+| Nouveau décor (Histoire) | la vitesse repart de celle du décor : forêt 9 m/s, ruines 10, donjon 11, cité 12 (Sprint en plus), puis +0,18 m/s par seconde ; les sabliers ramassés ne comptent que pour le décor. Exemple : les ruines, de 10 m/s à environ 28,6 m/s au bout de leurs 2000 m (1 min 44) | `ZONE_SPEED`, `STORY_GAIN`, `zone_t` |
+| Changement de décor | Run illimitée : un décor tous les **800 m** ; Histoire : les ruines juste après la victoire sur Vorace (après la ligne de gemmes bleues), puis tant qu'il n'y a pas d'autre boss : le donjon à 4000 m, la cité à 6000 m, la forêt à 8000 m, et ainsi de suite tous les 2000 m. Avec la **Relique altérée**, le décor ne change plus : à chaque changement, une bande de 12 m du décor suivant passe (ses deux bords en mosaïque), puis le décor revient | `boss`, `ZONE`, `strip_*`, `RELIC_STRIP` |
 | Textes à l'écran | seulement pour le boss (« Vorace ! », « Ça tombe ! », « Écrasée ! », « Vorace est vaincue ! ») ; plus de nom de décor, de monture, de nuée ni de « Cours ! » | js/main.js |
 | Ordre des décors | toujours forêt → ruines → donjon → cité, puis on reboucle sur la forêt | `NEXT_BIOME` |
 
@@ -44,7 +49,8 @@ L'accueil a un bouton par mode ; « Rejouer » relance le dernier mode choisi.
 | Saut maintenu | 4,8 m (gravité réduite à 1500 en montée) | `update` |
 | Double saut | 2,6 m de plus (4,1 m maintenu) | élan `-700` |
 | Ressort | élan +10 % par niveau, soit hauteur +21 % puis +44 % | `spring` |
-| Vol | chaque appui : montée à 15 m/s tant qu'on tient (10,75 avant la 0.33) ; relâché : la montée s'arrête net, puis chute 1,4 fois plus rapide qu'un saut, jusqu'à toucher le sol | `FLAP`, `VOL_DROP`, `flew` |
+| Bottes de métal | il retombe 1,25 fois plus vite (la montée ne change pas : les sauts gardent leur hauteur) ; le bouton (ou S / ↓) le fait plonger à 37,5 m/s, ou secoue le sol sur place s'il y est : la secousse casse le décor et écrase les créatures au sol ou basses (jusqu'à 3,75 m) à 3 / 4,5 m autour de lui ; ce qu'il touche en plongeant est écrasé ; recharge 8 / 5 s | `BOOTS_*`, `quake` |
+| Vol | chaque appui : montée à **12 m/s** tant qu'on tient (niveau 2 : 13,5 ; niveau 3 : 15) ; relâché : la montée s'arrête net, puis chute **1,2** fois plus rapide qu'un saut, jusqu'à toucher le sol | `FLAP_LV`, `VOL_STOP`, `VOL_DROP`, `flew` |
 | Plafond | à 0,6 m du haut de l'écran | `CEIL` |
 | Appui juste avant d'atterrir | retenu 0,12 s | `p.buf` |
 | Corps du héros (collisions) | 0,7 m de large, 2 m de haut, 0,15 m de marge sur chaque obstacle | `HERO_HALF`, `HERO_H` |
@@ -53,7 +59,7 @@ L'accueil a un bouton par mode ; « Rejouer » relance le dernier mode choisi.
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Cœurs | 1 (2 avec Cœur en plus) ; le compteur est caché quand il n'y en a qu'un | `HEARTS` |
+| Cœurs | 1, et un de plus par niveau de Vitalité (jusqu'à 4) ; le compteur est caché quand il n'y en a qu'un | `HEARTS` |
 | Invincible après un coup | 1,6 s | `hit` |
 | Invincible après la perte d'une monture | 1,5 s | `dismount` |
 | Rembobinage | 1 fois par course, rend tous les cœurs, 2 s d'invincibilité | `hit` |
@@ -72,7 +78,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) ; sans le Vol, + dessin dans le ciel ×1 (hors d'atteinte : l'envie du Vol) | +2 ou +3 entrées |
 | Avec Double saut | + volant | +1 entrée |
 | Sans le Vol (à pied) | le volant seul retiré ; + hérisson, + araignée jaune ×2 (dès 150 m, une arche de pièces au-dessus) : moins de volants, plus de dangers au sol | `spawn_pattern` |
-| Avec Vol | + volant, + deux volants à la suite ×2, + araignée en hauteur ×2 (7,5 ; 9,4 ou 12 m, pièces juste dessous), + rideau d'araignées ×3 : une colonne sur 5 hauteurs (1,6 ; 4,2 ; 6,8 ; 9,4 ; 12 m) dont deux voisines manquent, 9 m après le début du motif, le passage à 2 places au plus de celui du rideau d'avant, des pièces dedans ; les araignées « suspendues » prennent aussi ces hauteurs (dès 1500 m, 1 fois sur 2) | `CURTAIN`, `SKY_HOVERS` |
+| Avec Vol | + volant, + deux volants à la suite ×2, + araignée en hauteur ×2 (7,5 ; 9,4 ou 12 m, pièces juste dessous), + rideau d'araignées ×4 : **deux** araignées rouges sur 4 hauteurs (3,2 ; 5,8 ; 8,4 ; 11 m), les deux autres places libres et voisines, 9 m après le début du motif, le passage à 2 places au plus de celui du rideau d'avant, des pièces dedans ; les araignées « suspendues » prennent aussi ces hauteurs (dès 1500 m, 1 fois sur 2) | `CURTAIN`, `SKY_HOVERS` |
 | Monture en vue | jamais de grotte | |
 | Libellule | trois fois plus de créatures en l'air (motifs plus fournis, écarts 2,5 fois plus courts), accélération ×2 | `spawn_ride`, `MOUNTS.dragonfly.gain` |
 | Nuée annoncée ou en cours | pièces seulement, et aucun volant (les volants déjà posés plus loin sont retirés) | `followers`, `update` |
@@ -83,17 +89,17 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Écart entre deux motifs | le plus grand de 10,5 m et (vitesse × 0,72 s + 2,75 m), × hasard de 0,85 à 1,3 ; × 1,3 après des pièces. Compté en distance : la route garde sa densité quand la vitesse monte (2 dangers par 100 m vers 13-21 m/s, 3 à 4 au-delà) | `GAP` |
 | Remplissage des grands écarts | écart de plus de 16 m : au milieu, un suspendu à hauteur de tête (dès 1500 m, 1 fois sur 2), sinon un volant (dès 150 m : 35 % avec le Vol, 15 % sans) | `GAP_FILL` |
 | Dangers (rôles) | chacun a son dessin dans chaque décor (forêt / ruines / cité / donjon) | `ROLE`, js/render.js |
-| Au sol, à sauter | hérisson / boule de ronces / robot à pointes à l'œil bleu clignotant (cité) / piège à loup ; 1,7 m × 1,35 m | `SPIKY` |
+| Au sol, à sauter | hérisson / boule de ronces (verte depuis la 0.34 : elle se confondait avec les ruines) / robot à pointes à l'œil bleu clignotant (cité) / piège à loup (posé au sol, sa chaîne devant lui) ; 1,7 m × 1,35 m | `SPIKY`, `SINK` |
 | Volant | coléoptère / vautour / missile / flèche : un gros panneau rouge « ! » qui pulse au bord droit (à 64 % de la largeur avec « Signalements décalés »), à sa hauteur, avec sa trajectoire en pointillés et un klaxon à deux tons joué deux fois (pas deux fois en moins de 1,6 s), pendant 1 s ; puis il traverse l'écran à 20 m/s de plus que toi | `DART`, `warnMark` |
 | Hauteur des volants | 1,15 m (sauter) ou 4,25 m (rester au sol) ; avec Double saut aussi 7,25 m. **Avec le Vol** : ils visent ta hauteur au moment où leur « ! » s'affiche (entre 1,15 et 14 m), puis gardent cette hauteur | `DART_ALTS`, `aim`, `DART_TOP` |
 | Pas de campement (Vol) | rester 2,6 s à la même hauteur (à 1,75 m près) amène un volant visé sur toi, puis un autre 1,6 s plus tard si tu y restes ; jamais deux volants à la fois, ni quand un danger à ta hauteur (à 4 m près) arrive déjà ; sans le Vol, rien de tel (le sol est ta place) | `CAMP_*`, `camp` |
-| Araignées (0.32) | bien plus nombreuses : suspendu ×8 entrées, motif « araignées » (2 ou 3 à la suite : une jaune immobile, des rouges) ; **jaunes immobiles, rouges qui montent et descendent de 2,5 m de chaque côté en 2,4 s**, du sol jusqu'au plafond ; une colonne bouge d'un bloc | `SPIDER_*`, `add_hover` |
+| Araignées (0.32) | bien plus nombreuses : suspendu ×8 entrées, motif « araignées » (2 ou 3 à la suite : une jaune immobile, des rouges) ; **jaunes immobiles, rouges qui montent et descendent de 2,5 m de chaque côté en 2,4 s**, du sol jusqu'au plafond ; une colonne bouge d'un bloc ; **jamais plus de 2 l'une au-dessus de l'autre** (0.34 : une troisième n'est pas posée ; aussi la porte et la tour de la libellule) | `SPIDER_*`, `SPIDER_COLUMN`, `add_hover` |
 | Vagues de volants | 2 à 10 volants, de 0,9 s d'écart à 9 m/s jusqu'à 0,3 s à 30 m/s ; à pied à hauteur de tête (rester au sol), un bas seulement en premier avec 0,8 s avant le suivant (avec Double saut aussi au-dessus d'un petit saut) ; avec le Vol chacun vise ta hauteur ; rien d'autre sur la route pendant une vague | `WAVE_*`, `_wave` |
-| Objets rares | une vie ou un frein (-4 m/s pour le reste de la course), dans une bulle qui zigzague entre 2,75 et 4,5 m (à portée de saut), un tous les 1 400 à 2 400 m environ (dès 300 m) | `BONUS_*`, `add_bonus`, `BRAKE` |
-| Toujours esquivable | vérifié par un banc qui essaie toutes les façons de jouer image par image : à pied (sauts tapés ou tenus de 0,1 à 0,5 s) et avec le Vol (tenu ou relâché à chaque image, montée 15 m/s, vraie chute), 43 200 images chacun (12 min) : aucun passage impossible ; un campeur volant prend 17 à 21 coups par minute | bancs fair_bfs, fly_tests |
+| Objets rares | une vie (dans une bulle) ou un sablier (plus gros, sans bulle), qui zigzaguent entre 2,75 et 4,5 m (à portée de saut), un tous les 1 400 à 2 400 m environ (dès 300 m). Le sablier ôte **20 % de ta vitesse** du moment (pour le reste de la course ; en Histoire, du décor) et, une fois à l'écran, avance à **90 % de ta vitesse** : il reste longtemps en vue | `BONUS_*`, `add_bonus`, `BRAKE_SHARE`, `BRAKE_PACE` |
+| Toujours esquivable | vérifié par un banc qui essaie toutes les façons de jouer image par image : à pied (sauts tapés ou tenus de 0,1 à 0,5 s) et avec le Vol (tenu ou relâché à chaque image, montée 12 m/s, celle du niveau 1, vraie chute ×1,2), 43 200 images chacun (12 min) : aucun passage impossible ; un campeur volant prend 17 à 21 coups par minute | bancs fair_bfs, fly_tests |
 | Suspendu | araignée (forêt et ruines) / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 150 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
 | Mise en avant des dangers | façon 5 (son choix du 17/11) : contour sombre et bord éclairé en haut à gauche sur tout ce qui fait mal, décor de fond et décor du chemin assombris ; liseré rouge en plus en option (Réglages, Accessibilité) | `LOOK`, `setDangerRim` |
-| Décor à casser | grosse caisse (forêt) / jarre (ruines) / tonneau (donjon) / caisses (cité) ; posé derrière 12 % des motifs dès 70 m, un peu assombri ; inoffensif, il ne se casse qu'avec Brise-tout, la Ruée ou le rhino | `addDecor`, `DECOR_RATE` |
+| Décor à casser | grosse caisse (forêt) / jarre (ruines) / tonneau (donjon) / caisses (cité) ; posé derrière 12 % des motifs dès 70 m, un peu assombri ; inoffensif, il ne se casse qu'avec Brise-tout, l'Esquive, les Bottes de métal, la TNT ou le rhino | `addDecor`, `DECOR_RATE` |
 | Plateforme (6 à 6,35 m de long, à 3,4 m du sol, plus haut dans les chaînes et montées) | forêt et ruines : bloc de sol flottant, toujours devant une colline ; donjon : passerelle de planches pendue à deux chaînes qui montent jusqu'en haut ; cité : plateforme en lévitation sur 3 réacteurs (elle oscille de 0,1 m) ; pendant Vorace seulement : ses nénuphars volants (turquoise aux veines violettes, épines, œil orange), qui montent et descendent de 0,2 à 0,55 m et portent le héros | `PLAT_KIND`, `addPlatform`, `PAD` |
 | Colline | décor sombre, jamais un obstacle : 12,5 à 37 m de large, 2,5 à 13 m de haut ; sa forme suit le décor (forêt : ronde et touffue ; ruines : colonnes brisées sur la crête ; donjon : roche ; cité : blocs et rares fenêtres) ; seule en décor après 22 % des motifs | `addHill`, `hill` |
 | Bloc de sol flottant | 4,25 / 6 / 8,25 m de large, la terre du décor ; dans le motif « colline » : 2 ou 3 en escalier (2,6 m d'écart à pied, 3,1 m avec le Double saut), pièces dessus, hérisson dessous 65 % des fois, gemme 30 % | `ISLE_W`, `hills` |
@@ -118,7 +124,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Couleur d'une gemme | jaune 60 %, rouge 30 %, bleue 10 % | `gemKind` |
 | Gemmes dispersées | 1,2 % / 2,2 % / 3,5 % des pièces deviennent des gemmes | `SCATTER` |
 | Décor cassé | 4 pièces projetées devant Pépito | `smash` |
-| Créature détruite (Ruée) | 1 pièce ; nuée de moustiques : 3 | `destroy`, `followers` |
+| Créature détruite (Esquive, Bottes, TNT) | 1 pièce ; nuée de moustiques traversée par l'Esquive : 3 | `destroy`, `followers` |
 | Endroit exigu | une pièce tous les mètres ; avec Gemmes dispersées, 1 sur 6 est une gemme ; cœur 3 % | `tight` |
 | Cœur ramassé sans vie à rendre | 25 pièces | `HEART_GOLD` |
 | Explosion du temple | 30 pièces projetées sur les 35 premiers mètres environ, à ramasser ; posées avant que le relief sous elles soit construit, elles le suivent ensuite (montent sur une corniche, tombent dans un creux) | `BLAST_COINS`, `Coin.blast` |
@@ -134,8 +140,9 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Après en avoir perdu une | pas avant 900 à 1200 m | `dismount` |
 | Ami de la nature | ces distances divisées par 1,25 / 1,5 / 1,75 | `friend` |
 | Laquelle | 1 chance sur 3 chacune, parmi celles qui sont activées (boutique, onglet Montures : Activer / Désactiver) ; toutes désactivées : plus aucune monture | `run.mounts`, `save.mountsOff` |
-| Dompté (amélioration) | niv. 1 / 2 : attrapée à 2,9 / 4 m d'elle au lieu de 1,75 m ; elle avance 30 / 60 % moins vite devant toi ; gorille atteint 1 / 2 m plus bas, rhino attrapé même en sautant (1,75 / 3,5 m au-dessus de lui), libellule à 1 / 2 m de plus de sa hauteur | `tamed` |
-| Aimant de monture (amélioration) | sur une monture, les pièces viennent à toi de 4,25 / 6 m (niv. 1 / 2), ou plus si ton Aimant fait mieux | `mountMagnet` |
+| Améliorations | **chaque monture a les siennes** (0.34), achetées et coupées à part, listées sous elle dans l'onglet Montures : Gorille dompté, Aimant du gorille, Rhino dompté, Aimant du rhino, Libellule domptée, Aimant de la libellule | `<monture>Tamed`, `<monture>Magnet` |
+| Dompté | niv. 1 / 2 : attrapée à 2,9 / 4 m d'elle au lieu de 1,75 m ; elle avance 30 / 60 % moins vite devant toi ; gorille atteint 1 / 2 m plus bas, rhino attrapé même en sautant (1,75 / 3,5 m au-dessus de lui), libellule à 1 / 2 m de plus de sa hauteur | `TAME_*` |
+| Aimant (de la monture) | sur cette monture, les pièces viennent à toi de 4,25 / 6 m (niv. 1 / 2), ou plus si ton Aimant fait mieux | `MOUNT_MAGNET` |
 | Comment elles attendent | gorille tout en haut des lianes, pieds à 10 m du sol, avance à 45 % de ta vitesse : il faut le Vol (ou Double saut + Ressort) ; rhino immobile qui broute : il faut le toucher au sol, un saut le fait rater ; libellule qui zigzague entre 1,75 et 5,75 m (un aller en 1,6 s) et avance à 50 % de ta vitesse | `MOUNTS.ahead`, `PERCH`, `ZIG` |
 | Vitesse sur une monture | gorille et libellule : la leur, départ à 7,5 m/s (libellule 8 m/s), puis + 0,6 m/s par seconde (gorille), + 1,4 (libellule, ×2 depuis la 0.32) ; **rhino : le double de ta vitesse**, atteint en 1 à 2 secondes. Ta propre vitesse continue de monter en parallèle ; quand la monture part, la vitesse remonte de 1,75 m/s par seconde jusqu'à la tienne | `MOUNTS.speed` (`mul`, `ramp` pour le rhino), `RAMP` |
 | Gorille | saut 3,5 m (5,6 m maintenu), second saut jusqu'aux lianes | `MOUNTS.gorilla` |
@@ -181,7 +188,7 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 | Niveau | distance ÷ 450 m, ± 0,6 de hasard, de 0 à 3 | `wave` |
 | Niveau 0 / 1 / 2 / 3 | 1 couloir pris / 2 / tous sauf 2 voisins / tous sauf 1 | `wave` |
 | Couloir toujours libre | parmi les 2 du bas à pied, 3 avec Double saut, 5 avec Vol | `wave` |
-| Faune alcoolisée | 6 % / 10 % / 15 % des créatures et des nuées sont inoffensives | `DRUNK` |
+| Relique altérée | 6 % / 10 % / 15 % des créatures et des nuées sont inoffensives (et le décor ne change plus, § 1) | `DRUNK` |
 | Laser des drones | 1 m d'épaisseur, allumé de 0,25 à 0,7 s | `LASER` |
 
 ## 8. Boutique
@@ -194,27 +201,30 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 | Trèfle | 4 | 1200 / 3200 | voir § 5 |
 | Gemmes dispersées | 6 | 2000 / 4800 / 10000 | 1,2 / 2,2 / 3,5 % |
 | Brise-tout | 3 | 1400 | casse le décor (caisses, jarres, tonneaux) : 4 pièces chacun |
-| Cœur en plus | 7 | 3600 | 2 cœurs |
-| Faune alcoolisée | 5 | 1600 / 3600 / 7200 | 6 / 10 / 15 % |
+| Vitalité | 7 | 5000 / 12000 / 25000 | 2 / 3 / 4 cœurs |
+| Relique altérée | 5 | 1600 / 3600 / 7200 | 6 / 10 / 15 % d'éthérées ; le décor ne change plus |
 | Ami de la nature | 4 | 1200 / 2800 / 6000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
-| Gros sac à dos | 8 | 2400 | à chaque changement de décor (après Vorace, puis à chaque marque de 2000 m), 1 fois sur 2 il n'a pas lieu |
-| Ruée | 5 | 1200 / 2800 / 5600 | recharge 14 / 10 / 7 s |
+| Esquive (bouton) | 5 | 1200 / 2800 / 5600 | 40 m d'un coup ; recharge 14 / 10 / 7 s |
+| Bottes de métal (bouton) | 6 | 2500 / 5500 | secousse à 3 / 4,5 m ; recharge 8 / 5 s |
+| Fana de TNT (bouton) | 9 | 3000 / 6000 / 12000 | tout ce qui est devant toi saute (pas les boss) ; recharge 25 / 18 / 12 s |
 | Sablier | 7 | 1800 / 4000 | 3 / 4,5 s, recharge 20 s |
 | Dernier élan | 6 | 1600 / 3600 / 7200 | 1 / 2 / 3 rebonds |
-| Vol (pouvoir) | 10 | 4800 |  |
+| Vol (pouvoir) | 10 | 4800 / 7000 / 10000 | montée 12 / 13,5 / 15 m/s |
 | Sprint (pouvoir) | 8 | 4000 | +4 m/s |
 | Sphère (pouvoir) | 10 | 6000 |  |
 | Rembobinage | 12 | 10000 | 1 fois par course |
-| Dompté (Montures) | 3 | 1200 / 2800 | voir § 6 |
-| Aimant de monture (Montures) | 4 | 1500 / 3500 | 4,25 / 6 m sur une monture |
+| Dompté (Montures, une par monture) | 3 | 1200 / 2800 | voir § 6 |
+| Aimant (Montures, un par monture) | 4 | 1500 / 3500 | 4,25 / 6 m sur cette monture |
 
 Emplacements d'équipement : 3 (`MAX_EQUIPPED`). **Prix et niveau requis se changent dans
-`assets/progression.txt`** (version Godot, section `[ameliorations]`) : le jeu le lit à chaque lancement,
-un réexport suffit. Les montures et leurs deux améliorations sont dans l'onglet Montures.
+`reglages/progression.txt`** (section `[ameliorations]`), leurs effets dans `reglages/equilibrage.txt`
+(section `[objets]`) : le jeu les lit à chaque lancement, un réexport suffit. Le Gros sac à dos n'existe plus
+(0.34) ; une sauvegarde qui l'avait, ou l'ancien Dompté / Aimant de monture, récupère leur prix en pièces.
+Boutons en jeu, au clavier : Esquive Maj / E, Sablier A / Q, Bottes S / ↓, TNT F / T.
 
-## 9. Niveau et défis (`assets/progression.txt`)
+## 9. Niveau et défis (`reglages/progression.txt`)
 
-Tout ce tableau se règle dans **`assets/progression.txt`** (dépôt Godot) : un fichier texte, une ligne par
+Tout ce tableau se règle dans **`reglages/progression.txt`** (dépôt Godot) : un fichier texte, une ligne par
 élément, colonnes séparées par `|`. Le jeu le lit à chaque lancement ; une ligne absente ou mal écrite garde la
 valeur d'origine. Après un changement : réexporter le jeu.
 
@@ -259,5 +269,7 @@ Un défi absent du fichier garde l'ancienne règle des paliers (+1 palier tous l
 | Fin de course | la musique ralentit et s'éteint en 0,85 s ; la musique du menu entre à 0,6 s | `music('over')`, js/audio.js |
 | Avant-plan | deux rangées d'ombres fixes ; au plus 22 et 30 pixels en bas, 24 et 30 en haut (sur 320) | `silhouettes`, js/render.js |
 | Changement de décor | mosaïque : carreaux de 16 pixels, étalés sur 120 pixels de part et d'autre | `TILE`, `SPREAD`, js/render.js |
-| Interface | kit v2 (pierre, lianes, gemme turquoise), chaque image à la taille exacte de sa boîte : jamais étirée ni coupée (`assets/ui-v2`, `KIT_*` dans main.gd) ; le kit n'a ni vert ni or : le bouton choisi prend l'état « survol » (bleu-vert) | main.gd |
+| Interface | kit v2 (pierre, lianes, gemme turquoise), chaque image à la taille exacte de sa boîte : jamais étirée ni coupée (`assets/ui-v2`, `KIT_*` dans main.gd) ; le bouton choisi prend l'état « survol » (bleu-vert). Recolorés à partir du kit (`tools/make_ui_colours.py`) : « Jouer » à cadre doré, plus haut (58 pixels au lieu de 50), « Reprendre » vert, « Abandonner » rouge orangé ; « Histoire » assombri | main.gd |
+| Accueil | Jouer (la Run illimitée), Histoire, Améliorations ; survolé, ou tenu un moment au doigt (le lâcher ne lance alors rien), chaque bouton ouvre un panneau qui en dit l'esprit | `MENU_TIPS`, `_menu_tip` |
+| Photo de la chute | prise sans le filtre rouge du coup | `show_dead` |
 | Réglages | deux onglets : Général (son, police, qualité, plein écran, images par seconde) et Accessibilité (contour rouge des dangers ; signalements décalés : les alertes des Fonceurs à 64 % de la largeur au lieu du bord droit, loin du pouce) | index.html, `setAlertShift` |
