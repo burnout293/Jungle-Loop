@@ -18,7 +18,7 @@ paysage et peut s'installer sur l'écran d'accueil.
 
 Pour essayer sans toucher à sa sauvegarde : ajouter `?bac` à l'adresse.
 
-**Depuis le 18/11/2026, le jeu est la version Godot** (0.32.0) : son code est dans la branche `godot`
+**Depuis le 18/11/2026, le jeu est la version Godot** (0.32.1) : son code est dans la branche `godot`
 (dossier `Projects/Jungle-Loop-Godot`), son export web est à la racine de cette branche `main` (`index.html`,
 `index.js`, `index.wasm`, `index.pck`… avec son propre cache hors ligne, `index.service.worker.js`).
 Au premier lancement dans le navigateur, la partie de l'ancienne version (même adresse) est reprise si elle

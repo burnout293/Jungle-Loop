@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.32.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 18/11/2026, **version Godot 0.32.1** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
