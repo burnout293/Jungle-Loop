@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.36.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 18/11/2026, **version Godot 0.37.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -259,7 +259,7 @@ Un défi absent du fichier garde l'ancienne règle des paliers (+1 palier tous l
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Où | navigateur seulement (WebRTC), deux téléphones, un salon de 4 lettres sur le serveur (10 min au plus) ; l'écran Amis n'apparaît qu'une fois l'adresse du serveur dans `reglages/reseau.txt` | `coop.gd`, `net.gd` |
+| Où | navigateur seulement (WebRTC), deux téléphones, un salon de 4 lettres sur le serveur (10 min au plus) ; l'écran Amis n'apparaît qu'une fois l'adresse du serveur dans `reglages/reseau.txt` (en ligne depuis le 19/11 : https://jungle-loop.burnout293.workers.dev) ; jamais avec la sauvegarde d'essai ni pendant les bancs | `coop.gd`, `net.gd` |
 | La course | Jouer (Run illimitée), même graine, même décor de départ (celui de l'hôte), route faite pour le moins équipé des deux (à pied, Double saut ou Vol) | `run.coop`, `road_tier` |
 | Coupé en coop | montures, sablier ramassable, Esquive, Sablier, pause : ils changeraient l'allure d'un seul joueur, donc sa route | main.gd |
 | Départ | l'hôte part 0,8 s après « Partir ! », l'invité 0,8 s moins la moitié du ping après le message (ping mesuré toutes les 2 s) | `_coop_go`, `_coop_begin` |
