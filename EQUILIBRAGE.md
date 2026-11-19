@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.37.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 18/11/2026, **version Godot 0.38.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -266,7 +266,7 @@ Un défi absent du fichier garde l'ancienne règle des paliers (+1 palier tous l
 | Le partenaire | Pépito aux couleurs tournées (feuilles rouges), l'invité 1,75 m derrière l'hôte sur les deux écrans ; sa position arrive 15 fois par seconde | `MATE_SHADER`, `run.home` |
 | Bulle | au dernier cœur perdu (après le Rembobinage s'il reste) : une bulle de 1,25 m de rayon, 3,75 m au-dessus du sol sous l'autre, 0,5 m derrière lui, qui ondule ; il faut sauter dedans (au sol, rien) ; ramené : 1 s d'invincibilité, un cœur | `BUBBLE_*`, `to_bubble`, `_rescue_check`, `back` |
 | Fin | quand les deux sont dans une bulle (ou que l'autre est parti et qu'on flotte) ; chacun garde sa distance et ses pièces | `_float` |
-| Connexion | 30 s pour se trouver, sinon « réseau trop fermé » (il faudra un relais TURN) | `LINK_TIME` |
+| Connexion | 30 s pour se trouver ; directe si possible, sinon par le relais TURN de Cloudflare (accès de 4 h donnés par le serveur, clé posée par `server/turn.ps1`) ; sans relais, un message le dit | `LINK_TIME`, route `ice` |
 
 ## 10. Affichage et son
 
