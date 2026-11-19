@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.40.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 18/11/2026, **version Godot 0.41.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -208,7 +208,7 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 | Bottes de métal (bouton) | 6 | 2500 / 5500 | secousse à 3 / 4,5 m ; recharge 8 / 5 s |
 | Fana de TNT (bouton) | 9 | 3000 / 6000 / 12000 | tout ce qui est devant toi saute (pas les boss) ; recharge 25 / 18 / 12 s |
 | Sablier | 7 | 1800 / 4000 | 3 / 4,5 s, recharge 20 s |
-| RedMonster (bouton) | 8 | 2500 / 5000 / 10000 | vitesse ×2 pendant 5 / 10 / 20 s ; recharge 30 / 35 / 45 s depuis la gorgée ; la route reste posée pour ta vitesse à toi |
+| RedMonster (bouton) | 8 | 2500 / 5000 / 10000 | vitesse ×2 pendant 5 / 10 / 20 s ; recharge 30 / 35 / 45 s depuis la gorgée ; la route reste posée pour ta vitesse à toi ; à deux, pour les deux |
 | Dernier élan | 6 | 1600 / 3600 / 7200 | 1 / 2 / 3 rebonds |
 | Vol (pouvoir) | 10 | 4800 / 7000 / 10000 | montée 12 / 13,5 / 15 m/s |
 | Sprint (pouvoir) | 8 | 4000 | +4 m/s |
@@ -263,7 +263,8 @@ Un défi absent du fichier garde l'ancienne règle des paliers (+1 palier tous l
 | Où | navigateur seulement (WebRTC), deux téléphones, un salon sur le serveur (10 min au plus) : « Inviter » un ami de sa liste (il le voit sur n'importe quel écran hors course, 2 min au plus : Rejoindre / Pas maintenant), ou donner les 4 lettres du salon ; l'écran Amis n'apparaît qu'une fois l'adresse du serveur dans `reglages/reseau.txt` (en ligne depuis le 19/11 : https://jungle-loop.burnout293.workers.dev) ; jamais avec la sauvegarde d'essai ni pendant les bancs | `coop.gd`, `net.gd` |
 | La course | une fois connectés, les deux reviennent à l'accueil (bandeau « À deux avec… ») : l'hôte lance Jouer (Run illimitée, son décor de départ) ou Histoire (Vorace comprise) ; boutons grisés chez l'invité ; une nouvelle graine à chaque course ; « Rejouer » relance pour les deux | `_coop_go`, `run.coop` |
 | Équipement | celui de l'hôte (objets et pouvoirs, avec leurs niveaux) pour les deux, celui de l'invité ne s'ajoute pas ; la route est faite pour lui (à pied, Double saut ou Vol) | `kit`, `road_tier` |
-| Coupé en coop | montures, sablier ramassable, Esquive, Sablier, Sprint, RedMonster, pause : ils changeraient l'allure d'un seul joueur ; Relique altérée, gemmes du Trèfle, nuées : ils changeraient la route d'un seul | `Game.coop_run` |
+| Partagé | Esquive, Sablier, RedMonster : lancés par l'un, ils partent aussi chez l'autre (au même point de l'image, le temps du message plus tard), pour toute leur durée, avec la même recharge ; le Sprint, porté par les deux, entre dans la vitesse de pose de la route | `remote_act`, `lay_speed` |
+| Coupé en coop | montures, sablier ramassable, pause : ils changeraient l'allure d'un seul joueur ; Relique altérée, gemmes du Trèfle, nuées : ils changeraient la route d'un seul | `Game.coop_run` |
 | Même route | la même graine pose exactement la même route sur les deux appareils, quels que soient leurs images par seconde, la largeur de l'écran, la place de chacun et ce qu'il a équipé : écarts posés pour la vitesse prévue à cet endroit, décor changé au premier motif après la borne ; en Histoire, Vorace arrive et tombe à des endroits de la route (sa fin un écran de 32 m plus loin), ses attaques sont propres à chacun ; seuls les volants envoyés à un joueur qui campe en vol lui sont propres | `lay_speed`, `coop_biome_x`, `COOP_VIEW` |
 | Même allure | chaque appareil joue chaque instant du temps réel (pas de 34 ms au plus, 12 par image au plus : seul, une image lente ralentit le jeu, à deux elle laissait l'appareil lent derrière) ; chaque position reçue recale l'horloge de 4 ms au plus | `Coop.split`, `coop_owed` |
 | Départ | l'hôte part 0,8 s après son choix, l'invité 0,8 s moins la moitié du ping après le message (ping mesuré toutes les 2 s) | `_coop_go`, `_coop_begin` |
@@ -289,4 +290,4 @@ Un défi absent du fichier garde l'ancienne règle des paliers (+1 palier tous l
 | Interface | kit v2 (pierre, lianes, gemme turquoise), chaque image à la taille exacte de sa boîte : jamais étirée ni coupée (`assets/ui-v2`, `KIT_*` dans main.gd) ; le bouton choisi prend l'état « survol » (bleu-vert). Recolorés à partir du kit (`tools/make_ui_colours.py`) : « Jouer » à cadre doré, plus haut (58 pixels au lieu de 50), « Reprendre » vert, « Abandonner » rouge orangé ; « Histoire » assombri | main.gd |
 | Accueil | Jouer (la Run illimitée), Histoire, Améliorations ; survolé, ou tenu un moment au doigt (le lâcher ne lance alors rien), chaque bouton ouvre un panneau qui en dit l'esprit | `MENU_TIPS`, `_menu_tip` |
 | Photo de la chute | prise sans le filtre rouge du coup | `show_dead` |
-| Réglages | deux onglets : Général (son, police, qualité, plein écran, images par seconde) et Accessibilité (contour rouge des dangers ; signalements décalés : les alertes des Fonceurs à 64 % de la largeur au lieu du bord droit, loin du pouce) | index.html, `setAlertShift` |
+| Réglages | deux onglets : Général (son, police, qualité, plein écran, images par seconde ; dans le navigateur, la version et « Mettre à jour » : lit `version.txt`, plus récente le jeu se recharge sans ses fichiers gardés, la sauvegarde reste ; un « ! » doré sur la roue dentée de l'accueil quand une version plus récente est en ligne) et Accessibilité (contour rouge des dangers ; signalements décalés : les alertes des Fonceurs à 64 % de la largeur au lieu du bord droit, loin du pouce) | index.html, `setAlertShift` |
