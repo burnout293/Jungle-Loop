@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": ""}
+var opts := {"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -44,6 +44,8 @@ func _ready() -> void:
 			"showcase": opts["showcase"] = true
 			"coop": opts["coop"] = kv[1]           # host | join (in a browser, with ?net=)
 			"room": opts["room"] = kv[1]
+			"friend": opts["friend"] = kv[1]      # coop=host: the friend code to add and invite
+			"slow": opts["slow"] = int(kv[1])      # milliseconds lost each frame: a slow phone
 			"mate": opts["mate"] = kv[1]          # run | bubble: a pretend partner beside him (the coop's drawing)
 	if opts["shots"] != "":
 		DirAccess.make_dir_recursive_absolute(opts["shots"])
@@ -120,6 +122,8 @@ func _process(delta: float) -> void:
 		await _tour()
 		return
 	if opts["coop"] != "":                           # two browsers, one run: see _coop_bench
+		if opts["slow"] > 0:
+			OS.delay_msec(opts["slow"])              # (frames longer than 34 ms: what made a phone fall behind)
 		_coop_bench(delta)
 		return
 	if opts["screen"] != "":                         # only a screen to look at: no run
@@ -345,29 +349,87 @@ func _tour() -> void:
 					"state": print("touch check: state ", main.state)
 			"quit": get_tree().quit()
 
-# ---------- coop: two browsers on this computer (node server/dev.mjs), ?test&net=…&coop=host|join&room=… ----------
-# The host opens a room and prints its letters; the guest, started with them, joins; the host starts the
-# run. Both run with the invincibility on, a bot jumping now and then. At 5 s the guest is put in a bubble
-# (the host jumps until he has brought him back); at 12 s both are (each brings the other back); from 20 s
-# nobody jumps and both are put in bubbles: the run ends on both sides.
+# ---------- coop: two browsers on this computer (node server/dev.mjs) ----------
+#   ?test&net=…&coop=guest              waits on the home screen for an invitation (prints his friend code)
+#                                       and takes it
+#   ?test&net=…&coop=host&friend=CODE   adds that friend, invites him from the list (« Inviter »), and once
+#                                       linked starts Histoire from the home screen, then Jouer after it
+#   ?test&net=…&coop=host / coop=join&room=XXXX   the same with a room's four letters
+# The host wears Double saut, Aimant, Vitalité and the Vol; the guest nothing (the host's go on both).
+# Both run with the invincibility on, a bot jumping now and then. At 5 s the guest is put in a bubble (the
+# host jumps until he has brought him back); at 12 s both are (each brings the other back); from 20 s
+# nobody jumps and both are put in bubbles: the run ends on both sides. Each prints, every second, how far
+# ahead the partner is now (his last state carried to now at his speed): it must not grow.
 
 var coop_step := 0
 var coop_t := 0.0
 var coop_said := {}
 var coop_next := 1.0
+var coop_runs := 0
+
+func _press(b) -> void:
+	if b is Button and is_instance_valid(b):
+		b.pressed.emit()
+
+func _find_button(root: Node, text: String) -> Button:
+	if root is Button and (root as Button).text == text:
+		return root
+	for ch in root.get_children():
+		var f = _find_button(ch, text)
+		if f != null:
+			return f
+	return null
 
 func _coop_bench(delta: float) -> void:
 	var c: Coop = main.coop
+	var host = opts["coop"] == "host"
 	if coop_step == 0 and t > 0.5 and main.state == "menu":
-		main.save["seenIntro"] = true
-		main.friends_tab = "coop"
-		main.go("friends")
-		if opts["coop"] == "host":
-			main._coop_host()
+		var s: Dictionary = main.save
+		s["seenIntro"] = true
+		if host:
+			s["upgrades"] = {"doubleJump": 1, "magnet": 2, "heart": 1, "flight": 1}
+			s["equipped"] = ["doubleJump", "magnet", "heart"]
+			s["powersOff"] = []
+			main.refresh_menu()
 		else:
-			main.w["co-code"].text = opts["room"]
-			main._coop_join()
+			s["upgrades"] = {}
+			s["equipped"] = []
 		coop_step = 1
+		if opts["coop"] == "guest":
+			var me = await main.net.identity(s)
+			print("COOP CODE ", me.get("code", "?"))
+			coop_step = 10                           # then: the invitation (main polls every few seconds)
+		elif host and opts["friend"] != "":
+			main.friends_tab = "friends"
+			main.go("friends")
+			main.w["fr-add"].text = opts["friend"]
+			await main._add_friend()
+			coop_step = 2
+		else:
+			main.friends_tab = "coop"
+			main.go("friends")
+			if host:
+				main._coop_host()
+			else:
+				main.w["co-code"].text = opts["room"]
+				main._coop_join()
+			coop_step = 3
+	if coop_step == 2:                               # the friend in the list: « Inviter »
+		var b = _find_button(main.w["fr-board"], "Inviter")
+		if b != null:
+			print("COOP INVITE-LIST")
+			coop_step = 21
+			coop_t = t
+	if coop_step == 21 and t - coop_t > 1.0:
+		_press(_find_button(main.w["fr-board"], "Inviter"))
+		coop_step = 3
+	if coop_step == 10 and main.invite_box != null:
+		print("COOP INVITED")
+		coop_step = 11
+		coop_t = t
+	if coop_step == 11 and t - coop_t > 1.2:
+		_press(_find_button(main.invite_box, "Rejoindre"))
+		coop_step = 3
 	if c.room != "" and not coop_said.has("room"):
 		coop_said["room"] = true
 		print("COOP ROOM ", c.room)
@@ -378,15 +440,38 @@ func _coop_bench(delta: float) -> void:
 		coop_said["ready"] = true
 		coop_t = t
 		print("COOP READY ", c.role, " mate=", c.mate)
-	if coop_step == 1 and c.state == "ready" and opts["coop"] == "host" and t - coop_t > 1.5:
-		coop_step = 2
-		main._coop_go()
-	if main.state == "over" and not coop_said.has("over"):
-		coop_said["over"] = true
-		print("COOP OVER ", c.role, " dist=", floori(main.run.dist), " rtt=", c.rtt)
+	if coop_step == 3 and c.state == "ready" and main.state == "menu" and t - coop_t > 2.0:
+		coop_step = 4
+		print("COOP HOME %s kit=%s band=%s" % [c.role, c.kit.get("eq", []) if not host else main.save["equipped"], main.w["menu-coop-text"].text])
+		coop_t = t
+	if coop_step == 4 and host and t - coop_t > 1.5:
+		coop_step = 5
+		_press(main.w["menu-go-story"])               # Histoire, from the home screen, for both
+	if coop_step == 4 and not host and t - coop_t > 0.5 and not coop_said.has("tap"):
+		coop_said["tap"] = true                       # the guest's Jouer: only a word on the band
+		_press(main.w["menu-go-endless"])
+		print("COOP GUEST-TAP band=", main.w["menu-coop-text"].text, " state=", main.state)
+	if main.state == "over" and not coop_said.get("in_over", false):
+		coop_said["in_over"] = true
+		print("COOP OVER ", c.role, " mode=", main.run.mode, " dist=", floori(main.run.dist), " rtt=", c.rtt)
+		coop_runs += 1
+		coop_t = t
+	if main.state != "over":
+		coop_said["in_over"] = false
+	if main.state == "over" and coop_runs == 1 and t - coop_t > 2.5 and not coop_said.has("again"):
+		coop_said["again"] = true                     # then Jouer: back home, the host starts it
+		main.go("menu")
+		coop_t = t
+		coop_step = 6
+	if coop_step == 6 and host and t - coop_t > 1.5 and main.state == "menu":
+		coop_step = 7
+		_press(main.w["menu-go-endless"])
 	if main.state != "play" or main.run == null or not main.run.coop:
 		return
 	var r: Game.Run = main.run
+	if r.t > 3.0 and not coop_said.has("gear%d" % coop_runs):
+		coop_said["gear%d" % coop_runs] = true
+		print("COOP GEAR %s mode=%s hearts=%d up=%s tier=%d" % [c.role, r.mode, r.hearts, r.up, Game.tier_of(r)])
 	r.god = true
 	var mate_b: bool = r.mate != null and r.mate.get("b", false)
 	next_press -= delta
@@ -406,12 +491,12 @@ func _coop_bench(delta: float) -> void:
 		r.p.inv = 0
 		Game.hit(r, null)
 		r.god = true
-	if opts["coop"] == "join" and r.t > 5.0 and not coop_said.has("b1"):
-		coop_said["b1"] = true
+	if not host and r.t > 5.0 and not coop_said.has("b1%d" % coop_runs):
+		coop_said["b1%d" % coop_runs] = true
 		force.call()
-	if r.t > 12.0 and not coop_said.has("b2"):
+	if r.t > 12.0 and not coop_said.has("b2%d" % coop_runs):
 		if not r.bubble:
-			coop_said["b2"] = true
+			coop_said["b2%d" % coop_runs] = true
 			force.call()
 	if ending and not r.bubble and not r.dead:
 		main.input.hold = false
@@ -419,4 +504,8 @@ func _coop_bench(delta: float) -> void:
 	coop_next -= delta
 	if coop_next <= 0:
 		coop_next = 1.0
-		print("COOP %s t=%.1f d=%.0f mate=%s bubble=%s" % [opts["coop"], r.t, r.dist, ("%.0f%s" % [float(r.mate.get("d", 0)), " (bulle)" if mate_b else ""]) if r.mate != null else "-", r.bubble])
+		var ahead = "-"
+		if r.mate != null:
+			var now_x = float(r.mate.get("x", 0)) + float(r.mate.get("v", 0)) * (r.t - float(r.mate.get("at", r.t)))
+			ahead = "%.0f" % (now_x - (r.cam + r.sx))
+		print("COOP %s t=%.1f d=%.0f ahead=%s delay=%.0fms bubble=%s mate_b=%s" % [opts["coop"], r.t, r.dist, ahead, c.shown * 1000, r.bubble, mate_b])

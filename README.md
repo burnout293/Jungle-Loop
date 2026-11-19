@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.39.0** (19/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.40.0** (19/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,33 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.40.0
+
+- **Coop : le joueur 2 allait plus vite.** Cause : seul, une image plus longue que 34 ms ne compte que pour
+  34 ms (le jeu ralentit au lieu de sauter) ; à deux, l'appareil le plus lent prenait donc du retard pour de
+  bon. Banc `tests/coop_sync.gd` : 60 images/s contre 24 avec un à-coup toutes les 3 s, 304 m d'écart en
+  75 s avant, 0,1 m maintenant. À deux, la course joue chaque instant du temps réel (`Coop.split` : pas de
+  34 ms au plus, 12 par image au plus), et chaque message de position recale doucement les deux horloges.
+  Essayé entre deux navigateurs, l'un ralenti exprès (45 ms perdues par image) : l'écart reste fixe.
+- **Coop : le partenaire n'est plus saccadé.** 20 positions par seconde (au lieu de 15), datées du temps de
+  sa course ; il est dessiné un peu dans le passé (0,1 à 0,2 s selon le réseau, `Coop.view`), entre ses
+  deux positions les plus proches, et prolongé à sa vitesse si le réseau lâche. Le retard suit le réseau à
+  10 % au plus (jamais d'à-coup). Banc : 0 à-coup sur 1 621 images (contre un à chaque image avant).
+- **Inviter un ami** depuis la liste (bouton « Inviter ») : le jeu ouvre le salon et l'ami voit, sur
+  n'importe quel écran hors course, « Pseudo t'invite à jouer à deux ! » (Rejoindre / Pas maintenant ;
+  refusée, l'hôte le lit). Le salon à 4 lettres reste possible. Serveur : routes `invite`, `invites`,
+  `invite/no`, `room/close`, table `invites` (2 min).
+- **À deux, on lance depuis l'accueil** : une fois connectés, les deux reviennent à l'accueil (bandeau
+  « À deux avec Pseudo », Quitter) ; l'hôte lance Jouer ou **Histoire**, l'invité voit ses boutons grisés.
+  « Rejouer » relance pour les deux (chez l'invité : retour à l'accueil). Une nouvelle route à chaque course.
+- **L'hôte choisit l'équipement** : ses objets et pouvoirs (avec leurs niveaux) vont aux deux, ceux de
+  l'invité ne s'ajoutent pas ; l'accueil de l'invité montre les objets de l'hôte.
+- **Histoire à deux** : Vorace est posée sur la route (`coop_xb`, `coop_xf`, `COOP_VIEW`) au lieu de
+  l'écran, avec ses propres dés (elle vise chacun à part) ; ses nénuphars, ses gemmes bleues et les décors
+  suivants tombent au même endroit sur les deux appareils. `tests/coop_road.gd` vérifie l'Histoire jusqu'à
+  4,3 km (Vorace comprise) dans les mêmes cas que la Run illimitée.
+- Rembobinage à deux : plus de drone laser ensuite (il aurait changé la route d'un seul).
 
 ## 0.39.0
 

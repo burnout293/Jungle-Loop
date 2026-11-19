@@ -64,6 +64,37 @@ assert.equal(later.items.length, 0);
 assert.equal((await call('signal', { id: c.id, secret: c.secret, room: room.room, data: 'x' })).error, 'unknown');
 ok('the handshake: each side reads only the other\'s messages, from where it left off; strangers are kept out');
 
+// invitations: Léa (a) invites her friend Buly (b) into a new room; Third (c) is nobody's friend
+const r2 = await call('room', { id: a.id, secret: a.secret, seed: 7 });
+assert.equal((await call('invite', { id: a.id, secret: a.secret, code: c.code, room: r2.room })).error, 'friend');
+assert.equal((await call('invite', { id: c.id, secret: c.secret, code: a.code, room: r2.room })).error, 'friend');
+assert.equal((await call('invite', { id: a.id, secret: a.secret, code: b.code, room: 'ZZZZ' })).error, 'room');
+assert.equal((await call('invite', { id: a.id, secret: a.secret, code: b.code.toLowerCase(), room: r2.room.toLowerCase() })).name, 'Buly');
+let inv = await call('invites', { id: b.id, secret: b.secret });
+assert.equal(inv.items.length, 1); assert.equal(inv.items[0].room, r2.room); assert.equal(inv.items[0].code, a.code);
+assert.equal((await call('invites', { id: c.id, secret: c.secret })).items.length, 0);
+assert.equal((await call('invites', { id: a.id, secret: a.secret })).items.length, 0);
+ok('an invitation goes to a friend only, into the inviter\'s own room; only he sees it');
+
+await call('invite/no', { id: b.id, secret: b.secret, room: r2.room });
+assert.equal((await call('invites', { id: b.id, secret: b.secret })).items.length, 0);
+const told = await call('signals', { id: a.id, secret: a.secret, room: r2.room, since: 0 });
+assert.equal(told.items.length, 1); assert.equal(JSON.parse(told.items[0].data).t, 'no');
+ok('« Pas maintenant »: the invitation goes and the host reads {"t":"no"} in his room');
+
+const r3 = await call('room', { id: a.id, secret: a.secret, seed: 8 });
+await call('invite', { id: a.id, secret: a.secret, code: b.code, room: r3.room });
+assert.equal((await call('room/join', { id: b.id, secret: b.secret, room: r3.room })).seed, 8);
+assert.equal((await call('invites', { id: b.id, secret: b.secret })).items.length, 0);
+const r4 = await call('room', { id: a.id, secret: a.secret, seed: 9 });
+await call('invite', { id: a.id, secret: a.secret, code: b.code, room: r4.room });
+await call('room/close', { id: b.id, secret: b.secret, room: r4.room });
+assert.equal((await call('invites', { id: b.id, secret: b.secret })).items.length, 1);
+await call('room/close', { id: a.id, secret: a.secret, room: r4.room });
+assert.equal((await call('invites', { id: b.id, secret: b.secret })).items.length, 0);
+assert.equal((await call('room/join', { id: b.id, secret: b.secret, room: r4.room })).error, 'unknown');
+ok('an invitation goes once accepted, or when its host closes the room (no one else can close it)');
+
 const off = await call('ice', { id: a.id, secret: a.secret });
 assert.equal(off.status, 200); assert.deepEqual(off.iceServers, []); assert.equal(off.turn, 'off');
 assert.equal((await call('ice', { id: a.id, secret: 'nope' })).status, 403);

@@ -138,6 +138,16 @@ const DEATH_EASY := 2600.0
 static var BOSS_AT := 2000.0
 static var BOSS_SPEED := 560.0
 static var BOSS_FIGHT := 26.0
+const BOSS_ENTER := 1.6        # seconds she takes to slide in before the fight
+# Histoire for two: Vorace is laid on the road, not on the screen (coop_run). She shows when the heroes
+# reach coop_xb, falls once they reach coop_xf; the road is laid as if seen on a COOP_VIEW screen: coins
+# from COOP_CALM before her until a screen past coop_xb, then her lily pads until a screen past coop_xf,
+# then her blue gems at coop_xg (COOP_GEMS past coop_xf), then nothing until COOP_GAP past the pads' end.
+const COOP_VIEW := 1280.0
+const COOP_CALM := 400.0
+const COOP_GEMS := 1770.0
+const COOP_GAP := 2400.0
+const COOP_AHEAD := 1480.0     # a new scenery is laid this far past the mark where the speed starts again
 const BOSS_W := 446.0
 const BOSS_MOUTH_X := 50.0
 const BOSS_MOUTH_Y := 223.0
@@ -504,6 +514,12 @@ class Run:
 	var boom := 0.0
 	var biome_x := -1e9             # world x where the current scenery begins
 	var coop_biome_x := INF         # for two: the road's next mark, where spawn_pattern changes the scenery
+	var coop_xb := INF              # Histoire for two: where Vorace shows (the hero's x), see COOP_VIEW
+	var coop_xf := INF              # ... where she falls
+	var coop_xg := INF              # ... where her blue gems are laid
+	var coop_gems := false          # ... laid already
+	var coop_zone_at := INF         # ... where the next place's speed starts (the hero's x)
+	var boss_rng := RandomNumberGenerator.new()   # for two: Vorace's own dice (she aims at each hero apart)
 	var touched := {}              # scenery that reacted: cell -> when
 	var monkeys: Array = []
 	var terrain: Array = [Vector2(-1e9, 630.0)]   # the floor's outline, see floor_at
@@ -549,7 +565,8 @@ class Run:
 	var coop := false
 	var home := 200.0                  # where on screen he runs (PX; in coop the guest a little behind the host)
 	var road_tier := -1                # what the road may ask of him (-1: what his own upgrades allow)
-	var mate = null                    # the partner's last state: {x, y, vy, g, f, ph, b, d}, world units
+	var mate = null                    # the partner's last state: {at, x, y, vy, v, g, f, ph, b, d}, world units
+	var mate_view = null               # where he is drawn: his state a few hundredths ago, smoothed (Coop.view)
 	var bubble := false                # fallen: he floats after the partner until rescued
 	var bubble_pos := Vector2.ZERO     # where his bubble is (world)
 	var mate_bubble := Vector2.ZERO    # where the partner's bubble is, following him (world)
@@ -601,7 +618,36 @@ static func h01(i: float, s: float) -> float:
 static func lay_speed(run: Run, x: float) -> float:
 	if not run.coop:
 		return run.road_speed
-	return sqrt(SPEED_BASE * SPEED_BASE + 2.0 * SPEED_GAIN * maxf(0.0, x))
+	if run.mode != "story":
+		return sqrt(SPEED_BASE * SPEED_BASE + 2.0 * SPEED_GAIN * maxf(0.0, x))
+	if x < run.coop_xb:                              # Histoire: the forest's speed, then Vorace's, then each place's
+		return sqrt(SPEED_BASE * SPEED_BASE + 2.0 * STORY_GAIN * maxf(0.0, x))
+	if x < run.coop_xf + COOP_VIEW:
+		return BOSS_SPEED
+	var m = run.coop_xg + 16 * 48                    # the first new place (never coop_zone_at: it moves on
+	if x < m:                                        # with the hero) / (the speed coming back after her fall)
+		var v0 = BOSS_SPEED * DEATH_PACE
+		return sqrt(v0 * v0 + 2.0 * RAMP * (x - run.coop_xf))
+	var biome = NEXT_BIOME[0]
+	for i in 64:
+		var nm = coop_next_mark(m)
+		if x < nm:
+			break
+		m = nm
+		biome = NEXT_BIOME[biome]
+	var z = ZONE_SPEED.get(biome, SPEED_BASE)
+	return sqrt(z * z + 2.0 * STORY_GAIN * (x - m))
+
+## Histoire for two: the mark after `m` where a new place begins (its speed starts again there).
+static func coop_next_mark(m: float) -> float:
+	return maxf(2.0 * ZONE * PPM, (floorf(m / (ZONE * PPM)) + 1) * ZONE * PPM)
+
+## Whether the road laid at x is Vorace's (her lily pads, nothing else). Alone: while she is there. For two:
+## from a screen past where she shows to a screen past where she falls, the same on both phones.
+static func boss_road(run: Run, x: float) -> bool:
+	if run.coop:
+		return x >= run.coop_xb + COOP_VIEW and x < run.coop_xf + COOP_VIEW
+	return run.boss != null
 
 ## Trèfle's level as the road sees it: for two, none (its extra gems would be laid for one player only).
 static func road_luck(run: Run) -> int:
@@ -610,18 +656,26 @@ static func road_luck(run: Run) -> int:
 ## A run for two (main.gd): the same road on both phones, whatever their frame rate, screen, loadout or
 ## place on the screen. Nothing that changes one player's pace (Esquive, Sablier, Sprint, a mount, the
 ## hourglass, RedMonster) nor bends the road for him alone (Relique altérée, Trèfle's gems, the swarms that
-## follow him).
-static func coop_run(upgrades: Dictionary, seed_: int, tier: int, guest: bool) -> Run:
+## follow him). `mode`: "endless" or "story" (Vorace then laid on the road: see COOP_VIEW).
+static func coop_run(upgrades: Dictionary, seed_: int, tier: int, guest: bool, mode: String = "endless") -> Run:
 	var up = upgrades.duplicate()
 	for id in ["dash", "slow", "sprint", "drunk", "monster"]:
 		up.erase(id)
-	var run = new_run(up, "endless", seed_)
+	var run = new_run(up, mode, seed_)
 	run.coop = true
 	run.road_tier = tier
 	run.mounts = []
 	run.next_mount = INF
 	run.next_fm = INF
-	run.coop_biome_x = ZONE_ENDLESS * PPM
+	run.boss_rng.seed = seed_ * 7919 + 13
+	if mode == "story":
+		run.coop_xb = run.boss_at * PPM + PX
+		run.coop_xf = run.coop_xb + BOSS_SPEED * (BOSS_ENTER + BOSS_FIGHT) + 200
+		run.coop_xg = run.coop_xf + COOP_GEMS
+		run.coop_zone_at = run.coop_xg + 16 * 48     # past her gems: the first new place
+		run.coop_biome_x = run.coop_zone_at + COOP_AHEAD
+	else:
+		run.coop_biome_x = ZONE_ENDLESS * PPM
 	if guest:
 		run.home = PX - 70                       # just behind the host, on both screens: both are seen
 	return run
@@ -803,7 +857,7 @@ static func add_obs(run: Run, x: float, y: float, w: float, h: float, kind: Stri
 ## scenery's own: a block of floating ground with a dark hill behind it (forest, ruins), a walkway
 ## hanging from chains (dungeon), a platform levitating on its thrusters (city).
 static func add_platform(run: Run, x: float, y: float, bob: float = PAD_BOB) -> Plat:
-	if run.boss != null:
+	if boss_road(run, x):
 		return add_pad(run, x, y, bob)
 	var kind: String = PLAT_KIND[biome_at(run, x)]
 	if kind == "isle":
@@ -986,11 +1040,23 @@ static func spawn_pattern(run: Run) -> void:
 		scatter(run, laid)
 		return
 	var x = run.next_x
+	if run.coop and run.mode == "story" and x >= run.coop_xf + COOP_VIEW and not run.coop_gems:
+		run.coop_gems = true                         # for two: Vorace's blue gems, at a place on the road
+		var g0 = run.coop_xg
+		for k in 16:
+			coin(run, g0 + k * 48, floor_at(run, g0 + k * 48) - 40, "b")
+		run.calm_until = g0 + 16 * 48 + DEATH_CALM
+		run.easy_until = run.calm_until + DEATH_EASY
+		run.next_x = maxf(x, run.coop_xf + COOP_VIEW + COOP_GAP)
+		return
 	if x >= run.coop_biome_x:                        # for two: the next scenery begins at the first pattern past
 		run.prev_biome = run.biome                   # the mark, the same on both phones (alone: update(), when
 		run.biome = NEXT_BIOME[run.biome]            # he reaches the mark, just off screen)
 		run.biome_x = x
-		run.coop_biome_x = (floorf(x / (ZONE_ENDLESS * PPM)) + 1) * ZONE_ENDLESS * PPM
+		if run.mode == "story":
+			run.coop_biome_x = coop_next_mark(run.coop_biome_x - COOP_AHEAD) + COOP_AHEAD
+		else:
+			run.coop_biome_x = (floorf(x / (ZONE_ENDLESS * PPM)) + 1) * ZONE_ENDLESS * PPM
 	var G = GROUND
 	var tier = tier_of(run)
 	var riding = run.mount != null or run.items.size() > 0
@@ -1021,9 +1087,11 @@ static func spawn_pattern(run: Run) -> void:
 		opts = ["coins"]
 	elif x < run.easy_until:
 		opts = ["spiky", "coins", "coins", "plat", "ledge", "hollow"]
+	if run.coop and x >= run.coop_xb - COOP_CALM and x < run.coop_xb + COOP_VIEW:
+		opts = ["coins"]                             # for two: nothing but coins as Vorace comes
 	if run.fm != null or run.fm_due:
 		opts = ["coins"]
-	elif run.boss != null:
+	elif boss_road(run, x):
 		opts = ["plat", "plat", "steps", "padchain", "coins"]
 	elif not riding and x > 70 * PPM and x / PPM >= run.next_mount and run.mounts.size() > 0:
 		opts = ["mount"]
@@ -1199,7 +1267,7 @@ static func spawn_pattern(run: Run) -> void:
 				var px = x + k * 320
 				add_platform(run, px, G - hs[k], PAD_BOB + k * 3)
 				coin_line(run, px + 60, G - hs[k] - 40, 3)
-			if x > 70 * PPM and run.boss == null and W.randf() < 0.5:
+			if x > 70 * PPM and not boss_road(run, x) and W.randf() < 0.5:
 				add_spiky(run, x + 320 + PLAT_W / 2)
 			extent = hs.size() * 320
 		"padzig":                                    # a climb from pad to pad, a gem at the top
@@ -1237,7 +1305,7 @@ static func spawn_pattern(run: Run) -> void:
 	# The gap to the next pattern is set in distance (GAP_DIST), so the road keeps its density as the
 	# speed grows; only where a jump would no longer have room to land does it widen with the speed.
 	var gap = maxf(GAP_DIST, lay_speed(run, x) * GAP_TIME + GAP_MARGIN) * wrnd(0.85, 1.3) * (1.3 if kind == "coins" else 1.0)
-	var clear = run.fm == null and not run.fm_due and run.boss == null and kind != "wave"
+	var clear = run.fm == null and not run.fm_due and not boss_road(run, x) and kind != "wave"
 	if clear and x / PPM >= run.next_bonus and x / PPM > 300:   # a life or a brake, floating in the gap
 		add_bonus(run, x + extent + gap * 0.5)
 		run.next_bonus = x / PPM + wrnd(BONUS_EVERY[0], BONUS_EVERY[1])
@@ -1247,7 +1315,7 @@ static func spawn_pattern(run: Run) -> void:
 		add_hover(run, x + extent + gap * 0.5, HEAD)
 	elif gap > GAP_FILL and x / PPM > 150 and clear and W.randf() < (0.35 if tier >= 2 else 0.15):
 		add_dart(run, x + extent + gap * 0.5, 170).aim = tier >= 2
-	if x / PPM > 70 and run.boss == null and W.randf() < DECOR_RATE:
+	if x / PPM > 70 and not boss_road(run, x) and W.randf() < DECOR_RATE:
 		add_decor(run, x + extent + gap * wrnd(0.3, 0.6))     # something to smash
 	if x / PPM > 40 and kind != "hills" and W.randf() < 0.22:
 		add_hill(run, x + extent + gap * wrnd(-0.2, 0.3), wrnd(500, 1400), wrnd(100, 480))   # scenery only
@@ -1582,16 +1650,31 @@ static func camp(run: Run, dt: float) -> void:
 	dt_.aim = true
 	run.camp_t = CAMP_TIME - CAMP_AGAIN
 
+## Vorace. For two, she rolls her own dice (she aims at each hero apart, so each phone throws its own
+## attacks) and comes and goes at places on the road (coop_xb, coop_xf), which is laid for her already.
 static func boss(run: Run, d: float) -> void:
+	if not run.coop:
+		_boss_step(run, d)
+		return
+	var keep = W
+	W = run.boss_rng
+	_boss_step(run, d)
+	W = keep
+
+static func _boss_step(run: Run, d: float) -> void:
 	var p = run.p
 	if run.boss == null:
-		if run.boss_done or run.dist < run.boss_at or run.biome != 0 or run.prev_biome != 0:
+		if run.boss_done or run.biome != 0 or run.prev_biome != 0:
 			return                                   # only ever in the forest
+		if (run.cam + run.sx < run.coop_xb) if run.coop else (run.dist < run.boss_at):
+			return
 		var nb = Boss.new()
 		nb.sx = run.view_w + 60
 		run.boss = nb
 		run.items.clear()                            # no mount waiting during the fight
-		for o in run.obs:                            # nor any other danger: Vorace alone
+		for o in run.obs:                            # nor any other danger: Vorace alone (for two the road
+			if run.coop:                             # left her room already)
+				break
 			if not o.gone and o.x + o.w > run.cam + run.sx + 40:
 				o.gone = true
 				for i in 6:
@@ -1606,7 +1689,7 @@ static func boss(run: Run, d: float) -> void:
 	b.open = maxf(0, b.open - d)
 	if b.phase == "enter":                           # it slides in from the right edge
 		b.sx += (run.view_w - BOSS_W + BOSS_BACK - b.sx) * minf(1, d * 2.5)
-		if b.t > 1.6:
+		if b.t > BOSS_ENTER:
 			b.phase = "fight"
 			b.t = 0
 		return
@@ -1681,12 +1764,14 @@ static func boss(run: Run, d: float) -> void:
 					b.attack = chosen
 					b.wind = WIND
 					b.next = maxf(0.7, 1.2 - b.t * 0.025) / (FLY_PACE if flying else 1.0)    # more and more often
-		if b.t > BOSS_FIGHT and b.wind <= 0:           # a tree comes down on it
+		var over = (run.cam + run.sx >= run.coop_xf) if run.coop else (b.t > BOSS_FIGHT)
+		if over and b.wind <= 0:                       # a tree comes down on it
 			b.phase = "fall"
 			b.t = 0
 			b.wx = run.cam + b.sx
 			b.crushed = false
-			run.next_x = maxf(run.next_x, run.cam + run.view_w + 2600)   # nothing else on the road while she goes down
+			if not run.coop:                         # nothing else on the road while she goes down (for two: laid so)
+				run.next_x = maxf(run.next_x, run.cam + run.view_w + 2600)
 			run.events.append("timber")
 		return
 	# falling: it stays where it stood; the tree lands at 0.9 s and drives it into the ground
@@ -1705,6 +1790,9 @@ static func boss(run: Run, d: float) -> void:
 		for g in ["y", "r", "b"]:
 			loot(run, run.cam + run.sx + wrnd(100, 300), GROUND - 200)
 			run.coins[run.coins.size() - 1].gem = g
+		run.events.append("bossdown")
+		if run.coop:
+			return                                   # (for two the road laid her gems and what follows)
 		var g0 = run.cam + run.view_w + 200
 		for k in 16:
 			coin(run, g0 + k * 48, floor_at(run, g0 + k * 48) - 40, "b")
@@ -1714,7 +1802,6 @@ static func boss(run: Run, d: float) -> void:
 		# the world moves on after the gems (with the Relique altérée, another scenery only goes by)
 		run.next_biome_at = run.dist + (g0 + 16 * 48 - run.cam - run.sx) / PPM
 		run.by_mark = false
-		run.events.append("bossdown")
 
 # ---------- blows, breaks, mounts ----------
 
@@ -1889,7 +1976,8 @@ static func hit(run: Run, o: Obs) -> void:
 		run.obs = run.obs.filter(func(q): return q.x > run.cam + run.view_w)
 		run.fm = null
 		run.fm_due = false
-		run.next_fm = run.dist + rnd(170, 300)
+		if not run.coop:                             # (for two no laser drone: it would bend his road)
+			run.next_fm = run.dist + rnd(170, 300)
 		run.events.append("rewind")
 		return
 	if run.coop:                                     # two players: he floats after the other, who can bring him back
@@ -1948,7 +2036,12 @@ static func to_bubble(run: Run) -> void:
 static func _float(run: Run, d: float, move: float) -> void:
 	var p = run.p
 	var px = run.cam + run.sx
-	var target = _bubble_target(run, float(run.mate.get("x", px)) if run.mate != null else px, run.t)
+	var mx = px                                      # after the partner where he is drawn (smoothed)
+	if run.mate_view != null and not run.mate_view.is_empty():
+		mx = float(run.mate_view.get("x", px))
+	elif run.mate != null:
+		mx = float(run.mate.get("x", px))
+	var target = _bubble_target(run, mx, run.t)
 	run.bubble_pos.x += move                         # carried along at the run's pace, then eased into place
 	run.bubble_pos += (target - run.bubble_pos) * minf(1, d * 2.5)
 	p.y = run.bubble_pos.y + 40
@@ -2759,6 +2852,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		spawn_pattern(run)
 
 	# --- scenery change ---
+	if run.coop and run.mode == "story" and run.cam + run.sx >= run.coop_zone_at:
+		run.coop_zone_at = coop_next_mark(run.coop_zone_at)   # for two: a new place, its speed from here (the
+		run.zone_t = run.t                                    # road laid it at this mark, see lay_speed)
+		run.relic = 1
+		run.glitch = maxf(run.glitch, 0.5)
+		run.events.append("biome")
 	var Z = ZONE_ENDLESS if run.mode == "endless" else ZONE
 	if run.dist >= run.next_biome_at:
 		run.by_mark = true                           # from now on the changes come with the distance marks

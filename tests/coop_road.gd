@@ -5,13 +5,18 @@ extends SceneTree
 #   godot --headless --path . --script tests/coop_road.gd   (tests/ has a .gdignore: kept out of the game)
 
 const SECONDS := 150.0
+const STORY_SECONDS := 260.0            # Histoire: the forest, Vorace (about 2 km), her gems, two more places
+
+var no_boss := 0                        # Histoire runs where Vorace never showed (the test would prove nothing)
 
 func lay(seed_: int, opts: Dictionary) -> Array:
 	seed(opts.get("cosmetic", 999))
-	var r = Game.coop_run(opts.get("up", {}), seed_, 0, opts.get("guest", false))
+	var mode: String = opts.get("mode", "endless")
+	var r = Game.coop_run(opts.get("up", {}), seed_, 0, opts.get("guest", false), mode)
 	r.god = true
-	r.biome = 1
-	r.prev_biome = 1
+	if mode == "endless":
+		r.biome = 1
+		r.prev_biome = 1
 	r.view_w = opts.get("view_w", 1280)
 	Game.launch(r)
 	var inp = Game.Controls.new()
@@ -20,7 +25,9 @@ func lay(seed_: int, opts: Dictionary) -> Array:
 	var next_press = 0.5
 	var t = 0.0
 	var k = 0
-	while t < SECONDS:
+	var seconds = STORY_SECONDS if mode == "story" else SECONDS
+	var boss_seen = false
+	while t < seconds:
 		var dt: float = opts.get("dt", 1.0 / 60)
 		if opts.get("jitter", false):
 			dt = [1.0 / 60, 1.0 / 120, 1.0 / 45, 1.0 / 90][k % 4]
@@ -34,9 +41,11 @@ func lay(seed_: int, opts: Dictionary) -> Array:
 				inp.pressed = true
 			inp.hold = randf() < 0.5
 		Game.update(r, dt, inp)
+		if "boss" in r.events:
+			boss_seen = true
 		r.events.clear()
 		for o in r.obs:
-			if not seen.has(o) and not o.own:
+			if not seen.has(o) and not o.own and o.kind != "acid":   # (Vorace's acid: aimed at each hero apart)
 				seen[o] = true
 				out.append("%s %d %d" % [o.kind, roundi(o.x), roundi(o.y0 if o.amp > 0 else o.y)])
 		for pl in r.plats:
@@ -47,6 +56,8 @@ func lay(seed_: int, opts: Dictionary) -> Array:
 			if not seen.has(c) and not c.blast and c.loot < 0:
 				seen[c] = true
 				out.append("coin %d %d" % [roundi(c.x), roundi(c.y)])
+	if mode == "story" and not boss_seen:
+		no_boss += 1
 	return out
 
 func compare(name: String, a: Array, b: Array) -> bool:
@@ -89,5 +100,19 @@ func _init() -> void:
 	cases["TOUT à la fois"] = {"up": rich, "dt": 1.0 / 120, "jitter": true, "view_w": 2400, "guest": true, "jumpy": true, "cosmetic": 777}
 	for name in cases:
 		all_ok = compare(name, base, lay(4242, cases[name])) and all_ok
-	print("BILAN : ", "même route partout" if all_ok else "des écarts")
+	# Histoire for two: the forest, Vorace laid on the road (her pads, then her gems), the places after
+	var story = lay(4242, {"mode": "story"})
+	var story_cases = {
+		"Histoire : images/s irrégulières": {"jitter": true},
+		"Histoire : écran large": {"view_w": 2400},
+		"Histoire : invité": {"guest": true},
+		"Histoire : saute au hasard": {"jumpy": true, "cosmetic": 4321},
+		"Histoire : TOUT à la fois": {"up": rich, "dt": 1.0 / 120, "jitter": true, "view_w": 2400, "guest": true, "jumpy": true, "cosmetic": 778},
+	}
+	for name in story_cases:
+		var o: Dictionary = story_cases[name]
+		o["mode"] = "story"
+		all_ok = compare(name, story, lay(4242, o)) and all_ok
+	print("Vorace est venue dans chaque Histoire : ", "oui" if no_boss == 0 else "NON (%d fois absente)" % no_boss)
+	print("BILAN : ", "même route partout" if all_ok and no_boss == 0 else "des écarts")
 	quit()

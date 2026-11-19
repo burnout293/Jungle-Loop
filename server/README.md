@@ -6,7 +6,9 @@ Un petit serveur Cloudflare Workers avec une base D1. Il garde :
 - qui est ami avec qui ;
 - les salons où deux téléphones se retrouvent avant une course en coop (les messages de leur poignée de
   main WebRTC, dix minutes au plus). Ensuite les deux téléphones se parlent directement : la partie ne
-  passe pas par le serveur.
+  passe pas par le serveur ;
+- les invitations dans un salon, envoyées à un ami de sa liste (deux minutes au plus ; le jeu de l'ami
+  regarde toutes les 5 s, hors course).
 
 Rien de tout ça n'est nécessaire pour jouer : tant que l'adresse est vide dans `reglages/reseau.txt`, le
 jeu n'envoie rien et le bouton « Amis » n'apparaît pas.
@@ -55,8 +57,10 @@ Gratuit jusqu'à 100 000 requêtes par jour ; il ne se met jamais en veille. Seu
 
 1. `node server/dev.mjs` (port 8787).
 2. Le jeu exporté servi en local (`export/web`), ouvert avec `?net=http://127.0.0.1:8787` dans l'adresse.
-3. Deux navigateurs (deux profils) : l'un crée un salon dans Amis → Jouer à deux, l'autre le rejoint avec
-   ses 4 lettres. Le banc le fait tout seul : `?test&net=…&coop=host`, puis `?test&net=…&coop=join&room=XXXX`.
+3. Deux navigateurs (deux profils) : l'un invite l'autre depuis sa liste d'amis (ou crée un salon dans
+   Amis → Jouer à deux, l'autre le rejoint avec ses 4 lettres). Le banc le fait tout seul :
+   `?test&net=…&coop=guest` (affiche son code ami, attend l'invitation), puis
+   `?test&net=…&coop=host&friend=PEPI-XXXX` ; ou `coop=host`, puis `coop=join&room=XXXX`.
 
 ## Où en est le multijoueur
 
@@ -65,9 +69,10 @@ Les essais automatiques et la sauvegarde d'essai (`--bac`, `?bac`) ne l'appellen
 donnée exprès (`--net=`, `?net=`).
 
 Fait et essayé de bout en bout entre deux navigateurs (serveur local) : identité et code ami, pseudo,
-ajout d'un ami, classement de la semaine, salon à 4 lettres, connexion WebRTC directe, course à deux sur
-la même route (même graine, même décor, route faite pour le moins équipé des deux), partenaire recoloré,
-bulle de sauvetage, fin quand les deux sont dans une bulle.
+ajout d'un ami, classement de la semaine, invitation depuis la liste (acceptée ou refusée), salon à 4
+lettres, connexion WebRTC directe, retour à l'accueil à deux, Histoire puis Jouer lancées par l'hôte avec
+son équipement pour les deux, course sur la même route, partenaire recoloré et lissé, bulle de
+sauvetage, fin quand les deux sont dans une bulle.
 
 ## Le relais (TURN), pour jouer à deux en 4G / 5G
 

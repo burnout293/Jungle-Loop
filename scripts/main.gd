@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.39.0"
+const VERSION := "0.40.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -90,9 +90,20 @@ var held: Button = null                # a home screen button held down (a long 
 var held_t := 0.0
 var tip_held := false                  # its panel came from a long press: that press launches nothing
 var coop: Coop                         # two phones in one run (coop.gd)
-var coop_start := {}                   # a coop run about to start: {seed, biome, tier, at}
+var coop_start := {}                   # a coop run about to start: {mode, seed, biome, tier, up, at}
 var coop_send_t := 0.0
-var coop_last := false                 # the last run was for two: « Rejouer » goes back to the room
+var coop_last := false                 # the last run was for two
+var coop_owed := 0.0                   # for two: real seconds the run still owes (no frame's time is ever lost)
+var coop_note := ""                    # a word on the home screen's band for two, for a moment
+var coop_note_t := 0.0
+var coop_was := ""                     # the link's state last seen (main notices the partner leaving)
+var kit_sent := ""                     # the host's items and powers last sent to the guest (JSON)
+var invite_t := 3.0                    # seconds before the next look for an invitation
+var invite_busy := false
+var invite_seen := {}                  # the rooms of the invitations already shown
+var invite_box: CanvasLayer = null
+const INVITE_POLL := 5.0
+const INVITE_SCREENS := ["menu", "shop", "friends", "over", "settings"]
 var friends_tab := "friends"
 var board: Array = []                  # the friends' board, as the server sent it
 
@@ -110,7 +121,7 @@ func _ready() -> void:
 	coop.net = net
 	coop.save = save
 	add_child(coop)
-	coop.changed.connect(func() -> void: refresh_friends())
+	coop.changed.connect(_on_coop_changed)
 	coop.message.connect(_on_coop)
 	_adopt_web_save()
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
@@ -970,6 +981,12 @@ func _build_menu() -> void:
 			if tip_held:
 				tip_held = false                             # (it was held to read its panel)
 				return
+			if mode != "" and coop.state == "ready":    # linked for two: the host starts it for both
+				if coop.role == "host":
+					_coop_go(mode)
+				else:
+					_coop_say("C'est %s qui lance." % _mate_name())
+				return
 			if mode != "":
 				save["mode"] = mode                  # Histoire or Run illimitée: « Rejouer » keeps it
 				SaveData.store(save)
@@ -981,7 +998,26 @@ func _build_menu() -> void:
 		b.size_flags_horizontal = Control.SIZE_FILL
 		_menu_tip_on(b, mode if mode != "" else "shop")
 		buttons.add_child(b)
+		if mode != "":
+			w["menu-go-" + mode] = b
 	s.add_child(buttons)
+	var band = _box()                                # for two: with whom, and leaving
+	var band_row = _hbox(4)
+	w["menu-coop-text"] = _plain(_label("", ts("s"), GOLD, 0), "s")
+	w["menu-coop-text"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	w["menu-coop-text"].clip_text = true
+	w["menu-coop-text"].vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	band_row.add_child(w["menu-coop-text"])
+	var quit_two = _button("Quitter", "tab", func() -> void: coop.leave())
+	quit_two.custom_minimum_size = Vector2(a(62), a(18))
+	quit_two.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	band_row.add_child(quit_two)
+	band.add_child(band_row)
+	band.mouse_filter = Control.MOUSE_FILTER_PASS
+	_place(band, M, 68, 236, 26)
+	band.visible = false
+	w["menu-coop"] = band
+	s.add_child(band)
 	w["menu-tip"] = PanelContainer.new()            # what a button is about: hovered, or held down
 	w["menu-tip"].add_theme_stylebox_override("panel", _kit_tall("menu-info"))
 	w["menu-tip"].mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1507,10 +1543,20 @@ func refresh_menu() -> void:
 	_set_level(w["menu-level"], false)
 	_set_coins(w["menu-coins"], save["coins"])
 	_quest_cards(w["menu-quests"])
+	_send_kit()
+	_coop_band()
 	for ch in w["menu-loadout"].get_children():
 		ch.queue_free()
-	for i in mini(3, save["equipped"].size()):       # what goes on the next run: only the items equipped,
-		var id: String = save["equipped"][i]         # their pictures alone (no frame, no empty place)
+	var eq: Array = save["equipped"]
+	if _coop_guest():                                # for two the host's items go on the run, for both, and
+		eq = coop.kit.get("eq", [])                  # Jouer starts in his scenery: shown behind already
+		if coop.kit.has("biome") and int(coop.kit["biome"]) != endless_biome:
+			endless_biome = int(coop.kit["biome"])
+			if still != null:
+				still.biome = endless_biome
+				still.prev_biome = endless_biome
+	for i in mini(3, eq.size()):                     # what goes on the next run: only the items equipped,
+		var id: String = eq[i]                       # their pictures alone (no frame, no empty place)
 		var slot = Button.new()
 		slot.focus_mode = Control.FOCUS_NONE
 		slot.custom_minimum_size = Vector2(a(42), a(42))
@@ -1553,7 +1599,7 @@ func _slot_info(id: String) -> void:
 		ch.queue_free()
 	box.set_meta("id", id)
 	var u = SaveData.upgrade(id)
-	var lvl = SaveData.level(save, id)
+	var lvl = int(coop.kit.get("up", {}).get(id, 0)) if _coop_guest() else SaveData.level(save, id)
 	var col = _vbox(2)
 	var name_l = _label(u["name"] + ("  " + "●".repeat(lvl) + "○".repeat(u["costs"].size() - lvl) if u["costs"].size() > 1 else ""), ts("m"), GOLD, 0)
 	name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2211,9 +2257,18 @@ func go(name: String) -> void:
 		coop_start = {}
 		coop_last = not co.is_empty()
 		var up = SaveData.loadout(save)                # only the three equipped upgrades come along
-		if coop_last:                                  # for two: the same road (seed, scenery, tier) on both phones
-			run = Game.coop_run(up, int(co["seed"]), int(co["tier"]), coop.role == "guest")
-			endless_biome = int(co["biome"])
+		if coop_last:                                  # for two: the same road (seed, scenery, tier) on both phones,
+			var mode: String = co["mode"]              # and the host's items and powers on both (not added to the guest's)
+			if coop.role == "guest":
+				up = {}
+				for k in co["up"]:
+					up[str(k)] = int(co["up"][k])
+			run = Game.coop_run(up, int(co["seed"]), int(co["tier"]), coop.role == "guest", mode)
+			if mode == "endless":
+				endless_biome = int(co["biome"])
+			coop_owed = 0.0
+			coop_send_t = 0.0
+			coop.clear_states()
 		else:
 			run = Game.new_run(up, save["mode"])
 			run.mounts = Game.MOUNT_KINDS.filter(func(k): return not k in save["mountsOff"])   # Montures: on / off
@@ -2350,11 +2405,15 @@ func over_view(count_up: bool) -> void:
 	w["over-best"].label_settings.font_size = ts("m") if record else ts("s")
 	w["over-best"].set_meta("hop", record)
 
-## « Rejouer »: after a run for two, back to the room (the host starts the next one); alone, again.
+## « Rejouer »: after a run for two, the host starts the next one for both (the guest goes back home, where
+## it will start); alone, again.
 func _replay() -> void:
 	if coop_last and coop.state == "ready":
-		friends_tab = "coop"
-		go("friends")
+		if coop.role == "host":
+			_coop_go(str(over_info.get("mode", "endless")))
+		else:
+			go("menu")
+			_coop_say("C'est %s qui relance." % _mate_name())
 	else:
 		go("play")
 
@@ -2464,8 +2523,6 @@ func _build_friends() -> void:
 	w["co-join-row"] = join_row
 	co.add_child(join_row)
 	var go_row = _hbox(6)
-	w["co-go"] = _button("Partir !", "go", _coop_go)
-	go_row.add_child(w["co-go"])
 	w["co-leave"] = _button("Quitter", "small plain", func() -> void: coop.leave())
 	w["co-leave"].size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	go_row.add_child(w["co-leave"])
@@ -2506,19 +2563,18 @@ func refresh_friends() -> void:
 	w["co-join-row"].visible = can and idle
 	w["co-room"].text = coop.room if coop.role == "host" and st in ["waiting", "linking", "ready"] else ""
 	w["co-room"].visible = w["co-room"].text != ""
-	w["co-go"].visible = st == "ready" and coop.role == "host"
 	w["co-leave"].visible = not idle
 	var txt = ""
 	if not can:
 		txt = "Jouer à deux marche dans le navigateur, sur la page du jeu."
 	else:
 		match st:
-			"idle": txt = "Crée un salon et donne ses 4 lettres à ton ami, ou rejoins le sien. Vous courez la même route ; si l'un tombe, il flotte dans une bulle : l'autre saute dedans pour le ramener."
+			"idle": txt = "Invite un ami de ta liste (Inviter), ou crée un salon et donne-lui ses 4 lettres. Vous courez la même route, avec l'équipement de celui qui invite ; si l'un tombe, il flotte dans une bulle : l'autre saute dedans pour le ramener."
 			"opening": txt = "Ouverture du salon…"
-			"waiting": txt = "Donne ces 4 lettres à ton ami. En attente…"
+			"waiting": txt = ("Invitation envoyée à %s. En attente de sa réponse… (ou donne-lui ces 4 lettres)" % coop.invited) if coop.invited != "" else "Donne ces 4 lettres à ton ami. En attente…"
 			"joining": txt = "Recherche du salon…"
 			"linking": txt = "Connexion avec %s…" % mate_name
-			"ready": txt = ("Connecté avec %s ! Lance la course quand vous êtes prêts." % mate_name) if coop.role == "host" else ("Connecté avec %s ! La course part quand il la lance." % mate_name)
+			"ready": txt = ("Connecté avec %s ! Sur l'accueil, Jouer ou Histoire vous lance tous les deux." % mate_name) if coop.role == "host" else ("Connecté avec %s ! Il lance la course depuis l'accueil." % mate_name)
 			"failed": txt = coop.info
 	w["co-text"].text = txt
 	var holder: VBoxContainer = w["fr-board"]
@@ -2527,6 +2583,7 @@ func refresh_friends() -> void:
 		ch.queue_free()
 	if board.size() <= 1:
 		holder.add_child(_wrap("Ajoute un ami avec son code : vos meilleures distances de la semaine s'afficheront ici." if Net.enabled() else "Le serveur n'est pas encore en ligne.", DIM))
+	var can_invite = can and idle and Net.enabled()
 	for e in board:
 		var row = _box()
 		var h = _hbox(6)
@@ -2538,6 +2595,12 @@ func refresh_friends() -> void:
 		var dist = func(v) -> String: return ("%d m" % int(v)) if int(v) > 0 else "—"
 		h.add_child(_label("Jouer " + dist.call(e.get("endless_week", 0)), ts("s"), RELIC, 0))
 		h.add_child(_label("Hist. " + dist.call(e.get("week", 0)), ts("s"), DIM, 0))
+		if not me and can_invite:                      # a room for two, and this friend invited into it
+			var code = str(e.get("code", ""))
+			var who = str(e.get("name", "?"))
+			var inv = _button("Inviter", "small", func() -> void: _invite(code, who))
+			inv.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			h.add_child(inv)
 		row.add_child(h)
 		holder.add_child(row)
 
@@ -2586,18 +2649,158 @@ func _coop_join() -> void:
 	coop.save = save
 	coop.join(code)
 
-## The host starts the run for two: the same seed, scenery and road for both, a moment from now.
-func _coop_go() -> void:
+## « Inviter »: a room for two is opened and this friend is invited into it (his game shows it to him).
+func _invite(code: String, name: String) -> void:
+	coop.save = save
+	friends_tab = "coop"
+	refresh_friends()
+	await coop.host(randi() % 2147483647)
+	if coop.role != "host" or coop.state != "waiting":
+		return
+	coop.invited = name
+	refresh_friends()
+	var r = await net.invite(save, code, coop.room)
+	if r.has("error") and coop.state == "waiting":
+		coop.leave()
+		coop._fail({"friend": "%s n'est pas dans ta liste d'amis." % name, "full": "Quelqu'un a déjà rejoint ce salon."}.get(r["error"], "L'invitation n'est pas partie : réessaie dans un moment."))
+
+## The host starts a run for two in `mode` (Jouer: "endless", Histoire: "story"): a new road, the scenery
+## the home screen shows, and his items and powers for both, a moment from now.
+func _coop_go(mode: String) -> void:
 	if coop.state != "ready" or coop.role != "host":
 		return
-	var msg = {"t": "start", "seed": coop.seed, "biome": endless_biome, "tier": mini(Coop.tier(save), int(coop.mate.get("tier", 0))), "in": 0.8}
+	var up = SaveData.loadout(save)
+	var msg = {"t": "start", "mode": mode, "seed": randi() % 2147483647, "biome": endless_biome, "tier": Coop.tier_of(up), "up": up, "in": 0.8}
 	coop.send(msg)
 	_coop_begin(msg, 0.8)
 
 func _coop_begin(m: Dictionary, delay: float) -> void:
-	coop_start = {"seed": int(m["seed"]), "biome": int(m["biome"]), "tier": int(m["tier"]), "at": time + delay}
-	save["mode"] = "endless"
-	print("coop: start in %.2f s, seed %d, tier %d" % [delay, int(m["seed"]), int(m["tier"])])
+	var mode = "story" if str(m.get("mode", "endless")) == "story" else "endless"
+	coop_start = {"mode": mode, "seed": int(m["seed"]), "biome": int(m["biome"]), "tier": int(m["tier"]), "up": m.get("up", {}), "at": time + delay}
+	save["mode"] = mode
+	print("coop: %s in %.2f s, seed %d, tier %d" % [mode, delay, int(m["seed"]), int(m["tier"])])
+
+## The link for two changed. Once linked, both go to the home screen: the host starts the run there.
+func _on_coop_changed() -> void:
+	var was = coop_was
+	coop_was = coop.state
+	if coop.state != "ready":
+		kit_sent = ""                                # (a new link: the guest is sent the kit again)
+	if was == "ready" and coop.state == "failed":
+		coop_say_left()
+	refresh_friends()
+	if coop.state == "ready" and state == "friends":
+		go("menu")
+	elif state == "menu":
+		refresh_menu()
+
+## The partner left (or the link broke): the home screen's band says so a moment, then goes.
+func coop_say_left() -> void:
+	_coop_say(coop.info if coop.info != "" else "L'autre joueur est parti.")
+
+func _coop_guest() -> bool:
+	return coop.state == "ready" and coop.role == "guest"
+
+func _mate_name() -> String:
+	var n = str(coop.mate.get("name", ""))
+	return n if n != "" else "ton ami"
+
+## A word on the home screen's band for two, for a few seconds.
+func _coop_say(text: String) -> void:
+	coop_note = text
+	coop_note_t = 3.0
+	if state == "menu":
+		_coop_band()
+
+## The home screen's band for two: with whom (or a word for a moment); the guest's Jouer and Histoire dimmed.
+func _coop_band() -> void:
+	if not w.has("menu-coop") or not is_instance_valid(w["menu-coop"]):
+		return
+	var two = coop.state == "ready" or coop_note != ""
+	w["menu-coop"].visible = two
+	w["menu-coop-text"].text = coop_note if coop_note != "" else "À deux avec %s" % _mate_name()
+	for mode in ["endless", "story"]:
+		if w.has("menu-go-" + mode) and is_instance_valid(w["menu-go-" + mode]):
+			w["menu-go-" + mode].modulate = Color(0.55, 0.55, 0.62) if _coop_guest() else Color.WHITE
+
+## The host's items and powers, and the scenery Jouer starts in, sent to the guest's home screen when they
+## change (the run's start carries them too: that is what both wear).
+func _send_kit(force: bool = false) -> void:
+	if coop.state != "ready" or coop.role != "host":
+		kit_sent = ""
+		return
+	var up = SaveData.loadout(save)
+	var eq = save["equipped"].slice(0, 3)
+	var key = JSON.stringify([up, eq, endless_biome])
+	if key == kit_sent and not force:
+		return
+	kit_sent = key
+	coop.send({"t": "kit", "up": up, "eq": eq, "biome": endless_biome})
+
+## A look for invitations (menus only, never during a run): one shown at a time, each only once.
+func _poll_invites() -> void:
+	if invite_busy:
+		return
+	invite_busy = true
+	var r = await net.invites(save)
+	invite_busy = false
+	if r.has("error") or invite_box != null or not coop.state in ["idle", "failed"] or not state in INVITE_SCREENS:
+		return
+	for it in r.get("items", []):
+		var room = str(it.get("room", ""))
+		if room == "" or invite_seen.has(room):
+			continue
+		invite_seen[room] = true
+		_show_invite(str(it.get("name", "")), room)
+		return
+
+## « Léa t'invite à jouer à deux ! » Rejoindre: into her room (the Amis screen shows the link being made,
+## then both are on the home screen). Pas maintenant: she is told.
+func _show_invite(name: String, room: String) -> void:
+	var layer = CanvasLayer.new()
+	layer.layer = 41
+	add_child(layer)
+	invite_box = layer
+	var root = Control.new()
+	root.size = Vector2(W, H)
+	root.theme = ui.theme
+	layer.add_child(root)
+	var shade = ColorRect.new()
+	shade.color = Color(8 / 255.0, 10 / 255.0, 24 / 255.0, 0.7)
+	shade.size = Vector2(W, H)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(shade)
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	var col = _vbox(8)
+	var who = _plain(_label(name if name != "" else "Un ami", ts("l"), GOLD, 0), "l")
+	who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(who)
+	var what = _label("t'invite à jouer à deux !", ts("m"), INK, 0)
+	what.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(what)
+	var close = func() -> void:
+		layer.queue_free()
+		invite_box = null
+	var yes = func() -> void:
+		close.call()
+		coop.save = save
+		friends_tab = "coop"
+		go("friends")
+		coop.join(room)
+	var no = func() -> void:
+		close.call()
+		net.invite_no(save, room)
+	var row_b = _hbox(10)
+	row_b.alignment = BoxContainer.ALIGNMENT_CENTER
+	row_b.add_child(_button("Pas maintenant", "small plain", no))
+	row_b.add_child(_button("Rejoindre", "small gold", yes))
+	col.add_child(row_b)
+	p.add_child(col)
+	_place(p, 569 / 2.0 - 140, 70, 280, 100)
+	root.add_child(p)
+	Audio.sfx("level")
 
 ## What the partner says (coop.gd): where he is, his bubble, the run's start and end.
 func _on_coop(m: Dictionary) -> void:
@@ -2609,10 +2812,15 @@ func _on_coop(m: Dictionary) -> void:
 		return
 	match t:
 		"s":
-			var was = run.mate != null and run.mate.get("b", false)
-			run.mate = m
-			if m.get("b", false) and not was:
-				run.mate_bubble = Vector2(float(m["x"]), float(m["y"]) - 40)
+			coop.push(m, run.t)                          # drawn from these, a few hundredths in the past
+			if run.mate == null or float(m.get("at", 0.0)) >= float(run.mate.get("at", -1.0)):
+				var was = run.mate != null and run.mate.get("b", false)
+				run.mate = m
+				if m.get("b", false) and not was:
+					run.mate_bubble = Vector2(float(m["x"]), float(m["y"]) - 40)
+			# the clock: his run time, as it is now, against this one; each side closes a little of the gap
+			var drift = float(m.get("at", 0.0)) + coop.rtt / 2 - run.t
+			coop_owed += clampf(drift * 0.05, -0.004, 0.004)
 		"bubble":
 			if run.mate == null:
 				run.mate = {"x": run.cam + run.sx, "y": Game.GROUND}
@@ -2946,6 +3154,63 @@ func _notification(what: int) -> void:
 
 # ---------- loop ----------
 
+## One step of the run, `h` seconds: the world moves, its events are heard and counted, the partner is
+## told where he is.
+func _step(h: float) -> void:
+	var t0 = Time.get_ticks_usec()
+	Game.update(run, h, input)
+	perf["game"] += Time.get_ticks_usec() - t0
+	var stats = {"dist": run.dist - last_dist, "coins": 0, "gems": 0, "jumps": 0, "plats": 0, "breaks": 0, "shrooms": 0, "monkeys": 0, "mounts": 0, "dodges": 0, "hurt": false}
+	last_dist = run.dist
+	for ev in run.events:
+		Audio.sfx(ev)
+		match ev:
+			"coin": stats["coins"] += 1
+			"gem": stats["gems"] += 1
+			"jump": stats["jumps"] += 1
+			"land": stats["plats"] += 1
+			"break", "crate": stats["breaks"] += 1
+			"shroom": stats["shrooms"] += 1
+			"monkey": stats["monkeys"] += 1
+			"mount": stats["mounts"] += 1
+			"dodge": stats["dodges"] += 1
+			"boom": Audio.music("run")
+			"boss": banner("Vorace !")           # (text on screen only for the bosses)
+			"timber": banner("Ça tombe !")
+			"bossfall": banner("Écrasée !")
+			"bossdown": banner("Vorace est vaincue !")
+			"hurt", "rewind", "hit": stats["hurt"] = true
+			"life":                                 # a floating life picked up: one more heart
+				Audio.sfx("level")
+				_fill_hud()
+			"brake":                                # a floating brake: 4 m/s less, for good
+				Audio.sfx("slow")
+			"fatal":                                # the blow that ends the run: the photo, now
+				if not photo_taken:
+					photo_taken = true
+					_take_photo()
+			"bubble", "rescue", "back":               # coop: the partner is told
+				print("coop: ", ev)
+				coop.send({"t": ev})
+	run.events.clear()
+	if run.coop and coop.state == "ready" and not run.dead:   # where he is, for the partner's screen
+		coop_send_t -= h
+		if coop_send_t <= 0:
+			coop_send_t = Coop.SEND_EVERY             # (t: his run time, the partner draws him by it)
+			coop.send({"t": "s", "at": run.t, "x": run.cam + run.sx, "y": run.p.y, "vy": run.p.vy, "v": run.speed, "g": run.p.ground, "f": run.p.flying, "ph": run.p.phase, "b": run.bubble, "d": run.dist}, false)
+	progress(stats)
+	if hint_step == 1 and stats["jumps"] > 0:
+		hint(2)
+
+## The taps of this frame are used up (for two, by the first of its steps: a jump is one jump).
+func _taps_done() -> void:
+	input.pressed = false
+	input.dash = false
+	input.slow = false
+	input.stomp = false
+	input.tnt = false
+	input.monster = false
+
 func _process(delta: float) -> void:
 	var dt = minf(0.034, delta)                  # (30 images a second, in Éco, still run at full speed)
 	if rebuild_due and state != "play" and state != "loading" and state != "pause":
@@ -2957,51 +3222,16 @@ func _process(delta: float) -> void:
 		return
 	if state == "play" or state == "over":
 		run.view_w = render.view_w * Game.PIXEL
-		var t0 = Time.get_ticks_usec()
-		Game.update(run, dt, input)
-		perf["game"] += Time.get_ticks_usec() - t0
-		var stats = {"dist": run.dist - last_dist, "coins": 0, "gems": 0, "jumps": 0, "plats": 0, "breaks": 0, "shrooms": 0, "monkeys": 0, "mounts": 0, "dodges": 0, "hurt": false}
-		last_dist = run.dist
-		for ev in run.events:
-			Audio.sfx(ev)
-			match ev:
-				"coin": stats["coins"] += 1
-				"gem": stats["gems"] += 1
-				"jump": stats["jumps"] += 1
-				"land": stats["plats"] += 1
-				"break", "crate": stats["breaks"] += 1
-				"shroom": stats["shrooms"] += 1
-				"monkey": stats["monkeys"] += 1
-				"mount": stats["mounts"] += 1
-				"dodge": stats["dodges"] += 1
-				"boom": Audio.music("run")
-				"boss": banner("Vorace !")           # (text on screen only for the bosses)
-				"timber": banner("Ça tombe !")
-				"bossfall": banner("Écrasée !")
-				"bossdown": banner("Vorace est vaincue !")
-				"hurt", "rewind", "hit": stats["hurt"] = true
-				"life":                                 # a floating life picked up: one more heart
-					Audio.sfx("level")
-					_fill_hud()
-				"brake":                                # a floating brake: 4 m/s less, for good
-					Audio.sfx("slow")
-				"fatal":                                # the blow that ends the run: the photo, now
-					if not photo_taken:
-						photo_taken = true
-						_take_photo()
-				"bubble", "rescue", "back":               # coop: the partner is told
-					print("coop: ", ev)
-					coop.send({"t": ev})
-		run.events.clear()
-		if run.coop and coop.state == "ready" and not run.dead:   # where he is, for the partner's screen
-			coop_send_t -= dt
-			if coop_send_t <= 0:
-				coop_send_t = 1.0 / 15
-				coop.send({"t": "s", "x": run.cam + run.sx, "y": run.p.y, "vy": run.p.vy, "g": run.p.ground, "f": run.p.flying, "ph": run.p.phase, "b": run.bubble, "d": run.dist}, false)
-		progress(stats)
-		if hint_step == 1 and stats["jumps"] > 0:
-			hint(2)
-		elif hint_step == 2:
+		if run.coop and state == "play":             # for two: real time, every bit of it, in steps of 34 ms at most
+			coop_owed = minf(coop_owed + delta, 60.0)   # (alone, a slow frame slows the game down; for two that
+			for h in Coop.split(coop_owed):              # would leave him behind the other for good)
+				coop_owed -= h
+				_step(h)
+				_taps_done()
+			run.mate_view = coop.view(run.t) if not coop.buf.is_empty() else null
+		else:
+			_step(dt)
+		if hint_step == 2:
 			hint_timer -= dt
 			if hint_timer <= 0:
 				hint(0)
@@ -3015,12 +3245,17 @@ func _process(delta: float) -> void:
 				game_over()
 	if not coop_start.is_empty() and time >= coop_start["at"] and state != "play":
 		go("play")                                   # the coop run: both phones start together
-	input.pressed = false
-	input.dash = false
-	input.slow = false
-	input.stomp = false
-	input.tnt = false
-	input.monster = false
+	if coop_note_t > 0:
+		coop_note_t -= delta
+		if coop_note_t <= 0:
+			coop_note = ""
+			_coop_band()
+	if Net.enabled() and save.get("online", {}).has("id") and state in INVITE_SCREENS and coop.state in ["idle", "failed"] and invite_box == null:
+		invite_t -= delta
+		if invite_t <= 0:
+			invite_t = INVITE_POLL
+			_poll_invites()
+	_taps_done()
 	if held != null and is_instance_valid(held) and state == "menu" and not tip_held and time - held_t > 0.45:
 		tip_held = true                             # held long enough: its panel, and no launch on release
 		_menu_tip(held.get_meta("tip", ""), held)

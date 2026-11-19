@@ -1,7 +1,8 @@
 // Jungle Loop's small server, for Cloudflare Workers with a D1 database (schema.sql).
 // What it keeps: players (a pseudonym and a friend code, no e-mail), their best distances (all time and
-// this week, per mode), who is friends with whom, and the rooms where two phones meet before a coop
-// run (the messages of their WebRTC handshake, a few minutes at most).
+// this week, per mode), who is friends with whom, the rooms where two phones meet before a coop run (the
+// messages of their WebRTC handshake, a few minutes at most) and the invitations to such a room sent to a
+// friend (two minutes at most).
 //
 // Every request is a POST of JSON to /api/<route>. A player proves who they are with the secret given at
 // creation (only its hash is kept). Nothing here is needed to play: the game works without it.
@@ -16,6 +17,10 @@
 //   signal        {id, secret, room, data}                 -> {seq}
 //   signals       {id, secret, room, since}                -> {items: [{seq, from, data}]}
 //   ice           {id, secret}                             -> {iceServers: [{urls, username, credential}]}
+//   invite        {id, secret, code, room}                 -> {name}            (to a friend, into my room)
+//   invites       {id, secret}                             -> {items: [{room, name, code}]}
+//   invite/no     {id, secret, room}                       -> {ok}              (the host reads {"t":"no"})
+//   room/close    {id, secret, room}                       -> {ok}              (the host left: room and invitation go)
 //
 // ice: the relay (TURN) that carries a coop run when the two phones cannot reach each other directly
 // (a 4G / 5G network often forbids it). Cloudflare Realtime's TURN, with short-lived credentials made
@@ -24,6 +29,7 @@
 
 const MODES = ['story', 'endless'];
 const ROOM_LIFE = 10 * 60 * 1000;          // a room lasts ten minutes
+const INVITE_LIFE = 2 * 60 * 1000;         // an invitation waits two minutes
 const TURN_TTL = 4 * 3600;                 // seconds a relay credential lasts: longer than any run for two
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O, 1/I: read aloud without mistakes
 
@@ -143,6 +149,7 @@ const routes = {
     if (r.guest && r.guest !== me.id) return { error: 'full' };
     if (r.host === me.id) return { error: 'self' };
     await db.prepare('UPDATE rooms SET guest = ? WHERE code = ?').bind(me.id, room).run();
+    await db.prepare('DELETE FROM invites WHERE room = ?').bind(room).run();
     const host = await db.prepare('SELECT name FROM players WHERE id = ?').bind(r.host).first();
     return { seed: r.seed, host: host ? host.name : '' };
   },
@@ -161,6 +168,44 @@ const routes = {
     if (!r || (r.host !== me.id && r.guest !== me.id)) return { error: 'unknown' };
     const rows = await db.prepare('SELECT seq, sender, data FROM signals WHERE room = ? AND seq > ? AND sender != ? ORDER BY seq').bind(room, Math.floor(Number(body.since) || 0), me.id).all();
     return { items: rows.results.map((x) => ({ seq: x.seq, from: x.sender === r.host ? 'host' : 'guest', data: x.data })) };
+  },
+
+  async 'invite'(db, body, now, me) {
+    const code = String(body.code || '').toUpperCase().trim();
+    const room = String(body.room || '').toUpperCase().trim();
+    const f = await db.prepare('SELECT id, name FROM players WHERE code = ?').bind(code).first();
+    if (!f) return { error: 'unknown' };
+    const pal = await db.prepare('SELECT 1 FROM friends WHERE a = ? AND b = ?').bind(me.id, f.id).first();
+    if (!pal) return { error: 'friend' };
+    const r = await db.prepare('SELECT host, guest, created FROM rooms WHERE code = ?').bind(room).first();
+    if (!r || r.host !== me.id || r.created < now - ROOM_LIFE) return { error: 'room' };
+    if (r.guest) return { error: 'full' };
+    await db.prepare('INSERT OR REPLACE INTO invites (guest, host, room, at) VALUES (?, ?, ?, ?)').bind(f.id, me.id, room, now).run();
+    return { name: f.name };
+  },
+
+  async 'invites'(db, body, now, me) {
+    await db.prepare('DELETE FROM invites WHERE at < ?').bind(now - INVITE_LIFE).run();
+    const rows = await db.prepare(
+      'SELECT i.room, p.name, p.code FROM invites i JOIN players p ON p.id = i.host JOIN rooms r ON r.code = i.room ' +
+      'WHERE i.guest = ? AND r.host = i.host AND r.guest IS NULL ORDER BY i.at DESC').bind(me.id).all();
+    return { items: rows.results.map((x) => ({ room: x.room, name: x.name, code: x.code })) };
+  },
+
+  async 'invite/no'(db, body, now, me) {
+    const room = String(body.room || '').toUpperCase().trim();
+    const i = await db.prepare('SELECT host FROM invites WHERE guest = ? AND room = ?').bind(me.id, room).first();
+    if (!i) return { ok: true };
+    await db.prepare('DELETE FROM invites WHERE guest = ? AND room = ?').bind(me.id, room).run();
+    await db.prepare('INSERT INTO signals (room, sender, data, at) VALUES (?, ?, ?, ?)').bind(room, me.id, JSON.stringify({ t: 'no' }), now).run();
+    return { ok: true };
+  },
+
+  async 'room/close'(db, body, now, me) {
+    const room = String(body.room || '').toUpperCase().trim();
+    await db.prepare('DELETE FROM invites WHERE room = ? AND host = ?').bind(room, me.id).run();
+    await db.prepare('DELETE FROM rooms WHERE code = ? AND host = ?').bind(room, me.id).run();
+    return { ok: true };
   },
 
   async 'ice'(db, body, now, me, env) {

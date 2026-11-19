@@ -36,3 +36,10 @@ CREATE TABLE IF NOT EXISTS signals (
   at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS signals_room ON signals (room, seq);
+CREATE TABLE IF NOT EXISTS invites (
+  guest TEXT NOT NULL,               -- the friend invited
+  host TEXT NOT NULL,                -- who invites, into his room
+  room TEXT NOT NULL,
+  at INTEGER NOT NULL,               -- it waits two minutes
+  PRIMARY KEY (guest, host)
+);

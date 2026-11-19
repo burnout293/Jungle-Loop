@@ -906,11 +906,12 @@ void fragment() {
 }
 """
 
-## Coop: the partner, where he says he is, in his pose; in his bubble when he has fallen.
+## Coop: the partner, in his pose, where he was a few hundredths of a second ago (Coop.view: smooth whatever
+## the network does); in his bubble when he has fallen.
 func _draw_mate_layer(c: CanvasItem) -> void:
 	if run == null or not Art.ready or run.mate == null:
 		return
-	var m: Dictionary = run.mate
+	var m: Dictionary = run.mate_view if run.mate_view != null and not run.mate_view.is_empty() else run.mate
 	var x = sx(float(m.get("x", 0.0)))
 	if x < -60 or x > view_w + 60:
 		return
@@ -920,7 +921,7 @@ func _draw_mate_layer(c: CanvasItem) -> void:
 	mp.ground = bool(m.get("g", true))
 	mp.flying = bool(m.get("f", false))
 	mp.phase = float(m.get("ph", 0.0))
-	if m.get("b", false):
+	if run.mate.get("b", false):
 		mp.y = run.mate_bubble.y + 40
 		draw_hero(c, null, mp, sx(run.mate_bubble.x))
 		c.draw_set_transform_matrix(Transform2D.IDENTITY)

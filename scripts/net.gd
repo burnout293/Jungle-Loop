@@ -158,3 +158,19 @@ func read_signals(save: Dictionary, room: String, since: int) -> Dictionary:
 ## Empty while the server has no TURN key (server/turn.ps1).
 func ice(save: Dictionary) -> Dictionary:
 	return await _call(save, "ice", {})
+
+## Invites a friend (his code) into the room just opened: he sees it on his screen (invites).
+func invite(save: Dictionary, code: String, room: String) -> Dictionary:
+	return await _call(save, "invite", {"code": code, "room": room})
+
+## The invitations waiting for this player: {items: [{room, name, code}]}.
+func invites(save: Dictionary) -> Dictionary:
+	return await _call(save, "invites", {})
+
+## « Pas maintenant »: the invitation goes, the host is told.
+func invite_no(save: Dictionary, room: String) -> Dictionary:
+	return await _call(save, "invite/no", {"room": room})
+
+## The host left his room: it goes (and its invitation).
+func close_room(save: Dictionary, room: String) -> Dictionary:
+	return await _call(save, "room/close", {"room": room})
