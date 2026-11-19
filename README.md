@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.40.0** (19/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.41.0** (19/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,21 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
 
+## 0.41.0
+
+- **Mettre à jour le jeu** (Réglages, Général, dans le navigateur) : le jeu lit `version.txt` à côté de lui
+  (écrit par `tools/publish_web.py`) ; plus récente, il se recharge sans les fichiers gardés par le
+  navigateur (service worker, caches, puis le jeu redemandé au serveur), la sauvegarde ne bouge pas. Déjà à
+  jour, un 2e appui recharge quand même. Au lancement, un « ! » doré sur la roue dentée quand une version
+  plus récente est en ligne. Le moteur (`index.wasm`) n'est pas retéléchargé.
+- **À deux, les améliorations qui changent la vitesse s'appliquent aux deux en même temps** : Esquive,
+  Sablier et RedMonster lancés par l'un partent aussi chez l'autre (message `act`, `Game.remote_act`), au
+  même point de l'image, pour toute leur durée, avec la même recharge ; le Sprint, porté par les deux
+  (équipement de l'hôte), entre dans la vitesse de pose de la route (`lay_speed`, `run.base`). Banc
+  `coop_sync` : 0,1 m d'écart une fois les effets finis (16 m au plus fort pendant l'Esquive, le temps du
+  message) ; `coop_road` : même route avec les actifs partagés, décalés de 0,1 s, et avec le Sprint.
+  Restent coupés à deux : montures, sablier ramassable, pause, Relique altérée, gemmes du Trèfle, nuées.
+
 ## 0.40.0
 
 - **Coop : le joueur 2 allait plus vite.** Cause : seul, une image plus longue que 34 ms ne compte que pour
@@ -149,7 +164,7 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   lisibles lettre par lettre.
 - Nouvel objet **RedMonster** (bouton, niveau 8, 2500 / 5000 / 10000) : sa vitesse ×2 pendant 5 / 10 / 20 s,
   recharge 30 / 35 / 45 s depuis la gorgée ; la route reste posée pour sa vitesse à lui ; une traînée
-  rouge derrière lui, la canette qui s'ouvre (son) ; touche R ; pas en coop. Réglages dans
+  rouge derrière lui, la canette qui s'ouvre (son) ; touche R ; pas en coop (partagé depuis 0.41). Réglages dans
   `reglages/equilibrage.txt` (`redmonster, …`) et `progression.txt`. Icône `ico-monster` (PixelLab). La
   rangée de boutons en jeu a la place pour cinq.
 
@@ -330,6 +345,9 @@ Godot --headless --path . --export-release "Web" export/web/index.html
 ```
 
 Résultat : 44 Mo dans `export/web` (moteur `index.wasm` 39,5 Mo, jeu `index.pck` 6,5 Mo), jamais committé.
+Puis `python tools/publish_web.py` : copie l'export dans le dépôt du site (`../Jungle-Loop`) et y écrit
+`version.txt` (la version de `main.gd`), que le jeu lit pour « Mettre à jour » (Réglages) et le « ! » sur la
+roue dentée ; il refuse un export plus ancien que les scripts.
 L'export est une appli installable (PWA) : plein écran, couchée, icônes `assets/pwa/`, écran de chargement
 `assets/pwa/splash.png`, en-tête pour l'iPhone dans `html/head_include`. Le fichier de cache hors ligne se
 renouvelle à chaque export.

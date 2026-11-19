@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.40.0"
+const VERSION := "0.41.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -103,6 +103,11 @@ var invite_busy := false
 var invite_seen := {}                  # the rooms of the invitations already shown
 var invite_box: CanvasLayer = null
 const INVITE_POLL := 5.0
+var testing := false                   # a bench drives the game (--test, ?test on this computer): nothing looked up online
+var update_busy := false
+var update_online := ""                # the version online (version.txt beside the game), once looked at
+var update_text := ""                  # what Réglages says about it
+var update_sure := false               # « à jour » said: pressing again reloads anyway
 const INVITE_SCREENS := ["menu", "shop", "friends", "over", "settings"]
 var friends_tab := "friends"
 var board: Array = []                  # the friends' board, as the server sent it
@@ -158,7 +163,8 @@ func _ready() -> void:
 	w["loading"] = loading
 	# the bench: a bot plays (see bench.gd); in a browser only on this computer, with "?test" in the address
 	var web_test = OS.has_feature("web") and _js_yes("['localhost','127.0.0.1'].includes(location.hostname) && location.search.includes('test')")
-	if "--test" in OS.get_cmdline_user_args() or web_test:
+	testing = "--test" in OS.get_cmdline_user_args() or web_test
+	if testing:
 		var bench = load("res://scripts/bench.gd").new()
 		bench.main = self
 		add_child(bench)
@@ -166,6 +172,8 @@ func _ready() -> void:
 
 func _load() -> void:
 	await get_tree().process_frame                # the "loading" text is on screen first
+	if OS.has_feature("web") and not testing:
+		_look_update.call_deferred(false)          # a newer version online: a « ! » on the gear
 	var t0 = Time.get_ticks_msec()
 	Art.load_all()
 	var t_art = Time.get_ticks_msec() - t0
@@ -922,6 +930,19 @@ func _build_menu() -> void:
 		Audio.sfx("click")
 		go("settings")
 	gear.pressed.connect(on_gear)
+	var newer = PanelContainer.new()                 # a newer version online: a gold dot on the gear (Réglages →
+	var dot = _flat(GOLD, LINE, 1.0)                 # Mettre à jour)
+	dot.set_corner_radius_all(roundi(a(8)))
+	dot.set_content_margin_all(0)
+	newer.add_theme_stylebox_override("panel", dot)
+	newer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bang = _label("!", ts("m"), LINE, 0)
+	bang.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bang.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	newer.add_child(bang)
+	_place(newer, M + 25, M - 5, 16, 16)
+	newer.visible = _update_ready()
+	w["menu-upd"] = newer
 	var pals = Button.new()                          # Amis: only once a server is set (reglages/reseau.txt)
 	pals.focus_mode = Control.FOCUS_NONE
 	_kit_square(pals, "blank", 36)
@@ -938,6 +959,7 @@ func _build_menu() -> void:
 	w["menu-friends"] = pals
 	s.add_child(pals)
 	s.add_child(gear)
+	s.add_child(newer)
 	# the stone plaque of the title, its letters hopping one after the other
 	var plaque = TextureRect.new()
 	plaque.texture = icon("ui-title")
@@ -1334,6 +1356,18 @@ func _build_settings() -> void:
 			sub.custom_minimum_size.x = a(240)
 			w["q-sub"] = sub
 			main.add_child(sub)
+	if OS.has_feature("web"):                        # the browser keeps the game's files: a fresh copy on demand
+		main.add_child(_label("VERSION", ts("s"), RELIC, 0))
+		var vrow = _toggle_row("v" + VERSION)
+		var ub = _button("Mettre à jour", "small", _check_update)
+		ub.custom_minimum_size.x = a(130)
+		vrow.add_child(ub)
+		main.add_child(vrow)
+		var um = _label(update_text, ts("s"), DIM, 0)
+		um.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		um.custom_minimum_size.x = a(240)
+		w["upd-msg"] = um
+		main.add_child(um)
 	w["panel-main"] = main
 	col.add_child(main)
 	var access = _vbox(6)
@@ -1807,6 +1841,89 @@ func _on_opened(args: Array) -> void:
 
 func _js(code: String):
 	return JavaScriptBridge.eval(code, true) if OS.has_feature("web") else null
+
+# ---------- updating the game (in a browser) ----------
+# The browser keeps the game's files (its service worker, its cache): a new version may take a few
+# reloads to show. tools/publish_web.py writes version.txt beside the game; the game reads it once at the
+# start (a « ! » on the gear when it is newer) and when « Mettre à jour » is pressed (Réglages): newer, the
+# game reloads without the files kept; the save is elsewhere (IndexedDB) and stays.
+
+func _update_ready() -> bool:
+	return update_online != "" and _newer(update_online, VERSION)
+
+## Whether version a ("0.41.0") comes after version b.
+static func _newer(a: String, b: String) -> bool:
+	var pa = a.split(".")
+	var pb = b.split(".")
+	for i in maxi(pa.size(), pb.size()):
+		var x = pa[i].to_int() if i < pa.size() else 0
+		var y = pb[i].to_int() if i < pb.size() else 0
+		if x != y:
+			return x > y
+	return false
+
+func _upd_say(text: String) -> void:
+	update_text = text
+	if w.has("upd-msg") and is_instance_valid(w["upd-msg"]):
+		w["upd-msg"].text = text
+
+## « Mettre à jour »: a look online, then a fresh copy if there is a newer one; pressed again once it said
+## « à jour », a fresh copy anyway.
+func _check_update() -> void:
+	if update_sure:
+		_upd_say("Rechargement…")
+		_reload_fresh()
+		return
+	_look_update(true)
+
+## The version online (version.txt beside the game). `asked`: pressed in Réglages (a newer one is fetched
+## at once); otherwise the look at the start (the gear's « ! »).
+func _look_update(asked: bool) -> void:
+	if update_busy or not OS.has_feature("web"):
+		return
+	update_busy = true
+	if asked:
+		_upd_say("Recherche d'une nouvelle version…")
+	var here = str(_js("(function () { var u = location.href.split('#')[0].split('?')[0]; return u.substring(0, u.lastIndexOf('/') + 1); })()"))
+	var req = HTTPRequest.new()
+	req.timeout = 8.0
+	add_child(req)
+	var online = ""
+	if req.request(here + "version.txt?t=%d" % int(Time.get_unix_time_from_system() * 1000)) == OK:
+		var res = await req.request_completed
+		if res[0] == HTTPRequest.RESULT_SUCCESS and res[1] == 200:
+			online = (res[3] as PackedByteArray).get_string_from_utf8().strip_edges()
+	req.queue_free()
+	update_busy = false
+	if RegEx.create_from_string("^\\d+\\.\\d+\\.\\d+$").search(online) == null:
+		if asked:
+			_upd_say("Pas de réponse : vérifie ta connexion, puis réessaie.")
+		return
+	update_online = online
+	if w.has("menu-upd") and is_instance_valid(w["menu-upd"]):
+		w["menu-upd"].visible = _update_ready()
+	if not asked:
+		if _update_ready():
+			_upd_say("La version %s est en ligne : appuie sur Mettre à jour." % online)
+		return
+	if _newer(online, VERSION):
+		_upd_say("Version %s trouvée : mise à jour…" % online)
+		await get_tree().create_timer(0.8).timeout
+		_reload_fresh()
+	else:
+		_upd_say("Le jeu est à jour (v%s). Appuie encore pour le recharger quand même." % VERSION)
+		update_sure = true
+
+## The game again, fresh: the service worker and its cache go, the game's files are fetched anew (past
+## the browser's own cache too), then the page reloads. The engine (index.wasm, 40 Mo) is kept: it only
+## changes with Godot's version.
+func _reload_fresh() -> void:
+	_js("(async function () {" +
+		" try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); } catch (e) {}" +
+		" try { for (const k of await caches.keys()) await caches.delete(k); } catch (e) {}" +
+		" for (const f of [location.href.split('#')[0], 'index.html', 'index.js', 'index.pck', 'index.service.worker.js', 'version.txt']) {" +
+		" try { await fetch(f, { cache: 'reload' }); } catch (e) {} }" +
+		" location.reload(); })()")
 
 ## A yes-or-no question to the browser. (Its answer is made a number first: a true or false coming
 ## back from JavaScript is not always a bool on Godot's side, and comparing it to one stops the script.)
@@ -2831,6 +2948,8 @@ func _on_coop(m: Dictionary) -> void:
 		"rescue":
 			Game.back(run)
 			print("coop: rescued")
+		"act":                                           # his Esquive, Sablier or RedMonster: mine too
+			Game.remote_act(run, str(m.get("k", "")))
 		"back":
 			if run.mate != null:
 				run.mate["b"] = false
@@ -3193,6 +3312,9 @@ func _step(h: float) -> void:
 				print("coop: ", ev)
 				coop.send({"t": ev})
 	run.events.clear()
+	for k in run.acts:                               # for two: Esquive, Sablier, RedMonster start for both
+		coop.send({"t": "act", "k": k})
+	run.acts.clear()
 	if run.coop and coop.state == "ready" and not run.dead:   # where he is, for the partner's screen
 		coop_send_t -= h
 		if coop_send_t <= 0:

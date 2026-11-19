@@ -125,5 +125,46 @@ func _init() -> void:
 	check("et là où il était vraiment à ce moment (à 6 unités près)", worst < 6.0, "%.1f" % worst)
 	check("un retard court (moins de 0,2 s)", c.shown < 0.2, "%.3f s" % c.shown)
 	c.free()
+
+	# --- 3. the shared actives: A presses Esquive, Sablier, RedMonster; B starts each when A's word arrives,
+	# 0.08 s later (remote_act). Apart for a moment; once over, at the same place again.
+	var kit = {"dash": 2, "slow": 2, "monster": 2}
+	var A = Game.coop_run(kit, 4242, 0, false)
+	var B = Game.coop_run(kit, 4242, 0, false)
+	for r in [A, B]:
+		r.god = true
+		r.view_w = 1280
+		Game.launch(r)
+	var ia = Game.Controls.new()
+	var ib = Game.Controls.new()
+	var words = []
+	var tt = 0.0
+	var apart = 0.0
+	var started = []
+	var cds = []
+	while tt < 70.0:
+		tt += 1.0 / 60
+		ia.dash = absf(tt - 10.0) < 0.008
+		ia.slow = absf(tt - 20.0) < 0.008
+		ia.monster = absf(tt - 30.0) < 0.008
+		Game.update(A, 1.0 / 60, ia)
+		A.events.clear()
+		for k in A.acts:
+			words.append([tt + 0.08, k])
+			started.append(k)
+		A.acts.clear()
+		while not words.is_empty() and words[0][0] <= tt:
+			Game.remote_act(B, words.pop_front()[1])
+		Game.update(B, 1.0 / 60, ib)
+		B.events.clear()
+		B.acts.clear()
+		apart = maxf(apart, absf((A.cam + A.sx) - (B.cam + B.sx)))
+		if absf(tt - 30.5) < 0.008:
+			cds = [A.monster.cd, B.monster.cd, B.slow.cd, B.monster.t]
+	var after = absf((A.cam + A.sx) - (B.cam + B.sx))
+	print("Actifs partagés %s : écart au plus fort %.0f unités, après %.1f unités ; recharges RedMonster %.2f / %.2f s" % [started, apart, after, cds[0], cds[1]])
+	check("les trois actifs sont partis chez l'un", started == ["dash", "slow", "monster"], str(started))
+	check("et chez l'autre aussi, avec la même recharge", cds[3] > 0 and cds[2] > 0 and absf(cds[0] - cds[1]) < 0.2, str(cds))
+	check("une fois finis, au même endroit (à 5 unités près)", after < 5.0, "%.1f" % after)
 	print("BILAN : ", "tout bon" if fails == 0 else "%d échec(s)" % fails)
 	quit()

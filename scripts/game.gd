@@ -567,6 +567,8 @@ class Run:
 	var road_tier := -1                # what the road may ask of him (-1: what his own upgrades allow)
 	var mate = null                    # the partner's last state: {at, x, y, vy, v, g, f, ph, b, d}, world units
 	var mate_view = null               # where he is drawn: his state a few hundredths ago, smoothed (Coop.view)
+	var acts: Array = []               # for two: the actives he started this step (dash, slow, monster), told to the partner
+	var act_in: Array = []             # for two: those the partner started, to start here next step (remote_act)
 	var bubble := false                # fallen: he floats after the partner until rescued
 	var bubble_pos := Vector2.ZERO     # where his bubble is (world)
 	var mate_bubble := Vector2.ZERO    # where the partner's bubble is, following him (world)
@@ -618,10 +620,10 @@ static func h01(i: float, s: float) -> float:
 static func lay_speed(run: Run, x: float) -> float:
 	if not run.coop:
 		return run.road_speed
-	if run.mode != "story":
-		return sqrt(SPEED_BASE * SPEED_BASE + 2.0 * SPEED_GAIN * maxf(0.0, x))
+	if run.mode != "story":                          # (run.base: Sprint included, worn by both: the host's kit)
+		return sqrt(run.base * run.base + 2.0 * SPEED_GAIN * maxf(0.0, x))
 	if x < run.coop_xb:                              # Histoire: the forest's speed, then Vorace's, then each place's
-		return sqrt(SPEED_BASE * SPEED_BASE + 2.0 * STORY_GAIN * maxf(0.0, x))
+		return sqrt(run.base * run.base + 2.0 * STORY_GAIN * maxf(0.0, x))
 	if x < run.coop_xf + COOP_VIEW:
 		return BOSS_SPEED
 	var m = run.coop_xg + 16 * 48                    # the first new place (never coop_zone_at: it moves on
@@ -635,7 +637,7 @@ static func lay_speed(run: Run, x: float) -> float:
 			break
 		m = nm
 		biome = NEXT_BIOME[biome]
-	var z = ZONE_SPEED.get(biome, SPEED_BASE)
+	var z = ZONE_SPEED.get(biome, SPEED_BASE) + run.base - SPEED_BASE
 	return sqrt(z * z + 2.0 * STORY_GAIN * (x - m))
 
 ## Histoire for two: the mark after `m` where a new place begins (its speed starts again there).
@@ -653,14 +655,15 @@ static func boss_road(run: Run, x: float) -> bool:
 static func road_luck(run: Run) -> int:
 	return 0 if run.coop else run.lvl("lucky")
 
-## A run for two (main.gd): the same road on both phones, whatever their frame rate, screen, loadout or
-## place on the screen. Nothing that changes one player's pace (Esquive, Sablier, Sprint, a mount, the
-## hourglass, RedMonster) nor bends the road for him alone (Relique altérée, Trèfle's gems, the swarms that
-## follow him). `mode`: "endless" or "story" (Vorace then laid on the road: see COOP_VIEW).
+## A run for two (main.gd): the same road on both phones, whatever their frame rate, screen or place on the
+## screen; both wear the host's items and powers. What changes the pace is shared: Sprint (worn by both),
+## Esquive, Sablier and RedMonster (started by one, they start for both: remote_act). Left out: what would
+## change one player's pace alone (a mount, the hourglass picked up) or bend the road for him alone
+## (Relique altérée, Trèfle's gems, the swarms that follow him). `mode`: "endless" or "story" (Vorace then
+## laid on the road: see COOP_VIEW).
 static func coop_run(upgrades: Dictionary, seed_: int, tier: int, guest: bool, mode: String = "endless") -> Run:
 	var up = upgrades.duplicate()
-	for id in ["dash", "slow", "sprint", "drunk", "monster"]:
-		up.erase(id)
+	up.erase("drunk")
 	var run = new_run(up, mode, seed_)
 	run.coop = true
 	run.road_tier = tier
@@ -679,6 +682,14 @@ static func coop_run(upgrades: Dictionary, seed_: int, tier: int, guest: bool, m
 	if guest:
 		run.home = PX - 70                       # just behind the host, on both screens: both are seen
 	return run
+
+## For two: the partner started an active that changes the pace (Esquive, Sablier, RedMonster). It starts
+## here too at the next step, at the very point of the step where his own started, for its full length:
+## both cover the same extra ground (a few hundredths apart, the time his word took), and both wait for
+## the same recharge. (Already going here, both pressed at once: one only.)
+static func remote_act(run: Run, k: String) -> void:
+	if not run.dead and k in ["dash", "slow", "monster"]:
+		run.act_in.append(k)
 
 static func friend(run: Run) -> float:          # Ami de la nature: mounts come that much sooner
 	return 1.0 + FRIEND_K * run.lvl("nature")
@@ -2338,6 +2349,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			pl.y = pl.y0 + sin(run.t * PAD_SPEED + pl.ph) * pl.bob
 
 	# --- actives ---
+	var mate_acts: Array = run.act_in                # for two: what the partner started (remote_act)
+	run.act_in = []
 	var was_dashing = run.dash.t > 0
 	run.dash.t = maxf(0, run.dash.t - dt)
 	run.dash.cd = maxf(0, run.dash.cd - dt)
@@ -2361,6 +2374,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.dash.t = DODGE_TIME
 		run.dash.cd = run.dash.full
 		run.events.append("dash")
+		if run.coop:
+			run.acts.append("dash")                  # (for two: the partner's Esquive too, remote_act)
+	elif "dash" in mate_acts and run.dash.t == 0:
+		run.dash.t = DODGE_TIME
+		run.dash.cd = run.dash.full
+		run.events.append("dash")
 	var monster_was = run.monster.t                  # RedMonster: twice his speed for a few seconds
 	run.monster.t = maxf(0, run.monster.t - dt)
 	run.monster.cd = maxf(0, run.monster.cd - dt)
@@ -2370,10 +2389,22 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.monster.t = MONSTER_TIME[mini(run.lvl("monster"), MONSTER_TIME.size() - 1)]
 		run.monster.cd = run.monster.full
 		run.events.append("monster")
+		if run.coop:
+			run.acts.append("monster")
+	elif "monster" in mate_acts and run.monster.t == 0:
+		run.monster.t = MONSTER_TIME[clampi(run.lvl("monster"), 1, MONSTER_TIME.size() - 1)]
+		run.monster.cd = run.monster.full
+		run.events.append("monster")
 	if run.monster.t > 0 and randf() < 0.6:          # red fizz flying off behind him
 		part(run, run.cam + run.sx - rnd(10, 40), run.p.y - rnd(10, 70), -rnd(160, 420), rnd(-60, 40), rnd(0.2, 0.45), colour_of(["#ff3b3b", "#ff6b4a", "#ffd35c"]), rnd(4, 9), 0)
 	if run.leap == null and input.slow and run.lvl("slow") > 0 and run.slow.cd == 0:
 		run.slow.t = SLOW_TIME[run.lvl("slow")]
+		run.slow.cd = SLOW_CD
+		run.events.append("slow")
+		if run.coop:
+			run.acts.append("slow")
+	elif "slow" in mate_acts and run.slow.t == 0:
+		run.slow.t = SLOW_TIME[clampi(run.lvl("slow"), 1, SLOW_TIME.size() - 1)]
 		run.slow.cd = SLOW_CD
 		run.events.append("slow")
 	var dashing = run.dash.t > 0

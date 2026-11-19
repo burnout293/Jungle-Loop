@@ -355,7 +355,8 @@ func _tour() -> void:
 #   ?test&net=…&coop=host&friend=CODE   adds that friend, invites him from the list (« Inviter »), and once
 #                                       linked starts Histoire from the home screen, then Jouer after it
 #   ?test&net=…&coop=host / coop=join&room=XXXX   the same with a room's four letters
-# The host wears Double saut, Aimant, Vitalité and the Vol; the guest nothing (the host's go on both).
+# The host wears Double saut, RedMonster, Vitalité and the Vol; the guest nothing (the host's go on both).
+# At 6 s the host drinks RedMonster: it must start on both (Game.remote_act).
 # Both run with the invincibility on, a bot jumping now and then. At 5 s the guest is put in a bubble (the
 # host jumps until he has brought him back); at 12 s both are (each brings the other back); from 20 s
 # nobody jumps and both are put in bubbles: the run ends on both sides. Each prints, every second, how far
@@ -387,8 +388,8 @@ func _coop_bench(delta: float) -> void:
 		var s: Dictionary = main.save
 		s["seenIntro"] = true
 		if host:
-			s["upgrades"] = {"doubleJump": 1, "magnet": 2, "heart": 1, "flight": 1}
-			s["equipped"] = ["doubleJump", "magnet", "heart"]
+			s["upgrades"] = {"doubleJump": 1, "monster": 1, "heart": 1, "flight": 1}
+			s["equipped"] = ["doubleJump", "monster", "heart"]
 			s["powersOff"] = []
 			main.refresh_menu()
 		else:
@@ -473,6 +474,12 @@ func _coop_bench(delta: float) -> void:
 		coop_said["gear%d" % coop_runs] = true
 		print("COOP GEAR %s mode=%s hearts=%d up=%s tier=%d" % [c.role, r.mode, r.hearts, r.up, Game.tier_of(r)])
 	r.god = true
+	if host and r.t > 6.0 and not coop_said.has("drink%d" % coop_runs):
+		coop_said["drink%d" % coop_runs] = true
+		main.input.monster = true
+	if r.monster.t > 0 and not coop_said.has("fizz%d" % coop_runs):
+		coop_said["fizz%d" % coop_runs] = true
+		print("COOP ACT %s monster t=%.2f for %.1f s, recharge %.1f s" % [c.role, r.t, r.monster.t, r.monster.cd])
 	var mate_b: bool = r.mate != null and r.mate.get("b", false)
 	next_press -= delta
 	var ending = r.t > 20.0

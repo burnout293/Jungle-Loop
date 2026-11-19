@@ -1,7 +1,9 @@
 extends SceneTree
-# The coop road: two runs with one seed, as two different devices would play them (another loadout, another
-# frame rate, another screen width, the guest's place, one jumping, one idle). What the road lays (dangers,
-# platforms, coins) must be the same. Each difference is tried alone against the reference, then all at once.
+# The coop road: two runs with one seed, as two different devices would play them (another frame rate,
+# another screen width, the guest's place, one jumping, one idle, the shared actives starting a little later
+# on one). What the road lays (dangers, platforms, coins) must be the same. Each difference is tried alone
+# against the reference, then all at once. Both wear the host's kit since 0.40; the items that do not
+# change the road are still tried apart (Sprint does: it is tried on both).
 #   godot --headless --path . --script tests/coop_road.gd   (tests/ has a .gdignore: kept out of the game)
 
 const SECONDS := 150.0
@@ -40,6 +42,10 @@ func lay(seed_: int, opts: Dictionary) -> Array:
 				next_press = randf_range(0.3, 1.2)
 				inp.pressed = true
 			inp.hold = randf() < 0.5
+		for a in opts.get("acts", []):              # the partner's Esquive, Sablier, RedMonster (remote_act)
+			if t - dt < a[0] and t >= a[0]:
+				Game.remote_act(r, a[1])
+		r.acts.clear()
 		Game.update(r, dt, inp)
 		if "boss" in r.events:
 			boss_seen = true
@@ -84,8 +90,9 @@ func compare(name: String, a: Array, b: Array) -> bool:
 
 func _init() -> void:
 	Tune.load_file()
-	var rich = {"sprint": 1, "lucky": 3, "scatter": 1, "magnet": 3, "heart": 3, "drunk": 1, "boots": 2, "tnt": 2,
-		"flight": 3, "doubleJump": 1, "spring": 1, "smash": 1, "rewind": 1, "nature": 2, "dash": 2, "slow": 1}
+	var rich = {"lucky": 3, "scatter": 1, "magnet": 3, "heart": 3, "drunk": 1, "boots": 2, "tnt": 2,
+		"flight": 3, "doubleJump": 1, "spring": 1, "smash": 1, "rewind": 1, "nature": 2, "dash": 2, "slow": 1, "monster": 3}
+	var acts = [[20.0, "dash"], [35.0, "slow"], [50.0, "monster"], [95.0, "dash"], [110.0, "slow"]]
 	var base = lay(4242, {})
 	var all_ok = true
 	var cases = {
@@ -94,12 +101,16 @@ func _init() -> void:
 		"écran large": {"view_w": 2400},
 		"invité (1,75 m derrière)": {"guest": true},
 		"saute au hasard": {"jumpy": true, "cosmetic": 12345},
+		"actifs partagés (Esquive, Sablier, RedMonster)": {"acts": acts},
+		"les mêmes, 0,1 s plus tard": {"acts": acts.map(func(a): return [a[0] + 0.1, a[1]])},
 	}
 	for id in rich:
 		cases["objet " + id] = {"up": {id: rich[id]}}
-	cases["TOUT à la fois"] = {"up": rich, "dt": 1.0 / 120, "jitter": true, "view_w": 2400, "guest": true, "jumpy": true, "cosmetic": 777}
+	cases["TOUT à la fois"] = {"up": rich, "dt": 1.0 / 120, "jitter": true, "view_w": 2400, "guest": true, "jumpy": true, "cosmetic": 777, "acts": acts}
 	for name in cases:
 		all_ok = compare(name, base, lay(4242, cases[name])) and all_ok
+	var sprint = lay(4242, {"up": {"sprint": 1}})       # Sprint, worn by both (the host's kit)
+	all_ok = compare("Sprint sur les deux, TOUT", sprint, lay(4242, {"up": {"sprint": 1, "flight": 3, "dash": 2}, "dt": 1.0 / 120, "jitter": true, "view_w": 2400, "guest": true, "jumpy": true, "acts": acts})) and all_ok
 	# Histoire for two: the forest, Vorace laid on the road (her pads, then her gems), the places after
 	var story = lay(4242, {"mode": "story"})
 	var story_cases = {
@@ -107,7 +118,7 @@ func _init() -> void:
 		"Histoire : écran large": {"view_w": 2400},
 		"Histoire : invité": {"guest": true},
 		"Histoire : saute au hasard": {"jumpy": true, "cosmetic": 4321},
-		"Histoire : TOUT à la fois": {"up": rich, "dt": 1.0 / 120, "jitter": true, "view_w": 2400, "guest": true, "jumpy": true, "cosmetic": 778},
+		"Histoire : TOUT à la fois": {"up": rich, "dt": 1.0 / 120, "jitter": true, "view_w": 2400, "guest": true, "jumpy": true, "cosmetic": 778, "acts": acts},
 	}
 	for name in story_cases:
 		var o: Dictionary = story_cases[name]
