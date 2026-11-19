@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.42.0"
+const VERSION := "0.43.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -56,7 +56,7 @@ var picked := "doubleJump"
 var tab := "up"
 var picked_mount := "gorilla"
 var in_run := false                    # the settings were opened from the pause screen: the run waits behind them
-var set_tab := "main"
+var set_tab := "read"
 var fk := 0.95                         # evens out the sizes of the typefaces
 var font: Font
 var bold: Font                         # buttons, the HUD and titles: the bold cut
@@ -98,6 +98,11 @@ var coop_note := ""                    # a word on the home screen's band for tw
 var coop_note_t := 0.0
 var coop_was := ""                     # the link's state last seen (main notices the partner leaving)
 var peeking := false                   # the pause's eye: its menu hidden, the game looked at
+var run_xp0 := 0.0                     # the experience when the run began (the end counts from there)
+var run_quests0: Array = []            # the objectives when it began: [{q, p}] (the end shows them move on)
+var tally_tw: Tween = null             # the end's count, while it runs
+var tally_level := 0                   # the level the count has shown so far
+var over_tweens: Array = []            # the end screen's moves, stopped if it is left or built again
 var kit_sent := ""                     # the host's items and powers last sent to the guest (JSON)
 var invite_t := 3.0                    # seconds before the next look for an invitation
 var invite_busy := false
@@ -109,7 +114,7 @@ var update_busy := false
 var update_online := ""                # the version online (version.txt beside the game), once looked at
 var update_text := ""                  # what Réglages says about it
 var update_sure := false               # « à jour » said: pressing again reloads anyway
-const INVITE_SCREENS := ["menu", "shop", "friends", "over", "settings"]
+const INVITE_SCREENS := ["menu", "shop", "friends", "over", "tally", "settings"]
 var friends_tab := "friends"
 var board: Array = []                  # the friends' board, as the server sent it
 
@@ -743,6 +748,7 @@ func _build_screens() -> void:
 	_build_settings()
 	_build_score("over")
 	_build_score("pause")
+	_build_tally()
 	_build_friends()
 	var turn = _label("Tourne l'écran pour jouer en grand ↻", ts("m"), INK)   # a phone held upright
 	turn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -755,6 +761,7 @@ func _build_screens() -> void:
 ## Builds the screens again with the typeface and sizes of now, and puts back what was showing.
 func _rebuild() -> void:
 	rebuild_due = false
+	_stop_over()
 	for k in screens:
 		screens[k].queue_free()
 	screens = {}
@@ -781,6 +788,10 @@ func _rebuild() -> void:
 		pause_view()
 	if state == "over":
 		over_view(false)
+		_quest_cards(w["over-quests"])
+		w["over-shot"].scale = Vector2.ONE
+	if state == "tally":
+		tally_view()
 
 func _on_resized() -> void:
 	_check_turn()
@@ -1194,30 +1205,270 @@ func _quest_cards(holder: VBoxContainer) -> void:
 	for ch in holder.get_children():
 		ch.queue_free()
 	for q in save["quests"]:
-		var card = _box()
-		var col = _vbox(3)
-		var row = _hbox(6)
-		var txt = _label("%s (%d/%d)" % [Progress.quest_text(q), floori(q["p"]), q["goal"]], ts("s"), INK, 0)
-		txt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		txt.custom_minimum_size.x = a(118)
-		row.add_child(txt)
-		var rew = _vbox(0)
-		var r1 = _price(q["reward"], GOLD)
-		r1.alignment = BoxContainer.ALIGNMENT_END
-		(r1.get_child(0) as Label).text = "+%d" % q["reward"]
-		var r2 = _label("+%d XP" % q["xp"], ts("s"), RELIC, 0)
-		r2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		rew.add_child(r1)
-		rew.add_child(r2)
-		row.add_child(rew)
-		col.add_child(row)
-		var bar = _bar(10, 8, RELIC)
-		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		col.add_child(bar)
-		card.add_child(col)
+		holder.add_child(_quest_card(q, float(q["p"])))
+
+## One objective's card, as it stands at `p`: text, rewards, progress (the end moves it on: _card_at).
+func _quest_card(q: Dictionary, p: float) -> PanelContainer:
+	var card = _box()
+	var col = _vbox(3)
+	var row = _hbox(6)
+	var txt = _label("%s (%d/%d)" % [Progress.quest_text(q), floori(p), q["goal"]], ts("s"), INK, 0)
+	txt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	txt.custom_minimum_size.x = a(118)
+	row.add_child(txt)
+	var rew = _vbox(0)
+	var r1 = _price(q["reward"], GOLD)
+	r1.alignment = BoxContainer.ALIGNMENT_END
+	(r1.get_child(0) as Label).text = "+%d" % q["reward"]
+	var r2 = _label("+%d XP" % q["xp"], ts("s"), RELIC, 0)
+	r2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	rew.add_child(r1)
+	rew.add_child(r2)
+	row.add_child(rew)
+	col.add_child(row)
+	var bar = _bar(10, 8, RELIC)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(bar)
+	card.add_child(col)
+	set_bar(bar, p / q["goal"])
+	card.set_meta("bar", bar)
+	card.set_meta("txt", txt)
+	return card
+
+## The card's progress shown at `p`.
+func _card_at(card: PanelContainer, q: Dictionary, p: float) -> void:
+	if not is_instance_valid(card):
+		return
+	set_bar(card.get_meta("bar"), p / q["goal"])
+	(card.get_meta("txt") as Label).text = "%s (%d/%d)" % [Progress.quest_text(q), floori(p), q["goal"]]
+
+# ---------- the end: the count (tally), then the end screen ----------
+
+## The count: the metres run, the coins, the experience they made, the level bar filling up (a level
+## passed: a burst, then its panel with the rewards); « Suivant » goes on to the end screen.
+func _build_tally() -> void:
+	var s = _screen("tally", true)
+	w["tally-title"] = _head(s, DEATHS[0])
+	var left = _pane(s, false)
+	var col = _vbox(6)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	var d_head = _label("DISTANCE", ts("s"), RELIC, 0)
+	d_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(d_head)
+	w["tally-dist"] = _label("0 m", ts("huge"), INK, 3)
+	w["tally-dist"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(w["tally-dist"])
+	var gain = _hbox(5)
+	gain.alignment = BoxContainer.ALIGNMENT_CENTER
+	w["tally-gold"] = _label("+0", ts("xl"), GOLD)
+	gain.add_child(w["tally-gold"])
+	gain.add_child(_icon_rect(icon("coin-icon"), 20))
+	col.add_child(gain)
+	w["tally-best"] = _label("", ts("s"), DIM, 0)
+	w["tally-best"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(w["tally-best"])
+	left.add_child(_fixed(col))
+	var right = _pane(s, true)
+	var rc = _vbox(8)
+	rc.alignment = BoxContainer.ALIGNMENT_CENTER
+	var x_head = _label("EXPÉRIENCE", ts("s"), RELIC, 0)
+	x_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rc.add_child(x_head)
+	w["tally-xp"] = _label("+0 XP", ts("xl"), RELIC)
+	w["tally-xp"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rc.add_child(w["tally-xp"])
+	w["tally-level"] = _level_box(true)
+	rc.add_child(w["tally-level"])
+	w["tally-up"] = _label("NIVEAU SUPÉRIEUR !", ts("l"), GOLD, 1.5)
+	w["tally-up"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	w["tally-up"].modulate.a = 0
+	rc.add_child(w["tally-up"])
+	right.add_child(_fixed(rc))
+	w["tally-next"] = _button("Suivant", "big", _tally_next)
+	_actions(s, [w["tally-next"]])
+
+## The count, from nothing: metres (ticking), coins, then the experience and the level bar (through any
+## level passed: a sound, confetti, « Niveau supérieur ! »); then the panel of the levels gained.
+func tally_play() -> void:
+	if over_info.is_empty():
+		return
+	if tally_tw != null and tally_tw.is_valid():
+		tally_tw.kill()
+	var dist: int = over_info["dist"]
+	var gold: int = over_info["gold"]
+	var xp0: float = over_info.get("xp0", save["xp"])
+	var xp1: float = over_info.get("xp1", save["xp"])
+	w["tally-title"].text = over_info["title"]
+	w["tally-best"].text = ""
+	w["tally-up"].modulate.a = 0
+	tally_level = Progress.level_info(xp0)["level"]
+	_tally_dist(0)
+	_tally_gold(0)
+	_tally_xp(xp0, xp0)
+	var tw = create_tween()
+	tally_tw = tw
+	tw.tween_interval(0.25)
+	tw.tween_method(_tally_dist, 0.0, float(dist), clampf(0.35 + dist * 0.0011, 0.5, 1.6)).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_callback(_tally_best)
+	tw.tween_method(_tally_gold, 0.0, float(gold), 0.5).set_ease(Tween.EASE_OUT)
+	tw.tween_method(func(v: float) -> void: _tally_xp(xp0, v), xp0, xp1, clampf(0.4 + (xp1 - xp0) / 400.0, 0.6, 1.8)).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	tw.tween_interval(0.35)
+	tw.tween_callback(_tally_done)
+
+func _tally_dist(v: float) -> void:
+	var shown = "%d m" % roundi(v)
+	if w["tally-dist"].text != shown and roundi(v) % 7 == 0 and state == "tally":
+		Audio.sfx("tick")
+	w["tally-dist"].text = shown
+
+func _tally_gold(v: float) -> void:
+	w["tally-gold"].text = "+%d" % roundi(v)
+
+## The experience counted up to `x` (from xp0): the gain, the level bar, a burst at each level passed.
+func _tally_xp(xp0: float, x: float) -> void:
+	w["tally-xp"].text = "+%d XP" % roundi(x - xp0)
+	var info = Progress.level_info(x)
+	var box: PanelContainer = w["tally-level"]
+	(box.find_child("lvl", true, false) as Label).text = "Niveau " + str(info["level"])
+	set_bar(box.find_child("bar", true, false), float(info["into"]) / info["need"])
+	(box.find_child("pts", true, false) as Label).text = "%d / %d XP" % [info["into"], info["need"]]
+	if info["level"] > tally_level and state == "tally":
+		tally_level = info["level"]
+		Audio.sfx("level")
+		confetti(40)
+		var up: Label = w["tally-up"]
+		up.pivot_offset = up.size / 2
+		up.modulate.a = 1
+		up.scale = Vector2(0.5, 0.5)
+		var tw = create_tween()
+		tw.tween_property(up, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		box.pivot_offset = box.size / 2
+		box.scale = Vector2(1.12, 1.12)
+		create_tween().tween_property(box, "scale", Vector2.ONE, 0.3)
+
+func _tally_best() -> void:
+	var record: bool = over_info["record"]
+	w["tally-best"].text = "Debug : record non enregistré" if over_info["debug"] else ("★ Nouveau record ! ★" if record else "Record : %d m" % best_of(over_info["mode"]))
+	_set_colour(w["tally-best"], GOLD if record else DIM)
+	w["tally-best"].label_settings.font_size = ts("m") if record else ts("s")
+	w["tally-best"].set_meta("hop", record)
+	if record and state == "tally":
+		confetti(60)
+		Audio.sfx("record")
+
+func _tally_done() -> void:
+	tally_tw = null
+	if not levels_due.is_empty() and state == "tally":
+		show_levels()                                # the levels gained: their panel, to close
+
+## The count as it ends (the screen built again, or Suivant pressed during it).
+func tally_view() -> void:
+	if over_info.is_empty():
+		return
+	w["tally-title"].text = over_info["title"]
+	_tally_dist(over_info["dist"])
+	_tally_gold(over_info["gold"])
+	tally_level = 999
+	_tally_xp(over_info.get("xp0", save["xp"]), over_info.get("xp1", save["xp"]))
+	_tally_best()
+
+## « Suivant »: the end screen, where the objectives move on and the photo comes in.
+func _tally_next() -> void:
+	if state != "tally":
+		return
+	if tally_tw != null and tally_tw.is_valid():
+		tally_tw.kill()
+		tally_tw = null
+		tally_view()
+	Audio.sfx("click")
+	state = "over"
+	show_screen("over")
+	over_play()
+	if not levels_due.is_empty():                    # (Suivant before the levels' panel: it comes now)
+		show_levels.call_deferred()
+
+## The end screen comes alive: the photo of the fall drops in; each objective moves from where the run
+## found it to where it left it; one completed shines (« Réussi ! »), goes, and the one replacing it comes in.
+func over_play() -> void:
+	_stop_over()
+	var shot: Control = w["over-shot"]
+	shot.pivot_offset = shot.size / 2
+	shot.scale = Vector2(0.2, 0.2)
+	shot.rotation = -0.5
+	shot.modulate.a = 0
+	var pt = create_tween().set_parallel()
+	over_tweens.append(pt)
+	pt.tween_property(shot, "scale", Vector2.ONE, 0.5).set_delay(0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	pt.tween_property(shot, "rotation", -0.03, 0.5).set_delay(0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	pt.tween_property(shot, "modulate:a", 1.0, 0.25).set_delay(0.15)
+	var holder: VBoxContainer = w["over-quests"]
+	for ch in holder.get_children():
+		holder.remove_child(ch)
+		ch.queue_free()
+	var finals: Array = save["quests"]
+	var fresh: Array = finals.filter(func(f): return not run_quests0.any(func(s): return is_same(s["q"], f)))
+	var i = 0
+	for s in run_quests0:
+		var q: Dictionary = s["q"]
+		var done = not finals.any(func(f): return is_same(f, q))
+		var card = _quest_card(q, s["p"])
 		holder.add_child(card)
-		set_bar(bar, float(q["p"]) / q["goal"])
+		var target: float = float(q["goal"]) if done else float(q["p"])
+		if target <= s["p"] and not done:
+			i += 1
+			continue
+		var tw = create_tween()
+		over_tweens.append(tw)
+		tw.tween_interval(0.6 + i * 0.4)
+		tw.tween_method(func(v: float) -> void: _card_at(card, q, v), float(s["p"]), target, 0.7).set_ease(Tween.EASE_OUT)
+		if done:
+			var nq = fresh.pop_front() if not fresh.is_empty() else null
+			tw.tween_callback(func() -> void: _card_done(card, q))
+			tw.tween_interval(1.0)
+			tw.tween_property(card, "modulate:a", 0.0, 0.3)
+			tw.tween_callback(func() -> void: _card_swap(holder, card, nq))
+		i += 1
+	for nq in fresh:                                 # (more new ones than completed: shown at once)
+		holder.add_child(_quest_card(nq, float(nq["p"])))
+
+func _stop_over() -> void:
+	for tw in over_tweens:
+		if tw != null and tw.is_valid():
+			tw.kill()
+	over_tweens.clear()
+
+## An objective completed: it shines, « Réussi ! » and what it paid.
+func _card_done(card: PanelContainer, q: Dictionary) -> void:
+	if not is_instance_valid(card):
+		return
+	Audio.sfx("level")
+	var txt: Label = card.get_meta("txt")
+	txt.text = "RÉUSSI !  +%d pièces  +%d XP" % [q["reward"], q["xp"]]
+	_set_colour(txt, GOLD)
+	card.pivot_offset = card.size / 2
+	card.modulate = Color(1.5, 1.35, 0.9)
+	card.scale = Vector2(1.08, 1.08)
+	var tw = create_tween().set_parallel()
+	tw.tween_property(card, "modulate", Color.WHITE, 0.5)
+	tw.tween_property(card, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## The completed card goes; the new objective takes its place.
+func _card_swap(holder: VBoxContainer, card: PanelContainer, nq) -> void:
+	if not is_instance_valid(card):
+		return
+	var at = card.get_index()
+	holder.remove_child(card)
+	card.queue_free()
+	if nq == null:
+		return
+	var fresh_card = _quest_card(nq, float(nq["p"]))
+	holder.add_child(fresh_card)
+	holder.move_child(fresh_card, at)
+	fresh_card.modulate.a = 0
+	var tw = create_tween()
+	tw.tween_property(fresh_card, "modulate:a", 1.0, 0.35)
+	Audio.sfx("click")
 
 func _build_intro() -> void:
 	var s = _screen("intro", true)
@@ -1332,6 +1583,10 @@ func _build_shop() -> void:
 	prev.add_child(pc)
 	s.add_child(prev)
 
+## Réglages, nothing to scroll: on the left the sound and the picture; on the right three tabs, Lisibilité
+## (the typeface, the dangers' outline, the warnings further in), Sauvegarde (its code, its file, erasing
+## all), Version (in a browser, « Mettre à jour »). Opened from the pause, the Sauvegarde tab only says it
+## waits for the end of the run.
 func _build_settings() -> void:
 	var s = _screen("settings", true)
 	var back = _button("Retour", "", func() -> void: go("menu"))
@@ -1340,21 +1595,8 @@ func _build_settings() -> void:
 	_head(s, "Réglages")
 	var left = _pane(s, false, 262)
 	w["set-left"] = left
-	var col = _vbox(6)
-	var tabs = _hbox(4)
-	for spec in [["main", "Général"], ["access", "Accessibilité"]]:
-		var key: String = spec[0]
-		var on_set_tab = func() -> void:
-			set_tab = key
-			refresh_settings()
-		var b = _button(spec[1], "tab", on_set_tab)
-		b.custom_minimum_size = Vector2(a(117), a(22))
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tabs.add_child(b)
-		w["settab-" + key] = b
-	col.add_child(tabs)
-	var main = _vbox(6)
-	main.add_child(_label("SON", ts("s"), RELIC, 0))
+	var col = _vbox(3)
+	col.add_child(_label("SON", ts("s"), RELIC, 0))
 	for spec in [["Musique", "musicVol"], ["Effets", "sfxVol"]]:
 		var key: String = spec[1]
 		var row = _toggle_row(spec[0])
@@ -1366,73 +1608,68 @@ func _build_settings() -> void:
 		w["vol-" + key] = bar
 		vol.add_child(_small_square("+", func() -> void: _volume(key, 1)))
 		row.add_child(vol)
-		main.add_child(row)
-	main.add_child(_label("AFFICHAGE", ts("s"), RELIC, 0))
-	for spec in [["Police pixel", "tg-font"], ["Qualité", "tg-quality"], ["Plein écran", "tg-full"], ["Images par seconde", "tg-fps"]]:
+		col.add_child(row)
+	col.add_child(_label("IMAGE", ts("s"), RELIC, 0))
+	for spec in [["Qualité", "tg-quality"], ["Plein écran", "tg-full"], ["Images par seconde", "tg-fps"]]:
 		var row = _toggle_row(spec[0])
 		var id: String = spec[1]
 		var b = _button("", "small on", func() -> void: _toggle(id))
-		b.custom_minimum_size.x = a(130)
+		b.custom_minimum_size.x = a(110)
 		row.add_child(b)
 		w[id] = b
-		main.add_child(row)
+		col.add_child(row)
 		if id == "tg-full":
 			row.visible = _can_full()
 		if id == "tg-quality":
 			var sub = _label("", ts("s"), DIM, 0)
 			sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			sub.custom_minimum_size.x = a(240)
+			sub.custom_minimum_size.x = a(220)
 			w["q-sub"] = sub
-			main.add_child(sub)
-	if OS.has_feature("web"):                        # the browser keeps the game's files: a fresh copy on demand
-		main.add_child(_label("VERSION", ts("s"), RELIC, 0))
-		var vrow = _toggle_row("v" + VERSION)
-		var ub = _button("Mettre à jour", "small", _check_update)
-		ub.custom_minimum_size.x = a(130)
-		vrow.add_child(ub)
-		main.add_child(vrow)
-		var um = _label(update_text, ts("s"), DIM, 0)
-		um.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		um.custom_minimum_size.x = a(240)
-		w["upd-msg"] = um
-		main.add_child(um)
-	w["panel-main"] = main
-	col.add_child(main)
-	var access = _vbox(6)
-	for spec in [["Contour rouge des dangers", "tg-rim", "Un liseré rouge autour de tout ce qui fait mal."],
+			col.add_child(sub)
+	left.add_child(_fixed(col))
+	var right = _pane(s, true, 262)
+	w["set-right"] = right
+	var rc = _vbox(6)
+	var tabs = _hbox(3)
+	for spec in [["read", "Lisibilité"], ["save", "Sauvegarde"], ["version", "Version"]]:
+		var key: String = spec[0]
+		var on_set_tab = func() -> void:
+			set_tab = key
+			refresh_settings()
+		var b = _button(spec[1], "tab", on_set_tab)
+		b.custom_minimum_size = Vector2(a(70), a(22))
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tabs.add_child(b)
+		w["settab-" + key] = b
+	rc.add_child(tabs)
+	var read = _vbox(5)                              # Lisibilité
+	for spec in [["Police pixel", "tg-font", "Non : une police ronde, plus facile à lire."],
+			["Contour rouge des dangers", "tg-rim", "Un liseré rouge autour de tout ce qui fait mal."],
 			["Signalements décalés", "tg-shift", "Les alertes des Fonceurs apparaissent plus à gauche, loin du pouce."]]:
 		var row = _toggle_row(spec[0])
 		var id: String = spec[1]
 		var b = _button("", "small on", func() -> void: _toggle(id))
-		b.custom_minimum_size.x = a(100)
+		b.custom_minimum_size.x = a(70)
 		row.add_child(b)
 		w[id] = b
-		access.add_child(row)
+		read.add_child(row)
 		var sub = _label(spec[2], ts("s"), DIM, 0)
 		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		sub.custom_minimum_size.x = a(240)
-		access.add_child(sub)
-	w["panel-access"] = access
-	col.add_child(access)
-	var scroll = ScrollContainer.new()                # more than the pane holds: it scrolls, as in the web version
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(col)
-	left.add_child(scroll)
-	var right = _pane(s, true, 262)
-	w["set-right"] = right
-	var rc = _vbox(6)
-	rc.add_child(_label("SAUVEGARDE", ts("s"), RELIC, 0))
-	var sub = _label("Elle se fait toute seule. Pour changer d'appareil, exporte le code puis importe-le (il marche aussi avec la version web).", ts("s"), DIM, 0)
-	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	sub.custom_minimum_size.x = a(240)
-	rc.add_child(sub)
+		sub.custom_minimum_size.x = a(220)
+		read.add_child(sub)
+	w["panel-read"] = read
+	rc.add_child(read)
+	var keep = _vbox(5)                              # Sauvegarde
+	var sub_s = _label("Elle se fait toute seule. Pour changer d'appareil, exporte le code puis importe-le (il marche aussi avec la version web).", ts("s"), DIM, 0)
+	sub_s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub_s.custom_minimum_size.x = a(220)
+	keep.add_child(sub_s)
 	w["save-code"] = TextEdit.new()
 	w["save-code"].placeholder_text = "Code de sauvegarde"
-	w["save-code"].custom_minimum_size = Vector2(a(240), a(26))
+	w["save-code"].custom_minimum_size = Vector2(a(220), a(26))
 	w["save-code"].add_theme_font_size_override("font_size", roundi(7 * U))
 	w["save-code"].wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	rc.add_child(w["save-code"])
+	keep.add_child(w["save-code"])
 	var grid = GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", roundi(a(4)))
@@ -1446,9 +1683,7 @@ func _build_settings() -> void:
 	grid.add_child(_button("Importer", "small", _import_field))
 	grid.add_child(_button("Fichier", "small", _save_file))
 	grid.add_child(_button("Ouvrir", "small", _open_file))
-	rc.add_child(grid)
-	w["save-msg"] = _label("", ts("s"), DIM, 0)
-	rc.add_child(w["save-msg"])
+	keep.add_child(grid)
 	var do_reset = func() -> void:
 		save = SaveData.reset()
 		SaveData.store(save)
@@ -1458,7 +1693,28 @@ func _build_settings() -> void:
 		_confirm("Effacer toute la progression ? C'est définitif.", do_reset)
 	var reset = _button("Tout effacer", "small danger", ask_reset)
 	reset.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	rc.add_child(reset)
+	keep.add_child(reset)
+	w["panel-save"] = keep
+	rc.add_child(keep)
+	var later = _wrap("Pendant une course, la sauvegarde attend la fin : reviens ici depuis l'accueil.", DIM)
+	w["panel-save-later"] = later
+	rc.add_child(later)
+	w["save-msg"] = _label("", ts("s"), DIM, 0)
+	rc.add_child(w["save-msg"])
+	var ver = _vbox(6)                               # Version
+	var vrow = _toggle_row("Version " + VERSION)
+	if OS.has_feature("web"):                        # the browser keeps the game's files: a fresh copy on demand
+		var ub = _button("Mettre à jour", "small", _check_update)
+		ub.custom_minimum_size.x = a(110)
+		vrow.add_child(ub)
+	ver.add_child(vrow)
+	var um = _label(update_text if OS.has_feature("web") else "Une nouvelle version : le jeu la reçoit en se relançant.", ts("s"), DIM, 0)
+	um.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	um.custom_minimum_size.x = a(220)
+	w["upd-msg"] = um
+	ver.add_child(um)
+	w["panel-version"] = ver
+	rc.add_child(ver)
 	right.add_child(_fixed(rc))
 
 func _toggle_row(text: String) -> HBoxContainer:
@@ -1538,12 +1794,12 @@ func _build_score(name: String) -> void:
 		_actions(s, [_button("Abandonner", "stop", func() -> void: go("menu")), _button("Réglages", "", func() -> void: go("settings")), _button("Reprendre", "go", resume)], 150)
 		var eye = Button.new()                       # the eye: the menu goes, the game is seen (still paused); again: back
 		eye.focus_mode = Control.FOCUS_NONE
-		_kit_square(eye, "blank", 34)
+		_kit_square(eye, "blank", 36)
 		var drawn = Eye.new()
 		drawn.set_anchors_preset(Control.PRESET_FULL_RECT)
 		drawn.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		eye.add_child(drawn)
-		_place(eye, 569 - M - 34, M, 34, 34)
+		_place(eye, 569 - M - 36, M, 36, 36)
 		eye.set_meta("still", true)
 		var on_eye = func() -> void:
 			Audio.sfx("click")
@@ -1696,18 +1952,19 @@ func refresh_settings() -> void:
 		b.text = "Oui" if pair[1] else "Non"
 		_style_button(b, "small on" if pair[1] else "small plain")
 	w["tg-quality"].text = {"max": "Max", "perf": "Perf", "eco": "Éco"}[quality()]
-	w["q-sub"].text = {"max": "L'image la plus fine, autant d'images par seconde que l'écran.",
-		"perf": "Une image plus légère, tenue à 60 images par seconde : plus fluide.",
-		"eco": "30 images par seconde et moins de petits détails : la batterie dure plus."}[quality()]
+	w["q-sub"].text = {"max": "L'image la plus fine.",
+		"perf": "Plus légère, 60 images/s : plus fluide.",
+		"eco": "30 images/s : la batterie dure plus."}[quality()]
 	for key in ["musicVol", "sfxVol"]:
 		set_bar(w["vol-" + key], save[key] / 10.0)
-	for key in ["main", "access"]:
-		w["panel-" + key].visible = set_tab == key
+	if not set_tab in ["read", "save", "version"]:
+		set_tab = "read"
+	for key in ["read", "save", "version"]:
+		w["panel-" + key].visible = set_tab == key and not (key == "save" and in_run)
 		_style_button(w["settab-" + key], "tab sel" if set_tab == key else "tab")
-	w["set-right"].visible = not in_run         # opened from the pause: the save waits for the end of the run
-	var rest = Vector2(a(153.5) if in_run else a(14), w["set-left"].get_meta("rest", w["set-left"].position).y)
-	if w["set-left"].get_meta("rest", Vector2.ZERO) != rest:
-		_set_rest(w["set-left"], rest)
+		w["settab-" + key].custom_minimum_size = Vector2(a(70), a(22))
+	w["panel-save-later"].visible = set_tab == "save" and in_run   # opened from the pause: the save waits
+	w["save-msg"].visible = set_tab == "save"
 
 func _volume(key: String, d: int) -> void:
 	save[key] = clampi(save[key] + d, 0, 10)
@@ -2406,6 +2663,7 @@ func go(name: String) -> void:
 	Audio.duck(name == "settings" and state == "pause")   # (the settings opened from the pause: still quiet)
 	_menu_tip("")
 	_peek(false)
+	_stop_over()
 	if name == "settings" and state == "pause":
 		in_run = true
 	if name == "play":
@@ -2453,6 +2711,8 @@ func go(name: String) -> void:
 		state = "play"
 		show_screen("hud")
 		Progress.start_run(save)
+		run_xp0 = save["xp"]                         # (the end counts the experience and moves the objectives from here)
+		run_quests0 = save["quests"].map(func(q): return {"q": q, "p": float(q["p"])})
 		progress({"runs": 1})
 		hint(1 if save["loops"] < 2 else 0)          # the first escapes explain the one control
 		Audio.music("")                              # silence for the rumble: the theme starts on the blast
@@ -2526,16 +2786,14 @@ func game_over() -> void:
 	var record = not run.debug and floori(run.dist) > best_of(run.mode)
 	bank()
 	over_info = {"title": Game.pick(DEATHS), "record": record, "dist": floori(run.dist), "gold": run.gold, "debug": run.debug, "mode": run.mode}
+	over_info["xp0"] = run_xp0
+	over_info["xp1"] = save["xp"]
 	hint(0)
-	over_view(true)
-	if record:
-		confetti(60)
-		Audio.sfx("record")
+	over_view(false)
 	Audio.music("over")                              # the run's music winds down, the menu's comes in
-	state = "over"
-	show_screen("over")
-	if not levels_due.is_empty():                    # the levels gained, once the end screen is up
-		get_tree().create_timer(1.3).timeout.connect(show_levels)
+	state = "tally"                                  # first the count, then (Suivant) the end screen
+	show_screen("tally")
+	tally_play()
 
 ## Fills the end screen from over_info: counting up the first time, at once when the screen is built
 ## again (the phone turned: the screens are made anew at the new size).
@@ -2550,19 +2808,8 @@ func over_view(count_up: bool) -> void:
 	_quest_cards(w["over-quests"])
 	var dist: int = over_info["dist"]
 	var gold: int = over_info["gold"]
-	if count_up:
-		var dur = minf(1.1, 0.25 + dist * 0.012)
-		var tw = create_tween()
-		var count = func(v: float) -> void:        # counts up on screen, with a tick
-			var shown = roundi(v)
-			if w["over-dist"].text != "%d m" % shown and shown % 3 == 0:
-				Audio.sfx("tick")
-			w["over-dist"].text = "%d m" % shown
-			w["over-gold"].text = "+%d" % roundi(gold * (v / dist if dist > 0 else 1.0))
-		tw.tween_method(count, 0.0, float(dist), dur).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	else:
-		w["over-dist"].text = "%d m" % dist
-		w["over-gold"].text = "+%d" % gold
+	w["over-dist"].text = "%d m" % dist                # (counted on the tally just before)
+	w["over-gold"].text = "+%d" % gold
 	w["over-best"].text = "Debug : record non enregistré" if over_info["debug"] else ("★ Nouveau record ! ★" if record else "Record : %d m" % best_of(over_info["mode"]))
 	_set_colour(w["over-best"], GOLD if record else DIM)
 	w["over-best"].label_settings.font_size = ts("m") if record else ts("s")
@@ -3330,6 +3577,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				press()
 			elif state == "over":
 				_replay()
+			elif state == "tally":
+				_tally_next()
 			elif state == "menu" or state == "intro":
 				go("play")
 			elif state == "pause":
@@ -3438,7 +3687,7 @@ func _process(delta: float) -> void:
 	time += delta
 	if state == "loading":
 		return
-	if state == "play" or state == "over":
+	if state == "play" or state == "over" or state == "tally":
 		run.view_w = render.view_w * Game.PIXEL
 		if run.coop and state == "play":             # for two: real time, every bit of it, in steps of 34 ms at most
 			coop_owed = minf(coop_owed + delta, 60.0)   # (alone, a slow frame slows the game down; for two that
@@ -3483,7 +3732,7 @@ func _process(delta: float) -> void:
 			create_tween().tween_property(w["banner"], "modulate:a", 0.0, 0.35)
 	if w.has("over-best") and is_instance_valid(w["over-best"]):
 		var rb: Label = w["over-best"]
-		if rb.get_meta("hop", false) and state == "over":
+		if rb.get_meta("hop", false) and state in ["over", "tally"]:
 			var ph = fposmod(time, 0.6) / 0.6
 			var k = sin(ph / 0.6 * PI) if ph < 0.6 else 0.0
 			rb.pivot_offset = rb.size / 2
@@ -3511,7 +3760,7 @@ func _process(delta: float) -> void:
 		if w["info"].visible and Engine.get_process_frames() % 5 == 0:
 			w["info"].text = "%.1f m/s (propre %.1f) · %d m · %d s · hauteur %.2f m · max %.2f m" % [run.speed / 40, run.own / 40, floori(run.dist), roundi(run.t), run.h, run.max_h]
 	# Behind the menus: the temple, frozen. The hero only appears once the run starts.
-	var shown: Game.Run = run if (state == "play" or state == "pause" or state == "over" or in_run) and run != null else still
+	var shown: Game.Run = run if (state == "play" or state == "pause" or state == "over" or state == "tally" or in_run) and run != null else still
 	render.show_run(shown, time, q)
 	if state == "shop" and demo.run != null:         # the shop's preview: a tiny real run
 		demo.step(dt)

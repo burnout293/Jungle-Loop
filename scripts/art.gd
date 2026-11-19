@@ -46,6 +46,11 @@ static var hangs: Texture2D   # the hanging lianas of the scenery, a little dark
 static var radial: Texture2D  # a white disc fading out: every glow is this, tinted
 static var signs := {}
 static var hills := {}
+# What stands behind the path, per scenery (0.43, PixelLab, tools/prep_hills.py): the forest's mossy rocks
+# and arched roots, the ruins' broken walls of square stones, the dungeon's walls with a wooden door or iron
+# bars, the city's buildings and containers. A little darker than what can be touched.
+const HILL_SETS := [["hill-forest-1", "hill-forest-2"], ["hill-ruins-1", "hill-ruins-2"], ["hill-city-1", "hill-city-2"], ["hill-dungeon-1", "hill-dungeon-2"]]
+static var hill_sets: Array = []
 static var hill_order: Array = []
 static var ready := false
 static var look := 5          # how the dangers stand out: 5 = lit edge in a dark outline, scenery darker
@@ -103,8 +108,17 @@ static func load_all() -> void:
 		names.append_array(b["grounds"])
 		for i in b["props"]:
 			names.append(b["prop"] + str(i))
+	for set_ in HILL_SETS:
+		names.append_array(set_)
 	for n in names:
 		load_one(n)
+	hill_sets = []
+	for set_ in HILL_SETS:
+		var pics: Array = []
+		for n in set_:
+			if img.has(n):
+				pics.append(make(tinted(img[n], rgba(14, 8, 26, 0.38))))
+		hill_sets.append(pics)
 	radial = make(disc_image(64))
 	scene = []
 	for b in BIOMES:

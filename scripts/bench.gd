@@ -140,6 +140,12 @@ func _process(delta: float) -> void:
 	if main.state == "menu" or main.state == "intro":
 		_start()
 		return
+	if main.state == "tally":
+		over_for += delta
+		if over_for > 1.5:
+			over_for = 0
+			main._tally_next()
+		return
 	if main.state == "over":
 		over_for += delta
 		if over_for > 1.0:
@@ -213,28 +219,30 @@ func _tour() -> void:
 		[8.7, "confirm", ""], [9.2, "shot", "10-confirm"], [9.3, "close", ""],
 		[9.4, "go", "menu"], [10.2, "equip", "magnet"], [10.4, "slot", "magnet"], [10.8, "shot", "11-menu-slot"],
 		[10.82, "loadout", "magnet boots tnt"], [10.84, "slot", "boots"], [10.95, "shot", "11b-menu-three"], [10.96, "loadout", "-"], [10.97, "slot", "boots"],
-		[11.0, "play", ""], [11.05, "give", "tnt boots slow dash monster"],
+		[11.0, "play", ""], [11.02, "skipintro", ""], [11.05, "give", "tnt boots slow dash monster"],
 		[12.0, "touch", "0 down game"], [12.05, "check", "hold"], [12.3, "touch", "1 down btn-pause"], [12.35, "check", "state"],
 		[12.4, "touch", "0 up game"], [12.45, "check", "hold"], [12.5, "resume", ""], [13.5, "shot", "12-play"],
 		[13.6, "pause", ""], [14.4, "shot", "13-pause"],
 		[14.5, "go", "settings"], [15.3, "shot", "14-settings-in-run"],
 		[15.4, "go", "menu"], [16.2, "shot", "15-back-to-pause"],
-		[16.3, "resume", ""], [16.35, "levels", "4"], [16.4, "die", ""], [18.6, "shot", "16-over-record"],
-		[18.62, "close", ""], [18.64, "rebuild", ""], [18.95, "shot", "16b-over-rebuilt"],
-		[19.0, "photo", ""], [19.6, "shot", "17-photo-full"], [19.65, "close", ""],
-		[19.7, "go", "shop"], [19.75, "tab", "mount"], [19.8, "mpick", "rhinoTamed"], [21.0, "shot", "18-shop-tamed"],
-		[21.1, "moff", "rhino"], [21.15, "mpick", "rhino"], [22.2, "shot", "19-shop-rhino-off"], [22.3, "moff", "rhino"],
-		[22.4, "tab", "up"], [22.45, "pick", "boots"], [24.2, "shot", "20-shop-boots"],
-		[24.3, "pick", "tnt"], [25.6, "shot", "21-shop-tnt"], [25.7, "pick", "dash"], [26.7, "shot", "22-shop-dash"],
-		[26.8, "pick", "drunk"], [28.9, "shot", "23-shop-relic"],
-		[29.0, "go", "menu"], [29.9, "tip", "endless"], [30.0, "shot", "24-menu-tip"], [30.05, "tip", ""],
-		[30.2, "play", ""], [31.6, "scene", "1"], [32.0, "shot", "25-ruins"], [32.2, "scene", "3"], [32.6, "shot", "26-dungeon"],
-		[32.7, "go", "shop"], [32.75, "tab", "up"], [32.8, "own", "tnt"], [32.85, "pick", "tnt"], [34.0, "shot", "27-shop-tnt-owned"],
-		[34.1, "own", "dash"], [34.15, "pick", "dash"], [35.2, "shot", "28-shop-dash-owned"],
-		[35.3, "tab", "power"], [35.35, "own", "flight"], [35.4, "pick", "flight"], [36.5, "shot", "29-shop-flight-owned"],
-		[36.6, "tab", "mount"], [36.65, "mpick", "dragonfly"], [37.8, "shot", "30-shop-dragonfly"], [37.85, "mtick", ""], [38.2, "mtick", ""], [38.25, "mpick", "rhino"], [39.3, "shot", "31-shop-rhino"],
-		[39.35, "tab", "up"], [39.4, "own", "monster"], [39.45, "pick", "monster"], [41.0, "shot", "32-shop-monster"],
-		[41.1, "quit", ""],
+		[16.3, "resume", ""], [16.35, "qdone", ""], [16.4, "die", ""], [17.4, "shot", "16a-head-first"],
+		[20.2, "shot", "16b-tally-counting"], [23.2, "shot", "16c-tally-levels"], [23.25, "close", ""], [23.6, "shot", "16d-tally-done"],
+		[23.7, "next", ""], [24.6, "shot", "16e-over-quests"], [26.4, "shot", "16f-over-quests-done"],
+		[26.5, "rebuild", ""], [26.8, "shot", "16g-over-rebuilt"],
+		[26.9, "photo", ""], [27.5, "shot", "17-photo-full"], [27.55, "close", ""],
+		[27.6, "go", "shop"], [27.65, "tab", "mount"], [27.7, "mpick", "rhinoTamed"], [28.9, "shot", "18-shop-tamed"],
+		[29, "moff", "rhino"], [29.05, "mpick", "rhino"], [30.1, "shot", "19-shop-rhino-off"], [30.2, "moff", "rhino"],
+		[30.3, "tab", "up"], [30.35, "pick", "boots"], [32.1, "shot", "20-shop-boots"],
+		[32.2, "pick", "tnt"], [33.5, "shot", "21-shop-tnt"], [33.6, "pick", "dash"], [34.6, "shot", "22-shop-dash"],
+		[34.7, "pick", "drunk"], [36.8, "shot", "23-shop-relic"],
+		[36.9, "go", "menu"], [37.8, "tip", "endless"], [37.9, "shot", "24-menu-tip"], [37.95, "tip", ""],
+		[38.1, "play", ""], [38.12, "skipintro", ""], [39.5, "scene", "1"], [39.9, "shot", "25-ruins"], [40.1, "scene", "3"], [40.5, "shot", "26-dungeon"],
+		[40.6, "go", "shop"], [40.65, "tab", "up"], [40.7, "own", "tnt"], [40.75, "pick", "tnt"], [41.9, "shot", "27-shop-tnt-owned"],
+		[42, "own", "dash"], [42.05, "pick", "dash"], [43.1, "shot", "28-shop-dash-owned"],
+		[43.2, "tab", "power"], [43.25, "own", "flight"], [43.3, "pick", "flight"], [44.4, "shot", "29-shop-flight-owned"],
+		[44.5, "tab", "mount"], [44.55, "mpick", "dragonfly"], [45.7, "shot", "30-shop-dragonfly"], [45.75, "mtick", ""], [46.1, "mtick", ""], [46.15, "mpick", "rhino"], [47.2, "shot", "31-shop-rhino"],
+		[47.25, "tab", "up"], [47.3, "own", "monster"], [47.35, "pick", "monster"], [48.9, "shot", "32-shop-monster"],
+		[49, "quit", ""],
 	]
 	while tour_i < steps.size() and t >= steps[tour_i][0]:
 		var st = steps[tour_i]
@@ -277,7 +285,20 @@ func _tour() -> void:
 				else:
 					main.set_meta("xp_kept", main.save["xp"])
 					main.save["xp"] = int(arg)
+			"qdone":                                    # during the run: an objective done, another half way, a level passed
+				var q0: Dictionary = main.save["quests"][0]
+				var q1: Dictionary = main.save["quests"][1]
+				var k1: String = Progress.KINDS[q1["k"]]["stat"]
+				main.progress({Progress.KINDS[q0["k"]]["stat"]: q0["goal"]})
+				if k1 != Progress.KINDS[q0["k"]]["stat"]:
+					main.progress({k1: ceili((q1["goal"] - q1["p"]) * 0.5)})
+				main.progress({"dist": Progress.cfg["per_level"] * Progress.cfg["mpp"] * 1.2})
+			"skipintro":                                # (the temple's scene of Histoire: not in the tour's timing)
+				main.run.wait = minf(main.run.wait, 0.05)
+				main.run.say_queue.clear()
+				main.run.saying = ""
 			"photo": main._show_photo()
+			"next": main._tally_next()                 # the count's « Suivant »
 			"confirm": main._confirm("Effacer toute la progression ? C'est définitif.", func() -> void: pass)
 			"close":
 				if main.modal != null:
@@ -375,6 +396,7 @@ var coop_t := 0.0
 var coop_said := {}
 var coop_next := 1.0
 var coop_runs := 0
+var coop_tally := 0.0
 
 func _press(b) -> void:
 	if b is Button and is_instance_valid(b):
@@ -392,6 +414,12 @@ func _find_button(root: Node, text: String) -> Button:
 func _coop_bench(delta: float) -> void:
 	var c: Coop = main.coop
 	var host = opts["coop"] == "host"
+	if main.state == "tally":                        # the count at the end: Suivant after a moment
+		coop_tally += delta
+		if coop_tally > 1.5:
+			coop_tally = 0.0
+			main._tally_next()
+		return
 	if coop_step == 0 and t > 0.5 and main.state == "menu":
 		var s: Dictionary = main.save
 		s["seenIntro"] = true

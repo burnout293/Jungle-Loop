@@ -503,7 +503,19 @@ func draw_hills(c: CanvasItem) -> void:
 		var h = roundi(hl.h / PIXEL)
 		if x > view_w or x + w < 0:
 			continue
-		blit(c, Art.hill(hl.biome, w, h, hl.seed % 997), x, GN + 6 - h)
+		var pics: Array = Art.hill_sets[hl.biome] if hl.biome < Art.hill_sets.size() else []
+		if pics.is_empty():                          # (the pictures missing: the old mound, drawn)
+			blit(c, Art.hill(hl.biome, w, h, hl.seed % 997), x, GN + 6 - h)
+			continue
+		# its stretch filled with the scenery's pictures side by side (chosen from its seed), standing on the floor
+		var at = 0.0
+		var k = 0
+		while at < w - 30:
+			var im: Texture2D = pics[(hl.seed + k * 7 + k * k) % pics.size()]
+			var flip = (hl.seed >> (k % 8)) & 1 == 1 and hl.biome != 2
+			blit(c, im, x + snap(at), GN + 5 - im.get_height(), flip)
+			at += im.get_width() * (0.82 + 0.12 * h01(hl.seed % 997 + k, 13))
+			k += 1
 
 ## Scenery props stand on the floor behind the action. Which one stands where comes from the cell number
 ## alone, so the same stretch always looks the same within a run.
