@@ -7,6 +7,7 @@ extends Node
 
 var main: Node
 var tour_i := 0
+var saved_loadout := []
 var opts := {"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": ""}
 var t := 0.0
 var next_press := 0.6
@@ -199,6 +200,7 @@ func _tour() -> void:
 		[7.7, "toggle", "tg-font"], [8.6, "shot", "09-settings-pixel-again"],
 		[8.7, "confirm", ""], [9.2, "shot", "10-confirm"], [9.3, "close", ""],
 		[9.4, "go", "menu"], [10.2, "equip", "magnet"], [10.4, "slot", "magnet"], [10.8, "shot", "11-menu-slot"],
+		[10.82, "loadout", "magnet boots tnt"], [10.84, "slot", "boots"], [10.95, "shot", "11b-menu-three"], [10.96, "loadout", "-"], [10.97, "slot", "boots"],
 		[11.0, "play", ""], [11.05, "give", "tnt boots slow dash"],
 		[12.0, "touch", "0 down game"], [12.05, "check", "hold"], [12.3, "touch", "1 down btn-pause"], [12.35, "check", "state"],
 		[12.4, "touch", "0 up game"], [12.45, "check", "hold"], [12.5, "resume", ""], [13.5, "shot", "12-play"],
@@ -276,6 +278,15 @@ func _tour() -> void:
 					SaveData.toggle_equip(main.save, arg)
 				main.refresh_menu()
 			"slot": main._slot_info(arg)
+			"loadout":                                  # three items on the home screen for a picture ("-": back as they were)
+				if arg == "-":
+					main.save["equipped"] = saved_loadout
+				else:
+					saved_loadout = main.save["equipped"].duplicate()
+					for id in arg.split(" "):
+						main.save["upgrades"][id] = maxi(1, int(main.save["upgrades"].get(id, 0)))
+					main.save["equipped"] = Array(arg.split(" "))
+				main.refresh_menu()
 			"play":
 				main.save["seenIntro"] = true
 				main.save["best"] = 0

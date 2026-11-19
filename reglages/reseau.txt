@@ -7,7 +7,7 @@
 # (navigateur) ou -- --net=http://127.0.0.1:8787 (Godot).
 
 [serveur]
-adresse |                                   # par exemple https://jungle-loop.ton-compte.workers.dev
+adresse | https://jungle-loop.burnout293.workers.dev   # par exemple https://jungle-loop.ton-compte.workers.dev
 
 [coop]
 # Les serveurs STUN aident deux téléphones à se trouver sur Internet (gratuits, publics), séparés par /.

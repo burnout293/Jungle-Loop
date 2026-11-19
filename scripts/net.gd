@@ -41,14 +41,25 @@ static func load_config(text: String) -> void:
 			["coop", "turn mot de passe"]:
 				turn["credential"] = v
 
+## The benches (--test, ?test on this computer) and the throw-away save (--bac, ?bac) never talk to the
+## real server: they would make it players and scores. Only an address given on purpose is used then.
 static func set_from_args() -> void:
-	for a in OS.get_cmdline_user_args():
+	var given := false
+	var args = OS.get_cmdline_user_args()
+	for a in args:
 		if a.begins_with("--net="):
 			url = a.trim_prefix("--net=")
+			given = true
+	var trying: bool = "--test" in args or "--bac" in args
 	if OS.has_feature("web"):
 		var q = JavaScriptBridge.eval("new URLSearchParams(location.search).get('net') || ''")
 		if q is String and q != "":
 			url = q.trim_suffix("/")
+			given = true
+		var t = JavaScriptBridge.eval("(new URLSearchParams(location.search).has('bac') || (['localhost','127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).has('test'))) ? 1 : 0", true)
+		trying = trying or int(t) == 1             # (a number: a JavaScript boolean may come back as one)
+	if trying and not given:
+		url = ""
 
 static func enabled() -> bool:
 	return url != ""

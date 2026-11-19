@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.36.0"
+const VERSION := "0.37.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -460,8 +460,6 @@ func _styles() -> void:
 	styles["box-sel-down"] = _down(_flat(Color("#2c3558").darkened(0.1), GOLD))
 	styles["pane"] = _flat(Color(24 / 255.0, 30 / 255.0, 54 / 255.0, 0.96))
 	styles["pane"].set_content_margin_all(a(9))
-	styles["slot"] = _flat(Color(16 / 255.0, 20 / 255.0, 40 / 255.0, 0.5), Color(0, 0, 0, 0))   # its dashed edge is drawn by the slot itself
-	styles["slot-full"] = _flat(Color("#2b3358"), GOLD, 2)
 
 # ---------- widgets ----------
 
@@ -1001,6 +999,7 @@ func _build_menu() -> void:
 	w["menu-info"].z_index = 4
 	s.add_child(w["menu-info"])
 	w["menu-loadout"] = _hbox(M)
+	w["menu-loadout"].alignment = BoxContainer.ALIGNMENT_CENTER   # one or two items stay in the middle
 	_place(w["menu-loadout"], 212.5, 320 - M - 42, 150, 42)
 	s.add_child(w["menu-loadout"])
 	var version = _label("v" + VERSION + " · Godot", roundi(7 * U), DIM, 1)
@@ -1497,62 +1496,38 @@ func refresh_menu() -> void:
 	_quest_cards(w["menu-quests"])
 	for ch in w["menu-loadout"].get_children():
 		ch.queue_free()
-	for i in 3:                                  # the three slots: what goes on the next run
-		var id: String = save["equipped"][i] if i < save["equipped"].size() else ""
+	for i in mini(3, save["equipped"].size()):       # what goes on the next run: only the items equipped,
+		var id: String = save["equipped"][i]         # their pictures alone (no frame, no empty place)
 		var slot = Button.new()
 		slot.focus_mode = Control.FOCUS_NONE
 		slot.custom_minimum_size = Vector2(a(42), a(42))
-		if id != "":                                 # filled: the kit's stone square, the picture inside its frame
-			slot.add_theme_stylebox_override("normal", _kit_box("sq-blank-42", [0, 0, 0, 0], [7, 7, 7, 7]))
-			slot.add_theme_stylebox_override("hover", _kit_box("sq-blank-42", [0, 0, 0, 0], [7, 7, 7, 7], Color(1.12, 1.12, 1.12)))
-			slot.add_theme_stylebox_override("pressed", _down(_kit_box("sq-blank-42", [0, 0, 0, 0], [7, 7, 7, 7], Color(0.85, 0.85, 0.85))))
-		else:
-			for k in ["normal", "hover", "pressed"]:
-				slot.add_theme_stylebox_override(k, styles["slot"])
+		var bare = StyleBoxEmpty.new()
+		bare.set_content_margin_all(a(4))
+		for k in ["normal", "hover", "pressed", "disabled"]:
+			slot.add_theme_stylebox_override(k, bare)
+		var down: StyleBoxEmpty = bare.duplicate()        # pressed: the picture two art pixels lower
+		down.content_margin_top = a(6)
+		down.content_margin_bottom = a(2)
+		slot.add_theme_stylebox_override("pressed", down)
 		slot.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-		if id != "":
-			slot.icon = icon("ico-" + SaveData.upgrade(id)["icon"])
-			slot.expand_icon = true
-			slot.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		else:
-			slot.text = "+"
-			slot.add_theme_font_size_override("font_size", ts("l"))
-			slot.add_theme_color_override("font_color", Color(1, 248 / 255.0, 230 / 255.0, 0.6))
-		var on_slot = func() -> void:          # an empty slot leads to the shop; a filled one says what it holds
+		slot.icon = icon("ico-" + SaveData.upgrade(id)["icon"])
+		slot.expand_icon = true
+		slot.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		slot.add_theme_color_override("icon_hover_color", Color(1.15, 1.15, 1.15))
+		var on_slot = func() -> void:              # a touch says what it holds
 			Audio.sfx("click")
-			if id == "":
-				tab = "up"
-				go("shop")
-			else:
-				_slot_info(id)
+			_slot_info(id)
 		slot.pressed.connect(on_slot)
-		var outline = func() -> void:
-			if id == "":                         # empty: a dashed place on the scenery
-				var col = Color(1, 248 / 255.0, 230 / 255.0, 0.4)
-				var r = Rect2(Vector2.ZERO, slot.size).grow(-a(0.75))
-				var dash = a(4)
-				var x = r.position.x
-				while x < r.end.x:
-					var x2 = minf(x + dash, r.end.x)
-					slot.draw_line(Vector2(x, r.position.y), Vector2(x2, r.position.y), col, a(1.5))
-					slot.draw_line(Vector2(x, r.end.y), Vector2(x2, r.end.y), col, a(1.5))
-					x += dash * 2
-				var y = r.position.y
-				while y < r.end.y:
-					var y2 = minf(y + dash, r.end.y)
-					slot.draw_line(Vector2(r.position.x, y), Vector2(r.position.x, y2), col, a(1.5))
-					slot.draw_line(Vector2(r.end.x, y), Vector2(r.end.x, y2), col, a(1.5))
-					y += dash * 2
-			if slot.get_meta("sel", false):
-				slot.draw_rect(Rect2(Vector2(-a(3), -a(3)), slot.size + Vector2(a(6), a(6))), INK, false, a(1.5))
-		slot.draw.connect(outline)
 		slot.set_meta("id", id)
 		w["menu-loadout"].add_child(slot)
 
+## The item whose note is open stands out a little (brighter, a touch bigger), without a frame.
 func _mark_slots(id: String) -> void:
 	for sl in w["menu-loadout"].get_children():
-		sl.set_meta("sel", id != "" and sl.get_meta("id", "") == id)
-		sl.queue_redraw()
+		var on: bool = id != "" and sl.get_meta("id", "") == id
+		sl.modulate = Color(1.3, 1.25, 1.1) if on else Color.WHITE
+		sl.pivot_offset = sl.size / 2
+		sl.scale = Vector2.ONE * (1.12 if on else 1.0)
 
 func _slot_info(id: String) -> void:
 	var box: PanelContainer = w["menu-info"]

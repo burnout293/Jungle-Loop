@@ -59,6 +59,10 @@ Gratuit jusqu'à 100 000 requêtes par jour ; il ne se met jamais en veille. Seu
 
 ## Où en est le multijoueur
 
+**En ligne depuis le 19/11/2026** : https://jungle-loop.burnout293.workers.dev (base D1 « jungle-loop »).
+Les essais automatiques et la sauvegarde d'essai (`--bac`, `?bac`) ne l'appellent jamais, sauf adresse
+donnée exprès (`--net=`, `?net=`).
+
 Fait et essayé de bout en bout entre deux navigateurs (serveur local) : identité et code ami, pseudo,
 ajout d'un ami, classement de la semaine, salon à 4 lettres, connexion WebRTC directe, course à deux sur
 la même route (même graine, même décor, route faite pour le moins équipé des deux), partenaire recoloré,
