@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.38.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 18/11/2026, **version Godot 0.39.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -208,6 +208,7 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 | Bottes de métal (bouton) | 6 | 2500 / 5500 | secousse à 3 / 4,5 m ; recharge 8 / 5 s |
 | Fana de TNT (bouton) | 9 | 3000 / 6000 / 12000 | tout ce qui est devant toi saute (pas les boss) ; recharge 25 / 18 / 12 s |
 | Sablier | 7 | 1800 / 4000 | 3 / 4,5 s, recharge 20 s |
+| RedMonster (bouton) | 8 | 2500 / 5000 / 10000 | vitesse ×2 pendant 5 / 10 / 20 s ; recharge 30 / 35 / 45 s depuis la gorgée ; la route reste posée pour ta vitesse à toi |
 | Dernier élan | 6 | 1600 / 3600 / 7200 | 1 / 2 / 3 rebonds |
 | Vol (pouvoir) | 10 | 4800 / 7000 / 10000 | montée 12 / 13,5 / 15 m/s |
 | Sprint (pouvoir) | 8 | 4000 | +4 m/s |
@@ -220,7 +221,7 @@ Emplacements d'équipement : 3 (`MAX_EQUIPPED`). **Prix et niveau requis se chan
 `reglages/progression.txt`** (section `[ameliorations]`), leurs effets dans `reglages/equilibrage.txt`
 (section `[objets]`) : le jeu les lit à chaque lancement, un réexport suffit. Le Gros sac à dos n'existe plus
 (0.34) ; une sauvegarde qui l'avait, ou l'ancien Dompté / Aimant de monture, récupère leur prix en pièces.
-Boutons en jeu, au clavier : Esquive Maj / E, Sablier A / Q, Bottes S / ↓, TNT F / T.
+Boutons en jeu, au clavier : Esquive Maj / E, Sablier A / Q, Bottes S / ↓, TNT F / T, RedMonster R.
 
 ## 9. Niveau et défis (`reglages/progression.txt`)
 
@@ -261,7 +262,8 @@ Un défi absent du fichier garde l'ancienne règle des paliers (+1 palier tous l
 |---|---|---|
 | Où | navigateur seulement (WebRTC), deux téléphones, un salon de 4 lettres sur le serveur (10 min au plus) ; l'écran Amis n'apparaît qu'une fois l'adresse du serveur dans `reglages/reseau.txt` (en ligne depuis le 19/11 : https://jungle-loop.burnout293.workers.dev) ; jamais avec la sauvegarde d'essai ni pendant les bancs | `coop.gd`, `net.gd` |
 | La course | Jouer (Run illimitée), même graine, même décor de départ (celui de l'hôte), route faite pour le moins équipé des deux (à pied, Double saut ou Vol) | `run.coop`, `road_tier` |
-| Coupé en coop | montures, sablier ramassable, Esquive, Sablier, pause : ils changeraient l'allure d'un seul joueur, donc sa route | main.gd |
+| Coupé en coop | montures, sablier ramassable, Esquive, Sablier, Sprint, RedMonster, pause : ils changeraient l'allure d'un seul joueur ; Relique altérée, gemmes du Trèfle, nuées : ils changeraient la route d'un seul | `Game.coop_run` |
+| Même route | la même graine pose exactement la même route sur les deux appareils, quels que soient leurs images par seconde, la largeur de l'écran, la place de chacun et ce qu'il a équipé : écarts posés pour la vitesse prévue à cet endroit, décor changé au premier motif après la borne ; seuls les volants envoyés à un joueur qui campe en vol lui sont propres | `lay_speed`, `coop_biome_x` |
 | Départ | l'hôte part 0,8 s après « Partir ! », l'invité 0,8 s moins la moitié du ping après le message (ping mesuré toutes les 2 s) | `_coop_go`, `_coop_begin` |
 | Le partenaire | Pépito aux couleurs tournées (feuilles rouges), l'invité 1,75 m derrière l'hôte sur les deux écrans ; sa position arrive 15 fois par seconde | `MATE_SHADER`, `run.home` |
 | Bulle | au dernier cœur perdu (après le Rembobinage s'il reste) : une bulle de 1,25 m de rayon, 3,75 m au-dessus du sol sous l'autre, 0,5 m derrière lui, qui ondule ; il faut sauter dedans (au sol, rien) ; ramené : 1 s d'invincibilité, un cœur | `BUBBLE_*`, `to_bubble`, `_rescue_check`, `back` |
