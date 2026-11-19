@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 18/11/2026, version Godot 0.42.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 18/11/2026, version Godot 0.43.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -53,7 +53,7 @@ Inoffensif ; il se casse avec Brise-tout, l'Esquive, les Bottes de métal, la TN
 | | Forêt | Ruines | Donjon | Cité |
 |---|---|---|---|---|
 | **Plateforme** | bloc de sol flottant (terre et herbe) | bloc de sol flottant (dalles) | passerelle de planches pendue à deux chaînes | plateforme en lévitation sur 3 réacteurs cyan |
-| **Colline** (décor sombre, jamais un obstacle) | ronde, touffue | colonnes brisées sur la crête | roche | blocs, quelques fenêtres |
+| **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche | murs de pierres carrées effondrés | murs avec porte en bois ou fenêtre à barreaux | immeubles éclairés, conteneurs rouillés |
 | **Lianes** | pendent du haut de l'écran ici et là | idem | chaînes à crochet ou anneau | câbles à prise lumineuse, câbles tendus en arc |
 
 Les blocs de sol flottants ne viennent qu'avec une colline derrière eux. Avec le Gorille, une liane
