@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.41.0"
+const VERSION := "0.42.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -97,6 +97,7 @@ var coop_owed := 0.0                   # for two: real seconds the run still owe
 var coop_note := ""                    # a word on the home screen's band for two, for a moment
 var coop_note_t := 0.0
 var coop_was := ""                     # the link's state last seen (main notices the partner leaving)
+var peeking := false                   # the pause's eye: its menu hidden, the game looked at
 var kit_sent := ""                     # the host's items and powers last sent to the guest (JSON)
 var invite_t := 3.0                    # seconds before the next look for an invitation
 var invite_busy := false
@@ -117,6 +118,7 @@ var board: Array = []                  # the friends' board, as the server sent 
 func _ready() -> void:
 	Progress.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))   # prices, levels, objectives
 	Tune.load_file()                              # reglages/equilibrage.txt: the game's numbers (before Debug takes its origin)
+	Game.set_talks(FileAccess.get_file_as_string("res://reglages/dialogues.txt"))   # Histoire: what the guards say
 	save = SaveData.load_save()
 	Net.load_config(FileAccess.get_file_as_string("res://reglages/reseau.txt"))   # the server's address, empty for now
 	Net.set_from_args()
@@ -844,6 +846,24 @@ func _build_hud() -> void:
 	w["banner"].modulate.a = 0
 	w["banner"].set_meta("still", true)
 	s.add_child(w["banner"])
+	var say = PanelContainer.new()                   # Histoire: what the guards say, typed out, at the top
+	say.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	say.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var say_col = _vbox(1)
+	var who = _label("LES GARDES", ts("s"), RELIC, 0)
+	who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	say_col.add_child(who)
+	w["say-text"] = _plain(_label("", ts("m"), INK, 0), "m")
+	w["say-text"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	w["say-text"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	w["say-text"].custom_minimum_size.x = a(330)
+	say_col.add_child(w["say-text"])
+	say.add_child(say_col)
+	_place(say, 569 / 2.0 - 180, 46, 360, 44)
+	say.visible = false
+	say.set_meta("still", true)
+	w["say"] = say
+	s.add_child(say)
 	w["hint"] = _label("", ts("l"))
 	w["hint"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_place(w["hint"], 0, 320 * 0.76 - 20, 569, 24)
@@ -1055,7 +1075,7 @@ func _build_menu() -> void:
 	_place(w["menu-tip"], M + 236 + 6, 98, 300, 60)
 	s.add_child(w["menu-tip"])
 	var quests = _vbox(4)
-	_place(quests, 569 - M - 218, 80, 218, 150)
+	_place(quests, 569 - M - 8 - 210, 80, 210, 150)       # (a margin on the right like the left's buttons)
 	quests.add_child(_label("DÉFIS", ts("s"), INK, 1.5))
 	w["menu-quests"] = _vbox(4)
 	quests.add_child(w["menu-quests"])
@@ -1146,12 +1166,20 @@ func _level_box(full: bool) -> PanelContainer:
 	var bar = _bar(46 if not full else 80, 8, LEAF)
 	bar.name = "bar"
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(bar)
-	if full:
-		var pts = _label("", ts("s"), DIM, 0)
-		pts.name = "pts"
-		row.add_child(pts)
-	p.add_child(row)
+	if not full:
+		row.add_child(bar)
+		p.add_child(row)
+		return p
+	var pts = _label("", ts("s"), DIM, 0)            # full: the name and the points, then the bar beneath
+	pts.name = "pts"
+	pts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pts.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(pts)
+	var col = _vbox(3)
+	col.add_child(row)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(bar)
+	p.add_child(col)
 	return p
 
 func _set_level(box: PanelContainer, full: bool) -> void:
@@ -1172,7 +1200,7 @@ func _quest_cards(holder: VBoxContainer) -> void:
 		var txt = _label("%s (%d/%d)" % [Progress.quest_text(q), floori(q["p"]), q["goal"]], ts("s"), INK, 0)
 		txt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		txt.custom_minimum_size.x = a(130)
+		txt.custom_minimum_size.x = a(118)
 		row.add_child(txt)
 		var rew = _vbox(0)
 		var r1 = _price(q["reward"], GOLD)
@@ -1508,6 +1536,22 @@ func _build_score(name: String) -> void:
 		_actions(s, [_button("Menu", "", func() -> void: go("menu")), _button("Rejouer", "big", _replay)])
 	else:
 		_actions(s, [_button("Abandonner", "stop", func() -> void: go("menu")), _button("Réglages", "", func() -> void: go("settings")), _button("Reprendre", "go", resume)], 150)
+		var eye = Button.new()                       # the eye: the menu goes, the game is seen (still paused); again: back
+		eye.focus_mode = Control.FOCUS_NONE
+		_kit_square(eye, "blank", 34)
+		var drawn = Eye.new()
+		drawn.set_anchors_preset(Control.PRESET_FULL_RECT)
+		drawn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		eye.add_child(drawn)
+		_place(eye, 569 - M - 34, M, 34, 34)
+		eye.set_meta("still", true)
+		var on_eye = func() -> void:
+			Audio.sfx("click")
+			_peek(not peeking)
+		eye.pressed.connect(on_eye)
+		w["pause-eye"] = eye
+		w["pause-eye-icon"] = drawn
+		s.add_child(eye)
 
 # ---------- moving between screens ----------
 
@@ -2033,6 +2077,7 @@ func refresh_shop(just_bought: String = "") -> void:
 		return
 	var full: bool = save["equipped"].size() >= SaveData.MAX_EQUIPPED
 	var shown: Array = SaveData.UPGRADES.filter(func(u): return SaveData.family(u) == tab)
+	shown.sort_custom(func(p, q): return p["unlock"] < q["unlock"] or (p["unlock"] == q["unlock"] and SaveData.UPGRADES.find(p) < SaveData.UPGRADES.find(q)))   # by the level they come at
 	if tab != "mount" and not shown.any(func(u): return u["id"] == picked):
 		picked = shown[0]["id"]
 	var sel_id: String = picked_mount if tab == "mount" else picked
@@ -2358,8 +2403,9 @@ func go(name: String) -> void:
 			show_screen("pause")
 			Audio.duck(true)
 			return
-	Audio.duck(false)
+	Audio.duck(name == "settings" and state == "pause")   # (the settings opened from the pause: still quiet)
 	_menu_tip("")
+	_peek(false)
 	if name == "settings" and state == "pause":
 		in_run = true
 	if name == "play":
@@ -2976,7 +3022,46 @@ func pause_view() -> void:
 	_set_level(w["pause-level"], true)
 	_quest_cards(w["pause-quests"])
 
+## The pause's eye: the menu (and its shade) goes, the game is seen behind, still paused; again, it comes back.
+func _peek(on: bool) -> void:
+	peeking = on
+	if not screens.has("pause"):
+		return
+	for ch in screens["pause"].get_children():
+		if ch is CanvasItem and not (w.has("pause-eye") and ch == w["pause-eye"]):
+			ch.visible = not on
+	if w.has("pause-eye-icon") and is_instance_valid(w["pause-eye-icon"]):
+		w["pause-eye-icon"].shut = on
+		w["pause-eye-icon"].queue_redraw()
+
+## An eye, drawn: open (the menu can be hidden) or shut (it is: a touch brings it back).
+class Eye extends Control:
+	var shut := false
+	func _draw() -> void:
+		var c = size / 2
+		var r = minf(size.x, size.y) * 0.3
+		var ink = Color("#fff8e6")
+		if shut:                                     # a closed lid with lashes
+			var pts = PackedVector2Array()
+			for i in 13:
+				var a = PI * i / 12.0
+				pts.append(c + Vector2(-cos(a) * r * 1.2, sin(a) * r * 0.45))
+			draw_polyline(pts, ink, maxf(2, r * 0.18))
+			for k in [-0.6, 0.0, 0.6]:
+				var base = c + Vector2(k * r, r * 0.45)
+				draw_line(base, base + Vector2(k * r * 0.3, r * 0.4), ink, maxf(1.5, r * 0.14))
+			return
+		var top = PackedVector2Array()
+		for i in 25:
+			var a = TAU * i / 24.0
+			top.append(c + Vector2(cos(a) * r * 1.25, sin(a) * r * (0.62 if sin(a) > 0 else 0.7)))
+		draw_polyline(top, ink, maxf(2, r * 0.18))
+		draw_circle(c, r * 0.42, Color("#7dfff0"))
+		draw_circle(c, r * 0.2, Color("#1a1024"))
+		draw_circle(c + Vector2(-r * 0.12, -r * 0.14), r * 0.08, Color.WHITE)
+
 func resume() -> void:
+	_peek(false)
 	if state == "pause":
 		state = "play"
 		show_screen("hud")
@@ -3119,6 +3204,13 @@ func hint(step: int) -> void:
 		hint_timer = 3.5
 
 func hud() -> void:
+	if w.has("say") and is_instance_valid(w["say"]):  # the guards' line, typed out 40 letters a second
+		var on = run.saying != ""
+		w["say"].visible = on
+		if on:
+			if w["say-text"].text != run.saying:
+				w["say-text"].text = run.saying
+			w["say-text"].visible_characters = int((Game.line_time(run.saying) - run.say_t) * 40)
 	var d = floori(run.dist)
 	if d != hud_state["dist"]:
 		hud_state["dist"] = d
@@ -3304,10 +3396,14 @@ func _step(h: float) -> void:
 				_fill_hud()
 			"brake":                                # a floating brake: 4 m/s less, for good
 				Audio.sfx("slow")
-			"fatal":                                # the blow that ends the run: the photo, now
-				if not photo_taken:
+			"fatal":                                # the blow that ends the run: the photo, now (thrown ahead,
+				if not photo_taken and run.leap == null:   # when his head lands in the ground)
 					photo_taken = true
 					_take_photo()
+			"plant":
+				if not photo_taken:
+					photo_taken = true
+					_take_photo.call_deferred()
 			"bubble", "rescue", "back":               # coop: the partner is told
 				print("coop: ", ev)
 				coop.send({"t": ev})

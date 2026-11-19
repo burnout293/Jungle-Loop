@@ -68,6 +68,7 @@ const KEYS := {
 		"un tous les": ["BONUS_EVERY", "pair", 1.0],
 		"sablier ralentissement": ["BRAKE_SHARE", "n", PC],
 		"sablier vitesse": ["BRAKE_PACE", "n", PC],
+		"caisse pieces": ["CRATE_COINS", "i", 1.0],
 	},
 	"montures": {
 		"premiere": ["MOUNT_FIRST", "pair", 1.0],
@@ -85,11 +86,15 @@ const KEYS := {
 		"par colonne au plus": ["SPIDER_COLUMN", "i", 1.0],
 		"montee et descente": ["SPIDER_AMP", "n", M],
 		"aller retour": ["SPIDER_PERIOD", "n", 1.0],
+		"ecart dans une file": ["SPIDER_GAP_TIME", "n", 1.0],
+		"ecart mini dans une file": ["SPIDER_GAP_MIN", "n", M],
+		"files poids": ["CHAIN_SPIDERS", "i", 1.0],
 	},
 	"volants": {
 		"avertissement": ["DART_WARN", "n", 1.0],
 		"vitesse": ["DART_SPEED", "n", M],
 		"vagues": ["WAVE_N", "ipair", 1.0],
+		"vagues poids": ["CHAIN_WAVES", "i", 1.0],
 		"ecart dans les vagues": ["WAVE_GAP", "pair", 1.0],
 		"campement": ["CAMP_TIME", "n", 1.0],
 		"campement encore": ["CAMP_AGAIN", "n", 1.0],
@@ -97,6 +102,7 @@ const KEYS := {
 	"nuees": {
 		"premiere": ["FM_FIRST", "pair", 1.0],
 		"suivantes": ["FM_NEXT", "pair", 1.0],
+		"epaisseur": ["FM_THICK", "n", PC],
 	},
 	"vorace": {
 		"arrivee": ["BOSS_AT", "n", 1.0],

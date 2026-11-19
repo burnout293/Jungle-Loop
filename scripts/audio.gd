@@ -230,6 +230,10 @@ func _recipes() -> Dictionary:
 		"back": [T(500, 0.3, "triangle", 0.16, 0, 1000)],                                          # the boots plunging
 		"quake": [T(70, 0.5, "sine", 0.5, 0, 30), N(0.45, 0.5, 380), T(140, 0.2, "square", 0.15, 0, 60)],   # metal on stone
 		"slow": [T(900, 0.6, "sine", 0.2, 0, 150)],
+		# the last heart: a slide whistle as he flies off, then his head in the ground (thud) and a boing
+		"fling": [T(1500, 0.55, "sine", 0.16, 0.0, 420), T(1520, 0.55, "sine", 0.06, 0.0, 430)],
+		"plant": [N(0.14, 0.32, 260), T(120, 0.2, "square", 0.2, 0.0, 55), T(240, 0.32, "triangle", 0.17, 0.16, 620), T(620, 0.28, "triangle", 0.11, 0.42, 230), T(900, 0.08, "square", 0.05, 0.75, 1300), T(1300, 0.08, "square", 0.05, 0.86, 900)],
+		"say": [T(520, 0.05, "square", 0.05, 0.0, 600), T(660, 0.05, "square", 0.04, 0.06, 700)],
 		# RedMonster: the can hissing open, two gulps, then he revs up; and the fizz running out
 		"monster": [N(0.35, 0.16, 6000), T(240, 0.1, "sine", 0.24, 0.2, 150), T(240, 0.1, "sine", 0.24, 0.33, 150), T(160, 0.6, "sawtooth", 0.14, 0.45, 1400)],
 		"monsterend": [T(1300, 0.4, "sawtooth", 0.09, 0, 260)],

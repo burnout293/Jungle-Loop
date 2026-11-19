@@ -1,0 +1,13 @@
+# Jungle Loop — Histoire : ce que disent les gardes.
+# Une réplique par ligne : « où | ce qui est dit ». « départ » = au temple, avant que l'entrée n'explose
+# (la caméra reste figée ; seul, un toucher passe la scène) ; sinon la distance en mètres où ils parlent.
+# Les répliques d'un même endroit se suivent, chacune le temps de la lire (entre 2,2 et 4,8 s selon sa
+# longueur). Pendant un dialogue, Pépito court toujours, mais la route est vide : ni obstacle, ni pièce,
+# ni objet, ni nuée.
+
+départ | Il a la relique ! CHOPEZ-LE !!
+départ | C'est bon, l'entrée du temple s'est écroulée, il ira pas bien loin.
+départ | Attendez, pourquoi il nous lance des bâtons rouges ? ...
+
+1000   | Oh non Vorace ! DEMI-TOUR !!
+1000   | Mais il est fou il s'arrête pas !

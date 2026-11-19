@@ -101,6 +101,23 @@ static var DART_SPEED := 800.0
 const GAP_DIST := 420.0
 const GAP_TIME := 0.72
 const GAP_MARGIN := 110.0
+# Spiders in a row: SPIDER_GAP_TIME seconds apart at the speed the road is laid for, never closer than
+# SPIDER_GAP_MIN (and as much room after the row). How often a row of spiders, a wave of flyers (the
+# missiles in the city) come: their weights among the patterns.
+static var SPIDER_GAP_TIME := 1.15
+static var SPIDER_GAP_MIN := 440.0
+static var CHAIN_SPIDERS := 5
+static var CHAIN_WAVES := 3
+# The swarm: its creatures and their red band take this share of a lane's height (the lanes stay where
+# they are): more room in the free one.
+static var FM_THICK := 0.65
+# A crate broken: its coins burst out ahead of him, fall, bounce and wait on the floor.
+static var CRATE_COINS := 50
+# The last heart lost (alone): thrown ahead, he lands head first in the ground, legs kicking, PLANT_TIME
+# seconds; then the end.
+const PLANT_KICK := 1.5
+const PLANT_UP := 760.0
+const PLANT_TIME := 1.4
 const GAP_FILL := 640.0
 const DECOR_RATE := 0.12
 const HOVER_W := 60.0
@@ -135,7 +152,7 @@ const DEATH_PACE := 0.3
 const DEATH_TIME := 2.9
 const DEATH_CALM := 900.0
 const DEATH_EASY := 2600.0
-static var BOSS_AT := 2000.0
+static var BOSS_AT := 1500.0
 static var BOSS_SPEED := 560.0
 static var BOSS_FIGHT := 26.0
 const BOSS_ENTER := 1.6        # seconds she takes to slide in before the fight
@@ -436,6 +453,8 @@ class Active:
 class Leap:
 	var n := 0
 	var v := 0.0
+	var planted := false      # head first in the ground: legs kicking until the end
+	var pt := 0.0
 
 ## A stick of TNT in the air (Fana de TNT): it blows up when its time is out.
 class Shot:
@@ -570,6 +589,12 @@ class Run:
 	var acts: Array = []               # for two: the actives he started this step (dash, slow, monster), told to the partner
 	var act_in: Array = []             # for two: those the partner started, to start here next step (remote_act)
 	var bubble := false                # fallen: he floats after the partner until rescued
+	var saying := ""                   # Histoire: a line of the guards being said (main.gd shows it)
+	var say_t := 0.0                   # ... how long it stays
+	var say_queue: Array = []          # ... the lines still to say
+	var talk_zones: Array = []         # ... stretches of road kept empty while they talk: {x0, x1, lines, on}
+	var intro := false                 # ... the temple's scene: the camera still while they talk, then the blast
+	var intro_len := 0.0               # ... how long it lasts (a touch skips it, once it has run a moment)
 	var bubble_pos := Vector2.ZERO     # where his bubble is (world)
 	var mate_bubble := Vector2.ZERO    # where the partner's bubble is, following him (world)
 	var strip_biome := -1          # Relique altérée: a short strip of another scenery, from strip_x0 to strip_x1
@@ -784,6 +809,16 @@ static func new_run(upgrades: Dictionary, mode: String = "story", seed_: int = -
 	run.mode = mode
 	run.up = upgrades
 	run.base = SPEED_BASE + (SPEED_SPRINT if run.lvl("sprint") > 0 else 0.0)
+	if mode == "story":                              # the guards' talks along the way: the road is empty there
+		for tk in TALKS:
+			if tk["at"] < 0:
+				continue
+			var x0: float = tk["at"] * PPM + PX
+			var dur = 0.0
+			for l in tk["lines"]:
+				dur += line_time(l)
+			var v = sqrt(run.base * run.base + 2.0 * STORY_GAIN * x0)   # (the forest's speed there)
+			run.talk_zones.append({"x0": x0, "x1": x0 + v * dur * 1.15 + 200, "lines": tk["lines"], "on": false})
 	run.speed = SPEED_BASE
 	run.road_speed = SPEED_BASE
 	run.hearts = HEARTS + run.lvl("heart")          # Vitalité: a heart more per level
@@ -835,7 +870,60 @@ static func biome_at(run: Run, x: float) -> int:
 ## The hero starts shut inside the temple: a short rumble, then the doorway blows out and he runs.
 static func launch(run: Run) -> void:
 	run.wait = 0.75
-	run.events.append("rumble")
+	var lines: Array = []
+	if run.mode == "story":                          # Histoire: the guards outside talk first, the camera still
+		for tk in TALKS:
+			if tk["at"] < 0:
+				lines.append_array(tk["lines"])
+	if lines.is_empty():
+		run.events.append("rumble")
+		return
+	var total = 0.0
+	for l in lines:
+		total += line_time(l)
+	run.intro = true
+	run.say_queue = lines.duplicate()
+	run.wait = maxf(0.8, total - 0.5)                # the doorway blows out as the last line ends
+	run.intro_len = run.wait
+
+# ---------- Histoire: what the guards say (reglages/dialogues.txt) ----------
+
+## [{at: metres along the way (-1: at the temple, before the blast), lines: [String]}]
+static var TALKS: Array = []
+
+## Reads reglages/dialogues.txt: « départ | a line » or « 1000 | a line », one line said per row, in order;
+## rows with the same place make one talk.
+static func set_talks(text: String) -> void:
+	TALKS = []
+	for raw in text.split("\n"):
+		var line: String = raw.split("#")[0].strip_edges()
+		var cut = line.find("|")
+		if cut < 0:
+			continue
+		var where = line.substr(0, cut).strip_edges().to_lower()
+		var said = line.substr(cut + 1).strip_edges()
+		if said == "":
+			continue
+		var at = -1.0 if where in ["depart", "départ", "temple"] else (float(where) if where.is_valid_float() else NAN)
+		if is_nan(at):
+			continue
+		if TALKS.is_empty() or TALKS[-1]["at"] != at:
+			TALKS.append({"at": at, "lines": []})
+		TALKS[-1]["lines"].append(said)
+
+## How long a line stays on screen: long enough to read it.
+static func line_time(text: String) -> float:
+	return clampf(1.3 + 0.045 * text.length(), 2.2, 4.8)
+
+## Whether the hero is where the guards talk (nothing comes at him there: no swarm, no flyer).
+static func talking(run: Run) -> bool:
+	if run.saying != "" or not run.say_queue.is_empty():
+		return true
+	var px = run.cam + run.sx
+	for z in run.talk_zones:
+		if px >= z["x0"] - 900 and px < z["x1"]:
+			return true
+	return false
 
 # ---------- scenery the hero can brush past ----------
 # Which prop stands in which cell is a pure function of the cell number, so the rules (here) and the
@@ -988,6 +1076,10 @@ static func add_bonus(run: Run, x: float) -> void:
 	run.bonuses.append(it)
 
 ## A flyer: it waits beyond the right edge until the screen reaches it, shows a "!" at its height, then crosses.
+## Two spiders of a row: this far apart (SPIDER_GAP_*).
+static func spider_gap(run: Run, x: float) -> float:
+	return maxf(SPIDER_GAP_MIN, lay_speed(run, x) * SPIDER_GAP_TIME)
+
 static func add_dart(run: Run, x: float, alt: float, own: bool = false) -> Obs:
 	var o = add_obs(run, x, floor_at(run, x) - alt - DART_H / 2, DART_W, DART_H, "dart", false)
 	o.biome = biome_at(run, x)
@@ -1051,6 +1143,10 @@ static func spawn_pattern(run: Run) -> void:
 		scatter(run, laid)
 		return
 	var x = run.next_x
+	for z in run.talk_zones:                         # Histoire: nothing on the road while the guards talk (from a
+		if x >= z["x0"] - 900 and x < z["x1"]:       # screen before, so that nothing is left in sight)
+			run.next_x = z["x1"]
+			return
 	if run.coop and run.mode == "story" and x >= run.coop_xf + COOP_VIEW and not run.coop_gems:
 		run.coop_gems = true                         # for two: Vorace's blue gems, at a place on the road
 		var g0 = run.coop_xg
@@ -1079,9 +1175,12 @@ static func spawn_pattern(run: Run) -> void:
 		opts = ["spiky", "spiky", "double", "perch", "hop", "fly", "coins", "plat", "plat", "cave", "log", "gallery", "stairs", "ledge", "ledge", "hollow",
 			"hills", "hills", "hills", "padchain", "padchain", "padchain", "padzig", "padzig"]
 	if x / PPM >= FROM_LOW:                          # many spiders: dangers at every height
-		opts.append_array(["hover", "hover", "hover", "hover", "hover", "spiders", "spiders", "spiders"])
+		opts.append_array(["hover", "hover", "hover", "hover", "hover"])
+		for i in CHAIN_SPIDERS:
+			opts.append("spiders")
 	if x / PPM >= 150:                               # flyers come in waves too
-		opts.append("wave")
+		for i in CHAIN_WAVES:
+			opts.append("wave")
 	if tier < 2 and x >= 70 * PPM:                   # on foot: fewer flyers, more hedgehogs and low spiders
 		opts.erase("fly")
 		opts.append_array(["spiky", "lowhover", "lowhover"] if x / PPM >= FROM_LOW else ["spiky"])
@@ -1128,8 +1227,8 @@ static func spawn_pattern(run: Run) -> void:
 			var n = 2 + W.randi() % 2
 			for i in n:
 				var h = LOW if i % 2 == 0 else (wpick([HEAD] + SKY_HOVERS) if tier >= 2 else HEAD)
-				add_hover(run, x + i * maxf(320, lay_speed(run, x) * 0.9), h)
-			extent = (n - 1) * maxf(320, lay_speed(run, x) * 0.9) + HOVER_W
+				add_hover(run, x + i * spider_gap(run, x), h)
+			extent = (n - 1) * spider_gap(run, x) + HOVER_W
 		"lowhover":                                # a low spider: jump it
 			add_hover(run, x, LOW)
 			coin_arc(run, x - 40, 150, 5, 160)
@@ -1316,6 +1415,8 @@ static func spawn_pattern(run: Run) -> void:
 	# The gap to the next pattern is set in distance (GAP_DIST), so the road keeps its density as the
 	# speed grows; only where a jump would no longer have room to land does it widen with the speed.
 	var gap = maxf(GAP_DIST, lay_speed(run, x) * GAP_TIME + GAP_MARGIN) * wrnd(0.85, 1.3) * (1.3 if kind == "coins" else 1.0)
+	if kind == "spiders":
+		gap = maxf(gap, spider_gap(run, x))           # as much room after the row as within it
 	var clear = run.fm == null and not run.fm_due and not boss_road(run, x) and kind != "wave"
 	if clear and x / PPM >= run.next_bonus and x / PPM > 300:   # a life or a brake, floating in the gap
 		add_bonus(run, x + extent + gap * 0.5)
@@ -1635,7 +1736,7 @@ static func _attack_fits(run: Run, b: Boss, move: String, now: Array) -> bool:
 ## a flyer is already on its way or something near that height is coming anyway (he must move for it).
 static func camp(run: Run, dt: float) -> void:
 	var p = run.p
-	if run.lvl("flight") == 0 or run.mount != null or run.boss != null or run.fm != null or run.fm_due or run.leap != null or run.dead or run.sx < run.home:
+	if run.lvl("flight") == 0 or run.mount != null or run.boss != null or run.fm != null or run.fm_due or run.leap != null or run.dead or run.sx < run.home or talking(run):
 		run.camp_t = 0
 		return
 	if absf(p.y - run.camp_y) > CAMP_BAND:
@@ -1844,8 +1945,12 @@ static func smash(run: Run, dc: Decor) -> void:
 		s.vr = rnd(-13, 13)
 	for i in 6:                                      # dust
 		part(run, cx + rnd(-24, 24), cy + rnd(-20, 20), run.speed * rnd(0.3, 0.9), rnd(-90, 30), rnd(0.3, 0.55), colour_of(["#e9dcc0", "#cbb894", "#fff6dc"]), rnd(10, 20), -80)
-	for i in 4:
-		loot(run, cx, cy)
+	for i in CRATE_COINS:                            # its coins burst out ahead of him: they fall, bounce and wait
+		var c = coin(run, cx + rnd(-14, 14), cy - rnd(0, 30))
+		c.toss = true
+		c.blast = true
+		c.tvx = maxf(run.speed, 320.0) * rnd(0.9, 2.2)
+		c.tvy = rnd(-900, -240)
 	burst(run, cx, cy, Color("#e8c890"), 12, 420)    # splinters
 	run.shake = maxf(run.shake, 0.3)
 	run.events.append("crate")
@@ -2009,7 +2114,18 @@ static func hit(run: Run, o: Obs) -> void:
 		burst(run, run.cam + run.sx, p.y - 40, Color("#ff4d6d"), 14, 320)
 		run.events.append_array(["hurt", "bounce"])
 		return
-	die(run)
+	var p2 = run.p                                   # thrown ahead: he lands head first (see update), then the end
+	var lp2 = Leap.new()
+	lp2.n = 0
+	lp2.v = maxf(360, run.speed) * PLANT_KICK
+	run.leap = lp2
+	p2.vy = -PLANT_UP
+	p2.ground = false
+	p2.plat = null
+	p2.rotor = false
+	p2.flew = false
+	burst(run, run.cam + run.sx, p2.y - 40, Color("#ff4d6d"), 14, 320)
+	run.events.append_array(["hurt", "fling"])
 
 ## What the road may ask of him: 2 with the Vol, 1 with Double saut, 0 on foot (in coop: road_tier).
 static func tier_of(run: Run) -> int:
@@ -2104,6 +2220,8 @@ static func _fatal(run: Run) -> void:
 static func die(run: Run) -> void:
 	_fatal(run)
 	run.dead = true
+	if run.leap != null and run.leap.planted:
+		return                                       # (stuck head first: he stays there, quietly)
 	run.shake = 1
 	burst(run, run.cam + run.sx, run.p.y - 40, Color("#5cf2e0"), 26, 420)
 	run.events.append("hit")
@@ -2162,7 +2280,7 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 			run.fm_due = false
 			run.next_fm = maxf(run.next_fm, run.dist + 100)
 			return
-		if not run.fm_due and run.dist >= run.next_fm:
+		if not run.fm_due and run.dist >= run.next_fm and not talking(run):
 			run.fm_due = true                        # from now on only coins are laid ahead
 		if not run.fm_due or px < run.block_end + 60:
 			return                                   # waits until the road is clear
@@ -2203,14 +2321,14 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 	var x0 = run.cam + f.sx - FM_W / 2
 	if not f.hit and not f.ghost and x0 + 8 < box.r and x0 + FM_W - 8 > box.l:
 		for k in FM_LANES:
-			var y0 = GROUND - (k + 0.5) * FM_STEP - FM_H / 2
-			if not f.act[k] or y0 + 6 > box.b or y0 + FM_H - 6 < box.t:
+			var y0 = GROUND - (k + 0.5) * FM_STEP - FM_H * FM_THICK / 2
+			if not f.act[k] or y0 + 6 > box.b or y0 + FM_H * FM_THICK - 6 < box.t:
 				continue
 			if dashing:
 				f.hit = true
 				f.sx = -999
 				run.gold += 3
-				burst(run, px + 40, y0 + FM_H / 2, Color("#7fe0c8"), 18, 340)
+				burst(run, px + 40, y0 + FM_H * FM_THICK / 2, Color("#7fe0c8"), 18, 340)
 				run.shake = maxf(run.shake, 0.3)
 				run.events.append("break")
 			elif p.inv == 0:
@@ -2277,8 +2395,8 @@ static func hitboxes(run: Run) -> Dictionary:
 				box.call(run.cam - 200, run.cam + f.sx, y0 + 4, y0 + LASER_H - 4, "danger" if f.t > LASER_ON and f.t < LASER_OFF else "waiting")
 			else:
 				var x0 = run.cam + f.sx - FM_W / 2
-				var y1 = GROUND - (k + 0.5) * FM_STEP - FM_H / 2
-				box.call(x0 + 8, x0 + FM_W - 8, y1 + 6, y1 + FM_H - 6, "danger" if f.phase == "rush" else "waiting")
+				var y1 = GROUND - (k + 0.5) * FM_STEP - FM_H * FM_THICK / 2
+				box.call(x0 + 8, x0 + FM_W - 8, y1 + 6, y1 + FM_H * FM_THICK - 6, "danger" if f.phase == "rush" else "waiting")
 	return {"boxes": out, "coin": null}
 
 static func _ease_speed(v: float, pace: float, ramp: float, dt: float) -> float:
@@ -2309,6 +2427,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		q.x += q.vx * d
 		q.y += q.vy * d
 		if q.shard < 0:
+			if q.shard == -2:
+				q.rot += q.vr * d                    # (a stick of TNT spins)
 			continue
 		q.rot += q.vr * d                            # a piece of crate tumbles and bounces
 		var f = floor_at(run, q.x) - 8
@@ -2321,11 +2441,32 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	if run.dead:
 		return
 
+	if run.saying != "" or not run.say_queue.is_empty():   # Histoire: the guards' lines, one after the other
+		run.say_t -= dt
+		if run.say_t <= 0:
+			if run.say_queue.is_empty():
+				run.saying = ""
+			else:
+				run.saying = run.say_queue.pop_front()
+				run.say_t = line_time(run.saying)
+				run.events.append("say")
 	if run.wait > 0:                                 # still inside: the temple shakes, dust falls from the lintel
+		var was_wait = run.wait
+		if run.intro and input.pressed and not run.coop and run.wait > 0.75 and run.intro_len - run.wait > 1.2:
+			run.wait = 0.75                          # (alone, a touch skips the scene: not a reflex tap at once)
+			run.say_queue.clear()
+			run.saying = ""
 		run.wait -= dt
-		run.shake = maxf(run.shake, 0.22)
-		if randf() < 0.6:
-			part(run, rnd(60, 125), GROUND - rnd(195, 225), rnd(-20, 40), rnd(20, 120), 0.5, Color("#cfd3e6"), rnd(4, 8), 500)
+		if run.intro and was_wait >= 0.75 and run.wait < 0.75:
+			run.events.append("rumble")
+		if run.intro and run.wait > 0.75 and run.say_queue.is_empty() and run.saying != "" and fmod(run.wait, 0.45) < dt:
+			var stick = part(run, 118, GROUND - rnd(70, 110), rnd(380, 640), rnd(-620, -380), 1.4, Color("#e8402f"), 10, 1500)
+			stick.vr = rnd(-12, 12)                  # « why is he throwing red sticks at us? »
+			stick.shard = -2                         # (drawn as a stick of TNT, its fuse lit)
+		if not run.intro or run.wait < 0.75:
+			run.shake = maxf(run.shake, 0.22)
+			if randf() < 0.6:
+				part(run, rnd(60, 125), GROUND - rnd(195, 225), rnd(-20, 40), rnd(20, 120), 0.5, Color("#cfd3e6"), rnd(4, 8), 500)
 		if run.wait > 0:
 			return
 		run.exploded = true
@@ -2441,7 +2582,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	var gorilla_on = run.mount != null and run.mount.kind == "gorilla"
 	run.vine = clampf(run.vine + (1.0 if gorilla_on else -1.0) * dt * 2.5, 0, 1)
 	if run.leap != null:
-		run.leap.v = maxf(160, run.leap.v * (1 - LEAP_DRAG * d))   # knocked out: he only slows down, slowly
+		run.leap.v = 0.0 if run.leap.planted else maxf(160, run.leap.v * (1 - LEAP_DRAG * d))   # knocked out: he only slows down, slowly
 	# he is thrown out of the temple faster than he runs
 	var move: float
 	if run.leap != null:
@@ -2457,7 +2598,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	var px = run.cam + run.sx
 	var fl = floor_at(run, px)                      # the floor right under him
 
-	if run.leap != null:                             # --- Dernier élan: a rag doll bouncing along ---
+	if run.leap != null and run.leap.planted:        # --- head first in the ground, legs kicking ---
+		run.leap.pt += d
+		if run.leap.pt > PLANT_TIME and not run.dead:
+			die(run)
+			return
+	elif run.leap != null:                           # --- thrown (Dernier élan: bouncing along) ---
 		p.vy += 2000 * d
 		p.y += p.vy * d
 		p.roll += d * 11
@@ -2471,8 +2617,15 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				p.vy = minf(-420, p.vy * -LEAP_BOUNCE)     # each bounce a little lower than the last
 				run.shake = maxf(run.shake, 0.3)
 				run.events.append("bounce")
-			else:
-				die(run)
+			else:                                    # the last landing: head first, stuck
+				run.leap.planted = true
+				run.leap.v = 0
+				p.vy = 0
+				p.roll = PI
+				for i in 14:                         # a spray of earth
+					part(run, px + rnd(-16, 16), fl - 2, rnd(-220, 220), rnd(-380, -120), rnd(0.4, 0.7), colour_of(["#8a6a42", "#6a4f30", "#b08a58", "#f4f0e0"]), rnd(5, 11), 1400)
+				run.shake = maxf(run.shake, 0.6)
+				run.events.append("plant")
 				return
 	elif run.bubble:                                 # --- coop: fallen, he floats after the partner ---
 		_float(run, d, move)
@@ -2882,6 +3035,10 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	while run.next_x < edge:
 		spawn_pattern(run)
 
+	for z in run.talk_zones:                         # Histoire: the guards start talking here
+		if not z["on"] and run.cam + run.sx >= z["x0"]:
+			z["on"] = true
+			run.say_queue.append_array(z["lines"])
 	# --- scenery change ---
 	if run.coop and run.mode == "story" and run.cam + run.sx >= run.coop_zone_at:
 		run.coop_zone_at = coop_next_mark(run.coop_zone_at)   # for two: a new place, its speed from here (the

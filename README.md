@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.41.0** (19/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.42.0** (19/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,32 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.42.0
+
+Ses retours du 19/11 (1er lot ; l'écran de fin animé, les réglages et les collines suivent) :
+- **Histoire : la scène du temple** : caméra figée, les gardes parlent (« Il a la relique ! CHOPEZ-LE !! », …,
+  « pourquoi il nous lance des bâtons rouges ? ... » pendant que des bâtons de TNT volent hors du temple),
+  puis l'entrée explose. Seul, un toucher passe la scène (après 1,2 s : pas un réflexe). **Dialogues en
+  route** : à 1000 m, « Oh non Vorace ! DEMI-TOUR !! » puis « Mais il est fou il s'arrête pas ! » ; Pépito
+  court toujours, la route est vide (ni obstacle, ni pièce, ni objet, ni nuée) d'un écran avant jusqu'à la
+  fin du dialogue. Tout est dans **`reglages/dialogues.txt`** (« départ » ou une distance, une réplique par
+  ligne). Texte seulement, pas de voix. À deux : mêmes endroits, même route.
+- **Vorace arrive à 1500 m** (au lieu de 2000).
+- **La mort** (seul) : projeté en avant en sifflant, il retombe la tête la première, plantée dans le sol, les
+  jambes qui gigotent 1,4 s (un « boing »), puis la fin ; la photo est prise tête plantée. Avec le Dernier
+  élan, ses rebonds finissent pareil.
+- **Moustiques (nuées) plus fins** : mêmes couloirs, bestioles et bande rouge à 65 % du couloir (hitbox
+  42 au lieu de 64) : plus de place dans le couloir libre (`nuees, epaisseur`).
+- **Araignées en file plus espacées** : 1,15 s entre deux (au lieu de 0,9), 11 m au moins (au lieu de 8),
+  autant après la file ; **et plus souvent** : files d'araignées ×5 (au lieu de ×3), vagues de volants
+  (missiles en ville) ×3 (au lieu de ×1). Réglages `araignees` et `volants` (« poids »).
+- **Caisses** : 50 pièces jetées devant Pépito (au lieu de 4), qui retombent et l'attendent
+  (`caisse, pieces`).
+- **Pause** : un œil en haut à droite cache le menu pour regarder le jeu (toujours en pause), un 2e appui le
+  remet ; les réglages ouverts depuis la pause gardent la musique basse ; le panneau des défis ne déborde
+  plus à droite (la barre de niveau passe sous le nom) ; sur l'accueil, une marge à droite.
+- **Boutique** : les équipements rangés par niveau de déblocage.
 
 ## 0.41.0
 

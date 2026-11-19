@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0}
+var opts := {"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -46,6 +46,8 @@ func _ready() -> void:
 			"room": opts["room"] = kv[1]
 			"friend": opts["friend"] = kv[1]      # coop=host: the friend code to add and invite
 			"slow": opts["slow"] = int(kv[1])      # milliseconds lost each frame: a slow phone
+			"every": opts["every"] = float(kv[1])  # seconds between two pictures (--shots)
+			"die": opts["die"] = float(kv[1])      # seconds into the run: his last heart is lost then
 			"mate": opts["mate"] = kv[1]          # run | bubble: a pretend partner beside him (the coop's drawing)
 	if opts["shots"] != "":
 		DirAccess.make_dir_recursive_absolute(opts["shots"])
@@ -153,6 +155,12 @@ func _process(delta: float) -> void:
 		r.mate = {"x": r.cam + r.sx - 110, "y": Game.floor_at(r, r.cam + r.sx - 110), "vy": 0.0, "g": true, "f": false, "ph": r.p.phase + 1.5, "b": opts["mate"] == "bubble", "d": r.dist}
 		if not was:
 			r.mate_bubble = Vector2(r.cam + r.sx, Game.GROUND - 150)
+	if opts["die"] >= 0 and r.t > opts["die"] and not r.dead and r.leap == null:   # the end, on purpose
+		opts["die"] = -1.0
+		r.god = false
+		r.hearts = 1
+		r.p.inv = 0
+		Game.hit(r, null)
 	next_press -= delta
 	if next_press <= 0 and not opts["still"]:                              # a press now and then, held for a moment
 		next_press = randf_range(0.5, 1.4)
@@ -184,7 +192,7 @@ func _shoot(delta: float) -> void:
 		return
 	next_shot -= delta
 	if next_shot <= 0:
-		next_shot = 2.0
+		next_shot = opts["every"]
 		await RenderingServer.frame_post_draw
 		var im := get_viewport().get_texture().get_image()
 		im.save_png(opts["shots"].path_join("shot-%03d.png" % shot_n))

@@ -66,6 +66,7 @@ redmonster, vitesse           | 200      # % de ta vitesse pendant ce temps (la 
 un tous les                   | 1400 / 2400      # m, de … à …
 sablier, ralentissement       | 20       # % de ta vitesse en moins quand tu le ramasses
 sablier, vitesse              | 90       # % de ta vitesse, une fois à l'écran : il reste longtemps en vue
+caisse, pieces                | 50       # pièces jetées devant toi quand une caisse casse : elles retombent et t'attendent
 
 [montures]
 premiere                      | 700 / 1000       # m, de … à …
@@ -83,21 +84,26 @@ a hauteur de tete des         | 1500     # m
 par colonne au plus           | 2        # araignées l'une au-dessus de l'autre
 montee et descente            | 2.5      # m de chaque côté (les rouges)
 aller-retour                  | 2.4      # s
+ecart dans une file           | 1.15     # s entre deux araignées d'une file (à la vitesse prévue), et autant après la file
+ecart mini dans une file      | 11       # m au moins entre deux araignées d'une file
+files, poids                  | 5        # combien de fois plus souvent qu'un motif simple une file d'araignées arrive
 
 [volants]
 avertissement                 | 1        # s : le « ! » avant qu'il traverse
 vitesse                       | 20       # m/s de plus que toi
 vagues                        | 2 / 10   # volants : à 9 m/s / à 30 m/s
 ecart dans les vagues         | 0.9 / 0.3        # s : à 9 m/s / à 30 m/s
+vagues, poids                 | 3        # combien de fois plus souvent qu'un motif simple une vague de volants (missiles en ville) arrive
 campement                     | 2.6      # s à la même hauteur (Vol) avant qu'un volant te vise
 campement encore              | 1.6      # s, si tu y restes
 
 [nuees]
 premiere                      | 150 / 230        # m, de … à …
 suivantes                     | 170 / 300        # m après la précédente
+epaisseur                     | 65       # % de la hauteur d'un couloir pour les bestioles et leur bande rouge (couloirs inchangés)
 
 [vorace]
-arrivee                       | 2000     # m (à 100 m près), Histoire seulement
+arrivee                       | 1500     # m (à 100 m près), Histoire seulement
 vitesse                       | 14       # m/s pendant le combat
 duree                         | 26       # s d'attaques
 recul                         | 3.5      # m plus à droite qu'avant la 0.33

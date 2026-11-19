@@ -76,6 +76,7 @@ var view_w := 569.0
 var t := 0.0
 var q := 4.0                           # drawing steps per art pixel
 var shift := false                     # « Signalements décalés »: the fonceurs' warnings stand further in
+const PLANT_SINK := 16.0              # art pixels of his head under the floor, stuck head first
 var show_dead := false                 # the photo of his fall: he is still drawn, the one frame it is taken
 var hitbox := false                    # the debug menu's « Hitbox »: the boxes the rules test, over everything
 var seat = null                        # where the hero sits on his mount this frame
@@ -130,6 +131,8 @@ func show_run(r: Game.Run, time: float, q_: int) -> void:
 	# he steps out of the doorway: hidden while still inside
 	var in_temple = TEMPLE_X - r.cam / PIXEL > -_w("temple")
 	var rect = Rect2(DOOR_X, -400, view_w + 400, 1200) if in_temple and r.cam == 0 else Rect2(-400, -400, view_w + 800, 1200)
+	if planted():                                    # head first in the ground: what is under the floor is not seen
+		rect = Rect2(-400, -400, view_w + 800, 400 + n(Game.floor_at(r, r.cam + r.sx)) + 1)
 	if rect != hero_clip.rect:
 		hero_clip.rect = rect
 		hero_clip.queue_redraw()
@@ -137,6 +140,10 @@ func show_run(r: Game.Run, time: float, q_: int) -> void:
 		l.queue_redraw()
 
 # ---------- small helpers ----------
+
+## His last heart lost: head first in the ground, legs kicking (Game: Leap.planted).
+func planted() -> bool:
+	return run != null and run.leap != null and run.leap.planted
 
 func snap(v: float) -> float:
 	return roundf(v * q) / q
@@ -873,7 +880,7 @@ func stride(th: float) -> Dictionary:
 	return {"x": -1 - 8 * cos(th), "y": -4.5 - 6 * up, "r": 0.5 * sin(2 * th) if up > 0 else 0.0}
 
 func _draw_hero_layer(c: CanvasItem) -> void:
-	if run == null or not Art.ready or (run.dead and not show_dead):
+	if run == null or not Art.ready or (run.dead and not show_dead and not planted()):
 		return
 	if run.bubble:                                   # coop: fallen, floating after the partner
 		draw_hero(c, null, run.p, sx(run.bubble_pos.x))
@@ -1002,8 +1009,17 @@ func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN) -> void:
 		if me and run.lvl("sprint") > 0:
 			shoes = [null, null]                     # Sprint: no strides any more, a wheel of legs (below)
 
+	if leap != null and leap.planted:                # head first in the ground: upside down, legs kicking, arms flailing
+		var kick = sin(t * 19)
+		var kick2 = sin(t * 19 + 2.1)
+		shoes = [{"x": -5 + 3 * kick, "y": -4.0 - 2 * absf(kick), "r": 0.5 * kick}, {"x": 5 + 3 * kick2, "y": -5.0 - 2 * absf(kick2), "r": -0.5 * kick2}]
+		fists = [{"x": -11 + 2 * sin(t * 13), "y": -24.0 + 2 * cos(t * 13)}, {"x": 12 - 2 * sin(t * 13), "y": -24.0 - 2 * cos(t * 13)}]
+		tilt = 0.08 * sin(t * 7)
+		by = -11.0
 	var xf = Transform2D(0, Vector2(ox, oy))
-	if leap != null:                                 # knocked out: he tumbles
+	if leap != null and leap.planted:                # (turned round his middle, then sunk: the head under the floor)
+		xf = xf.translated_local(Vector2(0, -22 + PLANT_SINK)).rotated_local(PI + 0.06 * sin(t * 5)).translated_local(Vector2(0, 22))
+	elif leap != null:                               # knocked out: he tumbles
 		xf = xf.translated_local(Vector2(0, -20)).rotated_local(p.roll).translated_local(Vector2(0, 20))
 	if shoes[0] != null:
 		part(c, xf, "far-shoe", shoes[0]["x"], shoes[0]["y"], shoes[0]["r"])
@@ -1582,6 +1598,15 @@ func _draw_front(c: CanvasItem) -> void:
 			region(c, im, (qp.shard % 2) * hw, (qp.shard >> 1) * hh, hw, hh, -hw / 2, -hh / 2, hw, hh, Color(1, 1, 1, minf(1, 3 * (1 - qp.life / qp.span))))
 			c.draw_set_transform_matrix(Transform2D.IDENTITY)
 			continue
+		if qp.shard == -2:                           # a stick of TNT, spinning, its fuse lit
+			c.draw_set_transform_matrix(Transform2D(qp.rot, Vector2(sx(qp.x), n(qp.y))))
+			rect(c, -1.5, -6, 3, 12, Color("#d8352a"))
+			rect(c, -1.5, -6, 3, 2, Color("#f4f0e0"))
+			rect(c, -0.5, -9, 1, 3, Color("#3a2a1a"))
+			if floori(t * 30) % 2 == 0:
+				rect(c, -1, -11, 2, 2, Color("#ffd35c"))
+			c.draw_set_transform_matrix(Transform2D.IDENTITY)
+			continue
 		var col: Color = qp.c
 		col.a = clampf(1 - qp.life / qp.span, 0, 1)
 		var s = maxf(1, roundf(qp.s / PIXEL))
@@ -1661,23 +1686,24 @@ func _draw_swarm(c: CanvasItem) -> void:
 	for k in f.act.size():
 		if not f.act[k] or cx < -60:
 			continue
-		var top = GN - (k + 1) * step
-		var cy = top + step / 2
+		var cy = GN - (k + 0.5) * step
+		var band = (step - 6) * Game.FM_THICK        # thinner than a lane (Game.FM_THICK), in its middle
+		var top = cy - band / 2 - 3
 		if aiming and f.t > 0.3 and not f.ghost:     # a band that fades in from the left, runs under them, and fades out behind
 			var end = cx + 40
 			var a = 0.12 + 0.1 * pulse
 			var red0 = Color(1, 70 / 255.0, 70 / 255.0, 0)
 			var red = Color(1, 70 / 255.0, 70 / 255.0, a)
 			var s2 = maxf(0.5, 1 - 60 / end) * end
-			hgrad(c, 0, end * 0.5, top + 3, step - 6, red0, red)
-			hgrad(c, end * 0.5, s2, top + 3, step - 6, red, red)
-			hgrad(c, s2, end, top + 3, step - 6, red, red0)
+			hgrad(c, 0, end * 0.5, top + 3, band, red0, red)
+			hgrad(c, end * 0.5, s2, top + 3, band, red, red)
+			hgrad(c, s2, end, top + 3, band, red, red0)
 			var x = -fmod(t * 60, 16)
 			while x < end:
 				var fade = clampf(minf(x / (end * 0.5), (end - x) / 60), 0, 1)
 				var col = Color(1, 96 / 255.0, 96 / 255.0, (0.55 + 0.35 * pulse) * fade)
-				rect(c, snap(x), top + 3, 9, 2, col)
-				rect(c, snap(x), top + step - 5, 9, 2, col)
+				rect(c, snap(x), snap(top + 3), 9, 2, col)
+				rect(c, snap(x), snap(top + band + 1), 9, 2, col)
 				x += 16
 		if f.phase == "fire" and not f.ghost:        # the laser: a flicker while it charges, then the beam
 			var h = n(Game.LASER_H)
@@ -1708,7 +1734,10 @@ func _draw_swarm(c: CanvasItem) -> void:
 			if frames > 1:
 				frame = [0, 1, 2, 1][floori(t * 22 + k) % 4] if aiming else (3 if floori(t * 24 + k) % 2 == 1 else 1)
 			var still = 0.4 if name == "drone-big" else 1.0
-			sheet(c, im, frames, frame, snap(cx + jx * still - fw / 2), snap(cy + jy * still - im.get_height() / 2.0), Color(1, 1, 1, alpha))
+			var sc = clampf(Game.FM_THICK / 0.65, 0.5, 1.5) * 0.8   # (smaller with the band: 0.8 of its picture at 65 %)
+			c.draw_set_transform_matrix(Transform2D(0, Vector2(cx + jx * still, cy + jy * still)).scaled_local(Vector2(sc, sc)))
+			sheet(c, im, frames, frame, -fw / 2, -im.get_height() / 2.0, Color(1, 1, 1, alpha))
+			c.draw_set_transform_matrix(Transform2D.IDENTITY)
 			if name == "wasp":
 				rect(c, snap(cx + jx - 4), snap(cy + jy - im.get_height() / 2.0 - 2 + (floori(t * 30) % 2) * 2), 10, 2, Color(235 / 255.0, 245 / 255.0, 1, 0.55 * alpha))
 
