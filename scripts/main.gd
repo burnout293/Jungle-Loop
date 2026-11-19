@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.37.0"
+const VERSION := "0.38.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -2355,7 +2355,10 @@ func _replay() -> void:
 
 # ---------- Amis: the friend code, the week's board, and playing for two ----------
 
-func _field(hint_: String, length: int) -> LineEdit:
+## A text field. On a phone (a browser on a touch screen), Godot's own field lies under the phone's keyboard,
+## which hides it and sometimes types nothing at all: a touch opens the browser's own box instead (_ask_text,
+## `ask` its question), and `done` runs as if OK had been pressed. Elsewhere, Entrée runs it too.
+func _field(hint_: String, length: int, ask: String, done: Callable) -> LineEdit:
 	var f = LineEdit.new()
 	f.placeholder_text = hint_
 	f.max_length = length
@@ -2368,7 +2371,31 @@ func _field(hint_: String, length: int) -> LineEdit:
 	var sb = _flat(Color("#141a30"), LINE)
 	f.add_theme_stylebox_override("normal", sb)
 	f.add_theme_stylebox_override("focus", _flat(Color("#141a30"), GOLD))
+	f.add_theme_stylebox_override("read_only", sb)
+	f.add_theme_color_override("font_uneditable_color", INK)
+	var on_enter = func(_t: String) -> void:
+		done.call()
+	f.text_submitted.connect(on_enter)
+	if _phone_web():
+		f.editable = false
+		f.virtual_keyboard_enabled = false
+		var on_tap = func(ev: InputEvent) -> void:
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				f.accept_event()
+				var got = _ask_text(ask, f.text)
+				if got is String and got.strip_edges() != "":
+					f.text = got.strip_edges().left(length)
+					done.call()
+		f.gui_input.connect(on_tap)
 	return f
+
+## A browser on a touch screen (a phone, a tablet).
+func _phone_web() -> bool:
+	return OS.has_feature("web") and (DisplayServer.is_touchscreen_available() or OS.has_feature("web_android") or OS.has_feature("web_ios"))
+
+## The browser's own box asks for a text (it stays readable above the phone's keyboard): null if cancelled.
+func _ask_text(question: String, current: String):
+	return JavaScriptBridge.eval("window.prompt(%s, %s)" % [JSON.stringify(question), JSON.stringify(current)], true)
 
 func _wrap(text: String, colour: Color) -> Label:
 	var l = _label(text, ts("s"), colour, 0)
@@ -2402,13 +2429,13 @@ func _build_friends() -> void:
 	fr.add_child(w["fr-code"])
 	fr.add_child(_label("TON PSEUDO", ts("s"), RELIC, 0))
 	var name_row = _hbox(4)
-	w["fr-name"] = _field("Pépito", 16)
+	w["fr-name"] = _field("Pépito", 16, "Ton pseudo (16 lettres au plus) :", _rename)
 	name_row.add_child(w["fr-name"])
 	name_row.add_child(_button("OK", "small", _rename))
 	fr.add_child(name_row)
 	fr.add_child(_label("AJOUTER UN AMI", ts("s"), RELIC, 0))
 	var add_row = _hbox(4)
-	w["fr-add"] = _field("PEPI-XXXX", 9)
+	w["fr-add"] = _field("PEPI-XXXX", 9, "Le code de ton ami (PEPI-XXXX) :", _add_friend)
 	add_row.add_child(w["fr-add"])
 	add_row.add_child(_button("Ajouter", "small", _add_friend))
 	fr.add_child(add_row)
@@ -2426,7 +2453,7 @@ func _build_friends() -> void:
 	w["co-host"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	co.add_child(w["co-host"])
 	var join_row = _hbox(4)
-	w["co-code"] = _field("ABCD", 4)
+	w["co-code"] = _field("ABCD", 4, "Les 4 lettres du salon :", _coop_join)
 	join_row.add_child(w["co-code"])
 	join_row.add_child(_button("Rejoindre", "small", _coop_join))
 	w["co-join-row"] = join_row

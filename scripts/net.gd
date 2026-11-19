@@ -12,6 +12,7 @@ extends Node
 static var url := ""
 static var stun: Array = ["stun:stun.l.google.com:19302"]
 static var turn := {}                    # {"urls", "username", "credential"} when a relay is set
+static var relay_only := false          # --relay / ?relay: through the relay or not at all (to try it)
 
 ## reglages/reseau.txt: « adresse | … » under [serveur], « stun | a / b » and the turn lines under [coop].
 static func load_config(text: String) -> void:
@@ -60,6 +61,9 @@ static func set_from_args() -> void:
 		trying = trying or int(t) == 1             # (a number: a JavaScript boolean may come back as one)
 	if trying and not given:
 		url = ""
+	relay_only = "--relay" in args
+	if OS.has_feature("web"):
+		relay_only = relay_only or int(JavaScriptBridge.eval("new URLSearchParams(location.search).has('relay') ? 1 : 0", true)) == 1
 
 static func enabled() -> bool:
 	return url != ""
@@ -149,3 +153,8 @@ func send_signal(save: Dictionary, room: String, data: String) -> Dictionary:
 
 func read_signals(save: Dictionary, room: String, since: int) -> Dictionary:
 	return await _call(save, "signals", {"room": room, "since": since})
+
+## The relay (TURN) for a run for two, with credentials for a few hours: {iceServers, turn: on | off | ...}.
+## Empty while the server has no TURN key (server/turn.ps1).
+func ice(save: Dictionary) -> Dictionary:
+	return await _call(save, "ice", {})

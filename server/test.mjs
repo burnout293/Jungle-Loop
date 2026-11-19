@@ -64,6 +64,29 @@ assert.equal(later.items.length, 0);
 assert.equal((await call('signal', { id: c.id, secret: c.secret, room: room.room, data: 'x' })).error, 'unknown');
 ok('the handshake: each side reads only the other\'s messages, from where it left off; strangers are kept out');
 
+const off = await call('ice', { id: a.id, secret: a.secret });
+assert.equal(off.status, 200); assert.deepEqual(off.iceServers, []); assert.equal(off.turn, 'off');
+assert.equal((await call('ice', { id: a.id, secret: 'nope' })).status, 403);
+const realFetch = globalThis.fetch;
+let asked = null;
+globalThis.fetch = async (url, init) => {
+  asked = { url: String(url), auth: init.headers.authorization, body: JSON.parse(init.body) };
+  return new Response(JSON.stringify({ iceServers: [
+    { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.cloudflare.com:53'] },
+    { urls: ['turn:turn.cloudflare.com:3478?transport=udp', 'turn:turn.cloudflare.com:53?transport=udp', 'turns:turn.cloudflare.com:5349?transport=tcp', 'turns:turn.cloudflare.com:443?transport=tcp'], username: 'u', credential: 'c' },
+  ] }), { status: 201 });
+};
+env.TURN_KEY_ID = 'key123'; env.TURN_KEY_TOKEN = 'tok456\r\n';
+const on = await call('ice', { id: a.id, secret: a.secret });
+globalThis.fetch = realFetch; delete env.TURN_KEY_ID; delete env.TURN_KEY_TOKEN;
+assert.equal(asked.url, 'https://rtc.live.cloudflare.com/v1/turn/keys/key123/credentials/generate-ice-servers');
+assert.equal(asked.auth, 'Bearer tok456'); assert.equal(asked.body.ttl, 4 * 3600);
+assert.equal(on.turn, 'on');
+assert.deepEqual(on.iceServers[0].urls, ['stun:stun.cloudflare.com:3478']);
+assert.deepEqual(on.iceServers[1].urls, ['turn:turn.cloudflare.com:3478?transport=udp', 'turns:turn.cloudflare.com:5349?transport=tcp', 'turns:turn.cloudflare.com:443?transport=tcp']);
+assert.equal(on.iceServers[1].username, 'u'); assert.equal(on.iceServers[1].credential, 'c');
+ok('the relay: nothing until its two secrets are set; then short-lived credentials, port 53 left out');
+
 const pre = await worker.fetch(new Request('http://x/api/score', { method: 'OPTIONS' }), env);
 assert.equal(pre.status, 204); assert.equal(pre.headers.get('access-control-allow-origin'), '*'); assert.equal(await pre.text(), '');
 ok('a browser asking first (CORS) gets an empty 204');

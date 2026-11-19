@@ -33,6 +33,7 @@ var poll_t := 0.0
 var link_t := 0.0
 var busy := false
 var _ping_at := 0.0
+var relay := false                     # the server gave a relay (TURN) for this run
 var _ping_t := 0.0
 
 ## Whether this build can talk WebRTC: built in in browsers, a GDExtension elsewhere (not installed).
@@ -58,7 +59,10 @@ func host(seed_: int) -> void:
 		_fail("Impossible d'ouvrir un salon (%s)." % r["error"])
 		return
 	room = r["room"]
-	if not _make_peer():
+	var ice = await net.ice(save)
+	if role != "host" or state != "opening":
+		return
+	if not _make_peer(ice):
 		return
 	_state("waiting", "")
 
@@ -76,7 +80,10 @@ func join(code: String) -> void:
 		return
 	seed = int(r["seed"])
 	mate = {"name": str(r.get("host", "")), "tier": 0}
-	if not _make_peer():
+	var ice = await net.ice(save)
+	if role != "guest" or state != "joining":
+		return
+	if not _make_peer(ice):
 		return
 	_state("linking", "")
 	_signal({"t": "hi"})                         # the host makes its offer on this
@@ -117,9 +124,16 @@ func _fail(text: String) -> void:
 	pos = null
 	_state("failed", text)
 
-func _make_peer() -> bool:
+## `ice`: the server's answer (net.ice), its relay added to the STUN servers of reglages/reseau.txt.
+func _make_peer(ice: Dictionary) -> bool:
+	var servers: Array = Net.ice_servers() + Array(ice.get("iceServers", []))
+	relay = ice.get("turn", "") == "on" or Net.turn.has("urls")
+	var config = {"iceServers": servers}
+	if Net.relay_only:
+		config["iceTransportPolicy"] = "relay"
+	print("coop: %d ICE servers, relay %s%s" % [servers.size(), relay, " (relay only)" if Net.relay_only else ""])
 	peer = WebRTCPeerConnection.new()
-	if peer.initialize({"iceServers": Net.ice_servers()}) != OK:
+	if peer.initialize(config) != OK:
 		_fail("Ce navigateur ne sait pas jouer à deux.")
 		return false
 	peer.session_description_created.connect(_on_description)
@@ -176,7 +190,7 @@ func _process(delta: float) -> void:
 		if state == "linking":
 			link_t += delta
 			if link_t > LINK_TIME or peer.get_connection_state() == WebRTCPeerConnection.STATE_FAILED:
-				_fail("La connexion n'a pas pu se faire (réseau trop fermé ?).")
+				_fail("La connexion n'a pas pu se faire, même par le relais." if relay else "La connexion directe n'a pas pu se faire (en 4G / 5G, c'est souvent bloqué) et le serveur n'a pas encore de relais.")
 				return
 		if ctl != null and ctl.get_ready_state() == WebRTCDataChannel.STATE_OPEN:
 			_state("ready", "")

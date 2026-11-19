@@ -15,9 +15,16 @@
 //   room/join     {id, secret, room}                       -> {seed, host}
 //   signal        {id, secret, room, data}                 -> {seq}
 //   signals       {id, secret, room, since}                -> {items: [{seq, from, data}]}
+//   ice           {id, secret}                             -> {iceServers: [{urls, username, credential}]}
+//
+// ice: the relay (TURN) that carries a coop run when the two phones cannot reach each other directly
+// (a 4G / 5G network often forbids it). Cloudflare Realtime's TURN, with short-lived credentials made
+// here from two secrets set once by server/turn.ps1 (TURN_KEY_ID, TURN_KEY_TOKEN); without them, an
+// empty list (the phones try with STUN only).
 
 const MODES = ['story', 'endless'];
 const ROOM_LIFE = 10 * 60 * 1000;          // a room lasts ten minutes
+const TURN_TTL = 4 * 3600;                 // seconds a relay credential lasts: longer than any run for two
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O, 1/I: read aloud without mistakes
 
 const json = (data, status = 200, origin = '*') => new Response(JSON.stringify(data), {
@@ -155,6 +162,29 @@ const routes = {
     const rows = await db.prepare('SELECT seq, sender, data FROM signals WHERE room = ? AND seq > ? AND sender != ? ORDER BY seq').bind(room, Math.floor(Number(body.since) || 0), me.id).all();
     return { items: rows.results.map((x) => ({ seq: x.seq, from: x.sender === r.host ? 'host' : 'guest', data: x.data })) };
   },
+
+  async 'ice'(db, body, now, me, env) {
+    const id = String(env.TURN_KEY_ID || '').trim();
+    const token = String(env.TURN_KEY_TOKEN || '').trim();
+    if (!id || !token) return { iceServers: [], turn: 'off' };
+    let r;
+    try {
+      r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(id)}/credentials/generate-ice-servers`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ ttl: TURN_TTL }),
+      });
+    } catch {
+      return { iceServers: [], turn: 'unreachable' };
+    }
+    if (!r.ok) return { iceServers: [], turn: 'refused ' + r.status };
+    const data = await r.json();
+    // Port 53 is blocked by browsers: such an address would only make them wait (Cloudflare's advice).
+    const servers = (data.iceServers || [])
+      .map((s) => ({ ...s, urls: [].concat(s.urls || []).filter((u) => !/:53(\?|$)/.test(u)) }))
+      .filter((s) => s.urls.length);
+    return { iceServers: servers, turn: 'on' };
+  },
 };
 
 export default {
@@ -174,7 +204,7 @@ export default {
       me = await who(env.DB, body);
       if (!me) return json({ error: 'who' }, 403, origin);
     }
-    const out = await routes[route](env.DB, body, now, me);
+    const out = await routes[route](env.DB, body, now, me, env);
     return json(out, out && out.error ? 400 : 200, origin);
   },
 };

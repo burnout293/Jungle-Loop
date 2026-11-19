@@ -19,8 +19,9 @@ jeu n'envoie rien et le bouton « Amis » n'apparaît pas.
 | `schema.sql` | les tables |
 | `wrangler.toml` | les réglages Cloudflare (l'identifiant de la base y est noté par `deploy.ps1`) |
 | `deploy.ps1` | **la mise en ligne en une commande** (voir plus bas) |
+| `turn.ps1` | **le relais TURN** pour jouer à deux en 4G / 5G : range la clé de relais dans les secrets du serveur (voir plus bas) |
 | `dev.mjs` | le même serveur sur ce PC, sans Cloudflare (Node 22+, base en mémoire) : `node server/dev.mjs` |
-| `test.mjs` | chaque action vérifiée contre la base en mémoire : `node server/test.mjs` (11 vérifications) |
+| `test.mjs` | chaque action vérifiée contre la base en mémoire : `node server/test.mjs` (12 vérifications) |
 
 Le côté jeu : `scripts/net.gd` (les requêtes) et `scripts/coop.gd` (le salon, la connexion WebRTC, les
 messages de la course à deux).
@@ -68,8 +69,23 @@ ajout d'un ami, classement de la semaine, salon à 4 lettres, connexion WebRTC d
 la même route (même graine, même décor, route faite pour le moins équipé des deux), partenaire recoloré,
 bulle de sauvetage, fin quand les deux sont dans une bulle.
 
+## Le relais (TURN), pour jouer à deux en 4G / 5G
+
+Deux téléphones se parlent directement quand leurs réseaux le permettent. En 4G / 5G c'est souvent bloqué :
+la partie passe alors par le relais TURN de Cloudflare (gratuit jusqu'à 1 000 Go par mois, une course à
+deux en utilise très peu). Le serveur donne à chaque partie des accès valables 4 h (route `ice`), faits avec
+une clé de relais rangée dans ses secrets. Pour la poser, une fois :
+
+1. Sur https://dash.cloudflare.com/?to=/:account/calls (menu « Realtime », parfois « Calls » → « TURN
+   Server » → « Create », nom : jungle-loop), noter le « Turn Token ID » et l'« API Token ».
+2. Dans ce dossier : `powershell -ExecutionPolicy Bypass -File turn.ps1`, coller les deux valeurs. Le script
+   vérifie la clé auprès de Cloudflare puis la range (secrets `TURN_KEY_ID`, `TURN_KEY_TOKEN`). Rien à
+   réexporter.
+
+Sans clé, le jeu essaie la connexion directe seule et le dit quand elle échoue. Un autre relais peut aussi
+se mettre dans `reglages/reseau.txt` (lignes `turn`). Pour l'essayer : `?relay` dans l'adresse du jeu (par
+le relais ou pas du tout).
+
 Reste :
-- un **relais TURN** pour les réseaux qui bloquent la connexion directe (certaines 4G) : il se règle dans
-  `reglages/reseau.txt` (Cloudflare en propose un, payant au-delà d'un quota gratuit) ;
 - l'essai sur deux vrais téléphones, sur deux réseaux différents ;
 - plus tard : Android sur le même Wi-Fi sans serveur, Steam.
