@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.38.0** (19/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.39.0** (19/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,28 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.39.0
+
+- **Coop : la même route sur les deux appareils.** Son premier essai (téléphone 5G et PC, par le relais) :
+  même décor, mais relief, plateformes, monstres et pièces différents. Causes trouvées par un banc qui joue
+  la même graine comme deux appareils différents (`tests/coop_road.gd`) : l'écart entre deux motifs suivait la vitesse
+  du moment où la route était posée (donc les images par seconde, la largeur de l'écran, la place de
+  l'invité) ; le changement de décor était placé par rapport à l'écran ; l'or du temple et les nuées tiraient
+  au dé de la route à un moment propre à chacun ; Sprint, Relique altérée et les gemmes du Trèfle changeaient
+  la route d'un seul. Pour deux (`Game.coop_run`) : route posée pour la vitesse prévue à cet endroit
+  (`lay_speed`), décor changé au premier motif après la borne (`coop_biome_x`), or du temple et volants
+  « anti-campement » à leurs propres dés, sans nuées, ni Sprint, Relique altérée, RedMonster, ni gemmes du
+  Trèfle sur la route. Le banc : même route dans tous les cas (120 i/s, i/s irrégulières, écran large,
+  invité, sauts au hasard, chaque objet, tout à la fois) ; en solo rien ne change (même graine 993/993,
+  passages équitables à pied et au Vol, et pour deux).
+- Lettres du salon, pseudos, code ami et champs de saisie dans la police de Godot (`plain`, `tp`, `_plain`) :
+  lisibles lettre par lettre.
+- Nouvel objet **RedMonster** (bouton, niveau 8, 2500 / 5000 / 10000) : sa vitesse ×2 pendant 5 / 10 / 20 s,
+  recharge 30 / 35 / 45 s depuis la gorgée ; la route reste posée pour sa vitesse à lui ; une traînée
+  rouge derrière lui, la canette qui s'ouvre (son) ; touche R ; pas en coop. Réglages dans
+  `reglages/equilibrage.txt` (`redmonster, …`) et `progression.txt`. Icône `ico-monster` (PixelLab). La
+  rangée de boutons en jeu a la place pour cinq.
 
 ## 0.38.0
 

@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.38.0"
+const VERSION := "0.39.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -27,7 +27,7 @@ const MENU_TIPS := {
 	"story": "Peut-être qu'il y a un scénario dans ce jeu… ou pas. À vous de voir.",
 	"shop": "Parce que tout aventurier a le droit à sa panoplie de gadgets.",
 }
-const ACTS := ["tnt", "boots", "slow", "dash"]   # the HUD's buttons, right to left as shown
+const ACTS := ["tnt", "boots", "slow", "dash", "monster"]   # the HUD's buttons, right to left as shown
 const MOUNT_TEXT := {
 	"gorilla": "Il saute plus haut, et son second saut l'emmène jusqu'aux lianes du haut de l'écran. Appuie pour en redescendre.",
 	"rhino": "Il saute peu mais court de plus en plus vite, pulvérise les caisses et ramasse large. Rien ne le blesse, et il repart tout seul au bout de 8 secondes.",
@@ -60,6 +60,7 @@ var set_tab := "main"
 var fk := 0.95                         # evens out the sizes of the typefaces
 var font: Font
 var bold: Font                         # buttons, the HUD and titles: the bold cut
+var plain: Font                        # Godot's own: what must be read letter by letter (a room's letters, pseudos, codes)
 var ui: Control
 var screens := {}
 var w := {}                            # the widgets that change, by name
@@ -277,6 +278,7 @@ func _font() -> void:
 	fk = 0.95
 	font = ThemeDB.fallback_font
 	bold = font
+	plain = ThemeDB.fallback_font
 	if save["pixelFont"] and ResourceLoader.exists(dir + "Silkscreen-Regular.ttf"):
 		font = load(dir + "Silkscreen-Regular.ttf")
 		bold = load(dir + "Silkscreen-Bold.ttf") if ResourceLoader.exists(dir + "Silkscreen-Bold.ttf") else font
@@ -317,6 +319,16 @@ func ts(k: String) -> int:
 		return roundi(base)
 	var sc = _ui_scale()
 	return maxi(1, roundi(maxf(8, roundf(base * sc / 8 - 0.12) * 8) / sc))
+
+## A size for the plain typeface (tp: the same steps as ts, without the pixel grid).
+func tp(k: String) -> int:
+	return roundi({"s": 11, "m": 14, "l": 19, "xl": 26, "huge": 52}[k] * 0.95 * U)
+
+## A label in the plain typeface: a room's letters, a pseudo, a friend code, read letter by letter.
+func _plain(l: Label, k: String) -> Label:
+	l.label_settings.font = plain
+	l.label_settings.font_size = tp(k)
+	return l
 
 ## Real pixels per unit of the 1280 x 720 frame.
 func _ui_scale() -> float:
@@ -841,7 +853,7 @@ func _build_hud() -> void:
 		acts.add_child(b)
 		w["btn-" + k] = b
 		w["cd-" + k] = cool
-	_place(acts, 569 - 12 - 238, 320 - 12 - 52, 238, 52)
+	_place(acts, 569 - 12 - 300, 320 - 12 - 52, 300, 52)       # room for the five (three at most are equipped)
 	s.add_child(acts)
 
 ## Paper falling over the screens: a buy (14 pieces), a record (60).
@@ -1044,9 +1056,10 @@ func _roll_biome() -> void:
 		still.biome = endless_biome
 		still.prev_biome = endless_biome
 
-## A HUD button pressed: tnt, boots, slow or dash.
+## A HUD button pressed: tnt, boots, slow, dash or monster.
 func _act(k: String) -> void:
 	match k:
+		"monster": input.monster = true
 		"dash": input.dash = true
 		"slow": input.slow = true
 		"boots": input.stomp = true
@@ -2198,16 +2211,8 @@ func go(name: String) -> void:
 		coop_start = {}
 		coop_last = not co.is_empty()
 		var up = SaveData.loadout(save)                # only the three equipped upgrades come along
-		if coop_last:                                  # for two: the same road (seed, scenery, tier), and nothing
-			up.erase("dash")                           # that changes one player's pace: no Esquive, Sablier nor mount
-			up.erase("slow")
-			run = Game.new_run(up, "endless", int(co["seed"]))
-			run.coop = true
-			run.road_tier = int(co["tier"])
-			if coop.role == "guest":
-				run.home = Game.PX - 70                 # just behind the host, on both screens: both are seen
-			run.mounts = []
-			run.next_mount = INF
+		if coop_last:                                  # for two: the same road (seed, scenery, tier) on both phones
+			run = Game.coop_run(up, int(co["seed"]), int(co["tier"]), coop.role == "guest")
 			endless_biome = int(co["biome"])
 		else:
 			run = Game.new_run(up, save["mode"])
@@ -2364,8 +2369,8 @@ func _field(hint_: String, length: int, ask: String, done: Callable) -> LineEdit
 	f.max_length = length
 	f.custom_minimum_size = Vector2(a(140), a(24))
 	f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	f.add_theme_font_override("font", bold)
-	f.add_theme_font_size_override("font_size", ts("m"))
+	f.add_theme_font_override("font", plain)             # read letter by letter: not the pixel typeface
+	f.add_theme_font_size_override("font_size", tp("m"))
 	f.add_theme_color_override("font_color", INK)
 	f.add_theme_color_override("font_placeholder_color", Color(1, 1, 1, 0.35))
 	var sb = _flat(Color("#141a30"), LINE)
@@ -2425,7 +2430,7 @@ func _build_friends() -> void:
 	col.add_child(tabs)
 	var fr = _vbox(5)                                   # the friend code, the pseudonym, adding a friend
 	fr.add_child(_label("TON CODE AMI", ts("s"), RELIC, 0))
-	w["fr-code"] = _label("…", ts("xl"), GOLD)
+	w["fr-code"] = _plain(_label("…", ts("xl"), GOLD), "xl")
 	fr.add_child(w["fr-code"])
 	fr.add_child(_label("TON PSEUDO", ts("s"), RELIC, 0))
 	var name_row = _hbox(4)
@@ -2444,7 +2449,7 @@ func _build_friends() -> void:
 	w["panel-friends"] = fr
 	col.add_child(fr)
 	var co = _vbox(6)                                   # playing for two: a room, its four letters
-	w["co-room"] = _label("", ts("huge"), GOLD)
+	w["co-room"] = _plain(_label("", ts("huge"), GOLD), "huge")
 	w["co-room"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	co.add_child(w["co-room"])
 	w["co-text"] = _wrap("", INK)
@@ -2526,7 +2531,7 @@ func refresh_friends() -> void:
 		var row = _box()
 		var h = _hbox(6)
 		var me = e.get("me", false)
-		var nm = _label(str(e.get("name", "?")), ts("s"), GOLD if me else INK, 0)
+		var nm = _plain(_label(str(e.get("name", "?")), ts("s"), GOLD if me else INK, 0), "m")
 		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		nm.clip_text = true
 		h.add_child(nm)
@@ -2808,7 +2813,7 @@ func hud() -> void:
 			create_tween().tween_property(h, "scale", Vector2(0.8, 0.8) if lost else Vector2.ONE, 0.2)
 			i += 1
 	for k in ACTS:
-		var act = {"dash": run.dash, "slow": run.slow, "boots": run.boots, "tnt": run.tnt}[k]
+		var act = {"dash": run.dash, "slow": run.slow, "boots": run.boots, "tnt": run.tnt, "monster": run.monster}[k]
 		var cool: Cooldown = w["cd-" + k]
 		var v: float = act.cd / act.full if act.full > 0 else 0.0
 		if absf(cool.k - v) > 0.005 or (v == 0 and cool.k != 0):
@@ -2825,7 +2830,7 @@ func press() -> void:
 
 ## Which of the HUD's buttons is under a spot, if any.
 func _hud_button_at(pos: Vector2) -> String:
-	for k in ["btn-pause", "btn-dash", "btn-slow", "btn-boots", "btn-tnt"]:
+	for k in ["btn-pause", "btn-dash", "btn-slow", "btn-boots", "btn-tnt", "btn-monster"]:
 		var b: Control = w.get(k)
 		if b != null and is_instance_valid(b) and b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
 			return k
@@ -2841,7 +2846,7 @@ func _input(event: InputEvent) -> void:
 				pause()
 				get_viewport().set_input_as_handled()
 
-			"btn-slow", "btn-boots", "btn-tnt", "btn-dash":
+			"btn-slow", "btn-boots", "btn-tnt", "btn-dash", "btn-monster":
 				_act(_hud_button_at(event.position).substr(4))
 				get_viewport().set_input_as_handled()
 	var down = (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION)
@@ -2918,6 +2923,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			input.stomp = true
 		elif label == KEY_F or label == KEY_T:
 			input.tnt = true
+		elif label == KEY_R:
+			input.monster = true
 		elif k.keycode == KEY_ESCAPE or label == KEY_P:
 			if state == "play":
 				pause()
@@ -3013,6 +3020,7 @@ func _process(delta: float) -> void:
 	input.slow = false
 	input.stomp = false
 	input.tnt = false
+	input.monster = false
 	if held != null and is_instance_valid(held) and state == "menu" and not tip_held and time - held_t > 0.45:
 		tip_held = true                             # held long enough: its panel, and no launch on release
 		_menu_tip(held.get_meta("tip", ""), held)

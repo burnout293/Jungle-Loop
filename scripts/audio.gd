@@ -230,6 +230,9 @@ func _recipes() -> Dictionary:
 		"back": [T(500, 0.3, "triangle", 0.16, 0, 1000)],                                          # the boots plunging
 		"quake": [T(70, 0.5, "sine", 0.5, 0, 30), N(0.45, 0.5, 380), T(140, 0.2, "square", 0.15, 0, 60)],   # metal on stone
 		"slow": [T(900, 0.6, "sine", 0.2, 0, 150)],
+		# RedMonster: the can hissing open, two gulps, then he revs up; and the fizz running out
+		"monster": [N(0.35, 0.16, 6000), T(240, 0.1, "sine", 0.24, 0.2, 150), T(240, 0.1, "sine", 0.24, 0.33, 150), T(160, 0.6, "sawtooth", 0.14, 0.45, 1400)],
+		"monsterend": [T(1300, 0.4, "sawtooth", 0.09, 0, 260)],
 		"hit": [T(240, 0.5, "sawtooth", 0.3, 0, 40)],
 		"hurt": [T(300, 0.22, "square", 0.2, 0, 90)],
 		"gem": arp([12, 19, 24], 0.18, "triangle", 0.18, 0.06),

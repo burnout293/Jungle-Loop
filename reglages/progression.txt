@@ -25,6 +25,7 @@ dash           | 5  | 1200 / 2800 / 5600   # Esquive
 boots          | 6  | 2500 / 5500          # Bottes de métal
 tnt            | 9  | 3000 / 6000 / 12000  # Fana de TNT
 slow           | 7  | 1800 / 4000          # Sablier
+monster        | 8  | 2500 / 5000 / 10000  # RedMonster : 5, 10 puis 20 s à vitesse ×2
 lastLeap       | 6  | 1600 / 3600 / 7200   # Dernier élan
 flight         | 10 | 4800 / 7000 / 10000  # Vol : montée 12, 13,5 puis 15 m/s
 sprint         | 8  | 4000                 # Sprint

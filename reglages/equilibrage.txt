@@ -58,6 +58,9 @@ bottes, portee de la secousse | 3 / 4.5  # m autour de lui, par niveau
 bottes, recharge              | 8 / 5    # s, par niveau
 tnt, recharge                 | 25 / 18 / 12     # s, par niveau
 tnt, temps de vol             | 0.55     # s avant l'explosion
+redmonster, duree             | 5 / 10 / 20      # s, par niveau
+redmonster, recharge          | 30 / 35 / 45     # s avant la canette suivante, depuis la première gorgée, par niveau
+redmonster, vitesse           | 200      # % de ta vitesse pendant ce temps (la route reste posée pour ta vitesse à toi)
 
 [objets rares]
 un tous les                   | 1400 / 2400      # m, de … à …

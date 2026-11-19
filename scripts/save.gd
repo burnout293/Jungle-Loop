@@ -26,6 +26,7 @@ static var UPGRADES := [
 	{"id": "boots", "unlock": 6, "icon": "boots", "kind": "actif", "name": "Bottes de métal", "desc": "Plus lourd que le cuir et plus solide que le bois. Vous ferez des ravages avec ces bottes.", "costs": [2500, 5500]},
 	{"id": "tnt", "unlock": 9, "icon": "tnt", "kind": "actif", "name": "Fana de TNT", "desc": "Faire sauter l'entrée du temple à chaque nouvelle tentative ne vous suffit plus. Vous allez répandre le chaos dans cette jungle maudite !", "costs": [3000, 6000, 12000]},
 	{"id": "slow", "unlock": 7, "icon": "slow", "kind": "actif", "name": "Sablier", "desc": "Ralentit le temps quelques secondes.", "costs": [1800, 4000]},
+	{"id": "monster", "unlock": 8, "icon": "monster", "kind": "actif", "name": "RedMonster", "desc": "Une boisson confectionnée à partir de jus d'une créature rouge surexcitée. Qui pourrait bien boire un truc pareil ?", "costs": [2500, 5000, 10000]},
 	{"id": "lastLeap", "unlock": 6, "icon": "leap", "kind": "passif", "name": "Dernier élan", "desc": "Au dernier cœur perdu, tu rebondis encore pour gagner quelques mètres.", "costs": [1600, 3600, 7200]},
 	{"id": "flight", "unlock": 10, "icon": "flight", "kind": "passif", "power": true, "name": "Vol", "desc": "En l'air, chaque appui te fait remonter d'un coup d'hélice. Relâche : tu retombes. Niveaux 2 et 3 : tu montes plus vite.", "costs": [4800, 7000, 10000]},
 	{"id": "sprint", "unlock": 8, "icon": "shoes", "kind": "passif", "power": true, "name": "Sprint", "desc": "Cours plus vite dès le départ, les jambes en tourbillon.", "costs": [4000]},

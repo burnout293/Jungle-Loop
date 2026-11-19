@@ -60,6 +60,9 @@ const KEYS := {
 		"bottes recharge": ["BOOTS_CD", "lv", 1.0],
 		"tnt recharge": ["TNT_CD", "lv", 1.0],
 		"tnt temps de vol": ["TNT_FLIGHT", "n", 1.0],
+		"redmonster duree": ["MONSTER_TIME", "lv", 1.0],
+		"redmonster recharge": ["MONSTER_CD", "lv", 1.0],
+		"redmonster vitesse": ["MONSTER_MUL", "n", PC],
 	},
 	"objets rares": {
 		"un tous les": ["BONUS_EVERY", "pair", 1.0],

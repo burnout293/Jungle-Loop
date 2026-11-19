@@ -53,6 +53,10 @@ static var DODGE_SPEED := 8000.0
 static var DODGE_TIME := 0.2
 static var DODGE_INV := 0.3
 static var SLOW_TIME := [0.0, 3.0, 4.5]
+static var MONSTER_TIME := [0.0, 5.0, 10.0, 20.0]   # RedMonster: seconds at twice his speed, by level
+static var MONSTER_CD := [0.0, 30.0, 35.0, 45.0]    # seconds before the next can, from the first sip
+static var MONSTER_MUL := 2.0                       # his speed while it lasts
+const MONSTER_RAMP := 1800.0                        # units/s² to get there: a kick, not a slow climb
 static var SLOW_CD := 20.0
 static var SLOW_PACE := 0.45            # the Sablier: the world at 45 % of its pace
 # The Sablier's end is announced: the last SLOW_WARN seconds tick and blink, then the world eases back.
@@ -267,6 +271,7 @@ class Player:
 	var diving := false     # Bottes de métal: plunging down, the quake when he lands
 
 class Obs:
+	var own := false              # sent at him alone (anti-camping), not part of the road
 	var x := 0.0
 	var y := 0.0
 	var w := 0.0
@@ -445,6 +450,7 @@ class Controls:
 	var slow := false
 	var stomp := false       # Bottes de métal
 	var tnt := false         # Fana de TNT
+	var monster := false     # RedMonster
 
 class Shape:
 	var name := ""
@@ -487,6 +493,7 @@ class Run:
 	var slow := Active.new()
 	var boots := Active.new()
 	var tnt := Active.new()
+	var monster := Active.new()      # RedMonster: t = the seconds at twice the speed left
 	var shots: Array = []          # the sticks of TNT in the air
 	var rewind_left := 0
 	var dead := false
@@ -496,6 +503,7 @@ class Run:
 	var exploded := false
 	var boom := 0.0
 	var biome_x := -1e9             # world x where the current scenery begins
+	var coop_biome_x := INF         # for two: the road's next mark, where spawn_pattern changes the scenery
 	var touched := {}              # scenery that reacted: cell -> when
 	var monkeys: Array = []
 	var terrain: Array = [Vector2(-1e9, 630.0)]   # the floor's outline, see floor_at
@@ -586,6 +594,37 @@ static func colour_of(names: Array) -> Color:
 static func h01(i: float, s: float) -> float:
 	var x = sin(i * 127.1 + s * 311.7) * 43758.5453
 	return x - floor(x)
+
+## The speed the road is laid for at x (the gaps, a wave of flyers, spiders in a row). Alone: the speed now
+## (the road is laid a screen ahead, about when he gets there). For two: the speed the Run illimitée's law
+## gives at x, the same on both phones whatever their frame rate, screen width or place on the screen.
+static func lay_speed(run: Run, x: float) -> float:
+	if not run.coop:
+		return run.road_speed
+	return sqrt(SPEED_BASE * SPEED_BASE + 2.0 * SPEED_GAIN * maxf(0.0, x))
+
+## Trèfle's level as the road sees it: for two, none (its extra gems would be laid for one player only).
+static func road_luck(run: Run) -> int:
+	return 0 if run.coop else run.lvl("lucky")
+
+## A run for two (main.gd): the same road on both phones, whatever their frame rate, screen, loadout or
+## place on the screen. Nothing that changes one player's pace (Esquive, Sablier, Sprint, a mount, the
+## hourglass, RedMonster) nor bends the road for him alone (Relique altérée, Trèfle's gems, the swarms that
+## follow him).
+static func coop_run(upgrades: Dictionary, seed_: int, tier: int, guest: bool) -> Run:
+	var up = upgrades.duplicate()
+	for id in ["dash", "slow", "sprint", "drunk", "monster"]:
+		up.erase(id)
+	var run = new_run(up, "endless", seed_)
+	run.coop = true
+	run.road_tier = tier
+	run.mounts = []
+	run.next_mount = INF
+	run.next_fm = INF
+	run.coop_biome_x = ZONE_ENDLESS * PPM
+	if guest:
+		run.home = PX - 70                       # just behind the host, on both screens: both are seen
+	return run
 
 static func friend(run: Run) -> float:          # Ami de la nature: mounts come that much sooner
 	return 1.0 + FRIEND_K * run.lvl("nature")
@@ -688,6 +727,7 @@ static func new_run(upgrades: Dictionary, mode: String = "story", seed_: int = -
 	run.slow.full = SLOW_CD
 	run.boots.full = BOOTS_CD[mini(run.lvl("boots"), BOOTS_CD.size() - 1)]
 	run.tnt.full = TNT_CD[mini(run.lvl("tnt"), TNT_CD.size() - 1)]
+	run.monster.full = MONSTER_CD[mini(run.lvl("monster"), MONSTER_CD.size() - 1)]
 	run.rewind_left = 1 if run.lvl("rewind") > 0 else 0
 	run.next_mount = wrnd(MOUNT_FIRST[0], MOUNT_FIRST[1]) / friend(run)
 	run.next_fm = wrnd(FM_FIRST[0], FM_FIRST[1])
@@ -854,10 +894,10 @@ static func add_hover(run: Run, x: float, h: float, ph: float = -1.0) -> Obs:
 ## seconds before the next: a jump lasts 0.63 s, a flyer at head height must find him back on the floor.
 ## With the Vol, each takes his height when its "!" shows. Returns the stretch of road it takes.
 static func _wave(run: Run, x: float, tier: int) -> float:
-	var k = clampf((run.road_speed - SPEED_BASE) / (1200.0 - SPEED_BASE), 0, 1)
+	var k = clampf((lay_speed(run, x) - SPEED_BASE) / (1200.0 - SPEED_BASE), 0, 1)
 	var n = clampi(roundi(lerpf(WAVE_N[0], WAVE_N[1], k) * wrnd(0.6, 1.0)), WAVE_N[0], WAVE_N[1])
 	var dt_ = lerpf(WAVE_GAP[0], WAVE_GAP[1], k)
-	var v = maxf(run.road_speed, 1.0)
+	var v = maxf(lay_speed(run, x), 1.0)
 	var at = 0.0
 	for i in n:
 		var alt = 170.0
@@ -883,12 +923,13 @@ static func add_bonus(run: Run, x: float) -> void:
 	run.bonuses.append(it)
 
 ## A flyer: it waits beyond the right edge until the screen reaches it, shows a "!" at its height, then crosses.
-static func add_dart(run: Run, x: float, alt: float) -> Obs:
+static func add_dart(run: Run, x: float, alt: float, own: bool = false) -> Obs:
 	var o = add_obs(run, x, floor_at(run, x) - alt - DART_H / 2, DART_W, DART_H, "dart", false)
 	o.biome = biome_at(run, x)
 	o.state = "wait"
 	o.t = 0
-	o.ph = wrnd(0, 6)
+	o.ph = rnd(0, 6) if own else wrnd(0, 6)      # (own: sent at him, at a moment of his: not the road's dice)
+	o.own = own
 	return o
 
 static func coin_line(run: Run, x: float, y: float, n: int) -> void:
@@ -945,6 +986,11 @@ static func spawn_pattern(run: Run) -> void:
 		scatter(run, laid)
 		return
 	var x = run.next_x
+	if x >= run.coop_biome_x:                        # for two: the next scenery begins at the first pattern past
+		run.prev_biome = run.biome                   # the mark, the same on both phones (alone: update(), when
+		run.biome = NEXT_BIOME[run.biome]            # he reaches the mark, just off screen)
+		run.biome_x = x
+		run.coop_biome_x = (floorf(x / (ZONE_ENDLESS * PPM)) + 1) * ZONE_ENDLESS * PPM
 	var G = GROUND
 	var tier = tier_of(run)
 	var riding = run.mount != null or run.items.size() > 0
@@ -1003,8 +1049,8 @@ static func spawn_pattern(run: Run) -> void:
 			var n = 2 + W.randi() % 2
 			for i in n:
 				var h = LOW if i % 2 == 0 else (wpick([HEAD] + SKY_HOVERS) if tier >= 2 else HEAD)
-				add_hover(run, x + i * maxf(320, run.road_speed * 0.9), h)
-			extent = (n - 1) * maxf(320, run.road_speed * 0.9) + HOVER_W
+				add_hover(run, x + i * maxf(320, lay_speed(run, x) * 0.9), h)
+			extent = (n - 1) * maxf(320, lay_speed(run, x) * 0.9) + HOVER_W
 		"lowhover":                                # a low spider: jump it
 			add_hover(run, x, LOW)
 			coin_arc(run, x - 40, 150, 5, 160)
@@ -1028,7 +1074,7 @@ static func spawn_pattern(run: Run) -> void:
 				coin(run, cx - 140 + i * 70, floor_at(run, cx) - (CURTAIN[g] + CURTAIN[g + 1]) / 2)
 			extent = CURTAIN_LEAD + HOVER_W + 120
 		"double":
-			var d = run.road_speed + 90
+			var d = lay_speed(run, x) + 90
 			add_spiky(run, x)
 			add_spiky(run, x + d)
 			extent = d + SPIKY_W
@@ -1064,7 +1110,7 @@ static func spawn_pattern(run: Run) -> void:
 			var y = G - 135
 			add_platform(run, x, y)
 			coin_line(run, x + 40, y - 40, 4)
-			if W.randf() < 0.35 + 0.2 * run.lvl("lucky"):   # (the road's dice, always rolled: only the odds are his)
+			if W.randf() < 0.35 + 0.2 * road_luck(run):   # (the road's dice, always rolled: only the odds are his)
 				coin(run, x + PLAT_W / 2, y - 110, gem(run))
 			extent = PLAT_W
 		"cave":                                      # two ways: down through the hollow, or over its roof
@@ -1142,7 +1188,7 @@ static func spawn_pattern(run: Run) -> void:
 					pl = add_platform(run, ix, iy)
 				coin_line(run, ix + 30, iy - 40, maxi(2, floori((pl.w - 60) / 44)))
 				ix += pl.w + wrnd(70, 150)
-			if W.randf() < 0.3 + 0.2 * run.lvl("lucky"):
+			if W.randf() < 0.3 + 0.2 * road_luck(run):
 				coin(run, ix - 120, G - 130 - (n - 1) * rise - 110, gem(run))
 			if x > 70 * PPM and W.randf() < 0.65:     # below, a hedgehog: up there is the safe way
 				add_spiky(run, x + wrnd(0.3, 0.6) * (ix - x))
@@ -1190,7 +1236,7 @@ static func spawn_pattern(run: Run) -> void:
 
 	# The gap to the next pattern is set in distance (GAP_DIST), so the road keeps its density as the
 	# speed grows; only where a jump would no longer have room to land does it widen with the speed.
-	var gap = maxf(GAP_DIST, run.road_speed * GAP_TIME + GAP_MARGIN) * wrnd(0.85, 1.3) * (1.3 if kind == "coins" else 1.0)
+	var gap = maxf(GAP_DIST, lay_speed(run, x) * GAP_TIME + GAP_MARGIN) * wrnd(0.85, 1.3) * (1.3 if kind == "coins" else 1.0)
 	var clear = run.fm == null and not run.fm_due and run.boss == null and kind != "wave"
 	if clear and x / PPM >= run.next_bonus and x / PPM > 300:   # a life or a brake, floating in the gap
 		add_bonus(run, x + extent + gap * 0.5)
@@ -1233,7 +1279,7 @@ static func spawn_pattern(run: Run) -> void:
 					coin(run, wx, f - h)
 					if style == "double":
 						coin(run, wx, f - 84)                           # two rows, both caught at a run (the top one by the leaves on his head)
-			if W.randf() < 0.12 * run.lvl("lucky") and run.lvl("scatter") > 0:
+			if W.randf() < 0.12 * road_luck(run) and run.lvl("scatter") > 0:
 				coin(run, cx + n * 44 + 30, floor_at(run, cx + n * 44 + 30) - 110, gem(run))
 	run.next_x = x + extent + gap
 	scatter(run, laid)
@@ -1532,7 +1578,7 @@ static func camp(run: Run, dt: float) -> void:
 			var oa = floor_at(run, o.x) - (o.y + o.h / 2)
 			if absf(oa - alt) < 160:
 				return                               # something at his height is coming: that will move him
-	var dt_ = add_dart(run, run.cam + run.view_w + 80, clampf(alt, DART_ALTS[0][0], DART_TOP))
+	var dt_ = add_dart(run, run.cam + run.view_w + 80, clampf(alt, DART_ALTS[0][0], DART_TOP), true)
 	dt_.aim = true
 	run.camp_t = CAMP_TIME - CAMP_AGAIN
 
@@ -2186,11 +2232,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		for i in 46:                                 # the doorway bursts outward in blocks of stone and moss
 			part(run, rnd(60, 130), GROUND - rnd(40, 220), rnd(80, 900), rnd(-760, -40), rnd(0.8, 1.7), colour_of(["#8a8fa8", "#6a6f8c", "#4a4f6c", "#7bd13c", "#cfd3e6"]), rnd(8, 22), 1500)
 		for i in BLAST_COINS:                        # the temple's gold flies out: real coins, which bounce and wait
-			var c = coin(run, wrnd(70, 130), GROUND - wrnd(50, 200))
-			c.toss = true
+			var c = coin(run, rnd(70, 130), GROUND - rnd(50, 200))   # (its own dice: the road is already being laid,
+			c.toss = true                            # more or less far depending on the screen's width)
 			c.blast = true
-			c.tvx = wrnd(420, 1500)
-			c.tvy = wrnd(-820, -120)
+			c.tvx = rnd(420, 1500)
+			c.tvy = rnd(-820, -120)
 		run.events.append("boom")
 
 	var p = run.p
@@ -2222,6 +2268,17 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.dash.t = DODGE_TIME
 		run.dash.cd = run.dash.full
 		run.events.append("dash")
+	var monster_was = run.monster.t                  # RedMonster: twice his speed for a few seconds
+	run.monster.t = maxf(0, run.monster.t - dt)
+	run.monster.cd = maxf(0, run.monster.cd - dt)
+	if monster_was > 0 and run.monster.t == 0:
+		run.events.append("monsterend")
+	if run.leap == null and input.monster and run.lvl("monster") > 0 and run.monster.cd == 0 and run.mount == null and run.boss == null:
+		run.monster.t = MONSTER_TIME[mini(run.lvl("monster"), MONSTER_TIME.size() - 1)]
+		run.monster.cd = run.monster.full
+		run.events.append("monster")
+	if run.monster.t > 0 and randf() < 0.6:          # red fizz flying off behind him
+		part(run, run.cam + run.sx - rnd(10, 40), run.p.y - rnd(10, 70), -rnd(160, 420), rnd(-60, 40), rnd(0.2, 0.45), colour_of(["#ff3b3b", "#ff6b4a", "#ffd35c"]), rnd(4, 9), 0)
 	if run.leap == null and input.slow and run.lvl("slow") > 0 and run.slow.cd == 0:
 		run.slow.t = SLOW_TIME[run.lvl("slow")]
 		run.slow.cd = SLOW_CD
@@ -2240,6 +2297,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	own = maxf(SPEED_BASE * 0.6, own - run.brake)
 	var pace = own
 	var road_pace = raw
+	if run.monster.t > 0:                            # RedMonster: twice his speed; the road stays laid for his own
+		pace *= MONSTER_MUL
 	if run.boss != null:
 		pace = BOSS_SPEED * (DEATH_PACE if run.boss.phase == "fall" else 1.0)
 		road_pace = pace
@@ -2249,6 +2308,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		road_pace = raw * R["mul"] if R.has("mul") else pace
 	# Slowing down is quick; speeding back up (after a mount or the boss) is gradual.
 	var ramp = MOUNTS[run.mount.kind].get("ramp", RAMP) if run.mount != null and run.boss == null else RAMP
+	if run.monster.t > 0 and run.mount == null and run.boss == null:
+		ramp = MONSTER_RAMP
 	run.speed = _ease_speed(run.speed, pace, ramp, dt)
 	run.road_speed = _ease_speed(run.road_speed, road_pace, ramp, dt)
 	run.own = own
@@ -2703,7 +2764,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.by_mark = true                           # from now on the changes come with the distance marks
 		run.next_biome_at = maxf(2 * Z, (floorf(run.dist / Z) + 1) * Z) if run.mode != "endless" else (floorf(run.dist / Z) + 1) * Z
 		var at = run.cam + run.view_w + 400          # the new scenery starts ahead, off screen, and scrolls in
-		if run.lvl("drunk") > 0:                     # Relique altérée: the next scenery only goes by, and this one comes back
+		if run.coop:
+			pass                                     # (for two, spawn_pattern changed it already, at a place on the road)
+		elif run.lvl("drunk") > 0:                   # Relique altérée: the next scenery only goes by, and this one comes back
 			run.strip_biome = NEXT_BIOME[run.biome]
 			run.strip_x0 = at
 			run.strip_x1 = at + RELIC_STRIP

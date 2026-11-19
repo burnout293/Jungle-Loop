@@ -112,6 +112,19 @@ func play_dash(_r: Game.Run, ahead: float, _t: float, inp: Game.Controls) -> voi
 	if ahead < 130:
 		inp.dash = true
 
+func build_monster(r: Game.Run, x: float) -> void:     # a sip, and he flies along the coins at twice his speed
+	Game.coin_line(r, x + 300, Game.GROUND - 40, 40)
+	Game.add_spiky(r, x + 1500)
+	Game.add_spiky(r, x + 2600)
+	_no_ghosts(r)
+
+func play_monster(r: Game.Run, ahead: float, t: float, inp: Game.Controls) -> void:
+	if t > 0.4 and not done.has("monster"):
+		done["monster"] = true
+		inp.monster = true
+	if r.p.ground and ahead < 90 + r.speed * 0.25:     # at twice the speed, he jumps sooner
+		inp.pressed = true
+
 func build_slow(r: Game.Run, x: float) -> void:
 	Game.add_spiky(r, x + 800)
 	Game.add_spiky(r, x + 1250)

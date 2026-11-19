@@ -201,7 +201,7 @@ func _tour() -> void:
 		[8.7, "confirm", ""], [9.2, "shot", "10-confirm"], [9.3, "close", ""],
 		[9.4, "go", "menu"], [10.2, "equip", "magnet"], [10.4, "slot", "magnet"], [10.8, "shot", "11-menu-slot"],
 		[10.82, "loadout", "magnet boots tnt"], [10.84, "slot", "boots"], [10.95, "shot", "11b-menu-three"], [10.96, "loadout", "-"], [10.97, "slot", "boots"],
-		[11.0, "play", ""], [11.05, "give", "tnt boots slow dash"],
+		[11.0, "play", ""], [11.05, "give", "tnt boots slow dash monster"],
 		[12.0, "touch", "0 down game"], [12.05, "check", "hold"], [12.3, "touch", "1 down btn-pause"], [12.35, "check", "state"],
 		[12.4, "touch", "0 up game"], [12.45, "check", "hold"], [12.5, "resume", ""], [13.5, "shot", "12-play"],
 		[13.6, "pause", ""], [14.4, "shot", "13-pause"],
@@ -221,7 +221,8 @@ func _tour() -> void:
 		[34.1, "own", "dash"], [34.15, "pick", "dash"], [35.2, "shot", "28-shop-dash-owned"],
 		[35.3, "tab", "power"], [35.35, "own", "flight"], [35.4, "pick", "flight"], [36.5, "shot", "29-shop-flight-owned"],
 		[36.6, "tab", "mount"], [36.65, "mpick", "dragonfly"], [37.8, "shot", "30-shop-dragonfly"], [37.85, "mtick", ""], [38.2, "mtick", ""], [38.25, "mpick", "rhino"], [39.3, "shot", "31-shop-rhino"],
-		[39.4, "quit", ""],
+		[39.35, "tab", "up"], [39.4, "own", "monster"], [39.45, "pick", "monster"], [41.0, "shot", "32-shop-monster"],
+		[41.1, "quit", ""],
 	]
 	while tour_i < steps.size() and t >= steps[tour_i][0]:
 		var st = steps[tour_i]
@@ -298,6 +299,7 @@ func _tour() -> void:
 				main.run.dash.full = Game.DASH_CD[1]
 				main.run.boots.full = Game.BOOTS_CD[1]
 				main.run.tnt.full = Game.TNT_CD[1]
+				main.run.monster.full = Game.MONSTER_CD[1]
 				main._fill_hud()
 			"tip": main._menu_tip(main.MENU_TIPS.get(arg, ""))
 			"scene":                                    # a scenery, a danger on the floor and an hourglass in view
