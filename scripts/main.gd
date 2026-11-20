@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.45.0"
+const VERSION := "0.46.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -3767,7 +3767,9 @@ func _step(h: float) -> void:
 	var t0 = Time.get_ticks_usec()
 	Game.update(run, h, input)
 	perf["game"] += Time.get_ticks_usec() - t0
-	var stats = {"dist": run.dist - last_dist, "coins": 0, "gems": 0, "jumps": 0, "plats": 0, "breaks": 0, "shrooms": 0, "monkeys": 0, "mounts": 0, "dodges": 0, "hurt": false}
+	var stats = {"dist": run.dist - last_dist, "coins": 0, "gems": 0, "jumps": 0, "plats": 0, "breaks": 0, "shrooms": 0, "monkeys": 0, "mounts": 0, "dodges": 0, "missiles": 0, "hurt": false}
+	if run.mount != null:                           # the metres run on a mount, for its own objectives
+		stats[run.mount.kind + "Dist"] = run.dist - last_dist
 	last_dist = run.dist
 	for ev in run.events:
 		Audio.sfx(ev)
@@ -3781,6 +3783,7 @@ func _step(h: float) -> void:
 			"monkey": stats["monkeys"] += 1
 			"mount": stats["mounts"] += 1
 			"dodge": stats["dodges"] += 1
+			"missile": stats["missiles"] += 1
 			"boom": Audio.music("run")
 			"boss": banner("Vorace !")           # (text on screen only for the bosses)
 			"timber": banner("Ça tombe !")

@@ -11,36 +11,38 @@ points par niveau | 1000    # le même nombre de points pour chaque niveau
 pieces par niveau | 20      # un niveau rapporte ce nombre × le niveau atteint (niveau 5 : 100 pièces)
 
 [ameliorations]
-# identifiant  | niveau requis | prix de chaque niveau, séparés par /
-doubleJump     | 2  | 480                  # Double saut
-spring         | 3  | 1000 / 2400          # Ressort
-magnet         | 2  | 600 / 1600 / 3600    # Aimant
-lucky          | 4  | 1200 / 3200          # Trèfle
-scatter        | 6  | 2000 / 4800 / 10000  # Gemmes dispersées
-breaker        | 3  | 1400                 # Brise-tout
+# identifiant  | niveau requis | prix de chaque niveau, séparés par /   (0.46 : ses prix du 20/11)
+lastLeap       | 2  | 400 / 600 / 800      # Dernier élan
+spring         | 2  | 1000 / 2000          # Ressort
+breaker        | 3  | 800                  # Brise-tout
+doubleJump     | 3  | 1600                 # Double saut
+magnet         | 4  | 600 / 1600 / 3600    # Aimant
+scatter        | 4  | 1000 / 1500 / 3000   # Gemmes dispersées
+tnt            | 5  | 2000 / 4000 / 6000   # Fana de TNT
+drunk          | 5  | 2600 / 3600 / 4600   # Relique altérée
+lucky          | 6  | 800 / 2400           # Trèfle
+nature         | 6  | 1200 / 2800 / 6000   # Ami de la nature
 heart          | 7  | 5000 / 12000 / 25000 # Vitalité : 2, 3 puis 4 cœurs
-drunk          | 5  | 1600 / 3600 / 7200   # Relique altérée
-nature         | 4  | 1200 / 2800 / 6000   # Ami de la nature
-dash           | 5  | 1200 / 2800 / 5600   # Esquive
-boots          | 6  | 2500 / 5500          # Bottes de métal
-tnt            | 9  | 3000 / 6000 / 12000  # Fana de TNT
-slow           | 7  | 1800 / 4000          # Sablier
-monster        | 8  | 2500 / 5000 / 10000  # RedMonster : 5, 10 puis 20 s à vitesse ×2
-lastLeap       | 6  | 1600 / 3600 / 7200   # Dernier élan
-flight         | 10 | 4800 / 7000 / 10000  # Vol : montée 12, 13,5 puis 15 m/s
-sprint         | 8  | 4000                 # Sprint
-sphere         | 10 | 6000                 # Sphère
+dash           | 8  | 1200 / 2800 / 5600   # Esquive
+monster        | 8  | 2500 / 5000 / 10000  # RedMonster : 5, 10 puis 20 s à vitesse ×2 (pas dans sa liste : inchangé)
+boots          | 10 | 2500 / 5500          # Bottes de métal
+slow           | 12 | 5000 / 10000         # Sablier
+flight         | 5  | 4800 / 7000 / 10000  # Vol : montée 12, 13,5 puis 15 m/s
+sprint         | 5  | 4000                 # Sprint
+sphere         | 5  | 6000                 # Sphère
 rewind         | 12 | 10000                # Rembobinage
 # les montures, chacune les siennes (onglet Montures)
-gorillaTamed     | 3 | 1200 / 2800        # Gorille dompté
-gorillaMagnet    | 4 | 1500 / 3500        # Aimant du gorille
-rhinoTamed       | 3 | 1200 / 2800        # Rhino dompté
-rhinoMagnet      | 4 | 1500 / 3500        # Aimant du rhino
-dragonflyTamed   | 3 | 1200 / 2800        # Libellule domptée
-dragonflyMagnet  | 4 | 1500 / 3500        # Aimant de la libellule
+gorillaTamed     | 5 | 1800 / 3200        # Gorille dompté
+gorillaMagnet    | 5 | 1000 / 2000        # Aimant du gorille
+rhinoTamed       | 3 | 800 / 2000         # Rhino dompté
+rhinoMagnet      | 3 | 1000 / 2000        # Aimant du rhino
+dragonflyTamed   | 7 | 2500 / 4000        # Libellule domptée
+dragonflyMagnet  | 7 | 1000 / 2000        # Aimant de la libellule
 
 [defis]
 # identifiant | objectif | pièces | expérience (en points : 1000 = un niveau)
+# Le même identifiant sur plusieurs lignes : ses paliers, dans l'ordre. Le 1er est proposé d'abord ; une fois
+# réussi, ce défi revient au palier suivant ; après le dernier, le dernier revient.
 dist1    | 800   | 40  | 120     # Cours … m en une seule course
 distT    | 3000  | 60  | 200     # Cours … m en tout
 coins1   | 60    | 40  | 120     # Ramasse … pièces en une seule course
@@ -55,3 +57,15 @@ monkeys  | 3     | 50  | 150     # Salue … singes en une seule course
 breaks   | 10    | 50  | 150     # Casse … obstacles (Brise-tout, Esquive, Bottes, TNT)
 mounts   | 2     | 60  | 180     # Chevauche … montures
 dodges   | 3     | 60  | 180     # Esquive … nuées
+# 0.46 : les mètres sur chaque monture (proposés une fois ton record au-delà de 700 m, la 1re monture)
+gorilla   | 2000  | 60  | 180     # Parcours … m avec le Gorille
+gorilla   | 20000 | 500 | 600
+rhino     | 4000  | 60  | 180     # Parcours … m avec le Rhino
+rhino     | 20000 | 600 | 700
+dragonfly | 3000  | 60  | 180     # Parcours … m avec la Libellule
+dragonfly | 15000 | 400 | 500
+# 0.46 : les missiles (volants) passés sans te toucher
+darts1    | 3     | 20  | 80      # Esquive … missiles en une seule course
+darts1    | 15    | 300 | 350
+dartsT    | 30    | 180 | 200     # Esquive … missiles en tout
+dartsT    | 80    | 600 | 800

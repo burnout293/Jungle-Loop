@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.45.0** (20/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.46.0** (20/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,17 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.46.0
+
+Ses retours du 20/11, 3e lot (l'équilibrage) :
+- **Ses prix et niveaux** pour toutes les améliorations et celles des montures (`reglages/progression.txt`) ;
+  RedMonster, absent de sa liste, garde les siens.
+- **Défis nouveaux** : les mètres avec le Gorille, le Rhino, la Libellule (proposés une fois le record au-delà
+  de 700 m), les missiles esquivés en une course et en tout. Un missile compte quand il passe derrière lui sans
+  l'avoir touché (`missile`). Le même défi sur plusieurs lignes = ses paliers (`questSteps` dans la sauvegarde).
+- **Deux rapports** dans le dépôt du site : `RAPPORT-ECONOMIE.md` (ce que donnent ses prix sur 800 courses) et
+  `RAPPORT-SKINS.md` (la même chose avec des skins).
 
 ## 0.45.0
 

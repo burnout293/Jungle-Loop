@@ -73,7 +73,7 @@ static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
 		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
-		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "lastQuest": "", "online": {}, "mountsOff": [], "xpv": 2}
+		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "online": {}, "mountsOff": [], "xpv": 2}
 
 static func _int(x) -> int:
 	if (x is int or x is float) and x > 0 and is_finite(float(x)):
@@ -134,6 +134,10 @@ static func sanitize(raw) -> Dictionary:
 	var xp = raw.get("xp")
 	s["xp"] = float(xp) if (xp is int or xp is float) and xp > 0 else 0.0
 	s["questsDone"] = _int(raw.get("questsDone"))
+	if raw.get("questSteps") is Dictionary:          # how many times each kind of objective was completed
+		for k in raw["questSteps"]:
+			if Progress.KINDS.has(k) and _int(raw["questSteps"][k]) > 0:
+				s["questSteps"][k] = _int(raw["questSteps"][k])
 	if raw.get("lastQuest") is String and Progress.KINDS.has(raw["lastQuest"]):
 		s["lastQuest"] = raw["lastQuest"]
 	if raw.get("quests") is Array:
@@ -155,8 +159,8 @@ static func sanitize(raw) -> Dictionary:
 		s["xp"] = s["xp"] / 20.0
 		for q in s["quests"]:
 			if Progress.quest_cfg.has(q["k"]):
-				q["reward"] = Progress.quest_cfg[q["k"]]["reward"]
-				q["xp"] = Progress.quest_cfg[q["k"]]["xp"]
+				q["reward"] = Progress.quest_cfg[q["k"]][0]["reward"]
+				q["xp"] = Progress.quest_cfg[q["k"]][0]["xp"]
 	s["xpv"] = 2
 	Progress.fill(s)
 	return s

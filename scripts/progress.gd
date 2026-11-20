@@ -9,9 +9,10 @@ extends RefCounted
 # over these defaults; a missing or wrong line keeps the default.
 
 static var cfg := {"mpp": 20.0, "per_level": 1000.0, "level_coins": 20}
-static var quest_cfg := {}                   # kind -> {"goal", "reward", "xp"}
+static var quest_cfg := {}                   # kind -> [{"goal", "reward", "xp"}, ...]: its steps, in order
 
 static func load_config(text: String) -> void:
+	quest_cfg.clear()
 	var section = ""
 	for raw in text.split("\n"):
 		var line: String = raw.split("#")[0].strip_edges()
@@ -41,9 +42,11 @@ static func load_config(text: String) -> void:
 				var costs = Array(cols[2].split("/")).map(func(c): return int(c.strip_edges())).filter(func(c): return c > 0)
 				if costs.size() > 0:
 					u["costs"] = costs
-			"defis", "défis":
+			"defis", "défis":                    # the same kind on several lines: its steps, one after the other
 				if KINDS.has(cols[0]) and cols.size() >= 4 and cols[1].is_valid_float():
-					quest_cfg[cols[0]] = {"goal": maxi(1, int(cols[1])), "reward": maxi(0, int(cols[2])), "xp": maxi(0, int(cols[3]))}
+					if not quest_cfg.has(cols[0]):
+						quest_cfg[cols[0]] = []
+					quest_cfg[cols[0]].append({"goal": maxi(1, int(cols[1])), "reward": maxi(0, int(cols[2])), "xp": maxi(0, int(cols[3]))})
 
 # ---------- level: a point of experience every cfg.mpp metres, plus what the objectives pay ----------
 
@@ -85,7 +88,21 @@ const KINDS := {
 	"breaks": {"stat": "breaks", "base": 4, "step": 3, "needs": ["breaker", "dash", "boots", "tnt"], "text": "Casse %d obstacles"},
 	"mounts": {"stat": "mounts", "base": 1, "step": 1, "text": "Chevauche %d montures", "one": "Chevauche une monture"},
 	"dodges": {"stat": "dodges", "base": 2, "step": 1, "text": "Esquive %d nuées"},
+	# from 0.46: the metres on each mount (once one has been met: a record past the first one), the missiles
+	"gorilla": {"stat": "gorillaDist", "base": 500, "step": 500, "seen": 700, "text": "Parcours %d m avec le Gorille"},
+	"rhino": {"stat": "rhinoDist", "base": 500, "step": 500, "seen": 700, "text": "Parcours %d m avec le Rhino"},
+	"dragonfly": {"stat": "dragonflyDist", "base": 500, "step": 500, "seen": 700, "text": "Parcours %d m avec la Libellule"},
+	"darts1": {"stat": "missiles", "single": true, "base": 3, "step": 1, "text": "Esquive %d missiles en une seule course"},
+	"dartsT": {"stat": "missiles", "base": 20, "step": 10, "text": "Esquive %d missiles"},
 }
+
+## The step of a kind offered now: the first, then the next one each time it is completed; past the last,
+## the last again.
+static func quest_step(save: Dictionary, k: String) -> Dictionary:
+	var steps: Array = quest_cfg.get(k, [])
+	if steps.is_empty():
+		return {}
+	return steps[mini(int(save["questSteps"].get(k, 0)), steps.size() - 1)]
 
 const MAX_ACTIVE := 3
 const MAX_TIER := 12
@@ -109,6 +126,8 @@ static func fill(save: Dictionary) -> void:
 					taken = true
 			if taken or k == save["lastQuest"]:
 				continue
+			if KINDS[k].has("seen") and maxi(int(save["best"]), int(save["bestEndless"])) < KINDS[k]["seen"]:
+				continue                             # a mount never met yet: not its objectives
 			if KINDS[k].has("needs"):
 				var ok = false
 				for id in KINDS[k]["needs"]:
@@ -118,7 +137,9 @@ static func fill(save: Dictionary) -> void:
 					continue
 			free.append(k)
 		var chosen: String = free[randi() % free.size()]
-		var qc: Dictionary = quest_cfg.get(chosen, {"goal": KINDS[chosen]["base"] + KINDS[chosen]["step"] * tier, "reward": 30 + 15 * tier, "xp": 40 + 20 * tier})
+		var qc: Dictionary = quest_step(save, chosen)
+		if qc.is_empty():
+			qc = {"goal": KINDS[chosen]["base"] + KINDS[chosen]["step"] * tier, "reward": 30 + 15 * tier, "xp": 40 + 20 * tier}
 		save["quests"].append({"k": chosen, "goal": qc["goal"], "p": 0, "reward": qc["reward"], "xp": qc["xp"]})
 
 static func start_run(save: Dictionary) -> void:
@@ -142,6 +163,7 @@ static func feed(save: Dictionary, stats: Dictionary) -> Array:
 		save["quests"].erase(q)
 		save["coins"] += q["reward"]
 		save["questsDone"] += 1
+		save["questSteps"][q["k"]] = int(save["questSteps"].get(q["k"], 0)) + 1
 		save["lastQuest"] = q["k"]
 	if done.size() > 0:
 		fill(save)

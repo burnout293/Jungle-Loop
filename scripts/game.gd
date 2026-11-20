@@ -343,6 +343,7 @@ class Obs:
 	var ghost := false
 	var gone := false
 	var passed := false
+	var dodged := false         # a missile gone past him untouched (counted once, for the objectives)
 	var ride := false
 	var biome := 0
 	var ph := 0.0
@@ -3187,6 +3188,10 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				if o.state == "go":
 					o.x -= DART_SPEED * d
 					o.y = floor_at(run, o.x + o.w / 2) - o.alt - DART_H / 2
+					if not o.gone and not o.dodged and o.x + o.w < px - HERO_HALF - 10:
+						o.dodged = true              # gone past him: one missile dodged (not the ghosts)
+						if not o.ghost:
+							run.events.append("missile")
 			if o.kind == "acid":
 				o.x += o.vx * d
 				if o.lob:                            # a blob in the air: where it lands, a puddle of acid stays
