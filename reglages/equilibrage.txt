@@ -65,7 +65,7 @@ redmonster, vitesse           | 200      # % de ta vitesse pendant ce temps (la 
 [objets rares]
 un tous les                   | 1400 / 2400      # m, de … à …
 sablier, ralentissement       | 20       # % de ta vitesse en moins quand tu le ramasses
-sablier, vitesse              | 90       # % de ta vitesse, une fois à l'écran : il reste longtemps en vue
+sablier, vitesse              | 75       # % de ta vitesse, une fois à l'écran (le sablier et le cœur) : ils restent longtemps en vue
 caisse, pieces                | 50       # pièces jetées devant toi quand une caisse casse : elles retombent et t'attendent
 
 [montures]
@@ -87,9 +87,10 @@ aller-retour                  | 2.4      # s
 ecart dans une file           | 1.15     # s entre deux araignées d'une file (à la vitesse prévue), et autant après la file
 ecart mini dans une file      | 11       # m au moins entre deux araignées d'une file
 files, poids                  | 5        # combien de fois plus souvent qu'un motif simple une file d'araignées arrive
+nids, poids                   | 6        # pareil pour un nid : 4 ou 5 araignées à l'écran en même temps (une basse à sauter, les autres au-dessus de toi)
 
 [volants]
-avertissement                 | 1        # s : le « ! » avant qu'il traverse
+avertissement                 | 2        # s : le « ! » avant qu'il traverse ; pendant ce temps il suit ta hauteur, puis la garde
 vitesse                       | 20       # m/s de plus que toi
 vagues                        | 2 / 10   # volants : à 9 m/s / à 30 m/s
 ecart dans les vagues         | 0.9 / 0.3        # s : à 9 m/s / à 30 m/s

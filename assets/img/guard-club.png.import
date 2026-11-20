@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c77pp1t24mu17"
-path="res://.godot/imported/hill-dungeon-1.png-6df57d5a9cbd61c1cb04b244240cf010.ctex"
+uid="uid://b4wgt8ot3pxdk"
+path="res://.godot/imported/guard-club.png-64ab00d164b0197e413aafe50046e1c5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/img/hill-dungeon-1.png"
-dest_files=["res://.godot/imported/hill-dungeon-1.png-6df57d5a9cbd61c1cb04b244240cf010.ctex"]
+source_file="res://assets/img/guard-club.png"
+dest_files=["res://.godot/imported/guard-club.png-64ab00d164b0197e413aafe50046e1c5.ctex"]
 
 [params]
 

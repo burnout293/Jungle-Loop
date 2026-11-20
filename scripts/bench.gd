@@ -221,12 +221,12 @@ func _tour() -> void:
 		[10.82, "loadout", "magnet boots tnt"], [10.84, "slot", "boots"], [10.95, "shot", "11b-menu-three"], [10.96, "loadout", "-"], [10.97, "slot", "boots"],
 		[11.0, "play", ""], [11.02, "skipintro", ""], [11.05, "give", "tnt boots slow dash monster"],
 		[12.0, "touch", "0 down game"], [12.05, "check", "hold"], [12.3, "touch", "1 down btn-pause"], [12.35, "check", "state"],
-		[12.4, "touch", "0 up game"], [12.45, "check", "hold"], [12.5, "resume", ""], [13.5, "shot", "12-play"],
+		[12.4, "touch", "0 up game"], [12.45, "check", "hold"], [12.5, "resume", ""], [13.0, "life", ""], [13.5, "shot", "12-play"],
 		[13.6, "pause", ""], [14.4, "shot", "13-pause"],
 		[14.5, "go", "settings"], [15.3, "shot", "14-settings-in-run"],
 		[15.4, "go", "menu"], [16.2, "shot", "15-back-to-pause"],
 		[16.3, "resume", ""], [16.35, "qdone", ""], [16.4, "die", ""], [17.4, "shot", "16a-head-first"],
-		[20.2, "shot", "16b-tally-counting"], [23.2, "shot", "16c-tally-levels"], [23.25, "close", ""], [23.6, "shot", "16d-tally-done"],
+		[20.2, "shot", "16b-tally-counting"], [21.8, "tallytap", ""], [22.6, "shot", "16c-tally-levels"], [22.65, "close", ""], [23.6, "shot", "16d-tally-done"],
 		[23.7, "next", ""], [24.6, "shot", "16e-over-quests"], [26.4, "shot", "16f-over-quests-done"],
 		[26.5, "rebuild", ""], [26.8, "shot", "16g-over-rebuilt"],
 		[26.9, "photo", ""], [27.5, "shot", "17-photo-full"], [27.55, "close", ""],
@@ -242,7 +242,11 @@ func _tour() -> void:
 		[43.2, "tab", "power"], [43.25, "own", "flight"], [43.3, "pick", "flight"], [44.4, "shot", "29-shop-flight-owned"],
 		[44.5, "tab", "mount"], [44.55, "mpick", "dragonfly"], [45.7, "shot", "30-shop-dragonfly"], [45.75, "mtick", ""], [46.1, "mtick", ""], [46.15, "mpick", "rhino"], [47.2, "shot", "31-shop-rhino"],
 		[47.25, "tab", "up"], [47.3, "own", "monster"], [47.35, "pick", "monster"], [48.9, "shot", "32-shop-monster"],
-		[49, "quit", ""],
+		[49.0, "story", ""], [50.0, "shot", "33-story-say"], [51.0, "tap", ""], [51.3, "tap", ""], [51.6, "tap", ""],
+		[52.0, "shot", "34-story-line3"], [52.1, "tap", ""], [52.4, "tap", ""], [55.0, "shot", "35-guards-chasing"],
+		[56.5, "shot", "36-guards-chasing2"], [57.0, "darts", ""], [57.4, "shot", "37-warn-stack"],
+		[57.5, "lantern", ""], [57.7, "shot", "38-lantern-lit"], [58.4, "shot", "39-lantern-later"],
+		[59, "quit", ""],
 	]
 	while tour_i < steps.size() and t >= steps[tour_i][0]:
 		var st = steps[tour_i]
@@ -298,6 +302,35 @@ func _tour() -> void:
 				main.run.say_queue.clear()
 				main.run.saying = ""
 			"photo": main._show_photo()
+			"life":                                     # a floating life picked up: two hearts on the HUD
+				main.run.hearts += 1
+				main.run.max_hearts = maxi(main.run.max_hearts, main.run.hearts)
+				main._fill_hud()
+			"story":                                    # Histoire alone: the guards' lines wait for a touch
+				main.save["seenIntro"] = true
+				main.save["mode"] = "story"
+				main.go("play")
+				main.run.hearts = 99
+			"tallytap": main._tally_tap()              # a touch on the count: the step under way, finished
+			"tap":
+				main.press()
+				main.input.hold = false
+			"darts":                                    # three flyers' warnings at once, at his height
+				for k in 3:
+					var o = Game.add_dart(main.run, main.run.cam + main.run.view_w + 40, 46.0)
+					o.state = "warn"
+					o.t = 0.1 * k
+			"lantern":                                  # the next lantern and mushroom brought into view, brushed
+				var r = main.run
+				var i0 = floori((r.cam + r.sx) / Game.PROP_CELL) + 1
+				for i in range(i0, i0 + 400):
+					var pr = Game.prop_at(i)
+					if pr != null and pr["kind"] == Game.PROP_LANTERN and Game.biome_at(r, pr["x"]) == 0 and Game.flat_at(r, pr["x"], Game.PROP_CELL * 0.6):
+						r.cam = pr["x"] - 260 * Game.PIXEL
+						r.obs.clear()
+						for j in range(i - 3, i + 4):
+							r.touched[j] = r.t
+						break
 			"next": main._tally_next()                 # the count's « Suivant »
 			"confirm": main._confirm("Effacer toute la progression ? C'est définitif.", func() -> void: pass)
 			"close":
@@ -307,6 +340,8 @@ func _tour() -> void:
 				for ch in main.get_children():          # the photo in full, too
 					if ch is CanvasLayer and ch.layer == 45:
 						ch.queue_free()
+				if main.state == "tally" and main.tally_phase == "levels":
+					main._tally_end()                   # (what its « Super ! » does)
 			"equip":
 				if not (arg in main.save["equipped"]):
 					SaveData.toggle_equip(main.save, arg)

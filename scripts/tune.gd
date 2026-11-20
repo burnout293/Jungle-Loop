@@ -89,6 +89,7 @@ const KEYS := {
 		"ecart dans une file": ["SPIDER_GAP_TIME", "n", 1.0],
 		"ecart mini dans une file": ["SPIDER_GAP_MIN", "n", M],
 		"files poids": ["CHAIN_SPIDERS", "i", 1.0],
+		"nids poids": ["CHAIN_NESTS", "i", 1.0],
 	},
 	"volants": {
 		"avertissement": ["DART_WARN", "n", 1.0],

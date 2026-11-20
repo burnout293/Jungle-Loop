@@ -58,8 +58,7 @@ plan = [
     ('forest-2', 'forest-root.png', None),
     ('ruins-1', 'ruins-wall-b.png', None),
     ('ruins-2', 'ruins-wall-a.png', 'broken'),
-    ('dungeon-1', 'dungeon-door.png', None),
-    ('dungeon-2', 'dungeon-bars.png', None),
+    # (the dungeon's walls, dungeon-door.png and dungeon-bars.png: taken out of the game in 0.44)
     ('city-1', 'city-building.png', None),
     ('city-2', 'city-containers.png', 'ground'),
 ]

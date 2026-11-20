@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.43.0** (20/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.44.0** (20/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,38 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.44.0
+
+Ses retours du 20/11 :
+- **Histoire** : chaque réplique des gardes attend une touche (une touche affiche la réplique entière, la
+  suivante passe ; « Touche pour continuer ») ; au temple, l'entrée explose après la dernière. À 1000 m, la
+  distance s'arrête, la route n'est plus posée ; ils ne parlent qu'une fois la route vide devant lui (plus
+  rien : ni créature, ni volant, ni nuée, ni objet, ni animal) ; une fois finis, la route revient depuis le
+  bord droit et la distance repart. Plus de bâtons de TNT au temple. **Les gardes** (PixelLab : deux
+  guerriers masqués de feuilles, une lance, une massue, chacun avec sa course en 8 images) sortent de
+  l'entrée après l'explosion et le poursuivent sur le bord gauche, sans jamais l'atteindre ; à leur
+  « DEMI-TOUR !! » ils font demi-tour et s'enfuient. Pur décor. À deux, rien ne change (répliques à leur
+  temps, même route).
+- **La fin, le comptage refait** : un seul panneau ; les mètres montent de 0 (lentement puis de plus en plus
+  vite : 200 m en 0,5 s, 2300 m en 4 s, 6 s au plus), le nombre bat toutes les 0,8 s, de plus en plus fort ;
+  puis un coup : il enfle et retombe, les pièces gagnées arrivent avec ; puis la barre de niveau (vite, puis
+  de plus en plus lentement), le panneau des niveaux passés, et « Suivant ». Une touche n'importe où finit
+  l'étape en cours. Un son pour les barres qui montent (niveau et défis), de plus en plus aigu.
+- **Missiles (volants)** : leur « ! » dure 2 s (au lieu de 1) et suit ta hauteur pendant ce temps ; parti, il
+  garde sa hauteur au-dessus du sol. Plusieurs « ! » sur une même ligne se mettent côte à côte. À pied, deux
+  volants d'une vague ont 0,85 s d'écart au moins (chacun se saute).
+- **Les nids d'araignées** (comme avec la libellule) : 4 ou 5 araignées à l'écran en même temps, 5 m
+  d'écart : une basse à sauter ; au-dessus de ton saut, seulement des hors d'atteinte ; ailleurs au-dessus de
+  ta tête, et dès 1500 m parfois une à hauteur de tête, loin du saut. ×6 parmi les motifs (`nids, poids`).
+- **Objets volants** (vie, sablier) : une fois à l'écran, ils filent à 75 % de ta vitesse et zigzaguent
+  bien plus (de 1,5 à 7,25 m, 0,7 s par aller).
+- **La mort** : enfoncé plus profond (la tête ne se voit plus), un petit tas du sol lui-même autour de lui
+  (il se fond dans le sol de chaque décor), un bruit plus fort, et ses jambes qui gigotent s'entendent.
+- **Décor** : dans la forêt, plus de grand arbre ni de panneau juste derrière le sol ; la lanterne et les
+  champignons s'allument par leurs propres pixels (plus de carré bleu) ; la lanterne frôlée s'allume
+  franchement (un halo) et le reste 1,5 s. Au donjon, plus de murs en collines.
+- **Cœurs** : une vie ramassée montrait un cœur perdu (les anciens cœurs comptaient encore) : corrigé.
 
 ## 0.43.0
 

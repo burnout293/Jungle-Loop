@@ -93,10 +93,14 @@ static var JUMP_V := 760.0
 static var JUMP_DOUBLE := 700.0
 static var JUMP_GRAVITY := 2400.0
 static var JUMP_HELD := 1500.0
-# The flyer: a "!" at the right edge shows its height DART_WARN seconds before it crosses the screen.
+# The flyer: a "!" at the right edge shows its height DART_WARN seconds before it crosses the screen; while it
+# shows, it slides up or down to his height (DART_TRACK units a second), and keeps the height it had when it goes.
+# On foot, the flyers of a wave are DART_FOOT_GAP seconds apart at least: each one can be jumped.
 const DART_W := 64.0
 const DART_H := 40.0
-static var DART_WARN := 1.0
+static var DART_WARN := 2.0
+const DART_TRACK := 520.0
+const DART_FOOT_GAP := 0.85
 static var DART_SPEED := 800.0
 const GAP_DIST := 420.0
 const GAP_TIME := 0.72
@@ -108,6 +112,10 @@ static var SPIDER_GAP_TIME := 1.15
 static var SPIDER_GAP_MIN := 440.0
 static var CHAIN_SPIDERS := 5
 static var CHAIN_WAVES := 3
+# A nest of spiders (0.44): 4 or 5 at once, 200 units apart, as many as in the dragonfly's sky. One low (jump
+# it); over his jump only spiders out of reach; elsewhere spiders above his head, maybe one at head height.
+static var CHAIN_NESTS := 6
+const NEST_STEP := 200.0
 # The swarm: its creatures and their red band take this share of a lane's height (the lanes stay where
 # they are): more room in the free one.
 static var FM_THICK := 0.65
@@ -202,10 +210,11 @@ const WAVE_JUMP := 0.8
 # of his speed off, for the rest of the run, or of the scenery in Histoire). The hourglass, once on the
 # screen, goes on ahead at BRAKE_PACE of his speed: it stays in sight a long time.
 static var BONUS_EVERY := [1400.0, 2400.0]   # metres between two
-const BONUS_LOW := 110.0
-const BONUS_HIGH := 180.0
+const BONUS_LOW := 60.0                 # (0.44: a much wider zigzag, BONUS_ZIG seconds each way)
+const BONUS_HIGH := 290.0
+const BONUS_ZIG := 0.7
 static var BRAKE_SHARE := 0.2
-static var BRAKE_PACE := 0.9
+static var BRAKE_PACE := 0.75
 const DART_TOP := 560.0                  # the highest a flyer can come: the hero's middle just under the ceiling
 const CAMP_BAND := 70.0
 static var CAMP_TIME := 2.6
@@ -265,6 +274,7 @@ const PROP_FERN := 3
 const PROP_FLOWER := 4
 const PROP_SHROOM := 5
 const PROP_LANTERN := 6
+const PROP_GONE := [0, 2]                # the forest's big tree and its signpost: no longer stood behind the path
 const LOW := 64.0
 const HEAD := 165.0
 const DECOR_W := 70.0
@@ -319,6 +329,7 @@ class Obs:
 	var land := 0.0          # a blob in the air: where it will land (Vorace's fairness check)
 	var drop := false
 	var aim := false         # a flyer that takes his height when its "!" shows (the Vol)
+	var alt := 0.0           # a flyer gone across: its height over the floor, kept all the way
 	var y0 := 0.0            # a red spider: the middle of its course, and how far it goes each way
 	var amp := 0.0
 	var puddle := false
@@ -590,9 +601,12 @@ class Run:
 	var act_in: Array = []             # for two: those the partner started, to start here next step (remote_act)
 	var bubble := false                # fallen: he floats after the partner until rescued
 	var saying := ""                   # Histoire: a line of the guards being said (main.gd shows it)
-	var say_t := 0.0                   # ... how long it stays
+	var say_age := 0.0                 # ... since when (typed out SAY_RATE letters a second)
+	var held := 0.0                    # ... how far he ran while they talked: not counted in the distance
+	var blast_t := -1.0                # ... when the doorway blew out: the guards come out after him (render)
+	var guards_off := -1.0             # ... when they turned back (their first line on the way: « DEMI-TOUR !! »)
 	var say_queue: Array = []          # ... the lines still to say
-	var talk_zones: Array = []         # ... stretches of road kept empty while they talk: {x0, x1, lines, on}
+	var talk_zones: Array = []         # ... where they talk: {at, x0, x1, lines, on, wait, done}
 	var intro := false                 # ... the temple's scene: the camera still while they talk, then the blast
 	var intro_len := 0.0               # ... how long it lasts (a touch skips it, once it has run a moment)
 	var bubble_pos := Vector2.ZERO     # where his bubble is (world)
@@ -818,7 +832,7 @@ static func new_run(upgrades: Dictionary, mode: String = "story", seed_: int = -
 			for l in tk["lines"]:
 				dur += line_time(l)
 			var v = sqrt(run.base * run.base + 2.0 * STORY_GAIN * x0)   # (the forest's speed there)
-			run.talk_zones.append({"x0": x0, "x1": x0 + v * dur * 1.15 + 200, "lines": tk["lines"], "on": false})
+			run.talk_zones.append({"at": tk["at"], "x0": x0, "x1": x0 + v * dur * 1.15 + 200, "lines": tk["lines"], "on": false, "wait": false, "done": false})
 	run.speed = SPEED_BASE
 	run.road_speed = SPEED_BASE
 	run.hearts = HEARTS + run.lvl("heart")          # Vitalité: a heart more per level
@@ -911,19 +925,64 @@ static func set_talks(text: String) -> void:
 			TALKS.append({"at": at, "lines": []})
 		TALKS[-1]["lines"].append(said)
 
-## How long a line stays on screen: long enough to read it.
+## How long a line stays on screen for two (alone, it stays until a touch): long enough to read it.
 static func line_time(text: String) -> float:
 	return clampf(1.3 + 0.045 * text.length(), 2.2, 4.8)
 
-## Whether the hero is where the guards talk (nothing comes at him there: no swarm, no flyer).
+const SAY_RATE := 40.0
+
+## Whether the lines wait for a touch: alone, yes; for two (the same road on both phones) or in a test, each
+## line has its time.
+static func say_by_touch(run: Run) -> bool:
+	return not run.coop and not run.god
+
+## Whether the hero is where the guards talk (nothing comes at him there: no swarm, no flyer). Alone, from a
+## screen before their place until they are done; for two, the stretch of road kept for them.
 static func talking(run: Run) -> bool:
 	if run.saying != "" or not run.say_queue.is_empty():
 		return true
 	var px = run.cam + run.sx
 	for z in run.talk_zones:
-		if px >= z["x0"] - 900 and px < z["x1"]:
+		if run.coop:
+			if px >= z["x0"] - 900 and px < z["x1"]:
+				return true
+		elif not z["done"] and (z["on"] or px >= z["x0"] + run.held - 900):
 			return true
 	return false
+
+## Alone: between their place and the end of their talk, the distance does not count.
+static func talk_hold(run: Run) -> bool:
+	if run.coop:
+		return false
+	for z in run.talk_zones:
+		if z["on"] and not z["done"]:
+			return true
+	return false
+
+## Alone: the road waits (nothing more is laid) from a screen before their place until they are done.
+static func road_held(run: Run) -> bool:
+	if run.coop or run.mode != "story":
+		return false
+	for z in run.talk_zones:
+		if not z["done"] and (z["on"] or run.next_x >= z["x0"] + run.held - 900):
+			return true
+	return false
+
+## Alone: nothing left on the road in front of him (no creature, flyer, swarm, floating thing or animal).
+static func road_clear(run: Run) -> bool:
+	if run.fm != null or run.fm_due or run.boss != null:
+		return false
+	var px = run.cam + run.sx
+	for o in run.obs:
+		if not o.gone and o.x + o.w > px - HERO_HALF - 20:
+			return false
+	for it in run.bonuses:
+		if not it.gone and it.x > px - 40:
+			return false
+	for it in run.items:
+		if it.x > px - 40:
+			return false
+	return true
 
 # ---------- scenery the hero can brush past ----------
 # Which prop stands in which cell is a pure function of the cell number, so the rules (here) and the
@@ -1062,10 +1121,35 @@ static func _wave(run: Run, x: float, tier: int) -> float:
 			alt = 290.0                              # passes over a short jump, under nothing: never in the way
 		var o = add_dart(run, x + at * v, alt)
 		o.aim = tier >= 2
-		at += maxf(dt_, WAVE_JUMP) if alt == 46.0 else dt_
+		at += dt_ if tier >= 2 else maxf(dt_, DART_FOOT_GAP)   # (on foot: each one can be jumped, they follow him)
 	return at * v + DART_W + 200
 
-## A rare floating thing: a life or a brake, zigzagging a little within reach of a jump.
+## A nest of spiders from x: 4 or 5 of them NEST_STEP apart, all on screen at once. The low one (yellow, still)
+## is jumped; around it, where he is in the air, only spiders out of his reach; elsewhere spiders over his head
+## (their lowest still above him), and at most one at head height (pass it when it is up), far from the jump.
+static func _nest(run: Run, x: float) -> float:
+	var v = maxf(lay_speed(run, x), 1.0)
+	var n = 5 if W.randf() < 0.4 else 4
+	var low_k = W.randi() % 2
+	var xl = x + low_k * NEST_STEP
+	var in_air = v * 0.45 + HOVER_W                  # around the low one: he is in the air there
+	var head_left = x / PPM >= FROM_MID
+	for k in n:
+		var at = x + k * NEST_STEP
+		var h: float
+		if k == low_k:
+			h = LOW
+		elif absf(at - xl) < in_air:
+			h = SKY_HOVERS[2]                        # over his jump: out of reach
+		elif head_left and absf(at - xl) >= spider_gap(run, x) and W.randf() < 0.35:
+			h = HEAD
+			head_left = false
+		else:
+			h = wpick(SKY_HOVERS)
+		add_hover(run, at, h)
+	return (n - 1) * NEST_STEP + HOVER_W
+
+## A rare floating thing: a life or a brake, zigzagging up and down within reach of a jump.
 static func add_bonus(run: Run, x: float) -> void:
 	var it = Item.new()
 	it.x = x
@@ -1138,15 +1222,20 @@ static func scatter(run: Run, start: int) -> void:
 
 static func spawn_pattern(run: Run) -> void:
 	var laid = run.coins.size()
+	if run.mount != null and not run.coop and road_held(run):
+		return
 	if run.mount != null and run.fm == null and not run.fm_due and run.boss == null:
 		spawn_ride(run)
 		scatter(run, laid)
 		return
 	var x = run.next_x
-	for z in run.talk_zones:                         # Histoire: nothing on the road while the guards talk (from a
-		if x >= z["x0"] - 900 and x < z["x1"]:       # screen before, so that nothing is left in sight)
-			run.next_x = z["x1"]
-			return
+	if run.coop:
+		for z in run.talk_zones:                     # Histoire for two: nothing on the road while the guards talk
+			if x >= z["x0"] - 900 and x < z["x1"]:   # (from a screen before, so that nothing is left in sight)
+				run.next_x = z["x1"]
+				return
+	elif road_held(run):                             # alone: nothing more until they are done
+		return
 	if run.coop and run.mode == "story" and x >= run.coop_xf + COOP_VIEW and not run.coop_gems:
 		run.coop_gems = true                         # for two: Vorace's blue gems, at a place on the road
 		var g0 = run.coop_xg
@@ -1178,6 +1267,8 @@ static func spawn_pattern(run: Run) -> void:
 		opts.append_array(["hover", "hover", "hover", "hover", "hover"])
 		for i in CHAIN_SPIDERS:
 			opts.append("spiders")
+		for i in CHAIN_NESTS:
+			opts.append("nest")
 	if x / PPM >= 150:                               # flyers come in waves too
 		for i in CHAIN_WAVES:
 			opts.append("wave")
@@ -1229,6 +1320,8 @@ static func spawn_pattern(run: Run) -> void:
 				var h = LOW if i % 2 == 0 else (wpick([HEAD] + SKY_HOVERS) if tier >= 2 else HEAD)
 				add_hover(run, x + i * spider_gap(run, x), h)
 			extent = (n - 1) * spider_gap(run, x) + HOVER_W
+		"nest":                                    # a nest: many spiders at once (as the dragonfly sees them)
+			extent = _nest(run, x)
 		"lowhover":                                # a low spider: jump it
 			add_hover(run, x, LOW)
 			coin_arc(run, x - 40, 150, 5, 160)
@@ -1265,8 +1358,9 @@ static func spawn_pattern(run: Run) -> void:
 			var alts: Array = DART_ALTS[2].duplicate()
 			wshuffle(alts)
 			add_dart(run, x, alts[0]).aim = true
-			add_dart(run, x + 520, alts[1])
-			extent = 520
+			var gap2 = maxf(520.0, lay_speed(run, x) * DART_FOOT_GAP)
+			add_dart(run, x + gap2, alts[1])
+			extent = gap2
 		"perch":                                     # a platform over a hedgehog: jump over it, or onto it
 			var y = G - 135
 			add_platform(run, x, y)
@@ -2442,27 +2536,35 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		return
 
 	if run.saying != "" or not run.say_queue.is_empty():   # Histoire: the guards' lines, one after the other
-		run.say_t -= dt
-		if run.say_t <= 0:
+		run.say_age += dt
+		var next = run.saying == ""
+		if run.saying != "" and not say_by_touch(run):
+			next = run.say_age >= line_time(run.saying)
+		elif run.saying != "" and input.pressed:     # alone: a touch shows the whole line, the next touch goes on
+			input.pressed = false                    # (the touch is for the words: no jump)
+			if run.say_age * SAY_RATE >= run.saying.length():
+				next = true
+			else:
+				run.say_age = run.saying.length() / SAY_RATE
+		if next:
+			run.say_age = 0
 			if run.say_queue.is_empty():
 				run.saying = ""
 			else:
 				run.saying = run.say_queue.pop_front()
-				run.say_t = line_time(run.saying)
 				run.events.append("say")
+				if run.exploded and run.guards_off < 0:
+					run.guards_off = run.t               # (on the way: the guards chasing him turn back)
 	if run.wait > 0:                                 # still inside: the temple shakes, dust falls from the lintel
 		var was_wait = run.wait
-		if run.intro and input.pressed and not run.coop and run.wait > 0.75 and run.intro_len - run.wait > 1.2:
-			run.wait = 0.75                          # (alone, a touch skips the scene: not a reflex tap at once)
-			run.say_queue.clear()
-			run.saying = ""
+		if run.intro and say_by_touch(run):          # alone: the doorway waits for the last line to be read
+			if run.saying != "" or not run.say_queue.is_empty():
+				run.wait = maxf(run.wait, 1.05 + dt)
+			else:
+				run.wait = minf(run.wait, 1.05)
 		run.wait -= dt
 		if run.intro and was_wait >= 0.75 and run.wait < 0.75:
 			run.events.append("rumble")
-		if run.intro and run.wait > 0.75 and run.say_queue.is_empty() and run.saying != "" and fmod(run.wait, 0.45) < dt:
-			var stick = part(run, 118, GROUND - rnd(70, 110), rnd(380, 640), rnd(-620, -380), 1.4, Color("#e8402f"), 10, 1500)
-			stick.vr = rnd(-12, 12)                  # « why is he throwing red sticks at us? »
-			stick.shard = -2                         # (drawn as a stick of TNT, its fuse lit)
 		if not run.intro or run.wait < 0.75:
 			run.shake = maxf(run.shake, 0.22)
 			if randf() < 0.6:
@@ -2470,6 +2572,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		if run.wait > 0:
 			return
 		run.exploded = true
+		run.blast_t = run.t
 		run.shake = 1
 		run.boom = 1
 		if run.lvl("flight") > 0:
@@ -2594,12 +2697,19 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.sx = minf(run.home, run.sx + move)
 	else:
 		run.cam += move
-	run.dist = run.cam / PPM
+		if talk_hold(run):
+			run.held += move                         # (alone, while the guards talk: the distance waits)
+	run.dist = (run.cam - run.held) / PPM
 	var px = run.cam + run.sx
 	var fl = floor_at(run, px)                      # the floor right under him
 
 	if run.leap != null and run.leap.planted:        # --- head first in the ground, legs kicking ---
+		var kicks = floori(run.leap.pt / 0.28)
 		run.leap.pt += d
+		if floori(run.leap.pt / 0.28) > kicks and run.leap.pt < PLANT_TIME:
+			run.events.append("wriggle")             # his legs kicking, the earth crumbling round his head
+			for i in 3:
+				part(run, px + rnd(-14, 14), fl - 2, rnd(-120, 120), rnd(-220, -80), rnd(0.3, 0.5), colour_of(["#8a6a42", "#6a4f30", "#b08a58"]), rnd(4, 7), 1400)
 		if run.leap.pt > PLANT_TIME and not run.dead:
 			die(run)
 			return
@@ -2830,12 +2940,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		for o in run.obs:
 			if o.kind == "hover" and o.amp > 0:
 				o.y = o.y0 - sin(run.t * TAU / SPIDER_PERIOD + o.ph) * o.amp
-		# --- the rare floating things: they zigzag a little; touched, they are his ---
+		# --- the rare floating things: they zigzag up and down; touched, they are his ---
 		for it in run.bonuses:
-			if it.kind == "brake" and it.x < run.cam + run.view_w - 30:
-				it.x += run.speed * BRAKE_PACE * d          # the hourglass, once in sight, keeps ahead of him
+			if it.x < run.cam + run.view_w - 30:
+				it.x += run.speed * BRAKE_PACE * d          # once in sight, they fly on ahead of him at 75 % of his speed
 			var fb = floor_at(run, it.x)
-			var zk = fmod(run.t / 1.6 + it.ph, 2.0)
+			var zk = fmod(run.t / BONUS_ZIG + it.ph, 2.0)
 			it.y = fb - BONUS_LOW - (BONUS_HIGH - BONUS_LOW) * (zk if zk < 1 else 2 - zk)
 			if it.gone or absf(px - it.x) > (52.0 if it.kind == "brake" else 40.0):
 				continue
@@ -2918,17 +3028,19 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 					o.state = "warn"
 					o.t = 0
 					run.events.append("warn")
-					if o.aim:                        # it takes his height now: the "!" shows where it will pass
-						var alt = clampf(floor_at(run, px) - (p.y - tall / 2), DART_ALTS[0][0], DART_TOP)
-						o.y = floor_at(run, px) - alt - DART_H / 2
 				if o.state == "warn":
 					o.x = run.cam + run.view_w + 60
 					o.t += d
+					# its "!" follows his height while it shows; once it goes, its height stays as it was
+					var alt = clampf(floor_at(run, px) - (p.y - tall / 2), DART_ALTS[0][0], DART_TOP)
+					o.y = move_toward(o.y, floor_at(run, px) - alt - DART_H / 2, DART_TRACK * d)
 					if o.t >= DART_WARN:
 						o.state = "go"
+						o.alt = floor_at(run, px) - (o.y + DART_H / 2)   # (over the floor: a dip on the way changes nothing)
 						run.events.append("dart")
 				if o.state == "go":
 					o.x -= DART_SPEED * d
+					o.y = floor_at(run, o.x + o.w / 2) - o.alt - DART_H / 2
 			if o.kind == "acid":
 				o.x += o.vx * d
 				if o.lob:                            # a blob in the air: where it lands, a puddle of acid stays
@@ -3032,13 +3144,26 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 
 	# --- spawning ---
 	var edge = run.cam + run.view_w + 200
-	while run.next_x < edge:
+	while run.next_x < edge and not road_held(run):
 		spawn_pattern(run)
 
 	for z in run.talk_zones:                         # Histoire: the guards start talking here
-		if not z["on"] and run.cam + run.sx >= z["x0"]:
+		if run.coop:
+			if not z["on"] and run.cam + run.sx >= z["x0"]:
+				z["on"] = true
+				run.say_queue.append_array(z["lines"])
+			continue
+		# Alone: at their place the distance stops; they wait until nothing is left on the road, talk (a touch
+		# for each line), and once they are done the road comes again from the right edge.
+		if not z["on"] and run.dist >= z["at"]:
 			z["on"] = true
+			z["wait"] = true
+		elif z["wait"] and road_clear(run):
+			z["wait"] = false
 			run.say_queue.append_array(z["lines"])
+		elif z["on"] and not z["wait"] and not z["done"] and run.saying == "" and run.say_queue.is_empty():
+			z["done"] = true
+			run.next_x = maxf(run.next_x, run.cam + run.view_w + 60)
 	# --- scenery change ---
 	if run.coop and run.mode == "story" and run.cam + run.sx >= run.coop_zone_at:
 		run.coop_zone_at = coop_next_mark(run.coop_zone_at)   # for two: a new place, its speed from here (the
@@ -3079,7 +3204,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		var cell = floori(px / PROP_CELL)
 		for i in [cell - 1, cell]:
 			var pr = prop_at(i)
-			if pr == null or not REACTS.has(pr["kind"]):
+			if pr == null or not REACTS.has(pr["kind"]) or pr["kind"] in PROP_GONE:
 				continue
 			var react: Array = REACTS[pr["kind"]]
 			if run.touched.has(i) or p.y < fl - TOUCH_H or biome_at(run, pr["x"]) != 0 or not flat_at(run, pr["x"], PROP_CELL * 0.6):

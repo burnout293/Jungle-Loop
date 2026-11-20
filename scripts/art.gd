@@ -29,7 +29,8 @@ const BIOMES := [
 const NAMES := ["temple", "temple-rubble", "vorace-legs", "vorace-head", "vorace-body", "vorace-log", "crate-big", "lilypad", "walkway", "hover-plat", "vine-garland", "vine-hang",
 	"spikebot", "spider-low", "spider-mid", "bat", "thornball", "beartrap", "vulture", "arrow", "missile", "idol", "drone", "wasp", "drone-big",
 	"hero-body", "hero-ball", "hero-rotor", "hero-fist", "hero-shoe", "mount-gorilla", "mount-gorilla-hang", "mount-rhino", "mount-dragonfly",
-	"mosquito", "fly", "spiky", "coin", "gem", "gem-y", "gem-r", "gem-b", "heart", "monkey", "coin-icon"]
+	"mosquito", "fly", "spiky", "coin", "gem", "gem-y", "gem-r", "gem-b", "heart", "monkey", "coin-icon",
+	"guard-spear", "guard-club"]
 
 # Frames of each danger's sheet.
 const HAZ_FRAMES := {"spiky": 1, "thornball": 1, "beartrap": 2, "spikebot": 1, "fly": 4, "vulture": 2, "arrow": 1, "missile": 1, "spider-low": 2, "spider-mid": 2,
@@ -49,7 +50,7 @@ static var hills := {}
 # What stands behind the path, per scenery (0.43, PixelLab, tools/prep_hills.py): the forest's mossy rocks
 # and arched roots, the ruins' broken walls of square stones, the dungeon's walls with a wooden door or iron
 # bars, the city's buildings and containers. A little darker than what can be touched.
-const HILL_SETS := [["hill-forest-1", "hill-forest-2"], ["hill-ruins-1", "hill-ruins-2"], ["hill-city-1", "hill-city-2"], ["hill-dungeon-1", "hill-dungeon-2"]]
+const HILL_SETS := [["hill-forest-1", "hill-forest-2"], ["hill-ruins-1", "hill-ruins-2"], ["hill-city-1", "hill-city-2"], []]   # (the dungeon: none since 0.44)
 static var hill_sets: Array = []
 static var hill_order: Array = []
 static var ready := false
@@ -517,6 +518,12 @@ static func build_scene(b: Dictionary) -> Dictionary:
 	for i in b["props"]:
 		var n: String = b["prop"] + str(i)
 		props.append(make(tinted(img[n], veil)) if img.has(n) else null)
+	var glows = {}                               # the forest's lantern and mushrooms: their own lit pixels
+	if b["id"] == "jungle":
+		for k in [Game.PROP_SHROOM, Game.PROP_LANTERN]:
+			var pn: String = b["prop"] + str(k)
+			if img.has(pn):
+				glows[k] = lit_parts(img[pn], k == Game.PROP_LANTERN)
 	var isles: Array = []
 	if kinds.size() > 0:
 		for w in Game.ISLE_W:
@@ -541,10 +548,35 @@ static func build_scene(b: Dictionary) -> Dictionary:
 		"mid": make(mid) if mid != null else null,
 		"ground": {"pieces": pieces, "len": ln, "soil": row_colour(kinds[0] if kinds.size() > 0 else null, -2, Color("#2a1c2c")), "top": top},
 		"props": props,
+		"glows": glows,
 		"fore": silhouettes(shade),
 		"sky": row_colour(img.get(b["bg"]), 0, Color("#7fb9ec")),
 		"base": row_colour(img.get(b["mid"]), -1, Color("#1c2c3a")),
 	}
+
+## What lights up in a prop, pixel for pixel over it: its cyan glass and flame (a lantern's window), or its
+## caps (the mushrooms), a little paler; where their middle is. Drawn over the darkened prop, they light it
+## without a single pixel outside its own shape.
+static func lit_parts(im: Image, window: bool) -> Dictionary:
+	var w = im.get_width()
+	var h = im.get_height()
+	var out = blank(w, h)
+	var at = Vector2.ZERO
+	var count = 0
+	for y in h:
+		for x in w:
+			var c = im.get_pixel(x, y)
+			if c.a < 0.5:
+				continue
+			if window and (x < w * 0.2 or x > w * 0.75 or y < h * 0.44 or y > h * 0.88):
+				continue
+			if not window and y > h * 0.62:
+				continue                             # (the stems and the grass stay as they are)
+			if c.h > 0.45 and c.h < 0.62 and c.s > 0.35 and c.v > 0.45:
+				out.set_pixel(x, y, c.lerp(Color.WHITE, 0.3))
+				at += Vector2(x, y)
+				count += 1
+	return {"tex": make(out), "c": at / maxi(1, count)}
 
 ## The dangers as drawn: with a lit edge in a dark outline, maybe outlined in red as well (then one pixel
 ## larger all round: `pad`). Their harmless ghost (Faune alcoolisée) keeps a pale outline.

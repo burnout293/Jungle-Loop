@@ -76,7 +76,7 @@ var view_w := 569.0
 var t := 0.0
 var q := 4.0                           # drawing steps per art pixel
 var shift := false                     # « Signalements décalés »: the fonceurs' warnings stand further in
-const PLANT_SINK := 16.0              # art pixels of his head under the floor, stuck head first
+const PLANT_SINK := 22.0              # art pixels of him under the floor, stuck head first: his whole head
 var show_dead := false                 # the photo of his fall: he is still drawn, the one frame it is taken
 var hitbox := false                    # the debug menu's « Hitbox »: the boxes the rules test, over everything
 var seat = null                        # where the hero sits on his mount this frame
@@ -144,6 +144,67 @@ func show_run(r: Game.Run, time: float, q_: int) -> void:
 ## His last heart lost: head first in the ground, legs kicking (Game: Leap.planted).
 func planted() -> bool:
 	return run != null and run.leap != null and run.leap.planted
+
+## Histoire: the temple's guards, masked warriors of leaves (PixelLab, 0.44), burst out of the doorway after
+## the blast and run at his heels, never catching him; at their first line on the way (« DEMI-TOUR !! ») they
+## turn round and run off. Only to be looked at: nothing of theirs hurts.
+const GUARDS := ["guard-spear", "guard-club"]
+
+func draw_guards(c: CanvasItem) -> void:
+	if run.mode != "story" or run.blast_t < 0 or run.boss != null:
+		return
+	var since = run.t - run.blast_t
+	var back = run.t - run.guards_off if run.guards_off >= 0 else -1.0
+	if back > 3.0:
+		return
+	var hx = n(run.sx)
+	var door = snap(TEMPLE_X - run.cam / PIXEL) + 112
+	for i in GUARDS.size():
+		var im: Texture2D = Art.tex.get(GUARDS[i])
+		var come = clampf((since - 0.35 * i) / 1.4, 0, 1)
+		if im == null or come <= 0:
+			continue
+		come = 1.0 - pow(1.0 - come, 2)
+		var x = lerpf(door, hx - 52 - i * 34 + 9 * sin(t * 1.6 + i * 2.2), come)
+		var flip = back > 0.25                       # they turn round, and run off to the left
+		if flip:
+			x -= pow(back - 0.25, 2) * 160 + (back - 0.25) * 60
+		if x < -60:
+			continue
+		var fw = im.get_width() / 8.0
+		var frame = floori(t * 13 + i * 3) % 8
+		var foot = floor_px(x)
+		var dw = fw * 0.8
+		var dh = im.get_height() * 0.8
+		shadow(c, x, foot - 1, 16)
+		c.draw_texture_rect_region(im, Rect2(snap(x - dw / 2), snap(foot - dh + 3), -dw if flip else dw, dh), Rect2(frame * fw, 0, fw, im.get_height()), Color(0.92, 0.92, 0.96))
+
+## His head in the ground: a little heap of the floor's own picture round his waist, lifted a few pixels,
+## column by column from the very ground drawn there, so it melts into the floor (whatever the scenery).
+func plant_mound(c: CanvasItem) -> void:
+	if not planted():
+		return
+	var wx = run.cam + run.sx
+	var Gd: Dictionary = Art.scene[Game.biome_at(run, wx)]["ground"]
+	var L: float = Gd["len"]
+	if L <= 0:
+		return
+	var top: float = Gd["top"]
+	var fy = n(Game.floor_at(run, wx))
+	var ox = n(run.sx)
+	var cam = run.cam / PIXEL
+	var half = 16
+	for dx in range(-half, half + 1):
+		var k = float(dx) / (half + 0.5)
+		var hm = roundf(7.0 * (1.0 - k * k))
+		var pos = fposmod(cam + ox + dx, L)
+		var piece = null
+		for g in Gd["pieces"]:
+			if pos >= g["x"] and pos < g["x"] + g["w"]:
+				piece = g
+		if piece == null:
+			continue
+		region(c, piece["tex"], floorf(pos - piece["x"]), 0, 1, top + 12, ox + dx, fy - top - hm, 1, top + 12)
 
 func snap(v: float) -> float:
 	return roundf(v * q) / q
@@ -501,8 +562,8 @@ func draw_hills(c: CanvasItem) -> void:
 		var x = snap(hl.x / PIXEL - cam)
 		var w = roundi(hl.w / PIXEL)
 		var h = roundi(hl.h / PIXEL)
-		if x > view_w or x + w < 0:
-			continue
+		if x > view_w or x + w < 0 or hl.biome == 3:
+			continue                                 # (the dungeon has no hill since 0.44: its walls looked stuck on)
 		var pics: Array = Art.hill_sets[hl.biome] if hl.biome < Art.hill_sets.size() else []
 		if pics.is_empty():                          # (the pictures missing: the old mound, drawn)
 			blit(c, Art.hill(hl.biome, w, h, hl.seed % 997), x, GN + 6 - h)
@@ -531,7 +592,7 @@ func draw_props(c: CanvasItem) -> void:
 		var set_: Array = Art.scene[biome]["props"]
 		var k: int = pr["kind"] % set_.size()
 		var im: Texture2D = set_[k]
-		if im == null or k == SMASH[biome]:
+		if im == null or k == SMASH[biome] or (biome == 0 and k in Game.PROP_GONE):
 			continue
 		if run.boss != null and Art.meta.has("vorace"):   # nothing stands in front of Vorace
 			var bx = n(run.boss.sx)
@@ -552,10 +613,25 @@ func draw_props(c: CanvasItem) -> void:
 			Ambient.sway_blit(c, im, x, y, pr["flip"], t, i, 2)
 		else:
 			blit(c, im, x, y, pr["flip"])
-		if pr["kind"] == Game.PROP_LANTERN or (pr["kind"] == Game.PROP_SHROOM and shiver > 0):   # the flame breathes, the caps light up
-			var shroom: bool = pr["kind"] == Game.PROP_SHROOM
-			var a = 0.35 * shiver if shroom else 0.16 + 0.12 * pow(sin(t * 5 + i), 2) + 0.3 * shiver
-			rect(c, x + (im.get_width() >> 1) - 12, y + im.get_height() - (66 if shroom else 34), 24, 40 if shroom else 20, Color("#7dfff0", a))
+		if pr["kind"] == Game.PROP_LANTERN or pr["kind"] == Game.PROP_SHROOM:   # the flame breathes, the caps light up
+			var L: Dictionary = Art.scene[0]["glows"].get(pr["kind"], {})
+			if L.is_empty():
+				continue
+			var lantern: bool = pr["kind"] == Game.PROP_LANTERN
+			var lit = clampf((3.0 - since) / 1.5, 0, 1)   # brushed: fully lit, fading out after 1.5 s
+			var a = maxf(0.3 + 0.2 * pow(sin(t * 5 + i), 2), lit) if lantern else lit
+			if a <= 0:
+				continue
+			var mid: Vector2 = L["c"]
+			var gx = x + (im.get_width() - mid.x if pr["flip"] else mid.x)
+			if lantern:                              # (a soft light round the window, much stronger when lit)
+				glow(c, gx, y + mid.y, 16 + 30 * lit, Color(0.49, 1, 0.94, 0.18 + 0.5 * lit))
+			for pass_ in (2 if lit > 0 else 1):      # its own lit pixels over it, twice when lit: brighter still
+				var mod = Color(1, 1, 1, a) if pass_ == 0 else Color(1.5, 1.5, 1.5, lit * 0.85)
+				if shiver > 0 and not lantern:
+					Ambient.sway_blit(c, L["tex"], x, y, pr["flip"], t * 7, i, 5 * shiver, 4, mod)
+				else:
+					blit(c, L["tex"], x, y, pr["flip"], mod)
 
 ## Hanging lianas as scenery, in the forest and the ruins, here and there along the way from the top of the
 ## screen, a little darker than what can be touched; chains in the dungeon, cables in the city.
@@ -1221,6 +1297,7 @@ func _draw_back(c: CanvasItem) -> void:
 		draw_vines(c, run.vine)
 	_draw_items(c)
 	_draw_obstacles(c)
+	draw_guards(c)
 
 	if not run.dead or show_dead:
 		var p = run.p
@@ -1496,6 +1573,17 @@ func _draw_items(c: CanvasItem) -> void:
 		chevron(c, x + 6, n(it.y) - 52 - bounce, 1, Color("#ffd35c"), 6)
 
 func _draw_obstacles(c: CanvasItem) -> void:
+	var stack := {}                                  # warnings on one line: side by side, none hiding another
+	var lines: Array = []
+	for o in run.obs:
+		if o.kind == "dart" and o.state == "warn" and not o.gone:
+			var ly = n(o.y) + n(o.h) / 2
+			var k = 0
+			for q_ in lines:
+				if absf(q_ - ly) < 30:
+					k += 1
+			lines.append(ly)
+			stack[o] = k
 	for o in run.obs:
 		var x = sx(o.x)
 		var y = n(o.y)
@@ -1556,7 +1644,7 @@ func _draw_obstacles(c: CanvasItem) -> void:
 				glow(c, cx, foot - im.get_height() + 3, 9, Color(90 / 255.0, 240 / 255.0, 1, 0.8))
 		elif o.kind == "dart":                       # a "!" at the edge, at its height; then across in one go
 			if o.state == "warn":
-				warn_mark(c, roundf(view_w * 0.64) if shift else view_w - 20, cy, o.t)
+				warn_mark(c, (roundf(view_w * 0.64) if shift else view_w - 20) - stack.get(o, 0) * 27, cy, o.t)
 			elif o.state == "go":
 				var frame = floori(t * (14 if name == "fly" else 9) + o.ph) % frames if frames > 1 else 0
 				var x0 = snap(cx - fw / 2)
@@ -1595,6 +1683,7 @@ func _draw_obstacles(c: CanvasItem) -> void:
 func _draw_front(c: CanvasItem) -> void:
 	if run == null or not Art.ready:
 		return
+	plant_mound(c)
 	var cam = run.cam / PIXEL
 	if run.p.ball != null and run.p.ball.kind == "log" and not run.dead:
 		ribs(c, run.p.ball, true)                    # he rolls inside the trunk, not in front of it

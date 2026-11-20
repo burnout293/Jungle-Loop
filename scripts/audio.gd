@@ -146,7 +146,7 @@ func set_biome(_i: int) -> void:
 
 # ---------- effects ----------
 
-func sfx(name: String) -> void:
+func sfx(name: String, pitch: float = 1.0) -> void:
 	if sfx_vol <= 0 or not sounds.has(name):
 		return
 	if name == "warn":
@@ -163,6 +163,7 @@ func sfx(name: String) -> void:
 		free_p = pool[0]
 		pool.push_back(pool.pop_front())
 	free_p.stream = sounds[name]
+	free_p.pitch_scale = pitch
 	free_p.volume_db = linear_to_db(maxf(0.0001, gain_of(sfx_vol)))
 	free_p.play()
 
@@ -232,7 +233,8 @@ func _recipes() -> Dictionary:
 		"slow": [T(900, 0.6, "sine", 0.2, 0, 150)],
 		# the last heart: a slide whistle as he flies off, then his head in the ground (thud) and a boing
 		"fling": [T(1500, 0.55, "sine", 0.16, 0.0, 420), T(1520, 0.55, "sine", 0.06, 0.0, 430)],
-		"plant": [N(0.14, 0.32, 260), T(120, 0.2, "square", 0.2, 0.0, 55), T(240, 0.32, "triangle", 0.17, 0.16, 620), T(620, 0.28, "triangle", 0.11, 0.42, 230), T(900, 0.08, "square", 0.05, 0.75, 1300), T(1300, 0.08, "square", 0.05, 0.86, 900)],
+		"plant": [T(95, 0.38, "sine", 0.6, 0.0, 36), N(0.3, 0.55, 520), N(0.14, 0.4, 2600, 0.02), T(180, 0.5, "triangle", 0.26, 0.14, 640), T(640, 0.32, "triangle", 0.16, 0.46, 230), T(900, 0.08, "square", 0.07, 0.78, 1300), T(1300, 0.08, "square", 0.07, 0.88, 900)],
+		"wriggle": [N(0.08, 0.22, 1300), T(300, 0.07, "square", 0.07, 0.0, 450)],                # his legs kicking, earth crumbling
 		"say": [T(520, 0.05, "square", 0.05, 0.0, 600), T(660, 0.05, "square", 0.04, 0.06, 700)],
 		# RedMonster: the can hissing open, two gulps, then he revs up; and the fizz running out
 		"monster": [N(0.35, 0.16, 6000), T(240, 0.1, "sine", 0.24, 0.2, 150), T(240, 0.1, "sine", 0.24, 0.33, 150), T(160, 0.6, "sawtooth", 0.14, 0.45, 1400)],
@@ -252,6 +254,8 @@ func _recipes() -> Dictionary:
 		"rustle": [T(2400, 0.06, "sawtooth", 0.03, 0, 900)],
 		"monkey": [T(700, 0.09, "square", 0.1, 0, 1100), T(800, 0.09, "square", 0.1, 0.12, 1250), T(950, 0.12, "square", 0.1, 0.24, 1400)],
 		"tick": [T(1500, 0.03, "square", 0.05)],
+		"fill": [T(880, 0.045, "square", 0.06, 0, 1040)],                                          # a bar filling (pitched up as it fills)
+		"impact": [T(110, 0.42, "sine", 0.55, 0, 44), N(0.24, 0.38, 900), T(660, 0.3, "triangle", 0.15, 0.03, 990)],   # the count's punch
 		"quest": arp([7, 12, 16], 0.2, "triangle", 0.2, 0.08),
 		"level": arp([0, 4, 7, 12, 16], 0.3, "triangle", 0.2, 0.08),
 	}

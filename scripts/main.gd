@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.43.0"
+const VERSION := "0.44.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -102,6 +102,10 @@ var run_xp0 := 0.0                     # the experience when the run began (the 
 var run_quests0: Array = []            # the objectives when it began: [{q, p}] (the end shows them move on)
 var tally_tw: Tween = null             # the end's count, while it runs
 var tally_level := 0                   # the level the count has shown so far
+var tally_phase := ""                  # count, impact, bar, levels, done: what a touch finishes
+var tally_age := 0.0                   # how long it has been counting (the beat of the number)
+var tally_dur := 1.0                   # how long the count lasts
+var tally_tick_t := 0.0                # the last tick heard (the count, the bars filling)
 var over_tweens: Array = []            # the end screen's moves, stopped if it is left or built again
 var kit_sent := ""                     # the host's items and powers last sent to the guest (JSON)
 var invite_t := 3.0                    # seconds before the next look for an invitation
@@ -808,6 +812,7 @@ func _fill_hud() -> void:
 	hud_state = {"dist": -1, "gold": -1, "hearts": -1}
 	var hearts: HBoxContainer = w["hud-hearts"]
 	for ch in hearts.get_children():
+		hearts.remove_child(ch)                      # (at once: queue_free alone left them among the children)
 		ch.queue_free()
 	for i in run.max_hearts:
 		hearts.add_child(_icon_rect(icon("heart"), 20))
@@ -869,6 +874,10 @@ func _build_hud() -> void:
 	w["say-text"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	w["say-text"].custom_minimum_size.x = a(330)
 	say_col.add_child(w["say-text"])
+	w["say-more"] = _label("Touche pour continuer", ts("s"), DIM, 0)
+	w["say-more"].horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	w["say-more"].modulate.a = 0
+	say_col.add_child(w["say-more"])
 	say.add_child(say_col)
 	_place(say, 569 / 2.0 - 180, 46, 360, 44)
 	say.visible = false
@@ -1236,22 +1245,34 @@ func _quest_card(q: Dictionary, p: float) -> PanelContainer:
 	card.set_meta("txt", txt)
 	return card
 
-## The card's progress shown at `p`.
-func _card_at(card: PanelContainer, q: Dictionary, p: float) -> void:
+## The card's progress shown at `p` (moving on: a blip as it fills, higher and higher).
+func _card_at(card: PanelContainer, q: Dictionary, p: float, sound: bool = false) -> void:
 	if not is_instance_valid(card):
 		return
+	if sound and state == "over" and time - tally_tick_t > 0.05:
+		tally_tick_t = time
+		Audio.sfx("fill", 0.8 + clampf(p / q["goal"], 0, 1))
 	set_bar(card.get_meta("bar"), p / q["goal"])
 	(card.get_meta("txt") as Label).text = "%s (%d/%d)" % [Progress.quest_text(q), floori(p), q["goal"]]
 
 # ---------- the end: the count (tally), then the end screen ----------
 
-## The count: the metres run, the coins, the experience they made, the level bar filling up (a level
-## passed: a burst, then its panel with the rewards); « Suivant » goes on to the end screen.
+## The count, in one panel: the metres counting up from nothing (slowly at first, faster and faster; the
+## longer the run, the longer it lasts; the number beating harder every 0.8 s), then a punch: the distance
+## as it ends and the coins won; then the level bar (fast, then slowing down; a level passed: a burst, then
+## its panel); then « Suivant ». A touch anywhere finishes the step under way.
 func _build_tally() -> void:
 	var s = _screen("tally", true)
+	var catcher = Control.new()                      # a touch anywhere on the screen: _tally_tap
+	catcher.size = Vector2(W, H)
+	catcher.mouse_filter = Control.MOUSE_FILTER_STOP
+	catcher.gui_input.connect(_tally_input)
+	s.add_child(catcher)
 	w["tally-title"] = _head(s, DEATHS[0])
-	var left = _pane(s, false)
-	var col = _vbox(6)
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var col = _vbox(3)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	var d_head = _label("DISTANCE", ts("s"), RELIC, 0)
 	d_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1264,75 +1285,146 @@ func _build_tally() -> void:
 	w["tally-gold"] = _label("+0", ts("xl"), GOLD)
 	gain.add_child(w["tally-gold"])
 	gain.add_child(_icon_rect(icon("coin-icon"), 20))
+	w["tally-gain"] = gain
 	col.add_child(gain)
 	w["tally-best"] = _label("", ts("s"), DIM, 0)
 	w["tally-best"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(w["tally-best"])
-	left.add_child(_fixed(col))
-	var right = _pane(s, true)
-	var rc = _vbox(8)
-	rc.alignment = BoxContainer.ALIGNMENT_CENTER
-	var x_head = _label("EXPÉRIENCE", ts("s"), RELIC, 0)
-	x_head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rc.add_child(x_head)
-	w["tally-xp"] = _label("+0 XP", ts("xl"), RELIC)
-	w["tally-xp"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rc.add_child(w["tally-xp"])
 	w["tally-level"] = _level_box(true)
-	rc.add_child(w["tally-level"])
-	w["tally-up"] = _label("NIVEAU SUPÉRIEUR !", ts("l"), GOLD, 1.5)
-	w["tally-up"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(w["tally-level"])
+	var xrow = _hbox(8)
+	xrow.alignment = BoxContainer.ALIGNMENT_CENTER
+	w["tally-xp"] = _label("+0 XP", ts("m"), RELIC)
+	xrow.add_child(w["tally-xp"])
+	w["tally-up"] = _label("NIVEAU SUPÉRIEUR !", ts("m"), GOLD, 1.5)
 	w["tally-up"].modulate.a = 0
-	rc.add_child(w["tally-up"])
-	right.add_child(_fixed(rc))
+	xrow.add_child(w["tally-up"])
+	w["tally-xprow"] = xrow
+	col.add_child(xrow)
+	var room = Control.new()                         # (a little room above the frame's lower edge)
+	room.custom_minimum_size.y = a(6)
+	col.add_child(room)
+	p.add_child(col)
+	_place(p, 569 / 2.0 - 150, 42, 300, 150)
+	s.add_child(p)
 	w["tally-next"] = _button("Suivant", "big", _tally_next)
 	_actions(s, [w["tally-next"]])
 
-## The count, from nothing: metres (ticking), coins, then the experience and the level bar (through any
-## level passed: a sound, confetti, « Niveau supérieur ! »); then the panel of the levels gained.
+func _tally_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		_tally_tap()
+
+func _tally_kill() -> void:
+	if tally_tw != null and tally_tw.is_valid():
+		tally_tw.kill()
+	tally_tw = null
+
+## The count, from nothing: 200 m take 0.5 s, 2300 m 4 s (6 s at most), slow at first then faster and faster.
 func tally_play() -> void:
 	if over_info.is_empty():
 		return
-	if tally_tw != null and tally_tw.is_valid():
-		tally_tw.kill()
+	_tally_kill()
 	var dist: int = over_info["dist"]
-	var gold: int = over_info["gold"]
 	var xp0: float = over_info.get("xp0", save["xp"])
-	var xp1: float = over_info.get("xp1", save["xp"])
 	w["tally-title"].text = over_info["title"]
 	w["tally-best"].text = ""
 	w["tally-up"].modulate.a = 0
+	for k in ["tally-gain", "tally-best", "tally-level", "tally-xprow"]:
+		w[k].modulate.a = 0
+	w["tally-next"].visible = false
 	tally_level = Progress.level_info(xp0)["level"]
 	_tally_dist(0)
 	_tally_gold(0)
 	_tally_xp(xp0, xp0)
+	tally_phase = "count"
+	tally_age = 0.0
+	tally_dur = clampf(0.5 + (dist - 200) / 600.0, 0.35, 6.0)
 	var tw = create_tween()
 	tally_tw = tw
-	tw.tween_interval(0.25)
-	tw.tween_method(_tally_dist, 0.0, float(dist), clampf(0.35 + dist * 0.0011, 0.5, 1.6)).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tw.tween_callback(_tally_best)
-	tw.tween_method(_tally_gold, 0.0, float(gold), 0.5).set_ease(Tween.EASE_OUT)
-	tw.tween_method(func(v: float) -> void: _tally_xp(xp0, v), xp0, xp1, clampf(0.4 + (xp1 - xp0) / 400.0, 0.6, 1.8)).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
-	tw.tween_interval(0.35)
-	tw.tween_callback(_tally_done)
+	tw.tween_interval(0.2)
+	tw.tween_method(_tally_dist, 0.0, float(dist), tally_dur).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_callback(_tally_impact)
+
+## While it counts, the number beats once every 0.8 s, harder and harder.
+func _tally_beat(delta: float) -> void:
+	var l: Label = w.get("tally-dist")
+	if l == null or not is_instance_valid(l) or tally_phase != "count":
+		return
+	tally_age += delta
+	var k = clampf((tally_age - 0.2) / tally_dur, 0, 1)
+	var ph = fmod(tally_age, 0.8) / 0.8
+	var beat = sin(PI * ph / 0.3) if ph < 0.3 else 0.0
+	l.pivot_offset = l.size / 2
+	l.scale = Vector2.ONE * (1.0 + (0.05 + 0.3 * k) * beat)
 
 func _tally_dist(v: float) -> void:
 	var shown = "%d m" % roundi(v)
-	if w["tally-dist"].text != shown and roundi(v) % 7 == 0 and state == "tally":
-		Audio.sfx("tick")
+	if w["tally-dist"].text != shown and state == "tally" and time - tally_tick_t > 0.06:
+		tally_tick_t = time                          # a tick, higher and higher as it climbs
+		Audio.sfx("tick", 0.8 + 0.8 * clampf(v / maxf(1.0, float(over_info.get("dist", 1))), 0, 1))
 	w["tally-dist"].text = shown
 
 func _tally_gold(v: float) -> void:
 	w["tally-gold"].text = "+%d" % roundi(v)
 
-## The experience counted up to `x` (from xp0): the gain, the level bar, a burst at each level passed.
-func _tally_xp(xp0: float, x: float) -> void:
+## The count reaches its end: the number swells at once and settles, the coins won come in with it.
+func _tally_impact() -> void:
+	_tally_kill()
+	tally_phase = "impact"
+	_tally_dist(over_info["dist"])
+	_tally_gold(over_info["gold"])
+	var l: Label = w["tally-dist"]
+	l.pivot_offset = l.size / 2
+	l.scale = Vector2(1.75, 1.75)
+	var gain: Control = w["tally-gain"]
+	gain.pivot_offset = gain.size / 2
+	gain.scale = Vector2(1.6, 1.6)
+	Audio.sfx("impact")
+	var tw = create_tween().set_parallel()
+	tally_tw = tw
+	tw.tween_property(l, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(gain, "modulate:a", 1.0, 0.12)
+	tw.tween_property(gain, "scale", Vector2.ONE, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_callback(_tally_best)
+	tw.chain().tween_interval(0.5)
+	tw.chain().tween_callback(_tally_bar)
+
+## (the top of the panel as the punch leaves it)
+func _tally_top() -> void:
+	_tally_dist(over_info["dist"])
+	_tally_gold(over_info["gold"])
+	w["tally-dist"].scale = Vector2.ONE
+	w["tally-gain"].scale = Vector2.ONE
+	w["tally-gain"].modulate.a = 1
+	_tally_best()
+
+## The level bar: in, then filled with the experience won, fast at first and slowing down.
+func _tally_bar() -> void:
+	_tally_kill()
+	tally_phase = "bar"
+	var xp0: float = over_info.get("xp0", save["xp"])
+	var xp1: float = over_info.get("xp1", save["xp"])
+	var tw = create_tween().set_parallel()
+	tally_tw = tw
+	tw.tween_property(w["tally-level"], "modulate:a", 1.0, 0.2)
+	tw.tween_property(w["tally-xprow"], "modulate:a", 1.0, 0.2)
+	tw.chain().tween_method(func(v: float) -> void: _tally_xp(xp0, v, true), xp0, xp1, clampf(0.9 + (xp1 - xp0) / 300.0, 1.0, 2.6)).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_interval(0.25)
+	tw.chain().tween_callback(_tally_levels)
+
+## The experience counted up to `x` (from xp0): the gain, the level bar (a blip as it fills, higher and
+## higher), a burst at each level passed.
+func _tally_xp(xp0: float, x: float, sound: bool = false) -> void:
 	w["tally-xp"].text = "+%d XP" % roundi(x - xp0)
 	var info = Progress.level_info(x)
 	var box: PanelContainer = w["tally-level"]
+	var k = float(info["into"]) / info["need"]
 	(box.find_child("lvl", true, false) as Label).text = "Niveau " + str(info["level"])
-	set_bar(box.find_child("bar", true, false), float(info["into"]) / info["need"])
+	set_bar(box.find_child("bar", true, false), k)
 	(box.find_child("pts", true, false) as Label).text = "%d / %d XP" % [info["into"], info["need"]]
+	if sound and state == "tally" and time - tally_tick_t > 0.05 and roundi(x) != roundi(xp0):
+		tally_tick_t = time
+		Audio.sfx("fill", 0.8 + k)
 	if info["level"] > tally_level and state == "tally":
 		tally_level = info["level"]
 		Audio.sfx("level")
@@ -1349,37 +1441,84 @@ func _tally_xp(xp0: float, x: float) -> void:
 
 func _tally_best() -> void:
 	var record: bool = over_info["record"]
+	w["tally-best"].modulate.a = 1
 	w["tally-best"].text = "Debug : record non enregistré" if over_info["debug"] else ("★ Nouveau record ! ★" if record else "Record : %d m" % best_of(over_info["mode"]))
 	_set_colour(w["tally-best"], GOLD if record else DIM)
 	w["tally-best"].label_settings.font_size = ts("m") if record else ts("s")
 	w["tally-best"].set_meta("hop", record)
-	if record and state == "tally":
+	if record and state == "tally" and tally_phase != "done":
 		confetti(60)
 		Audio.sfx("record")
 
-func _tally_done() -> void:
+## The bar full: a level passed, its panel (then « Suivant »); otherwise « Suivant » at once.
+func _tally_levels() -> void:
 	tally_tw = null
 	if not levels_due.is_empty() and state == "tally":
-		show_levels()                                # the levels gained: their panel, to close
+		tally_phase = "levels"
+		show_levels(_tally_end)
+	else:
+		_tally_end()
+
+## « Suivant » comes in.
+func _tally_end() -> void:
+	tally_phase = "done"
+	if state != "tally":
+		return
+	var b: Control = w["tally-next"]
+	b.visible = true
+	b.pivot_offset = b.size / 2
+	b.scale = Vector2(0.6, 0.6)
+	b.modulate.a = 0
+	var tw = create_tween().set_parallel()
+	tw.tween_property(b, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(b, "modulate:a", 1.0, 0.2)
+
+## A touch (or the jump key) during the count: the step under way, finished at once.
+func _tally_tap() -> void:
+	if state != "tally":
+		return
+	var xp0: float = over_info.get("xp0", save["xp"])
+	var xp1: float = over_info.get("xp1", save["xp"])
+	match tally_phase:
+		"count":
+			_tally_impact()
+		"impact":
+			_tally_kill()
+			_tally_top()
+			_tally_bar()
+		"bar":
+			_tally_kill()
+			w["tally-level"].modulate.a = 1
+			w["tally-xprow"].modulate.a = 1
+			_tally_xp(xp0, xp1)
+			_tally_levels()
+		"levels":                                    # (the levels' panel gone without its button: on to Suivant)
+			if modal == null:
+				_tally_end()
+		"done":
+			_tally_next()
 
 ## The count as it ends (the screen built again, or Suivant pressed during it).
 func tally_view() -> void:
 	if over_info.is_empty():
 		return
 	w["tally-title"].text = over_info["title"]
-	_tally_dist(over_info["dist"])
-	_tally_gold(over_info["gold"])
+	tally_phase = "done"
+	for k in ["tally-gain", "tally-best", "tally-level", "tally-xprow"]:
+		w[k].modulate.a = 1
+	_tally_top()
 	tally_level = 999
 	_tally_xp(over_info.get("xp0", save["xp"]), over_info.get("xp1", save["xp"]))
-	_tally_best()
+	w["tally-next"].visible = true
+	w["tally-next"].modulate.a = 1
+	w["tally-next"].scale = Vector2.ONE
 
 ## « Suivant »: the end screen, where the objectives move on and the photo comes in.
 func _tally_next() -> void:
 	if state != "tally":
 		return
-	if tally_tw != null and tally_tw.is_valid():
-		tally_tw.kill()
-		tally_tw = null
+	if tally_phase != "done":
+		_tally_kill()
 		tally_view()
 	Audio.sfx("click")
 	state = "over"
@@ -1421,7 +1560,7 @@ func over_play() -> void:
 		var tw = create_tween()
 		over_tweens.append(tw)
 		tw.tween_interval(0.6 + i * 0.4)
-		tw.tween_method(func(v: float) -> void: _card_at(card, q, v), float(s["p"]), target, 0.7).set_ease(Tween.EASE_OUT)
+		tw.tween_method(func(v: float) -> void: _card_at(card, q, v, true), float(s["p"]), target, 0.7).set_ease(Tween.EASE_OUT)
 		if done:
 			var nq = fresh.pop_front() if not fresh.is_empty() else null
 			tw.tween_callback(func() -> void: _card_done(card, q))
@@ -3332,7 +3471,7 @@ func progress(stats: Dictionary) -> void:
 
 ## The levels gained during the run, in a panel: the level reached, the coins it paid, and what can now
 ## be bought in the shop. Shown once the run is over (end screen, or back at the menu).
-func show_levels() -> void:
+func show_levels(after: Callable = Callable()) -> void:
 	if levels_due.is_empty():
 		return
 	var levels: Array = levels_due.duplicate()
@@ -3392,6 +3531,8 @@ func show_levels() -> void:
 	var close = func() -> void:
 		layer.queue_free()
 		modal = null
+		if after.is_valid():
+			after.call()
 	var row_b = _hbox(10)
 	row_b.alignment = BoxContainer.ALIGNMENT_CENTER
 	row_b.add_child(_button("Super !", "small gold", close))
@@ -3457,7 +3598,9 @@ func hud() -> void:
 		if on:
 			if w["say-text"].text != run.saying:
 				w["say-text"].text = run.saying
-			w["say-text"].visible_characters = int((Game.line_time(run.saying) - run.say_t) * 40)
+			w["say-text"].visible_characters = int(run.say_age * Game.SAY_RATE)
+			var said = run.say_age * Game.SAY_RATE >= run.saying.length()
+			w["say-more"].modulate.a = (0.6 + 0.4 * sin(time * 5)) if Game.say_by_touch(run) and said else 0.0
 	var d = floori(run.dist)
 	if d != hud_state["dist"]:
 		hud_state["dist"] = d
@@ -3578,7 +3721,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif state == "over":
 				_replay()
 			elif state == "tally":
-				_tally_next()
+				_tally_tap()
 			elif state == "menu" or state == "intro":
 				go("play")
 			elif state == "pause":
@@ -3687,6 +3830,8 @@ func _process(delta: float) -> void:
 	time += delta
 	if state == "loading":
 		return
+	if state == "tally":
+		_tally_beat(delta)
 	if state == "play" or state == "over" or state == "tally":
 		run.view_w = render.view_w * Game.PIXEL
 		if run.coop and state == "play":             # for two: real time, every bit of it, in steps of 34 ms at most
