@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 18/11/2026, version Godot 0.43.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 18/11/2026, version Godot 0.44.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -53,11 +53,21 @@ Inoffensif ; il se casse avec Brise-tout, l'Esquive, les Bottes de métal, la TN
 | | Forêt | Ruines | Donjon | Cité |
 |---|---|---|---|---|
 | **Plateforme** | bloc de sol flottant (terre et herbe) | bloc de sol flottant (dalles) | passerelle de planches pendue à deux chaînes | plateforme en lévitation sur 3 réacteurs cyan |
-| **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche | murs de pierres carrées effondrés | murs avec porte en bois ou fenêtre à barreaux | immeubles éclairés, conteneurs rouillés |
+| **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche | murs de pierres carrées effondrés | aucune (0.44) | immeubles éclairés, conteneurs rouillés |
 | **Lianes** | pendent du haut de l'écran ici et là | idem | chaînes à crochet ou anneau | câbles à prise lumineuse, câbles tendus en arc |
+
+Derrière le sol de la forêt (0.44) : fougères, fleurs, champignons et lanterne (ils s'allument quand il les frôle),
+tête de pierre, bannière, bloc de lianes ; plus de grand arbre ni de panneau.
 
 Les blocs de sol flottants ne viennent qu'avec une colline derrière eux. Avec le Gorille, une liane
 tressée court tout le long du haut de l'écran (une chaîne au donjon, un câble à pinces lumineuses dans la cité).
+
+## Les gardes du temple (Histoire, décor)
+
+Deux guerriers masqués de feuilles (PixelLab, 0.44) : l'un au masque de bois et à la lance, l'autre au masque
+rouge à plumes et à la massue. Ils sortent de l'entrée du temple après l'explosion et courent derrière Pépito,
+sur le bord gauche, sans jamais l'atteindre ; à leur « DEMI-TOUR !! » (1000 m) ils s'enfuient. Ils ne font
+pas mal.
 
 ## Amis et trésors
 

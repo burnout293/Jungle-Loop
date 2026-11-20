@@ -4,7 +4,7 @@
 // Incrementing CACHE_VERSION will kick off the install event and force
 // previously cached resources to be updated from the network.
 /** @type {string} */
-const CACHE_VERSION = '1795130331|2803255';
+const CACHE_VERSION = '1795157482|10305762';
 /** @type {string} */
 const CACHE_PREFIX = 'Jungle Loop-sw-cache-';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
