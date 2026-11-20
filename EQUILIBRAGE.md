@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 18/11/2026, **version Godot 0.45.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 20/11/2026, **version Godot 0.46.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -196,27 +196,31 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 
 | Objet | Débloqué au niveau | Prix par niveau | Effet chiffré |
 |---|---|---|---|
-| Double saut | 2 | 480 |  |
-| Ressort | 3 | 1000 / 2400 | +10 % d'élan par niveau |
-| Aimant | 2 | 600 / 1600 / 3600 | 2,75 / 4,25 / 6 m |
-| Trèfle | 4 | 1200 / 3200 | voir § 5 |
-| Gemmes dispersées | 6 | 2000 / 4800 / 10000 | 1,2 / 2,2 / 3,5 % |
-| Brise-tout | 3 | 1400 | casse le décor (caisses, jarres, tonneaux) : 50 pièces chacun, jetées devant toi |
+| Dernier élan | 2 | 400 / 600 / 800 | 1 / 2 / 3 rebonds |
+| Ressort | 2 | 1000 / 2000 | +10 % d'élan par niveau |
+| Brise-tout | 3 | 800 | casse le décor (caisses, jarres, tonneaux) : 50 pièces chacun, jetées devant toi |
+| Double saut | 3 | 1600 |  |
+| Aimant | 4 | 600 / 1600 / 3600 | 2,75 / 4,25 / 6 m |
+| Gemmes dispersées | 4 | 1000 / 1500 / 3000 | 1,2 / 2,2 / 3,5 % |
+| Fana de TNT (bouton) | 5 | 2000 / 4000 / 6000 | tout ce qui est devant toi saute (pas les boss) ; recharge 25 / 18 / 12 s |
+| Relique altérée | 5 | 2600 / 3600 / 4600 | 6 / 10 / 15 % d'éthérées ; le décor ne change plus |
+| Vol (pouvoir) | 5 | 4800 / 7000 / 10000 | montée 12 / 13,5 / 15 m/s |
+| Sprint (pouvoir) | 5 | 4000 | +4 m/s |
+| Sphère (pouvoir) | 5 | 6000 |  |
+| Trèfle | 6 | 800 / 2400 | voir § 5 |
+| Ami de la nature | 6 | 1200 / 2800 / 6000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
 | Vitalité | 7 | 5000 / 12000 / 25000 | 2 / 3 / 4 cœurs |
-| Relique altérée | 5 | 1600 / 3600 / 7200 | 6 / 10 / 15 % d'éthérées ; le décor ne change plus |
-| Ami de la nature | 4 | 1200 / 2800 / 6000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
-| Esquive (bouton) | 5 | 1200 / 2800 / 5600 | 40 m d'un coup ; recharge 14 / 10 / 7 s |
-| Bottes de métal (bouton) | 6 | 2500 / 5500 | secousse à 3 / 4,5 m ; recharge 8 / 5 s |
-| Fana de TNT (bouton) | 9 | 3000 / 6000 / 12000 | tout ce qui est devant toi saute (pas les boss) ; recharge 25 / 18 / 12 s |
-| Sablier | 7 | 1800 / 4000 | 3 / 4,5 s, recharge 20 s |
+| Esquive (bouton) | 8 | 1200 / 2800 / 5600 | 40 m d'un coup ; recharge 14 / 10 / 7 s |
 | RedMonster (bouton) | 8 | 2500 / 5000 / 10000 | vitesse ×2 pendant 5 / 10 / 20 s ; recharge 30 / 35 / 45 s depuis la gorgée ; la route reste posée pour ta vitesse à toi ; à deux, pour les deux |
-| Dernier élan | 6 | 1600 / 3600 / 7200 | 1 / 2 / 3 rebonds |
-| Vol (pouvoir) | 10 | 4800 / 7000 / 10000 | montée 12 / 13,5 / 15 m/s |
-| Sprint (pouvoir) | 8 | 4000 | +4 m/s |
-| Sphère (pouvoir) | 10 | 6000 |  |
+| Bottes de métal (bouton) | 10 | 2500 / 5500 | secousse à 3 / 4,5 m ; recharge 8 / 5 s |
+| Sablier | 12 | 5000 / 10000 | 3 / 4,5 s, recharge 20 s |
 | Rembobinage | 12 | 10000 | 1 fois par course |
-| Dompté (Montures, une par monture) | 3 | 1200 / 2800 | voir § 6 |
-| Aimant (Montures, un par monture) | 4 | 1500 / 3500 | 4,25 / 6 m sur cette monture |
+| Gorille : Dompté ; Aimant (Montures) | 5 ; 5 | 1800 / 3200 ; 1000 / 2000 | voir § 6 ; aimant 4,25 / 6 m sur lui |
+| Rhino : Dompté ; Aimant | 3 ; 3 | 800 / 2000 ; 1000 / 2000 | pareil |
+| Libellule : Dompté ; Aimant | 7 ; 7 | 2500 / 4000 ; 1000 / 2000 | pareil |
+
+Ses prix du 20/11 (0.46) ; tout acheter coûte 211 700 pièces. Ce que ça donne au fil des courses :
+`RAPPORT-ECONOMIE.md` ; avec des skins : `RAPPORT-SKINS.md`.
 
 Emplacements d'équipement : 3 (`MAX_EQUIPPED`). **Prix et niveau requis se changent dans
 `reglages/progression.txt`** (section `[ameliorations]`), leurs effets dans `reglages/equilibrage.txt`
@@ -255,8 +259,17 @@ valeur d'origine. Après un changement : réexporter le jeu.
 | Décors ou créatures cassés | 10 | 50 | 150 |
 | Montures | 2 | 60 | 180 |
 | Nuées esquivées | 3 | 60 | 180 |
+| Mètres avec le Gorille (0.46) | 2000 puis 20000 m | 60 puis 500 | 180 puis 600 |
+| Mètres avec le Rhino (0.46) | 4000 puis 20000 m | 60 puis 600 | 180 puis 700 |
+| Mètres avec la Libellule (0.46) | 3000 puis 15000 m | 60 puis 400 | 180 puis 500 |
+| Missiles esquivés en une course (0.46) | 3 puis 15 | 20 puis 300 | 80 puis 350 |
+| Missiles esquivés en tout (0.46) | 30 puis 80 | 180 puis 600 | 200 puis 800 |
 
 Un défi absent du fichier garde l'ancienne règle des paliers (+1 palier tous les 3 défis réussis).
+Plusieurs lignes du même défi dans le fichier : ses paliers (0.46). Le 1er est proposé d'abord ; une fois réussi,
+ce défi revient au palier suivant ; après le dernier, le dernier revient (`questSteps` dans la sauvegarde). Les
+défis de monture ne sont proposés qu'une fois ton record au-delà de 700 m (la 1re monture). Un missile compte
+quand il passe derrière toi sans t'avoir touché (pas ceux de la Relique altérée, inoffensifs).
 
 ## 10 bis. Jouer à deux (coop)
 
