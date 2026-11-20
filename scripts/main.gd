@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.44.0"
+const VERSION := "0.45.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -866,9 +866,10 @@ func _build_hud() -> void:
 	say.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
 	say.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var say_col = _vbox(1)
-	var who = _label("LES GARDES", ts("s"), RELIC, 0)
+	var who = _label("LES GARDES", ts("s"), RELIC, 0)  # who says it (reglages/dialogues.txt); Pépito in green
 	who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	say_col.add_child(who)
+	w["say-who"] = who
 	w["say-text"] = _plain(_label("", ts("m"), INK, 0), "m")
 	w["say-text"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	w["say-text"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -3598,6 +3599,9 @@ func hud() -> void:
 		if on:
 			if w["say-text"].text != run.saying:
 				w["say-text"].text = run.saying
+				var who_ = run.who.to_upper() if run.who != "" else "LES GARDES"
+				w["say-who"].text = who_
+				w["say-who"].label_settings.font_color = LEAF if who_.begins_with("PÉPITO") else RELIC
 			w["say-text"].visible_characters = int(run.say_age * Game.SAY_RATE)
 			var said = run.say_age * Game.SAY_RATE >= run.saying.length()
 			w["say-more"].modulate.a = (0.6 + 0.4 * sin(time * 5)) if Game.say_by_touch(run) and said else 0.0
@@ -3793,6 +3797,10 @@ func _step(h: float) -> void:
 					photo_taken = true
 					_take_photo()
 			"plant":
+				if not photo_taken and run.caught == null:   # (caught by the guards: the photo is of him on the spit)
+					photo_taken = true
+					_take_photo.call_deferred()
+			"snap":
 				if not photo_taken:
 					photo_taken = true
 					_take_photo.call_deferred()

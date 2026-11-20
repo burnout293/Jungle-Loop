@@ -94,12 +94,14 @@ static var JUMP_DOUBLE := 700.0
 static var JUMP_GRAVITY := 2400.0
 static var JUMP_HELD := 1500.0
 # The flyer: a "!" at the right edge shows its height DART_WARN seconds before it crosses the screen; while it
-# shows, it slides up or down to his height (DART_TRACK units a second), and keeps the height it had when it goes.
+# shows, it drifts lazily towards his height (late: DART_LAG, never faster than DART_TRACK units a second), and
+# keeps the height it had when it goes.
 # On foot, the flyers of a wave are DART_FOOT_GAP seconds apart at least: each one can be jumped.
 const DART_W := 64.0
 const DART_H := 40.0
 static var DART_WARN := 2.0
-const DART_TRACK := 520.0
+static var DART_TRACK := 160.0
+const DART_LAG := 1.6
 const DART_FOOT_GAP := 0.85
 static var DART_SPEED := 800.0
 const GAP_DIST := 420.0
@@ -126,6 +128,29 @@ static var CRATE_COINS := 50
 const PLANT_KICK := 1.5
 const PLANT_UP := 760.0
 const PLANT_TIME := 1.4
+# Histoire: out of the temple he runs on, the camera still, to EXIT_LEAD of the screen past his place; then it
+# catches him up in EXIT_CATCH seconds (eased in and out), and the run starts. The guards come out of the
+# doorway GUARD_OUT s after the blast (the second GUARD_NEXT s later), keep his pace while the camera has not
+# caught him up, then close in fast (GUARD_CLOSE of the gap a second, at most GUARD_RUSH more than him) to
+# GUARD_GAP behind him (the second GUARD_STEP further), never touching him. Only to be looked at.
+const EXIT_LEAD := 0.24
+const EXIT_CATCH := 1.0
+const DOOR_X := 108.0              # the temple's doorway, in the world (render: TEMPLE_X + 112 art pixels)
+const GUARD_OUT := 0.7
+const GUARD_NEXT := 0.4
+const GUARD_GAP := 117.0
+const GUARD_STEP := 76.0
+const GUARD_CLOSE := 3.0
+const GUARD_RUSH := 900.0
+const GUARD_FLEE := 420.0          # turned back: off to the left at this pace (world), soon
+# ... planted with them at his heels (alone): they leap on him (CATCH_LEAP s), a cloud of dust and blows until
+# CATCH_FIGHT, then he is carried off on a spit back to the temple (CATCH_WALK units a second); the run ends
+# once they are off the screen (CATCH_END at most).
+const CATCH_LEAP := 0.6
+const CATCH_FIGHT := 2.5
+const CATCH_WALK := 240.0
+const CATCH_END := 7.5
+const CATCH_SHIFT := 0.2           # (meanwhile the camera steps back this much of the screen: the scene in the middle)
 const GAP_FILL := 640.0
 const DECOR_RATE := 0.12
 const HOVER_W := 60.0
@@ -609,6 +634,12 @@ class Run:
 	var talk_zones: Array = []         # ... where they talk: {at, x0, x1, lines, on, wait, done}
 	var intro := false                 # ... the temple's scene: the camera still while they talk, then the blast
 	var intro_len := 0.0               # ... how long it lasts (a touch skips it, once it has run a moment)
+	var who := ""                      # ... who says the line being said (« Pépito », « Chef Massue »...)
+	var out := 0                       # out of the temple: 0 running out (Histoire: the camera still), 1 the camera
+	var catch_from := 0.0              #   catching him up (from where he was on screen, since when), 2 following
+	var catch_t := 0.0
+	var guards: Array = []             # Histoire: the guards after him, [{x (world), v, on}] (render draws them)
+	var caught = null                  # ... alone, planted with them at his heels: {t, x (the spit, world), gx}
 	var bubble_pos := Vector2.ZERO     # where his bubble is (world)
 	var mate_bubble := Vector2.ZERO    # where the partner's bubble is, following him (world)
 	var strip_biome := -1          # Relique altérée: a short strip of another scenery, from strip_x0 to strip_x1
@@ -905,19 +936,26 @@ static func launch(run: Run) -> void:
 ## [{at: metres along the way (-1: at the temple, before the blast), lines: [String]}]
 static var TALKS: Array = []
 
-## Reads reglages/dialogues.txt: « départ | a line » or « 1000 | a line », one line said per row, in order;
-## rows with the same place make one talk.
+static var TURN_CUE := false        # a line says « DEMI-TOUR »: the guards turn back there (else at the first line on the way)
+
+## Reads reglages/dialogues.txt: « départ | who | a line » or « 1000 | who | a line » (who may be left out),
+## one line said per row, in order; rows with the same place make one talk. A line is kept as « who|text ».
 static func set_talks(text: String) -> void:
 	TALKS = []
+	TURN_CUE = false
 	for raw in text.split("\n"):
 		var line: String = raw.split("#")[0].strip_edges()
-		var cut = line.find("|")
-		if cut < 0:
+		var cols = line.split("|")
+		if cols.size() < 2:
 			continue
-		var where = line.substr(0, cut).strip_edges().to_lower()
-		var said = line.substr(cut + 1).strip_edges()
+		var where = cols[0].strip_edges().to_lower()
+		var who = cols[1].strip_edges() if cols.size() >= 3 else ""
+		var said = "|".join(cols.slice(2 if cols.size() >= 3 else 1)).strip_edges()
 		if said == "":
 			continue
+		if "DEMI-TOUR" in said.to_upper():
+			TURN_CUE = true
+		said = who + "|" + said
 		var at = -1.0 if where in ["depart", "départ", "temple"] else (float(where) if where.is_valid_float() else NAN)
 		if is_nan(at):
 			continue
@@ -927,7 +965,7 @@ static func set_talks(text: String) -> void:
 
 ## How long a line stays on screen for two (alone, it stays until a touch): long enough to read it.
 static func line_time(text: String) -> float:
-	return clampf(1.3 + 0.045 * text.length(), 2.2, 4.8)
+	return clampf(1.3 + 0.045 * text.substr(text.find("|") + 1).length(), 2.2, 4.8)
 
 const SAY_RATE := 40.0
 
@@ -1830,7 +1868,7 @@ static func _attack_fits(run: Run, b: Boss, move: String, now: Array) -> bool:
 ## a flyer is already on its way or something near that height is coming anyway (he must move for it).
 static func camp(run: Run, dt: float) -> void:
 	var p = run.p
-	if run.lvl("flight") == 0 or run.mount != null or run.boss != null or run.fm != null or run.fm_due or run.leap != null or run.dead or run.sx < run.home or talking(run):
+	if run.lvl("flight") == 0 or run.mount != null or run.boss != null or run.fm != null or run.fm_due or run.leap != null or run.dead or run.out < 2 or talking(run):
 		run.camp_t = 0
 		return
 	if absf(p.y - run.camp_y) > CAMP_BAND:
@@ -2311,6 +2349,86 @@ static func _fatal(run: Run) -> void:
 		run.fatal = true
 		run.events.append("fatal")
 
+## Histoire: whether the guards are at his heels (out of the doorway, not turned back yet, no boss).
+static func guards_after(run: Run) -> bool:
+	if run.coop or run.mode != "story" or run.blast_t < 0 or run.guards_off >= 0 or run.boss != null or run.dead:
+		return false
+	for g in run.guards:
+		if g.on:
+			return true
+	return false
+
+## Histoire: the guards after him. Out of the doorway one after the other, at his pace (hv: how fast he goes,
+## world) while the camera has not caught him up, then in fast to their place behind him; turned back, they
+## run off to the left. Caught: _capture moves them.
+static func _guards(run: Run, d: float, hv: float) -> void:
+	if run.mode != "story" or run.blast_t < 0 or run.caught != null:
+		return
+	if run.guards.is_empty():
+		for i in 2:
+			run.guards.append({"x": DOOR_X, "v": 0.0, "on": false})
+	var px = run.cam + run.sx
+	var since = run.t - run.blast_t
+	for i in run.guards.size():
+		var g = run.guards[i]
+		if not g.on:
+			if since < GUARD_OUT + GUARD_NEXT * i:
+				continue
+			g.on = true
+			g.x = DOOR_X
+			g.v = hv
+		if run.guards_off >= 0:                      # turned back: off to the left, faster and faster
+			g.v = move_toward(g.v, -GUARD_FLEE, 1600 * d)
+			g.x += g.v * d
+			continue
+		var want = px - GUARD_GAP - GUARD_STEP * i
+		if run.out < 2:
+			g.v = hv
+		else:
+			g.v = hv + clampf((want - g.x) * GUARD_CLOSE, -0.5 * hv, GUARD_RUSH)
+		g.x = minf(g.x + g.v * d, want + 8)
+
+## Caught (Histoire, alone): they leap on him, a cloud of dust and blows, then he goes off tied to a spit,
+## carried back to the temple. True once it is over (the end).
+static func _capture(run: Run, d: float, px: float, fl: float) -> bool:
+	var c = run.caught
+	var t0: float = c.t
+	c.t += d
+	var k = clampf(c.t / (CATCH_LEAP + 0.6), 0, 1)  # the camera steps back a little (the distance waits)
+	var sx2 = lerpf(c.sx0, c.sx0 + CATCH_SHIFT * run.view_w, k * k * (3 - 2 * k))
+	run.cam -= sx2 - run.sx
+	run.held -= sx2 - run.sx
+	run.sx = sx2
+	run.dist = (run.cam - run.held) / PPM
+	if c.t < CATCH_LEAP:                             # his legs still kicking; they come
+		if floori(c.t / 0.28) > floori(t0 / 0.28):
+			run.events.append("wriggle")
+		return false
+	if t0 < CATCH_LEAP:                              # on him: the cloud bursts
+		run.shake = maxf(run.shake, 0.7)
+		run.events.append("pounce")
+		for i in 22:
+			part(run, px + rnd(-30, 30), fl - rnd(0, 50), rnd(-420, 420), rnd(-420, -60), rnd(0.4, 0.8), colour_of(["#e8dcc0", "#c9b89a", "#a8926e"]), rnd(6, 12), 900)
+	if c.t < CATCH_FIGHT:                            # the fight: blows, dust, things flying out
+		if floori(c.t / 0.17) > floori(t0 / 0.17):
+			run.events.append("scuffle" if randf() < 0.6 else "bonk")
+			run.shake = maxf(run.shake, 0.25)
+		if randf() < 0.5:
+			part(run, px + rnd(-50, 50), fl - rnd(0, 60), rnd(-260, 260), rnd(-300, -40), rnd(0.3, 0.6), colour_of(["#e8dcc0", "#c9b89a", "#a8926e"]), rnd(4, 9), 700)
+		return false
+	if t0 < CATCH_FIGHT:                             # the dust settles: tied to a spit, off he goes
+		c.x = px
+		run.events.append("skewer")
+		for i in 16:
+			part(run, px + rnd(-60, 60), fl - rnd(0, 40), rnd(-200, 200), rnd(-200, -40), rnd(0.4, 0.7), colour_of(["#e8dcc0", "#c9b89a"]), rnd(6, 11), 500)
+	if t0 < CATCH_FIGHT + 0.6 and c.t >= CATCH_FIGHT + 0.6:
+		run.events.append("snap")                    # (the photo: him on the spit)
+	c.x -= CATCH_WALK * d
+	if c.x < run.cam - 160 or c.t > CATCH_END:
+		die(run)
+		return true
+	return false
+
 static func die(run: Run) -> void:
 	_fatal(run)
 	run.dead = true
@@ -2550,10 +2668,14 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			run.say_age = 0
 			if run.say_queue.is_empty():
 				run.saying = ""
+				run.who = ""
 			else:
-				run.saying = run.say_queue.pop_front()
+				var l: String = run.say_queue.pop_front()
+				var cut = l.find("|")
+				run.who = l.substr(0, cut) if cut >= 0 else ""
+				run.saying = l.substr(cut + 1)
 				run.events.append("say")
-				if run.exploded and run.guards_off < 0:
+				if run.exploded and run.guards_off < 0 and (not TURN_CUE or "DEMI-TOUR" in run.saying.to_upper()):
 					run.guards_off = run.t               # (on the way: the guards chasing him turn back)
 	if run.wait > 0:                                 # still inside: the temple shakes, dust falls from the lintel
 		var was_wait = run.wait
@@ -2693,24 +2815,42 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	else:
 		move = (run.speed + (DODGE_SPEED if dashing else 0.0)) * (1.8 if run.exploded and run.sx < run.home else 1.0) * d
 	var px0 = run.cam + run.sx                      # where he was: the Esquive sweeps everything between
-	if run.sx < run.home:
-		run.sx = minf(run.home, run.sx + move)
+	var lead = run.home + (EXIT_LEAD * run.view_w if run.intro and run.mode == "story" else 0.0)
+	if run.out == 0:                                 # out of the temple, the camera still
+		run.sx = minf(lead, run.sx + move)
+		if run.sx >= lead:
+			run.out = 1 if lead > run.home else 2
+			run.catch_from = run.sx
+			run.catch_t = 0
 	else:
-		run.cam += move
+		var back = 0.0
+		if run.out == 1:                             # Histoire: the camera catches him up, eased in and out
+			run.catch_t += d
+			var k = clampf(run.catch_t / EXIT_CATCH, 0, 1)
+			var sx2 = lerpf(run.catch_from, run.home, k * k * (3 - 2 * k))
+			back = run.sx - sx2
+			run.sx = sx2
+			if k >= 1:
+				run.out = 2
+		run.cam += move + back
 		if talk_hold(run):
-			run.held += move                         # (alone, while the guards talk: the distance waits)
+			run.held += move + back                  # (alone, while the guards talk: the distance waits)
 	run.dist = (run.cam - run.held) / PPM
 	var px = run.cam + run.sx
+	_guards(run, d, (px - px0) / d if d > 0 else 0.0)
 	var fl = floor_at(run, px)                      # the floor right under him
 
 	if run.leap != null and run.leap.planted:        # --- head first in the ground, legs kicking ---
 		var kicks = floori(run.leap.pt / 0.28)
 		run.leap.pt += d
-		if floori(run.leap.pt / 0.28) > kicks and run.leap.pt < PLANT_TIME:
+		if run.caught != null:                       # (Histoire: the guards were at his heels)
+			if _capture(run, d, px, fl):
+				return
+		elif floori(run.leap.pt / 0.28) > kicks and run.leap.pt < PLANT_TIME:
 			run.events.append("wriggle")             # his legs kicking, the earth crumbling round his head
 			for i in 3:
 				part(run, px + rnd(-14, 14), fl - 2, rnd(-120, 120), rnd(-220, -80), rnd(0.3, 0.5), colour_of(["#8a6a42", "#6a4f30", "#b08a58"]), rnd(4, 7), 1400)
-		if run.leap.pt > PLANT_TIME and not run.dead:
+		if run.caught == null and run.leap.pt > PLANT_TIME and not run.dead:
 			die(run)
 			return
 	elif run.leap != null:                           # --- thrown (Dernier élan: bouncing along) ---
@@ -2735,6 +2875,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				for i in 14:                         # a spray of earth
 					part(run, px + rnd(-16, 16), fl - 2, rnd(-220, 220), rnd(-380, -120), rnd(0.4, 0.7), colour_of(["#8a6a42", "#6a4f30", "#b08a58", "#f4f0e0"]), rnd(5, 11), 1400)
 				run.shake = maxf(run.shake, 0.6)
+				if guards_after(run):
+					run.caught = {"t": 0.0, "x": px, "sx0": run.sx, "gx": run.guards.map(func(g): return g.x)}
+					for o in run.obs:                # (what he left behind him: gone)
+						if o.x + o.w < px:
+							o.gone = true
 				run.events.append("plant")
 				return
 	elif run.bubble:                                 # --- coop: fallen, he floats after the partner ---
@@ -3033,7 +3178,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 					o.t += d
 					# its "!" follows his height while it shows; once it goes, its height stays as it was
 					var alt = clampf(floor_at(run, px) - (p.y - tall / 2), DART_ALTS[0][0], DART_TOP)
-					o.y = move_toward(o.y, floor_at(run, px) - alt - DART_H / 2, DART_TRACK * d)
+					var want = floor_at(run, px) - alt - DART_H / 2   # (lazily: it lags behind him, slowly)
+					o.y = move_toward(o.y, want, minf(DART_TRACK * d, absf(want - o.y) * (1.0 - exp(-DART_LAG * d))))
 					if o.t >= DART_WARN:
 						o.state = "go"
 						o.alt = floor_at(run, px) - (o.y + DART_H / 2)   # (over the floor: a dip on the way changes nothing)

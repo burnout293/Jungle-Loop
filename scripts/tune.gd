@@ -93,6 +93,7 @@ const KEYS := {
 	},
 	"volants": {
 		"avertissement": ["DART_WARN", "n", 1.0],
+		"suivi": ["DART_TRACK", "n", M],
 		"vitesse": ["DART_SPEED", "n", M],
 		"vagues": ["WAVE_N", "ipair", 1.0],
 		"vagues poids": ["CHAIN_WAVES", "i", 1.0],

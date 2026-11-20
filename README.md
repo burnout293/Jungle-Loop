@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.44.0** (20/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.45.0** (20/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,28 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.45.0
+
+Ses retours du 20/11, 2e lot :
+- **Missiles (volants)** : leur « ! » rejoint ta hauteur lentement, en retard (au plus 4 m/s, de moins en moins
+  vite en approchant ; réglage `suivi`).
+- **Sortie du temple (Histoire)** : après l'explosion, la caméra reste figée ; Pépito sort et court jusqu'au
+  tiers de l'écran, les deux gardes sortent derrière lui à distance (0,7 s puis 1,1 s après l'explosion) ;
+  puis la caméra le rattrape en 1 s (en douceur) et la course commence ; les gardes reviennent alors très vite
+  juste derrière lui (environ 0,6 s) et le poursuivent. Leur position est maintenant tenue par le jeu
+  (`Game._guards`), le dessin ne fait que les montrer.
+- **Capturé** : seul, si Pépito se plante (dernier cœur) avec les gardes à ses trousses (avant leur
+  demi-tour), ils lui sautent dessus ; un nuage de poussière de bagarre (des coups, des étoiles, sa chaussure,
+  son poing, la lance, la massue qui en dépassent) ; puis il repart attaché sous une broche posée sur leurs
+  têtes, ramené vers le temple, jusqu'à sortir de l'écran ; c'est la fin. La caméra recule un peu pour que la
+  scène soit au milieu ; la photo est prise sur la broche. Composé avec les images existantes (PixelLab à 0
+  génération ce jour-là). Après leur demi-tour, la mort reste la tête plantée.
+- **Dialogues réécrits** (`reglages/dialogues.txt`) : au temple, Chef Massue, Pointu et Pépito (enfermés
+  ensemble par leur propre éboulement, jusqu'au bâton rouge) ; à 1000 m, les os sous les fleurs, Vorace,
+  « DEMI-TOUR, les chefs d'abord ! », et Pépito qui veut la mettre dans un vase. Format : « où | qui |
+  réplique » ; le nom s'affiche au-dessus (Pépito en vert) ; les gardes font demi-tour à la réplique qui
+  contient « DEMI-TOUR ».
 
 ## 0.44.0
 

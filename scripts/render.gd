@@ -145,39 +145,149 @@ func show_run(r: Game.Run, time: float, q_: int) -> void:
 func planted() -> bool:
 	return run != null and run.leap != null and run.leap.planted
 
-## Histoire: the temple's guards, masked warriors of leaves (PixelLab, 0.44), burst out of the doorway after
-## the blast and run at his heels, never catching him; at their first line on the way (« DEMI-TOUR !! ») they
-## turn round and run off. Only to be looked at: nothing of theirs hurts.
+## Histoire: the temple's guards, masked warriors of leaves (PixelLab, 0.44). Where they are is the game's
+## (Game._guards: out of the doorway after him, then at his heels; turned back, off to the left): here they are
+## only drawn. Only to be looked at: nothing of theirs hurts.
 const GUARDS := ["guard-spear", "guard-club"]
+var spit_at = null                     # (draw_spit: where draw_hero puts him, tied under the spit)
+
+## One guard (0 the spear, 1 the club, the chief), at 80 %, its feet at (x, foot), raised by `lift`.
+func guard_at(c: CanvasItem, i: int, x: float, foot: float, flip: bool, frame: int, lift: float = 0.0) -> void:
+	var im: Texture2D = Art.tex.get(GUARDS[i])
+	if im == null:
+		return
+	var fw = im.get_width() / 8.0
+	var dw = fw * 0.8
+	var dh = im.get_height() * 0.8
+	c.draw_texture_rect_region(im, Rect2(snap(x - dw / 2), snap(foot - dh + 3 - lift), -dw if flip else dw, dh), Rect2((frame % 8) * fw, 0, fw, im.get_height()), Color(0.92, 0.92, 0.96))
 
 func draw_guards(c: CanvasItem) -> void:
-	if run.mode != "story" or run.blast_t < 0 or run.boss != null:
+	if run.mode != "story" or run.blast_t < 0 or run.boss != null or run.caught != null:
 		return
-	var since = run.t - run.blast_t
-	var back = run.t - run.guards_off if run.guards_off >= 0 else -1.0
-	if back > 3.0:
+	for i in run.guards.size():
+		var g = run.guards[i]
+		if not g.on:
+			continue
+		var x = sx(g.x)
+		if run.out == 2 and g.v > 0:
+			x += 5 * sin(t * 1.6 + i * 2.2)          # (at his heels, never quite in step)
+		if x < -60 or x > view_w + 60:
+			continue
+		var foot = floor_px(x)
+		shadow(c, x, foot - 1, 16)
+		guard_at(c, i, x, foot, g.v < 0, floori(t * 13 + i * 3))
+
+## Caught (Histoire, alone, Game._capture): they leap on him, a cloud of dust and blows, then off he goes tied
+## under a spit, carried back to the temple. Drawn in his own layer, over everything of the road.
+func draw_capture(c: CanvasItem) -> void:
+	var k = run.caught
+	if run.dead and not show_dead:
 		return
 	var hx = n(run.sx)
-	var door = snap(TEMPLE_X - run.cam / PIXEL) + 112
-	for i in GUARDS.size():
-		var im: Texture2D = Art.tex.get(GUARDS[i])
-		var come = clampf((since - 0.35 * i) / 1.4, 0, 1)
-		if im == null or come <= 0:
-			continue
-		come = 1.0 - pow(1.0 - come, 2)
-		var x = lerpf(door, hx - 52 - i * 34 + 9 * sin(t * 1.6 + i * 2.2), come)
-		var flip = back > 0.25                       # they turn round, and run off to the left
-		if flip:
-			x -= pow(back - 0.25, 2) * 160 + (back - 0.25) * 60
-		if x < -60:
-			continue
-		var fw = im.get_width() / 8.0
-		var frame = floori(t * 13 + i * 3) % 8
-		var foot = floor_px(x)
-		var dw = fw * 0.8
-		var dh = im.get_height() * 0.8
-		shadow(c, x, foot - 1, 16)
-		c.draw_texture_rect_region(im, Rect2(snap(x - dw / 2), snap(foot - dh + 3), -dw if flip else dw, dh), Rect2(frame * fw, 0, fw, im.get_height()), Color(0.92, 0.92, 0.96))
+	var fy = floor_px(hx)
+	if k.t < Game.CATCH_LEAP:                        # his legs kicking, they come and leap on him
+		draw_hero(c, seat)
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		for i in [1, 0]:
+			var u = clampf((k.t - 0.08 * i) / (Game.CATCH_LEAP - 0.08), 0, 1)
+			var x0 = sx(k.gx[i]) if i < k.gx.size() else hx - 60
+			var x = lerpf(x0, hx - 8 + 14 * i, u * u * (3 - 2 * u))
+			guard_at(c, i, x, floor_px(x), false, floori(t * 16 + i * 3), sin(PI * u) * 26)
+	elif k.t < Game.CATCH_FIGHT:
+		draw_cloud(c, hx, fy, k.t - Game.CATCH_LEAP)
+	else:
+		draw_spit(c, sx(k.x), k.t - Game.CATCH_FIGHT)
+
+## A disc of pixels, row by row (the dust cloud's puffs).
+func disc(c: CanvasItem, cx: float, cy: float, r: float, col: Color) -> void:
+	if r <= 0.5:
+		return
+	cx = roundf(cx)
+	cy = roundf(cy)
+	var ri = floori(r)
+	for dy in range(-ri, ri + 1):
+		var hw = floorf(sqrt(maxf(0, r * r - dy * dy)) + 0.5)
+		rect(c, cx - hw, cy + dy, 2 * hw + 1, 1, col)
+
+## A star of the cartoon fight: a little cross of pixels.
+func star(c: CanvasItem, x: float, y: float, col: Color) -> void:
+	x = roundf(x)
+	y = roundf(y)
+	rect(c, x - 2, y, 5, 1, col)
+	rect(c, x, y - 2, 1, 5, col)
+	rect(c, x - 1, y - 1, 3, 3, col)
+
+## The fight: a cloud of dust that churns, with bits of them sticking out of it for a moment (his shoe, his
+## fist, the spear, the club) and stars spinning over it. `a`: since it burst.
+func draw_cloud(c: CanvasItem, x: float, fy: float, a: float) -> void:
+	var cy = fy - 24
+	var grow = minf(1, a / 0.12)
+	var calm = clampf((Game.CATCH_FIGHT - Game.CATCH_LEAP - a) / 0.25, 0, 1)   # (it melts at the end)
+	grow *= 0.6 + 0.4 * calm
+	# bits sticking out (behind the puffs: only their ends show)
+	for kk in 3:
+		var slot = floori(a / 0.22) * 3 + kk
+		var ph = fposmod(a / 0.22, 1.0)
+		var h = absf(sin(slot * 12.9898) * 43758.5453)
+		h -= floorf(h)
+		var ang = [PI, 0.0, -PI / 2][kk] + (h - 0.5) * 2.4   # (left, right, up)
+		var out = 22 + 12 * sin(PI * ph)
+		var bx = x + cos(ang) * out * 1.3
+		var by_ = cy + sin(ang) * out * 0.75
+		var kind = floori(h * 97) % 4
+		var xf = Transform2D(ang + PI / 2, Vector2(bx, by_))
+		if kind == 0:
+			part(c, xf, "hero-shoe", 0, 0, 0)
+		elif kind == 1:
+			part(c, xf, "hero-fist", 0, 0, 0)
+		elif kind == 2:                              # the spear: a shaft, its grey head
+			c.draw_set_transform_matrix(xf)
+			rect(c, -1, -2, 2, 16, Color("#5a3a1e"))
+			rect(c, -2, -7, 4, 5, Color("#c9d3e0"))
+			rect(c, -1, -9, 2, 2, Color("#eef4ff"))
+		else:                                        # the club: thick wood, a dark knob with a spike
+			c.draw_set_transform_matrix(xf)
+			rect(c, -2, -2, 4, 13, Color("#7a4a26"))
+			rect(c, -3, -7, 6, 6, Color("#4a2c16"))
+			rect(c, -1, -10, 2, 3, Color("#9aa3b0"))
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	var puffs: Array = []
+	for j in 10:
+		var ang = j * TAU / 10 + 0.45 * sin(t * 9 + j * 1.7)
+		var r = (11 + 3 * sin(t * 23 + j * 2.3)) * grow
+		puffs.append(Vector3(x + cos(ang) * 25 * grow, cy + sin(ang) * 13 * grow, r))
+	puffs.append(Vector3(x + 3 * sin(t * 17), cy - 2, 16 * grow))
+	for P in puffs:
+		disc(c, P.x, P.y, P.z + 1, Color("#4a3a26"))
+	for P in puffs:
+		disc(c, P.x, P.y, P.z, Color("#d9c9a6"))
+	for P in puffs:
+		disc(c, P.x - 2, P.y - 3, P.z * 0.6, Color("#efe4c8"))
+	for j in 3:                                      # stars spinning over the fight
+		var ang = t * 7 + j * TAU / 3
+		star(c, x + cos(ang) * 20, cy - 24 + sin(ang) * 5, Color("#ffd35c"))
+
+## Off he goes: tied under a spit resting on their heads, the chief in front, back to the temple. `x`: the
+## middle of the spit, on screen.
+func draw_spit(c: CanvasItem, x: float, a: float) -> void:
+	var fy = floor_px(x)
+	var step = floori(t * 10)
+	for i in [1, 0]:                                 # the spear behind, the chief in front (they go left)
+		var gx = x - 40.0 if i == 1 else x + 40.0
+		shadow(c, gx, floor_px(gx) - 1, 16)
+		guard_at(c, i, gx, floor_px(gx), true, step + i * 4)
+	var bob = roundf(1.2 * sin(t * 10 * PI / 4))
+	var py = fy - 42 + bob
+	rect(c, x - 66, py - 1, 132, 4, Color("#3a2614"))   # the spit: a long pole of wood, resting on their heads
+	rect(c, x - 65, py, 130, 2, Color("#8a5a2b"))
+	rect(c, x - 65, py, 130, 1, Color("#b07a42"))
+	spit_at = Vector2(x, py + 1)
+	draw_hero(c, null)
+	spit_at = null
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	for rx in [-11, -7, 17, 21]:                     # the ropes round his wrists and his ankles
+		rect(c, x + rx - 1, py - 2, 3, 6, Color("#3a2614"))
+		rect(c, x + rx, py - 1, 1, 4, Color("#e0c98e"))
 
 ## His head in the ground: a little heap of the floor's own picture round his waist, lifted a few pixels,
 ## column by column from the very ground drawn there, so it melts into the floor (whatever the scenery).
@@ -970,6 +1080,10 @@ func stride(th: float) -> Dictionary:
 func _draw_hero_layer(c: CanvasItem) -> void:
 	if run == null or not Art.ready or (run.dead and not show_dead and not planted()):
 		return
+	if run.caught != null:                           # Histoire: caught by the guards
+		draw_capture(c)
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		return
 	if run.bubble:                                   # coop: fallen, floating after the partner
 		draw_hero(c, null, run.p, sx(run.bubble_pos.x))
 		c.draw_set_transform_matrix(Transform2D.IDENTITY)
@@ -1104,8 +1218,16 @@ func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN) -> void:
 		fists = [{"x": -11 + 2 * sin(t * 13), "y": -24.0 + 2 * cos(t * 13)}, {"x": 12 - 2 * sin(t * 13), "y": -24.0 - 2 * cos(t * 13)}]
 		tilt = 0.08 * sin(t * 7)
 		by = -11.0
+	if me and spit_at != null:                       # tied under the spit: on his back, fists and shoes up to it
+		shoes = [{"x": 10.0, "y": -3.0, "r": 0.0}, {"x": 11.0, "y": 1.0, "r": 0.0}]
+		fists = [{"x": 10.0, "y": -33.0}, {"x": 11.0, "y": -29.0}]
+		tilt = 0.0
+		by = -11.0
+		bx = -1.0
 	var xf = Transform2D(0, Vector2(ox, oy))
-	if leap != null and leap.planted:                # (turned round his middle, then sunk: the head under the floor)
+	if me and spit_at != null:                       # (turned on his back under the pole, swaying as they walk)
+		xf = Transform2D(0, spit_at).rotated_local(-PI / 2 + 0.07 * sin(t * 6)).translated_local(Vector2(-11, 22))
+	elif leap != null and leap.planted:              # (turned round his middle, then sunk: the head under the floor)
 		xf = xf.translated_local(Vector2(0, -22 + PLANT_SINK)).rotated_local(PI + 0.06 * sin(t * 5)).translated_local(Vector2(0, 22))
 	elif leap != null:                               # knocked out: he tumbles
 		xf = xf.translated_local(Vector2(0, -20)).rotated_local(p.roll).translated_local(Vector2(0, 20))
@@ -1305,7 +1427,7 @@ func _draw_back(c: CanvasItem) -> void:
 		var floor_y = n(p.plat.y) if p.plat != null else floor_px(hx)
 		var M = run.mount
 		var aloft: bool = M != null and (p.hang or Game.MOUNTS[M.kind].get("fly", false))
-		if not in_temple or hx > DOOR_X + 8:
+		if (not in_temple or hx > DOOR_X + 8) and (run.caught == null or run.caught.t < Game.CATCH_LEAP):
 			var w = 26.0 if aloft else (62.0 if M != null else maxf(8, 20 - (int(floor_y - n(p.y)) >> 3)))
 			shadow(c, hx - 2 + (8 if M != null and not aloft else 0), floor_y - 1, w)
 		if run.gone != null:                         # the mount that just took a blow: it tumbles back, shrinks and fades

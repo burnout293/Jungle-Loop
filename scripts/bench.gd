@@ -242,11 +242,13 @@ func _tour() -> void:
 		[43.2, "tab", "power"], [43.25, "own", "flight"], [43.3, "pick", "flight"], [44.4, "shot", "29-shop-flight-owned"],
 		[44.5, "tab", "mount"], [44.55, "mpick", "dragonfly"], [45.7, "shot", "30-shop-dragonfly"], [45.75, "mtick", ""], [46.1, "mtick", ""], [46.15, "mpick", "rhino"], [47.2, "shot", "31-shop-rhino"],
 		[47.25, "tab", "up"], [47.3, "own", "monster"], [47.35, "pick", "monster"], [48.9, "shot", "32-shop-monster"],
-		[49.0, "story", ""], [50.0, "shot", "33-story-say"], [51.0, "tap", ""], [51.3, "tap", ""], [51.6, "tap", ""],
-		[52.0, "shot", "34-story-line3"], [52.1, "tap", ""], [52.4, "tap", ""], [55.0, "shot", "35-guards-chasing"],
-		[56.5, "shot", "36-guards-chasing2"], [57.0, "darts", ""], [57.4, "shot", "37-warn-stack"],
-		[57.5, "lantern", ""], [57.7, "shot", "38-lantern-lit"], [58.4, "shot", "39-lantern-later"],
-		[59, "quit", ""],
+		[49.0, "story", ""], [50.0, "shot", "33-story-chef"], [50.2, "tap", ""], [50.35, "tap", ""], [50.9, "shot", "34-story-pepito"],
+		[51.0, "skiptalk", ""], [52.5, "shot", "35-exit-still"], [53.0, "shot", "36-guards-out"],
+		[53.6, "shot", "37-camera-catch"], [55.0, "shot", "38-guards-heels"], [55.2, "darts", ""],
+		[55.6, "shot", "39-warn-slow"], [56.4, "shot", "40-warn-later"], [56.5, "catch", ""],
+		[57.6, "shot", "41-caught-pounce"], [58.6, "shot", "42-caught-cloud"], [59.2, "shot", "43-caught-cloud2"],
+		[60.2, "shot", "44-caught-spit"], [61.0, "shot", "45-caught-spit2"],
+		[61.5, "quit", ""],
 	]
 	while tour_i < steps.size() and t >= steps[tour_i][0]:
 		var st = steps[tour_i]
@@ -312,6 +314,14 @@ func _tour() -> void:
 				main.go("play")
 				main.run.hearts = 99
 			"tallytap": main._tally_tap()              # a touch on the count: the step under way, finished
+			"skiptalk":                                 # the rest of the temple's lines read at once: the blast
+				main.run.say_queue.clear()
+				main.run.saying = ""
+			"catch":                                    # Histoire: his last heart lost, the guards at his heels
+				main.run.obs.clear()
+				main.run.god = false
+				main.run.hearts = 1
+				Game.hit(main.run, null)
 			"tap":
 				main.press()
 				main.input.hold = false

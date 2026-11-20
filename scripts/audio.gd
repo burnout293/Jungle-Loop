@@ -234,6 +234,10 @@ func _recipes() -> Dictionary:
 		# the last heart: a slide whistle as he flies off, then his head in the ground (thud) and a boing
 		"fling": [T(1500, 0.55, "sine", 0.16, 0.0, 420), T(1520, 0.55, "sine", 0.06, 0.0, 430)],
 		"plant": [T(95, 0.38, "sine", 0.6, 0.0, 36), N(0.3, 0.55, 520), N(0.14, 0.4, 2600, 0.02), T(180, 0.5, "triangle", 0.26, 0.14, 640), T(640, 0.32, "triangle", 0.16, 0.46, 230), T(900, 0.08, "square", 0.07, 0.78, 1300), T(1300, 0.08, "square", 0.07, 0.88, 900)],
+		"pounce": [N(0.3, 0.5, 600), T(85, 0.35, "sine", 0.6, 0, 38), T(400, 0.18, "triangle", 0.12, 0.02, 160)],   # the guards leap on him
+		"scuffle": [N(0.07, 0.4, 900), T(180, 0.08, "square", 0.1, 0, 90)],                       # a blow in the cloud of dust
+		"bonk": [T(620, 0.1, "square", 0.1, 0, 300), N(0.03, 0.25, 3200)],                         # ... a head knocked
+		"skewer": [T(70, 0.14, "sine", 0.55), T(70, 0.14, "sine", 0.5, 0.18), T(90, 0.22, "sine", 0.55, 0.36), T(hz(12), 0.14, "triangle", 0.16, 0.5), T(hz(15), 0.14, "triangle", 0.16, 0.59), T(hz(19), 0.14, "triangle", 0.16, 0.68), T(hz(24), 0.32, "triangle", 0.16, 0.77)],   # tied to the spit: drums, a little tune
 		"wriggle": [N(0.08, 0.22, 1300), T(300, 0.07, "square", 0.07, 0.0, 450)],                # his legs kicking, earth crumbling
 		"say": [T(520, 0.05, "square", 0.05, 0.0, 600), T(660, 0.05, "square", 0.04, 0.06, 700)],
 		# RedMonster: the can hissing open, two gulps, then he revs up; and the fizz running out

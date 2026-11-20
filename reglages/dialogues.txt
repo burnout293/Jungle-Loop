@@ -1,13 +1,23 @@
-# Jungle Loop — Histoire : ce que disent les gardes.
-# Une réplique par ligne : « où | ce qui est dit ». « départ » = au temple, avant que l'entrée n'explose
-# (la caméra reste figée ; seul, un toucher passe la scène) ; sinon la distance en mètres où ils parlent.
-# Les répliques d'un même endroit se suivent, chacune le temps de la lire (entre 2,2 et 4,8 s selon sa
-# longueur). Pendant un dialogue, Pépito court toujours, mais la route est vide : ni obstacle, ni pièce,
-# ni objet, ni nuée.
+# Jungle Loop — Histoire : ce qui se dit en chemin.
+# Une réplique par ligne : « où | qui | ce qui est dit » (« qui » peut manquer : « LES GARDES » s'affiche).
+# « départ » = dans le temple, avant que l'entrée n'explose (la caméra reste figée) ; sinon la distance en
+# mètres où ils parlent. Seul, chaque réplique attend un toucher ; à deux, elle reste le temps de la lire.
+# Pendant un dialogue en route, la route se vide et la distance s'arrête, puis tout repart.
+# Les gardes font demi-tour à la première réplique qui contient « DEMI-TOUR ».
+# Le nom « Pépito » s'affiche en vert, les autres en bleu.
 
-départ | Il a la relique ! CHOPEZ-LE !!
-départ | C'est bon, l'entrée du temple s'est écroulée, il ira pas bien loin.
-départ | Attendez, pourquoi il nous lance des bâtons rouges ? ...
+# Dans le temple : Pépito a la relique, les gardes ont fait s'écrouler l'entrée... sur eux aussi.
+départ | Chef Massue | Halte, voleur ! Rends-nous la relique sacrée !
+départ | Pépito      | Quelle relique ?
+départ | Pointu      | Celle qui brille dans ton sac à dos.
+départ | Chef Massue | Ha ! L'entrée s'est écroulée : tu es pris au piège !
+départ | Pointu      | Euh, chef... du coup, on est enfermés avec lui.
+départ | Chef Massue | ... C'était le plan.
+départ | Pointu      | Pourquoi il allume un bâton rouge ?
 
-1000   | Oh non Vorace ! DEMI-TOUR !!
-1000   | Mais il est fou il s'arrête pas !
+# En route : Vorace, la fleur-reine carnivore, n'est plus très loin.
+1000   | Pointu      | Chef... pourquoi il y a des os sous toutes les fleurs, par ici ?
+1000   | Chef Massue | Ces pétales géants... VORACE !! DEMI-TOUR, les chefs d'abord !
+1000   | Pointu      | Hé, le voleur ! Vorace, c'est une fleur qui mange les gens !
+1000   | Pépito      | Une fleur ? Pfff. Je vais la mettre dans un vase.
+1000   | Pointu      | Chef... il est encore plus fou que nous.

@@ -91,6 +91,7 @@ nids, poids                   | 6        # pareil pour un nid : 4 ou 5 araignée
 
 [volants]
 avertissement                 | 2        # s : le « ! » avant qu'il traverse ; pendant ce temps il suit ta hauteur, puis la garde
+suivi                         | 4        # m/s au plus : le « ! » rejoint ta hauteur lentement, en retard sur toi
 vitesse                       | 20       # m/s de plus que toi
 vagues                        | 2 / 10   # volants : à 9 m/s / à 30 m/s
 ecart dans les vagues         | 0.9 / 0.3        # s : à 9 m/s / à 30 m/s
