@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 18/11/2026, version Godot 0.44.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 18/11/2026, version Godot 0.45.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -64,10 +64,13 @@ tressée court tout le long du haut de l'écran (une chaîne au donjon, un câbl
 
 ## Les gardes du temple (Histoire, décor)
 
-Deux guerriers masqués de feuilles (PixelLab, 0.44) : l'un au masque de bois et à la lance, l'autre au masque
-rouge à plumes et à la massue. Ils sortent de l'entrée du temple après l'explosion et courent derrière Pépito,
-sur le bord gauche, sans jamais l'atteindre ; à leur « DEMI-TOUR !! » (1000 m) ils s'enfuient. Ils ne font
-pas mal.
+Deux guerriers masqués de feuilles (PixelLab, 0.44) : **Pointu**, au masque de bois et à la lance, et **Chef
+Massue**, au masque rouge à plumes et à la massue. Ils se sont enfermés avec Pépito en faisant s'écrouler
+l'entrée. Après l'explosion, ils sortent du temple derrière lui, à distance, pendant que la caméra reste
+figée ; quand elle le rattrape, ils reviennent très vite juste derrière lui (bord gauche) sans jamais
+l'atteindre ; à leur « DEMI-TOUR » (1000 m, Vorace n'est plus loin) ils s'enfuient. Ils ne font pas mal,
+mais si Pépito se plante (dernier cœur) avant leur demi-tour, ils lui sautent dessus : un nuage de bagarre,
+puis il est ramené vers le temple, attaché sous une broche posée sur leurs têtes (0.45).
 
 ## Amis et trésors
 
