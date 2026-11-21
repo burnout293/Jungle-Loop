@@ -1,4 +1,4 @@
-# Jungle Loop — rapport d'économie (0.46, 20/11/2026)
+# Jungle Loop — rapport d'économie (0.46, 20/11/2026 ; § 6 : 0.47, 21/11/2026)
 
 Question : avec tes prix du 20/11, est-ce que **20 courses = le tout début, 200 = le milieu, 800 = la fin
 (les dernières améliorations)** ?
@@ -121,3 +121,21 @@ Il reste un trou entre la course 600 et la course 800. Il vaut mieux le remplir 
 
 **Niveaux** : les premiers niveaux plus courts, par exemple 300, 500, 700 points, puis 1000. Le niveau 2
 arriverait ainsi vers la course 5. Il faut une petite modification du code.
+
+## 6. En 0.47 (ce qui est dans le jeu)
+
+Tes choix appliqués : premiers niveaux à 300 / 500 / 700 points, une urne par niveau (en plus de 20 × le
+niveau), un seul défi long à la fois, défis longs payés selon l'effort, Tambours chaque jour. Tout ça rapporte
+plus : avec la proposition A, un joueur moyen avait tout vers la course 500. La fin de boutique a donc été
+doublée (Vitalité 5000 / 60000 / 200000, Rembobinage 160000, Vol 3 120000…).
+
+| Joueur | Achats à la course 20 | à la 200 | Tout acheté |
+|---|---|---|---|
+| Prudent | 4 | 37 | 51 sur 55 à la course 800 |
+| Moyen | 6 | 42 | vers la course 725 |
+| Rapide | 8 | 48 | vers la course 550 |
+
+- **Le début** va plus vite : niveau 3 et 6 achats à la course 20 (contre niveau 2 et 3 achats).
+- **Les niveaux** rapportent beaucoup sur la fin (20 × le niveau, et une urne d'environ 180 pièces) : plafonner
+  les pièces d'un niveau (par exemple à 600) calmerait la fin sans toucher au début.
+- **Les skins** ne coûtent pas de pièces (urnes et éclats) : ils n'allongent pas la boutique.

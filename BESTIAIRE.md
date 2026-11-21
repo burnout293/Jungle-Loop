@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 18/11/2026, version Godot 0.46.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 18/11/2026, version Godot 0.47.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -70,11 +70,15 @@ l'entrée. Après l'explosion, ils sortent du temple derrière lui, à distance,
 figée ; quand elle le rattrape, ils reviennent très vite juste derrière lui (bord gauche) sans jamais
 l'atteindre ; à leur « DEMI-TOUR » (1000 m, Vorace n'est plus loin) ils s'enfuient. Ils ne font pas mal,
 mais si Pépito se plante (dernier cœur) avant leur demi-tour, ils lui sautent dessus : un nuage de bagarre,
-puis il est ramené vers le temple, attaché sous une broche posée sur leurs têtes (0.45).
+puis il est ramené vers le temple, attaché sous une broche posée sur leurs têtes (0.45). Depuis la 0.47, ils
+reviennent le chercher où qu'il tombe (seul, hors boss), même après leur demi-tour et en Run illimitée ; avec
+un couteau suisse il peut s'évader (couper les cordes au bon moment), et ils s'enfuient. Leurs skins (0.47) :
+Feuilles d'automne, Nuit, Feu.
 
 ## Amis et trésors
 
 - **Singes** dans les arbres, à saluer en passant.
+- **Plumes de toucan** et **urnes** (0.47, PixelLab), qui flottent comme le sablier.
 - **Pièces** (et 27 dessins de pièces dans `assets/patterns.txt`, dont certains dans le ciel, à n'attraper qu'avec le Vol), **gemmes** jaune, rouge, bleue, **cœurs**.
 
 ## Retirés

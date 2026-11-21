@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 20/11/2026, **version Godot 0.46.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 21/11/2026, **version Godot 0.47.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -96,7 +96,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Pas de campement (Vol) | rester 2,6 s à la même hauteur (à 1,75 m près) amène un volant visé sur toi, puis un autre 1,6 s plus tard si tu y restes ; jamais deux volants à la fois, ni quand un danger à ta hauteur (à 4 m près) arrive déjà ; sans le Vol, rien de tel (le sol est ta place) | `CAMP_*`, `camp` |
 | Araignées (0.32) | bien plus nombreuses : suspendu ×8 entrées, motif « araignées » ×5 (0.42 ; 2 ou 3 à la suite : une jaune immobile, des rouges ; 1,15 s d'écart à la vitesse prévue, 11 m au moins, autant après la file) ; **nids** ×6 (0.44, comme avec la libellule) : 4 ou 5 araignées à 5 m d'écart, toutes à l'écran ensemble : une jaune basse à sauter, au-dessus de ton saut seulement des hors d'atteinte (11,65 m), ailleurs au-dessus de ta tête (6,8 ; 9,4 ou 11,65 m), dès 1500 m parfois une à hauteur de tête, loin du saut ; **jaunes immobiles, rouges qui montent et descendent de 2,5 m de chaque côté en 2,4 s**, du sol jusqu'au plafond ; une colonne bouge d'un bloc ; **jamais plus de 2 l'une au-dessus de l'autre** (0.34 : une troisième n'est pas posée ; aussi la porte et la tour de la libellule) | `SPIDER_*`, `SPIDER_COLUMN`, `add_hover` |
 | Vagues de volants | 3 fois plus souvent qu'un motif simple (0.42 ; `vagues, poids`) ; 2 à 10 volants, de 0,9 s d'écart à 9 m/s jusqu'à 0,3 s à 30 m/s ; à pied 0,85 s d'écart au moins (0.44 : chacun suit ta hauteur, chacun se saute) ; avec le Vol l'écart de la vague ; rien d'autre sur la route pendant une vague | `WAVE_*`, `_wave` |
-| Objets rares | une vie (dans une bulle) ou un sablier (plus gros, sans bulle), qui zigzaguent entre 1,5 et 7,25 m (0,7 s par aller ; à portée de saut), un tous les 1 400 à 2 400 m environ (dès 300 m). Une fois à l'écran, ils avancent à **75 % de ta vitesse** (0.44, les deux) : ils restent longtemps en vue. Le sablier ôte **20 % de ta vitesse** du moment (pour le reste de la course ; en Histoire, du décor) | `BONUS_*`, `add_bonus`, `BRAKE_SHARE`, `BRAKE_PACE` |
+| Objets rares | seul : un sablier, une plume de toucan ou une urne (0.47 : plus de vies volantes ; 40 % sablier, 45 % plume, le reste une urne, une par course au plus, dès 600 m ; à deux : rien), qui zigzaguent entre 1,5 et 7,25 m (0,7 s par aller ; à portée de saut), un tous les 1 400 à 2 400 m environ (dès 300 m). Une fois à l'écran, ils avancent à **75 % de ta vitesse** (0.44, les deux) : ils restent longtemps en vue. Le sablier ôte **20 % de ta vitesse** du moment (pour le reste de la course ; en Histoire, du décor) | `BONUS_*`, `add_bonus`, `BRAKE_SHARE`, `BRAKE_PACE` |
 | Toujours esquivable | vérifié par un banc qui essaie toutes les façons de jouer image par image : à pied (sauts tapés ou tenus de 0,1 à 0,5 s) et avec le Vol (tenu ou relâché à chaque image, montée 12 m/s, celle du niveau 1, vraie chute ×1,2), 43 200 images chacun (12 min) : aucun passage impossible ; un campeur volant prend 17 à 21 coups par minute | bancs fair_bfs, fly_tests |
 | Suspendu | araignée (forêt et ruines) / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 150 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
 | Mise en avant des dangers | façon 5 (son choix du 17/11) : contour sombre et bord éclairé en haut à gauche sur tout ce qui fait mal, décor de fond et décor du chemin assombris ; liseré rouge en plus en option (Réglages, Accessibilité) | `LOOK`, `setDangerRim` |
@@ -202,25 +202,26 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 | Double saut | 3 | 1600 |  |
 | Aimant | 4 | 600 / 1600 / 3600 | 2,75 / 4,25 / 6 m |
 | Gemmes dispersées | 4 | 1000 / 1500 / 3000 | 1,2 / 2,2 / 3,5 % |
-| Fana de TNT (bouton) | 5 | 2000 / 4000 / 6000 | tout ce qui est devant toi saute (pas les boss) ; recharge 25 / 18 / 12 s |
+| Fana de TNT (bouton) | 5 | 2000 / 4000 / 50000 | tout ce qui est devant toi saute (pas les boss) ; recharge 25 / 18 / 12 s |
 | Relique altérée | 5 | 2600 / 3600 / 4600 | 6 / 10 / 15 % d'éthérées ; le décor ne change plus |
-| Vol (pouvoir) | 5 | 4800 / 7000 / 10000 | montée 12 / 13,5 / 15 m/s |
+| Vol (pouvoir) | 5 | 4800 / 40000 / 120000 | montée 12 / 13,5 / 15 m/s |
 | Sprint (pouvoir) | 5 | 4000 | +4 m/s |
-| Sphère (pouvoir) | 5 | 6000 |  |
+| Sphère (pouvoir) | 5 | 60000 |  |
 | Trèfle | 6 | 800 / 2400 | voir § 5 |
-| Ami de la nature | 6 | 1200 / 2800 / 6000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
-| Vitalité | 7 | 5000 / 12000 / 25000 | 2 / 3 / 4 cœurs |
-| Esquive (bouton) | 8 | 1200 / 2800 / 5600 | 40 m d'un coup ; recharge 14 / 10 / 7 s |
-| RedMonster (bouton) | 8 | 2500 / 5000 / 10000 | vitesse ×2 pendant 5 / 10 / 20 s ; recharge 30 / 35 / 45 s depuis la gorgée ; la route reste posée pour ta vitesse à toi ; à deux, pour les deux |
-| Bottes de métal (bouton) | 10 | 2500 / 5500 | secousse à 3 / 4,5 m ; recharge 8 / 5 s |
-| Sablier | 12 | 5000 / 10000 | 3 / 4,5 s, recharge 20 s |
-| Rembobinage | 12 | 10000 | 1 fois par course |
+| Ami de la nature | 6 | 1200 / 2800 / 40000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
+| Vitalité | 7 | 5000 / 60000 / 200000 | 2 / 3 / 4 cœurs |
+| Esquive (bouton) | 8 | 1200 / 2800 / 40000 | 40 m d'un coup ; recharge 14 / 10 / 7 s |
+| RedMonster (bouton) | 8 | 2500 / 30000 / 80000 | vitesse ×2 pendant 5 / 10 / 20 s ; recharge 30 / 35 / 45 s depuis la gorgée ; la route reste posée pour ta vitesse à toi ; à deux, pour les deux |
+| Bottes de métal (bouton) | 10 | 2500 / 30000 | secousse à 3 / 4,5 m ; recharge 8 / 5 s |
+| Sablier | 12 | 30000 / 100000 | 3 / 4,5 s, recharge 20 s |
+| Rembobinage | 12 | 160000 | 1 fois par course |
 | Gorille : Dompté ; Aimant (Montures) | 5 ; 5 | 1800 / 3200 ; 1000 / 2000 | voir § 6 ; aimant 4,25 / 6 m sur lui |
 | Rhino : Dompté ; Aimant | 3 ; 3 | 800 / 2000 ; 1000 / 2000 | pareil |
 | Libellule : Dompté ; Aimant | 7 ; 7 | 2500 / 4000 ; 1000 / 2000 | pareil |
 
-Ses prix du 20/11 (0.46) ; tout acheter coûte 211 700 pièces. Ce que ça donne au fil des courses :
-`RAPPORT-ECONOMIE.md` ; avec des skins : `RAPPORT-SKINS.md`.
+Ses prix du 20/11 (0.46), la fin de boutique bien plus chère en 0.47 (les urnes, les défis et les Tambours
+rapportent aussi) : tout acheter coûte 1 128 600 pièces ; le joueur moyen finit vers la course 725. Ce que
+ça donne au fil des courses : `RAPPORT-ECONOMIE.md` (§ 6 pour la 0.47).
 
 Emplacements d'équipement : 3 (`MAX_EQUIPPED`). **Prix et niveau requis se changent dans
 `reglages/progression.txt`** (section `[ameliorations]`), leurs effets dans `reglages/equilibrage.txt`
@@ -237,8 +238,8 @@ valeur d'origine. Après un changement : réexporter le jeu.
 | Valeur | Aujourd'hui | Ligne du fichier |
 |---|---|---|
 | Expérience | 1 point tous les 20 m courus, plus celle des défis | `[niveaux] metres par point` |
-| Niveau | 1000 points chaque niveau, sans palier | `[niveaux] points par niveau` |
-| Récompense d'un niveau | 20 pièces × le niveau atteint | `[niveaux] pieces par niveau` |
+| Niveau | 300, 500, 700 points pour les trois premiers (0.47), puis 1000 chaque niveau | `[niveaux] points par niveau` |
+| Récompense d'un niveau | 20 pièces × le niveau atteint, et une urne (0.47) | `[niveaux] pieces par niveau` |
 | Annonce | rien pendant la course ; à la fin, sur l'écran de comptage, la barre de niveau monte avec l'expérience gagnée (vite puis de plus en plus lentement, un son de plus en plus aigu ; son, confettis et « Niveau supérieur ! » à chaque niveau passé), puis un panneau : le niveau atteint, les pièces reçues, ce qui se débloque dans la boutique (retour au menu depuis la pause : le panneau seul) | `tally_play`, `show_levels` (main.gd) |
 | Fin de course, l'écran | comptage d'abord, dans un seul panneau (0.44) : les mètres montent de 0, lentement puis de plus en plus vite (200 m en 0,5 s, 2300 m en 4 s, 6 s au plus), le nombre bat toutes les 0,8 s de plus en plus fort ; puis un coup (il enfle et retombe) avec les pièces gagnées et le record ; puis la barre de niveau, le panneau des niveaux passés, et « Suivant » (une touche n'importe où finit l'étape en cours) ; puis l'écran de fin : la photo arrive en tournant ; chaque défi avance de là où la course l'a trouvé à là où elle l'a laissé, un réussi brille (« RÉUSSI ! » et ce qu'il paie), s'efface, et son remplaçant apparaît | `tally_play`, `over_play` |
 | Anciennes sauvegardes | expérience divisée par 20 au premier lancement de la 0.33 (1 point valait 1 m), défis en cours payés selon le fichier | `sanitize` (save.gd) |
@@ -270,6 +271,23 @@ Plusieurs lignes du même défi dans le fichier : ses paliers (0.46). Le 1er est
 ce défi revient au palier suivant ; après le dernier, le dernier revient (`questSteps` dans la sauvegarde). Les
 défis de monture ne sont proposés qu'une fois ton record au-delà de 700 m (la 1re monture). Un missile compte
 quand il passe derrière toi sans t'avoir touché (pas ceux de la Relique altérée, inoffensifs).
+
+Défis longs (0.47) : la 5e colonne « long » dans le fichier ; jamais plus d'un à la fois (`longs a la fois`),
+sinon ils prenaient les trois places. Une **plume de toucan** remplace un défi par un autre (bouton plume sur
+les défis de l'accueil) ; 3 plumes au plus, une de trop vaut 25 pièces (`[plumes]`).
+
+## 9 bis. Objets, urnes, skins, évasion, Tambours (0.47)
+
+| Valeur | Aujourd'hui | Où |
+|---|---|---|
+| Consommables | en stock (le Trésor les montre) ; à la sortie du temple, seul, ceux qu'on a s'affichent 3 s en bas à gauche et on peut en prendre **un** : Bouclier (encaisse le prochain coup), Aimant simple (l'Aimant niveau 2 toute la course), Idole dorée (+50 % sur les pièces ramassées), Corne de brousse (une monture au hasard t'attend juste devant) | `SaveData.CONSUMABLES`, `_offer_tick`, `CONS_MAGNET`, `IDOL_MUL`, `call_mount` |
+| Couteau suisse | en stock, jamais proposé à la sortie : il sert quand les pygmées t'ont capturé | `escape_start` |
+| Capture | seul, n'importe où, n'importe quel mode, hors boss : à la tête plantée, les pygmées accourent (de derrière l'écran s'ils n'étaient pas là, 0,8 s), puis le bond, la bagarre et la broche comme en 0.45 | `capture_ok`, `CATCH_*` |
+| Évasion | sur la broche, avec un couteau : 5 s pour le prendre ; puis une barre où un curseur et une zone font des allers-retours ; une touche curseur dans la zone coupe une corde (3, une de plus par évasion déjà faite dans la course), à côté coûte 1,2 s ; 6 s en tout. La zone : 16 % de la barre, +1 % par lanterne allumée (40 % au plus), 15 % plus petite et curseur 25 % plus rapide par évasion déjà faite. Libre : un cœur, 2,5 s intouchable, la route devant vidée, la caméra le rattrape, les pygmées s'enfuient | `ESC_*`, `_release` |
+| Lanternes | celles de la forêt, allumées en passant devant (déjà là), comptées pour l'évasion | `run.lanterns` |
+| Urnes | une par niveau, une sur la route parfois ; ouvertes dans le **Trésor** (bouton urne de l'accueil, avec leur nombre) : commune, rare 15 %, légendaire 2 % ; une rare au plus tard toutes les 10 urnes, une légendaire toutes les 50. Commune ou rare : une chose tirée au sort ; légendaire : tout (3000-5000 pièces, 2 couteaux, 80 éclats, un skin) | `Treasure`, `[urnes]` |
+| Skins | standards en couleurs (17 : Pépito 5, chaque monture 3, les pygmées 3), faits en code à partir des images (aucune image nouvelle) ; onglet Skins de la boutique : aperçu, « Porter », ou 60 éclats ; un doublon d'urne donne 30 éclats. Rares et légendaires : plus tard | `Skins`, `skin_shards` |
+| Tambours des pygmées | bouton tambour de l'accueil (point doré tant que celle du jour est à prendre) : 30 s, deux gros tambours en bas (grave à gauche, aigu à droite, ou les flèches), les coups tombent d'en haut ; parfait ±0,07 s (2 points), bien ±0,16 s (1) ; le rythme du jour est le même pour tous, de 96 à 132 battements par minute. Score en % : 30 % 300 pièces, 55 % une urne, 75 % un couteau suisse, 90 % une urne et 30 éclats de plus. Une récompense par jour, entraînement à volonté | `Drums`, `[tambours]` |
 
 ## 10 bis. Jouer à deux (coop)
 
