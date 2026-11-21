@@ -7,30 +7,37 @@
 
 [niveaux]
 metres par point  | 20      # un point d'expérience tous les 20 m courus
-points par niveau | 1000    # le même nombre de points pour chaque niveau
-pieces par niveau | 20      # un niveau rapporte ce nombre × le niveau atteint (niveau 5 : 100 pièces)
+points par niveau | 300 / 500 / 700 / 1000   # un par niveau (0.47 : les premiers vont vite), le dernier pour tous les suivants
+pieces par niveau | 20      # un niveau rapporte ce nombre × le niveau atteint (niveau 5 : 100 pièces), et une urne (0.47)
+
+[plumes]
+# les plumes de toucan (0.47) : ramassées en course, chacune remplace un défi par un autre
+au plus            | 3       # gardées en même temps
+une de trop vaut   | 25      # pièces, pour une plume ramassée quand tu en as déjà assez
 
 [ameliorations]
-# identifiant  | niveau requis | prix de chaque niveau, séparés par /   (0.46 : ses prix du 20/11)
+# identifiant  | niveau requis | prix de chaque niveau, séparés par /
+# 0.46 : ses prix du 20/11 ; 0.47 : la fin de boutique bien plus chère (les urnes, les défis et les Tambours
+# rapportent aussi : le joueur moyen finit vers la course 725, voir RAPPORT-ECONOMIE.md)
 lastLeap       | 2  | 400 / 600 / 800      # Dernier élan
 spring         | 2  | 1000 / 2000          # Ressort
 breaker        | 3  | 800                  # Brise-tout
 doubleJump     | 3  | 1600                 # Double saut
 magnet         | 4  | 600 / 1600 / 3600    # Aimant
 scatter        | 4  | 1000 / 1500 / 3000   # Gemmes dispersées
-tnt            | 5  | 2000 / 4000 / 6000   # Fana de TNT
+tnt            | 5  | 2000 / 4000 / 50000    # Fana de TNT
 drunk          | 5  | 2600 / 3600 / 4600   # Relique altérée
 lucky          | 6  | 800 / 2400           # Trèfle
-nature         | 6  | 1200 / 2800 / 6000   # Ami de la nature
-heart          | 7  | 5000 / 12000 / 25000 # Vitalité : 2, 3 puis 4 cœurs
-dash           | 8  | 1200 / 2800 / 5600   # Esquive
-monster        | 8  | 2500 / 5000 / 10000  # RedMonster : 5, 10 puis 20 s à vitesse ×2 (pas dans sa liste : inchangé)
-boots          | 10 | 2500 / 5500          # Bottes de métal
-slow           | 12 | 5000 / 10000         # Sablier
-flight         | 5  | 4800 / 7000 / 10000  # Vol : montée 12, 13,5 puis 15 m/s
+nature         | 6  | 1200 / 2800 / 40000    # Ami de la nature
+heart          | 7  | 5000 / 60000 / 200000  # Vitalité : 2, 3 puis 4 cœurs
+dash           | 8  | 1200 / 2800 / 40000    # Esquive
+monster        | 8  | 2500 / 30000 / 80000   # RedMonster : 5, 10 puis 20 s à vitesse ×2
+boots          | 10 | 2500 / 30000           # Bottes de métal
+slow           | 12 | 30000 / 100000         # Sablier
+flight         | 5  | 4800 / 40000 / 120000  # Vol : montée 12, 13,5 puis 15 m/s
 sprint         | 5  | 4000                 # Sprint
-sphere         | 5  | 6000                 # Sphère
-rewind         | 12 | 10000                # Rembobinage
+sphere         | 5  | 60000                  # Sphère
+rewind         | 12 | 160000                 # Rembobinage
 # les montures, chacune les siennes (onglet Montures)
 gorillaTamed     | 5 | 1800 / 3200        # Gorille dompté
 gorillaMagnet    | 5 | 1000 / 2000        # Aimant du gorille
@@ -43,6 +50,8 @@ dragonflyMagnet  | 7 | 1000 / 2000        # Aimant de la libellule
 # identifiant | objectif | pièces | expérience (en points : 1000 = un niveau)
 # Le même identifiant sur plusieurs lignes : ses paliers, dans l'ordre. Le 1er est proposé d'abord ; une fois
 # réussi, ce défi revient au palier suivant ; après le dernier, le dernier revient.
+# 5e colonne « long » : un défi de plusieurs dizaines de courses ; il n'y en a jamais plus que « longs à la fois ».
+longs a la fois | 1
 dist1    | 800   | 40  | 120     # Cours … m en une seule course
 distT    | 3000  | 60  | 200     # Cours … m en tout
 coins1   | 60    | 40  | 120     # Ramasse … pièces en une seule course
@@ -58,14 +67,55 @@ breaks   | 10    | 50  | 150     # Casse … obstacles (Brise-tout, Esquive, Bot
 mounts   | 2     | 60  | 180     # Chevauche … montures
 dodges   | 3     | 60  | 180     # Esquive … nuées
 # 0.46 : les mètres sur chaque monture (proposés une fois ton record au-delà de 700 m, la 1re monture)
-gorilla   | 2000  | 60  | 180     # Parcours … m avec le Gorille
-gorilla   | 20000 | 500 | 600
-rhino     | 4000  | 60  | 180     # Parcours … m avec le Rhino
-rhino     | 20000 | 600 | 700
-dragonfly | 3000  | 60  | 180     # Parcours … m avec la Libellule
-dragonfly | 15000 | 400 | 500
+# 0.47 : payés selon l'effort (environ le nombre de courses qu'il faut)
+gorilla   | 2000  | 150  | 180            # Parcours … m avec le Gorille (~14 courses)
+gorilla   | 20000 | 2000 | 600  | long    #   (~145 courses)
+rhino     | 4000  | 300  | 200  | long    # Parcours … m avec le Rhino (~45 courses)
+rhino     | 20000 | 2500 | 700  | long    #   (~220 courses)
+dragonfly | 3000  | 150  | 180            # Parcours … m avec la Libellule (~19 courses)
+dragonfly | 15000 | 1500 | 500  | long    #   (~95 courses)
 # 0.46 : les missiles (volants) passés sans te toucher
-darts1    | 3     | 20  | 80      # Esquive … missiles en une seule course
-darts1    | 15    | 300 | 350
-dartsT    | 30    | 180 | 200     # Esquive … missiles en tout
-dartsT    | 80    | 600 | 800
+darts1    | 3     | 20   | 80             # Esquive … missiles en une seule course
+darts1    | 15    | 1000 | 350  | long    #   (une course d'environ 4,4 km : un exploit)
+dartsT    | 30    | 100  | 200            # Esquive … missiles en tout (~6 courses)
+dartsT    | 80    | 250  | 800            #   (~17 courses)
+
+[urnes]
+# 0.47 : une urne par niveau atteint, parfois une sur la route (une par course au plus). Ouvertes dans le Trésor
+# (bouton de l'accueil). Chances en % (le reste : commune), et la garantie : au plus tard la n-ième urne sans
+# rare (ou sans légendaire) en donne une.
+rare                 | 15
+legendaire           | 2
+rare garantie        | 10
+legendaire garantie  | 50
+eclats pour un skin  | 60      # le prix d'un skin standard dans l'onglet Skins
+eclats d'un doublon  | 30      # un skin déjà à toi sorti d'une urne
+# ce qu'elles contiennent : rareté | objet | quantité (de / à) | poids. Une commune ou une rare donne UNE ligne
+# tirée au sort (selon les poids) ; une légendaire donne TOUTES ses lignes. Objets : pieces, plume, eclats,
+# skin, shield (Bouclier), magnet (Aimant simple), idol (Idole dorée), horn (Corne de brousse), knife (Couteau suisse).
+commune    | pieces  | 150 / 400   | 30
+commune    | plume   | 1           | 12
+commune    | shield  | 1           | 12
+commune    | magnet  | 1           | 12
+commune    | idol    | 1           | 8
+commune    | horn    | 1           | 8
+commune    | eclats  | 10 / 20     | 18
+rare       | knife   | 1           | 30
+rare       | skin    | 1           | 30
+rare       | pieces  | 1000 / 2000 | 15
+rare       | eclats  | 40 / 60     | 25
+legendaire | pieces  | 3000 / 5000 | 1
+legendaire | knife   | 2           | 1
+legendaire | eclats  | 80          | 1
+legendaire | skin    | 1           | 1
+
+[tambours]
+# 0.47 : les Tambours des pygmées (bouton de l'accueil), une récompense par jour, entraînement à volonté.
+duree   | 30          # secondes
+tempo   | 96 / 132    # battements par minute, au début / à la fin
+# à partir de ce score (en %) : ce qu'il donne ; toutes les lignes atteintes s'ajoutent
+30 | pieces  | 300
+55 | urne    | 1
+75 | couteau | 1
+90 | urne    | 1
+90 | eclats  | 30

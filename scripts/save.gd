@@ -40,6 +40,40 @@ static var UPGRADES := [
 	{"id": "dragonflyMagnet", "unlock": 4, "icon": "magnet", "kind": "passif", "power": true, "family": "mount", "mount": "dragonfly", "name": "Aimant de la libellule", "short": "Aimant", "desc": "Sur la libellule, les pièces viennent à toi, de plus en plus loin à chaque niveau.", "costs": [1500, 3500]},
 ]
 
+# The consumables (0.47), kept in stock (save.stock: id -> how many). Out of the temple, those in stock are
+# offered for 3 s and one may be taken (main.gd); the Couteau suisse is never offered: it is used from the
+# stock when the pygmies have caught him (the escape).
+const CONSUMABLES := [
+	{"id": "shield", "icon": "shield", "name": "Bouclier", "desc": "Un vieux bouclier en bois : il encaisse le prochain coup, puis se brise."},
+	{"id": "magnet", "icon": "magnet", "name": "Aimant simple", "desc": "Attire les pièces proches pendant toute la course."},
+	{"id": "idol", "icon": "idolgold", "name": "Idole dorée", "desc": "Toutes les pièces ramassées valent 50 % de plus pendant la course."},
+	{"id": "horn", "icon": "horn", "name": "Corne de brousse", "desc": "Un animal répond à l'appel et t'attend juste à la sortie du temple."},
+	{"id": "knife", "icon": "knife", "name": "Couteau suisse", "stock": true, "desc": "Capturé par les pygmées, tu peux t'en servir pour ronger tes liens et t'évader."},
+]
+
+static func consumable(id: String) -> Dictionary:
+	for c in CONSUMABLES:
+		if c["id"] == id:
+			return c
+	return {}
+
+static func stock(save: Dictionary, id: String) -> int:
+	return int(save["stock"].get(id, 0))
+
+## One more (or n) in stock.
+static func give(save: Dictionary, id: String, n: int = 1) -> void:
+	save["stock"][id] = stock(save, id) + n
+
+## One taken from the stock. False when there is none.
+static func use(save: Dictionary, id: String) -> bool:
+	if stock(save, id) <= 0:
+		return false
+	save["stock"][id] = stock(save, id) - 1
+	if save["stock"][id] == 0:
+		save["stock"].erase(id)
+	store(save)
+	return true
+
 # Taken out of the shop in 0.34 (Dompté and Aimant de monture are now one per animal; the Gros sac à dos is
 # gone): a save that had them gets back what they cost.
 const REMOVED := {"tamed": [1200, 2800], "mountMagnet": [1500, 3500], "jammer": [2400]}
@@ -73,7 +107,7 @@ static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
 		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
-		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "online": {}, "mountsOff": [], "xpv": 2}
+		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "feathers": 0, "stock": {}, "urns": 0, "urnPity": {"r": 0, "l": 0}, "shards": 0, "skins": {"owned": [], "worn": {}}, "drums": {"day": "", "best": 0}, "online": {}, "mountsOff": [], "xpv": 2}
 
 static func _int(x) -> int:
 	if (x is int or x is float) and x > 0 and is_finite(float(x)):
@@ -134,6 +168,29 @@ static func sanitize(raw) -> Dictionary:
 	var xp = raw.get("xp")
 	s["xp"] = float(xp) if (xp is int or xp is float) and xp > 0 else 0.0
 	s["questsDone"] = _int(raw.get("questsDone"))
+	s["feathers"] = mini(_int(raw.get("feathers")), int(Progress.cfg["feather_max"]))
+	s["urns"] = _int(raw.get("urns"))
+	s["shards"] = _int(raw.get("shards"))
+	if raw.get("drums") is Dictionary:               # the drums: the day of the last reward, the best score
+		s["drums"] = {"day": str(raw["drums"].get("day", "")), "best": mini(100, _int(raw["drums"].get("best")))}
+	if raw.get("urnPity") is Dictionary:             # urns opened since the last rare, the last legendary
+		s["urnPity"] = {"r": _int(raw["urnPity"].get("r")), "l": _int(raw["urnPity"].get("l"))}
+	var sk = raw.get("skins")
+	if sk is Dictionary:                              # the skins owned, and the one worn by each (0.47)
+		if sk.get("owned") is Array:
+			for id in sk["owned"]:
+				if id is String and not Skins.skin(id).is_empty() and not id in s["skins"]["owned"]:
+					s["skins"]["owned"].append(id)
+		if sk.get("worn") is Dictionary:
+			for target in sk["worn"]:
+				var id = sk["worn"][target]
+				if id is String and id in s["skins"]["owned"] and Skins.skin(id).get("target") == target:
+					s["skins"]["worn"][target] = id
+	if raw.get("stock") is Dictionary:               # the consumables in stock (0.47)
+		for c in CONSUMABLES:
+			var n = _int(raw["stock"].get(c["id"]))
+			if n > 0:
+				s["stock"][c["id"]] = n
 	if raw.get("questSteps") is Dictionary:          # how many times each kind of objective was completed
 		for k in raw["questSteps"]:
 			if Progress.KINDS.has(k) and _int(raw["questSteps"][k]) > 0:
@@ -153,6 +210,8 @@ static func sanitize(raw) -> Dictionary:
 			var p = q.get("p")
 			s["quests"].append({"k": q["k"], "goal": _int(q["goal"]), "p": minf(_int(q["goal"]), float(p) if (p is int or p is float) and p > 0 else 0.0),
 				"reward": _int(q.get("reward")), "xp": _int(q.get("xp")) if _int(q.get("xp")) > 0 else 40})
+			if q.get("long") == true:
+				s["quests"][s["quests"].size() - 1]["long"] = true
 	# experience: since 0.33 a point is 20 m (it was a metre). An older save is brought to the new scale,
 	# and its objectives under way pay what reglages/progression.txt says.
 	if raw.get("xpv") != 2:

@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.46.0"
+const VERSION := "0.47.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -121,11 +121,21 @@ var update_sure := false               # « à jour » said: pressing again relo
 const INVITE_SCREENS := ["menu", "shop", "friends", "over", "tally", "settings"]
 var friends_tab := "friends"
 var board: Array = []                  # the friends' board, as the server sent it
+var offer_t := 0.0                     # the consumables offered out of the temple: seconds left (0.47)
+var treasure: CanvasLayer = null       # the Trésor (0.47): the urns to break, what is in the bag
+var urn_busy := false                  # an urn is being broken (its shake): one at a time
+var picked_skin := ""                  # the shop's Skins tab: the row picked ("<target>:" for an original look)
+var drums: Drums = null                # the pygmies' drums (0.47), while played
+var drums_daily := false               # ... for today's reward (else for practice)
+var drums_tick := 0                    # ... the next shaker to hear
+const OFFER_TIME := 3.0
 
 # ---------- start ----------
 
 func _ready() -> void:
 	Progress.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))   # prices, levels, objectives
+	Treasure.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))   # the urns (0.47)
+	Drums.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))      # the drums' rewards (0.47)
 	Tune.load_file()                              # reglages/equilibrage.txt: the game's numbers (before Debug takes its origin)
 	Game.set_talks(FileAccess.get_file_as_string("res://reglages/dialogues.txt"))   # Histoire: what the guards say
 	save = SaveData.load_save()
@@ -187,6 +197,7 @@ func _load() -> void:
 		_look_update.call_deferred(false)          # a newer version online: a « ! » on the gear
 	var t0 = Time.get_ticks_msec()
 	Art.load_all()
+	Skins.apply(save["skins"]["worn"])               # the skins worn (0.47)
 	var t_art = Time.get_ticks_msec() - t0
 	Art.set_danger_rim(save["dangerRim"])
 	render.shift = save["alertShift"]
@@ -754,6 +765,7 @@ func _build_screens() -> void:
 	_build_score("pause")
 	_build_tally()
 	_build_friends()
+	_build_drums()
 	var turn = _label("Tourne l'écran pour jouer en grand ↻", ts("m"), INK)   # a phone held upright
 	turn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_place(turn, 0, 74, 569, 20)
@@ -915,6 +927,48 @@ func _build_hud() -> void:
 		w["cd-" + k] = cool
 	_place(acts, 569 - 12 - 300, 320 - 12 - 52, 300, 52)       # room for the five (three at most are equipped)
 	s.add_child(acts)
+	var offer = _hbox(8)                             # 0.47: the consumables in stock, offered for 3 s out of the temple
+	offer.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_place(offer, 12, 320 - 12 - 60, 250, 50)
+	offer.visible = false
+	s.add_child(offer)
+	w["offer"] = offer
+	var ob = _bar(10, 5, GOLD)
+	_place(ob, 12, 320 - 12 - 5, 120, 5)
+	ob.visible = false
+	s.add_child(ob)
+	w["offer-bar"] = ob
+	# 0.47: caught by the pygmies: the Couteau suisse offered, then the escape (a cursor, a zone, the ropes)
+	var esc = PanelContainer.new()
+	esc.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	esc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ec = _vbox(4)
+	ec.alignment = BoxContainer.ALIGNMENT_CENTER
+	w["esc-label"] = _label("", ts("m"), INK, 0)
+	w["esc-label"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ec.add_child(w["esc-label"])
+	var eb = EscapeBar.new()
+	eb.custom_minimum_size = Vector2(a(250), a(24))
+	eb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ec.add_child(eb)
+	w["esc-bar"] = eb
+	var kb = _button("S'évader", "gold", _use_knife)
+	kb.icon = icon("ico-knife")
+	kb.expand_icon = true
+	kb.add_theme_constant_override("icon_max_width", roundi(a(18)))
+	kb.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	kb.custom_minimum_size = Vector2(a(150), a(34))
+	ec.add_child(kb)
+	w["esc-knife"] = kb
+	var et = _bar(10, 6, GOLD)
+	et.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ec.add_child(et)
+	w["esc-time"] = et
+	esc.add_child(ec)
+	_place(esc, 569 / 2.0 - 140, 44, 280, 110)
+	esc.visible = false
+	s.add_child(esc)
+	w["esc"] = esc
 
 ## Paper falling over the screens: a buy (14 pieces), a record (60).
 func confetti(count: int) -> void:
@@ -944,6 +998,24 @@ class Confetti extends Control:
 		draw_set_transform(Vector2.ZERO)
 
 ## The shade sweeping round an active's button while it charges (conic-gradient in the web version).
+## The escape's bar (0.47): the zone (green) and the cursor (gold) going to and fro, as Game keeps them.
+class EscapeBar extends Control:
+	var e: Dictionary = {}
+	func _draw() -> void:
+		if e.is_empty():
+			return
+		var W_ = size.x
+		var H_ = size.y
+		draw_rect(Rect2(0, 0, W_, H_), Color("#1a1024"))
+		draw_rect(Rect2(2, 2, W_ - 4, H_ - 4), Color("#3b2a1c"))
+		var zw: float = e["w"] * (W_ - 4)
+		var zx: float = 2 + e["zone"] * (W_ - 4) - zw / 2
+		draw_rect(Rect2(zx, 2, zw, H_ - 4), Color("#6cc22e"))
+		draw_rect(Rect2(zx, 2, zw, 3), Color("#a8f060"))
+		var cx: float = 2 + e["cur"] * (W_ - 4)
+		draw_rect(Rect2(cx - 3, -3, 6, H_ + 6), Color("#1a1024"))
+		draw_rect(Rect2(cx - 1.5, -2, 3, H_ + 4), Color("#ffd35c"))
+
 class Cooldown extends Control:
 	var k := 0.0
 	func _draw() -> void:
@@ -999,6 +1071,65 @@ func _build_menu() -> void:
 	pals.visible = Net.enabled()
 	w["menu-friends"] = pals
 	s.add_child(pals)
+	var urnb = Button.new()                          # 0.47: the Trésor (urns, the bag); a gold count when urns wait
+	urnb.focus_mode = Control.FOCUS_NONE
+	_kit_square(urnb, "blank", 36)
+	urnb.icon = icon("ico-urn")
+	urnb.expand_icon = true
+	urnb.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	urnb.add_theme_constant_override("icon_max_width", roundi(a(20)))
+	var ux = M + (84 if Net.enabled() else 42)      # (after Amis when it is there)
+	_place(urnb, ux, M, 36, 36)
+	var on_urns = func() -> void:
+		Audio.sfx("click")
+		_treasure()
+	urnb.pressed.connect(on_urns)
+	s.add_child(urnb)
+	w["menu-urnb"] = urnb
+	var badge = PanelContainer.new()
+	var bdot = _flat(GOLD, LINE, 1.0)
+	bdot.set_corner_radius_all(roundi(a(8)))
+	bdot.content_margin_left = a(3)
+	bdot.content_margin_right = a(3)
+	bdot.content_margin_top = 0
+	bdot.content_margin_bottom = 0
+	badge.add_theme_stylebox_override("panel", bdot)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bl = _label("0", ts("s"), LINE, 0)
+	bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.add_child(bl)
+	_place(badge, ux + 23, M - 5, 18, 16)
+	badge.visible = false
+	s.add_child(badge)
+	w["menu-urns"] = badge
+	w["menu-urns-n"] = bl
+	var drumb = Button.new()                         # 0.47: the pygmies' drums
+	drumb.focus_mode = Control.FOCUS_NONE
+	_kit_square(drumb, "blank", 36)
+	drumb.icon = icon("ico-drum")
+	drumb.expand_icon = true
+	drumb.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	drumb.add_theme_constant_override("icon_max_width", roundi(a(24)))
+	var on_drums = func() -> void:
+		Audio.sfx("click")
+		go("drums")
+	drumb.pressed.connect(on_drums)
+	_place(drumb, ux + 42, M, 36, 36)
+	s.add_child(drumb)
+	w["menu-drumb"] = drumb
+	var ddot = PanelContainer.new()
+	var dsb = _flat(GOLD, LINE, 1.0)
+	dsb.set_corner_radius_all(roundi(a(8)))
+	dsb.set_content_margin_all(0)
+	ddot.add_theme_stylebox_override("panel", dsb)
+	ddot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var dbang = _label("!", ts("m"), LINE, 0)
+	dbang.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	dbang.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	ddot.add_child(dbang)
+	_place(ddot, ux + 42 + 25, M - 5, 16, 16)
+	s.add_child(ddot)
+	w["menu-drums"] = ddot
 	s.add_child(gear)
 	s.add_child(newer)
 	# the stone plaque of the title, its letters hopping one after the other
@@ -1214,14 +1345,33 @@ func _set_level(box: PanelContainer, full: bool) -> void:
 func _quest_cards(holder: VBoxContainer) -> void:
 	for ch in holder.get_children():
 		ch.queue_free()
+	var reroll = w.has("menu-quests") and holder == w["menu-quests"] and int(save["feathers"]) > 0
 	for q in save["quests"]:
-		holder.add_child(_quest_card(q, float(q["p"])))
+		holder.add_child(_quest_card(q, float(q["p"]), reroll))
 
 ## One objective's card, as it stands at `p`: text, rewards, progress (the end moves it on: _card_at).
-func _quest_card(q: Dictionary, p: float) -> PanelContainer:
+func _quest_card(q: Dictionary, p: float, reroll: bool = false) -> PanelContainer:
 	var card = _box()
 	var col = _vbox(3)
 	var row = _hbox(6)
+	if reroll:                                       # 0.47: a toucan's feather, to change this objective
+		var fb = Button.new()
+		fb.focus_mode = Control.FOCUS_NONE
+		_style_button(fb, "square")
+		fb.custom_minimum_size = Vector2(a(26), a(26))
+		fb.icon = icon("ico-feather")
+		fb.expand_icon = true
+		fb.add_theme_constant_override("icon_max_width", roundi(a(18)))
+		fb.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		fb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		fb.tooltip_text = "Changer ce défi (une plume)"
+		var on_feather = func() -> void:
+			if Progress.reroll(save, q):
+				SaveData.store(save)
+				Audio.sfx("feather")
+				refresh_menu()
+		fb.pressed.connect(on_feather)
+		row.add_child(fb)
 	var txt = _label("%s (%d/%d)" % [Progress.quest_text(q), floori(p), q["goal"]], ts("s"), INK, 0)
 	txt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	txt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2015,6 +2165,10 @@ func show_screen(name: String) -> void:
 
 func refresh_menu() -> void:
 	_set_level(w["menu-level"], false)
+	var nu = int(save["urns"])
+	w["menu-urns"].visible = nu > 0
+	w["menu-drums"].visible = Drums.free_today(save)
+	w["menu-urns-n"].text = str(nu) if nu < 100 else "99+"
 	_set_coins(w["menu-coins"], save["coins"])
 	_quest_cards(w["menu-quests"])
 	_send_kit()
@@ -2179,6 +2333,7 @@ func _import(code: String) -> void:
 
 func _after_load() -> void:
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
+	Skins.apply(save["skins"]["worn"])
 	Art.set_danger_rim(save["dangerRim"])
 	render.shift = save["alertShift"]
 	refresh_settings()
@@ -2449,7 +2604,7 @@ func refresh_shop(just_bought: String = "") -> void:
 			if u.get("mount", "") == open_k:
 				list.add_child(_up_row(u, picked_mount, just_bought))
 		var stage = MountStage.new()
-		stage.tex = icon("mount-" + open_k)
+		stage.tex = Art.tex.get("mount-" + open_k, icon("mount-" + open_k))   # (with its worn skin)
 		stage.frames = int(Art.meta["mounts"][open_k]["frames"])
 		stage.flies = Game.MOUNTS[open_k].get("fly", false)
 		stage.custom_minimum_size = Vector2(a(236), a(134))
@@ -2465,13 +2620,9 @@ func refresh_shop(just_bought: String = "") -> void:
 			w["card-actions"].add_child(_button("Activer" if off_o else "Désactiver", "small on" if off_o else "small plain", on_toggle))
 			return                                   # an animal's card
 	if tab == "skin":
-		var l = _label("Bientôt : la tenue, les cheveux, la cape et les baskets du héros, à changer séparément.", ts("s"), DIM, 0)
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l.custom_minimum_size.x = a(226)
-		list.add_child(l)
-		_card("Skins", "À venir.", "")
-		_show_demo("sprint", 1)
+		_skins_tab(list)
 		return
+	Skins.apply(save["skins"]["worn"])               # (a skin looked at in the Skins tab: back to the worn ones)
 	var full: bool = save["equipped"].size() >= SaveData.MAX_EQUIPPED
 	var shown: Array = SaveData.UPGRADES.filter(func(u): return SaveData.family(u) == tab)
 	shown.sort_custom(func(p, q): return p["unlock"] < q["unlock"] or (p["unlock"] == q["unlock"] and SaveData.UPGRADES.find(p) < SaveData.UPGRADES.find(q)))   # by the level they come at
@@ -2523,6 +2674,475 @@ func refresh_shop(just_bought: String = "") -> void:
 		b.disabled = not st["on"] and full
 		acts.add_child(b)
 	_fit_actions(acts, st, u)
+
+## The Skins tab (0.47): each target (Pépito, the mounts, the pygmies) under its name, its original look then
+## its skins; a skin picked is shown at once (the preview, and the game behind); owned, it is worn with
+## « Porter »; not owned, it comes out of the urns or is bought with shards (éclats).
+func _skins_tab(list: VBoxContainer) -> void:
+	w["shop-title"].text = "SKINS · %d ÉCLATS" % int(save["shards"])
+	var worn: Dictionary = save["skins"]["worn"]
+	var owned: Array = save["skins"]["owned"]
+	if picked_skin == "":
+		picked_skin = "pepito:"
+	var target: String = picked_skin.split(":")[0] if picked_skin.ends_with(":") else str(Skins.skin(picked_skin).get("target", "pepito"))
+	var look: Dictionary = worn.duplicate()          # what is shown: the picked skin, over the worn ones
+	if picked_skin.ends_with(":"):
+		look.erase(target)
+	else:
+		look[target] = picked_skin
+	Skins.apply(look)
+	for t in Skins.ORDER:
+		var head = _label(Skins.TARGETS[t]["name"].to_upper(), ts("s"), RELIC, 1.5)
+		list.add_child(head)
+		var orig_id: String = t + ":"
+		var orig_right = _note("Porté" if not worn.has(t) else "", RELIC)
+		var on_orig = func() -> void:
+			picked_skin = orig_id
+			refresh_shop()
+		list.add_child(_row(null, "Original", orig_right, picked_skin == orig_id, 0, on_orig))
+		for sk in Skins.of_target(t):
+			var id: String = sk["id"]
+			var right: Control
+			if worn.get(t, "") == id:
+				right = _note("Porté", RELIC)
+			elif id in owned:
+				right = _note("Possédé", DIM)
+			else:
+				right = _shards(int(Treasure.cfg["skin_shards"]), GOLD if int(save["shards"]) >= int(Treasure.cfg["skin_shards"]) else DIM)
+			var on_skin = func() -> void:
+				picked_skin = id
+				refresh_shop()
+			var row = _row(null, sk["name"], right, picked_skin == id, 0, on_skin)
+			list.add_child(row)
+		if t == "pygmies":                           # the pygmies have no preview run: one of them, alive
+			var stage = MountStage.new()
+			stage.tex = Art.tex.get("guard-club")
+			stage.frames = 8
+			stage.custom_minimum_size = Vector2(a(236), a(100))
+			stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			list.add_child(stage)
+	var sk2 = Skins.skin(picked_skin)
+	var acts: HBoxContainer = w["card-actions"]
+	if sk2.is_empty():
+		_card(Skins.TARGETS[target]["name"] + " · Original", "Porté." if not worn.has(target) else "", "Son allure de toujours.")
+		if worn.has(target):
+			var on_plain = func() -> void:
+				save["skins"]["worn"].erase(target)
+				SaveData.store(save)
+				Audio.sfx("click")
+				refresh_shop()
+			acts.add_child(_button("Porter", "small on", on_plain))
+	else:
+		var rar: Dictionary = Skins.RARITIES[sk2["rarity"]]
+		var have: bool = picked_skin in owned
+		var on_now: bool = worn.get(target, "") == picked_skin
+		_card(Skins.TARGETS[target]["name"] + " · " + sk2["name"], rar["name"] + (" · Porté." if on_now else (" · Possédé." if have else " · Dans les urnes, ou contre des éclats.")), "Les mêmes images, dans d'autres couleurs.")
+		if have and not on_now:
+			var on_wear = func() -> void:
+				save["skins"]["worn"][target] = picked_skin
+				SaveData.store(save)
+				Audio.sfx("click")
+				refresh_shop()
+			acts.add_child(_button("Porter", "small on", on_wear))
+		elif not have:
+			var cost = int(Treasure.cfg["skin_shards"])
+			var b = _button("%d éclats" % cost, "small gold", func() -> void: _buy_skin(picked_skin))
+			b.icon = icon("gem-b")
+			b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			b.add_theme_constant_override("icon_max_width", roundi(a(11)))
+			b.disabled = int(save["shards"]) < cost
+			acts.add_child(b)
+	_show_demo({"pepito": "sprint", "gorilla": "m-gorilla", "rhino": "m-rhino", "dragonfly": "m-dragonfly"}.get(target, "sprint"), 1)
+
+func _buy_skin(id: String) -> void:
+	var ok = Treasure.buy_skin(save, id)
+	Audio.sfx("buy" if ok else "no")
+	if ok:
+		SaveData.store(save)
+		confetti(14)
+	refresh_shop()
+
+## A price in shards: the number and a blue gem.
+func _shards(n: int, colour: Color) -> Control:
+	var h = _hbox(3)
+	h.add_child(_label(str(n), ts("s"), colour, 0))
+	h.add_child(_icon_rect(icon("gem-b"), 10))
+	return h
+
+## The Trésor (0.47): on the left the urns, broken one by one (a shake, then what came out, in the colour of
+## its rarity); on the right the bag: the consumables in stock, the feathers, the shards.
+func _treasure() -> void:
+	if treasure != null:
+		treasure.queue_free()
+	var layer = CanvasLayer.new()
+	layer.layer = 40
+	add_child(layer)
+	treasure = layer
+	var root = Control.new()
+	root.size = Vector2(W, H)
+	root.theme = ui.theme
+	layer.add_child(root)
+	var shade = ColorRect.new()
+	shade.color = Color(8 / 255.0, 10 / 255.0, 24 / 255.0, 0.75)
+	shade.size = Vector2(W, H)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(shade)
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_panel("shop-preview-wide", 3))
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	_place(p, 569 / 2.0 - 205, 14, 410, 292)
+	var col = _vbox(6)
+	var title = _label("TRÉSOR", ts("l"), GOLD, 1.5)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+	var row = _hbox(14)
+	var left = _vbox(5)
+	left.alignment = BoxContainer.ALIGNMENT_CENTER
+	left.custom_minimum_size.x = a(150)
+	var urn = TextureRect.new()
+	urn.texture = icon("ico-urn")
+	urn.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	urn.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	urn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	urn.custom_minimum_size = Vector2(a(70), a(88))
+	urn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.add_child(urn)
+	w["tr-urn"] = urn
+	w["tr-count"] = _label("", ts("m"), INK, 0)
+	w["tr-count"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	left.add_child(w["tr-count"])
+	var open = _button("Ouvrir", "gold", _break_urn)
+	open.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	open.custom_minimum_size = Vector2(a(110), a(34))
+	left.add_child(open)
+	w["tr-open"] = open
+	row.add_child(left)
+	var right = _vbox(4)
+	right.custom_minimum_size.x = a(196)
+	right.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	right.add_child(_label("TON SAC", ts("s"), RELIC, 1.5))
+	w["tr-bag"] = _vbox(3)
+	right.add_child(w["tr-bag"])
+	row.add_child(right)
+	col.add_child(row)
+	var reveal = _vbox(3)
+	reveal.custom_minimum_size.y = a(56)
+	col.add_child(reveal)
+	w["tr-reveal"] = reveal
+	var close = _button("Fermer", "small plain", func() -> void: _close_treasure())
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col.add_child(close)
+	p.add_child(col)
+	root.add_child(p)
+	_treasure_fill()
+
+func _close_treasure() -> void:
+	if treasure != null:
+		treasure.queue_free()
+		treasure = null
+	urn_busy = false
+	Audio.sfx("click")
+	if state == "menu":
+		refresh_menu()
+	elif state == "shop":
+		refresh_shop()
+
+## The urns' count and the bag, as the save has them now.
+func _treasure_fill() -> void:
+	var nu = int(save["urns"])
+	w["tr-count"].text = "Urnes : %d" % nu
+	w["tr-open"].disabled = nu <= 0 or urn_busy
+	w["tr-urn"].modulate = Color.WHITE if nu > 0 else Color(0.5, 0.5, 0.55)
+	var bag: VBoxContainer = w["tr-bag"]
+	for ch in bag.get_children():
+		bag.remove_child(ch)
+		ch.queue_free()
+	var lines: Array = []
+	for c in SaveData.CONSUMABLES:
+		lines.append(["ico-" + c["icon"], c["name"], str(SaveData.stock(save, c["id"]))])
+	lines.append(["ico-feather", "Plumes de toucan", "%d / %d" % [int(save["feathers"]), int(Progress.cfg["feather_max"])]])
+	lines.append(["gem-b", "Éclats", str(int(save["shards"]))])
+	for ln in lines:
+		var h = _hbox(5)
+		h.add_child(_icon_rect(icon(ln[0]), 14))
+		var l = _label(ln[1], ts("s"), INK, 0)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		h.add_child(l)
+		h.add_child(_label(ln[2], ts("s"), GOLD, 0))
+		bag.add_child(h)
+
+## « Ouvrir »: the urn shakes, swells, then breaks: what came out, in the colour of its rarity.
+func _break_urn() -> void:
+	if urn_busy or int(save["urns"]) <= 0:
+		return
+	urn_busy = true
+	w["tr-open"].disabled = true
+	for ch in w["tr-reveal"].get_children():
+		ch.queue_free()
+	Audio.sfx("urn")
+	var u: TextureRect = w["tr-urn"]
+	u.pivot_offset = Vector2(u.size.x / 2, u.size.y)
+	var tw = create_tween()
+	for i in 6:
+		tw.tween_property(u, "rotation", (0.16 if i % 2 == 0 else -0.16) * (1.0 + i * 0.12), 0.07)
+	tw.tween_property(u, "rotation", 0.0, 0.05)
+	tw.tween_property(u, "scale", Vector2(1.3, 1.3), 0.1)
+	tw.tween_callback(_urn_reveal)
+	tw.tween_property(u, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _urn_reveal() -> void:
+	if treasure == null:
+		return
+	var res = Treasure.open(save)
+	SaveData.store(save)
+	urn_busy = false
+	if res.is_empty():
+		_treasure_fill()
+		return
+	var rar: String = res["rarity"]
+	var box: VBoxContainer = w["tr-reveal"]
+	var head = _label("URNE %s !" % Treasure.NAMES[rar].to_upper(), ts("m"), Color(Treasure.COLOURS[rar]), 1.5)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(head)
+	var items: HBoxContainer = null
+	var k = 0
+	for g in res["got"]:                             # two to a row (a legendary urn gives four things)
+		if k % 2 == 0:
+			items = _hbox(14)
+			items.alignment = BoxContainer.ALIGNMENT_CENTER
+			box.add_child(items)
+		var h = _hbox(4)
+		h.add_child(_icon_rect(icon(g["icon"]), 16))
+		h.add_child(_label(g["name"], ts("s"), INK, 0))
+		items.add_child(h)
+		k += 1
+	box.modulate.a = 0
+	box.scale = Vector2(0.8, 0.8)
+	box.pivot_offset = Vector2(box.size.x / 2, 0)
+	var tw = create_tween()
+	tw.tween_property(box, "modulate:a", 1.0, 0.2)
+	tw.parallel().tween_property(box, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	Audio.sfx({"common": "quest", "rare": "level", "legendary": "record"}[rar])
+	if rar != "common":
+		confetti(60 if rar == "legendary" else 18)
+	if res["got"].any(func(g): return g["what"] == "skin"):
+		Skins.apply(save["skins"]["worn"])
+	_treasure_fill()
+
+# ---------- the pygmies' drums (0.47) ----------
+
+## The screen: two big drums at the bottom, the beats falling onto them; over it, a panel before (what it
+## is, what it gives today) and after (the score, the reward).
+func _build_drums() -> void:
+	var s = _screen("drums", true)
+	(s.get_node("bg") as ColorRect).color = Color(10 / 255.0, 8 / 255.0, 20 / 255.0, 0.82)
+	var view = DrumsView.new()
+	view.main = self
+	_place(view, 0, 0, 569, 320)
+	view.mouse_filter = Control.MOUSE_FILTER_STOP
+	s.add_child(view)
+	w["drums-view"] = view
+	var title = _label("TAMBOURS DES PYGMÉES", ts("l"), GOLD, 1.5)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_place(title, 0, 10, 569, 24)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	s.add_child(title)
+	w["drums-score"] = _label("", ts("m"), INK, 0)
+	w["drums-score"].horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_place(w["drums-score"], 569 - 12 - 200, 12, 200, 20)
+	s.add_child(w["drums-score"])
+	var back = _button("Retour", "small plain", func() -> void: _drums_leave())
+	_place(back, M, M, 70, 26)
+	s.add_child(back)
+	var panel = PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var col = _vbox(6)
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	w["drums-text"] = _label("", ts("m"), INK, 0)
+	w["drums-text"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	w["drums-text"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	w["drums-text"].custom_minimum_size.x = a(300)
+	col.add_child(w["drums-text"])
+	w["drums-prizes"] = _vbox(2)
+	col.add_child(w["drums-prizes"])
+	var row = _hbox(10)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	w["drums-go"] = _button("Jouer", "gold", func() -> void: _drums_start())
+	w["drums-go"].custom_minimum_size = Vector2(a(130), a(34))
+	row.add_child(w["drums-go"])
+	col.add_child(row)
+	panel.add_child(col)
+	_place(panel, 569 / 2.0 - 170, 60, 340, 200)
+	s.add_child(panel)
+	w["drums-panel"] = panel
+
+## Before a song: what to do, and what today's song gives (or that it is for practice).
+func _drums_intro() -> void:
+	drums = null
+	Audio.music("")
+	w["drums-panel"].visible = true
+	w["drums-score"].text = "Record : %d %%" % int(save["drums"]["best"])
+	drums_daily = Drums.free_today(save)
+	w["drums-text"].text = "Touche à gauche pour le tambour grave, à droite pour l'aigu (ou les flèches), quand le coup tombe dans l'anneau." + ("\nAujourd'hui, ton score te rapporte :" if drums_daily else "\nLa récompense du jour est prise : entraîne-toi, ou reviens demain.")
+	_drums_prizes(-1 if drums_daily else -2)
+	w["drums-go"].text = "Jouer" if drums_daily else "S'entraîner"
+
+## The reward table (score: what), the lines reached in gold; -2: none shown.
+func _drums_prizes(score_: int) -> void:
+	var box: VBoxContainer = w["drums-prizes"]
+	for ch in box.get_children():
+		box.remove_child(ch)
+		ch.queue_free()
+	if score_ == -2:
+		return
+	var by := {}
+	for r in Drums.rewards:
+		if not by.has(r["at"]):
+			by[r["at"]] = []
+		by[r["at"]].append(r)
+	for at in by:
+		var h = _hbox(5)
+		h.alignment = BoxContainer.ALIGNMENT_CENTER
+		var reached = score_ >= int(at)
+		h.add_child(_label("%d %% :" % at, ts("s"), GOLD if reached else DIM, 0))
+		for r in by[at]:
+			var ic = {"coins": "coin-icon", "urn": "ico-urn", "knife": "ico-knife", "shards": "gem-b", "feather": "ico-feather"}.get(r["what"], "ico-star")
+			h.add_child(_label("+%d" % r["n"], ts("s"), INK if reached or score_ < 0 else DIM, 0))
+			h.add_child(_icon_rect(icon(ic), 12))
+		box.add_child(h)
+
+func _drums_start() -> void:
+	drums = Drums.new()
+	drums.make(Drums.today())
+	drums_tick = 0
+	w["drums-panel"].visible = false
+	Audio.sfx("click")
+
+## A drum hit (the view: a touch on its half, or a key).
+func drums_hit(lane: int) -> void:
+	if drums == null or drums.over():
+		return
+	Audio.sfx("drumlo" if lane == 0 else "drumhi")
+	drums.hit(lane)
+
+func _drums_step(delta: float) -> void:
+	if drums == null or state != "drums":
+		return
+	drums.step(delta)
+	while drums_tick < drums.ticks.size() and drums.t >= drums.ticks[drums_tick]:
+		drums_tick += 1
+		Audio.sfx("shaker")
+	w["drums-score"].text = "%d %%   combo %d" % [drums.score(), drums.combo]
+	w["drums-view"].queue_redraw()
+	if drums.over() and not w["drums-panel"].visible:
+		_drums_end()
+
+## The song over: the score, and today's reward (once a day).
+func _drums_end() -> void:
+	var sc = drums.score()
+	var best_before = int(save["drums"]["best"])
+	save["drums"]["best"] = maxi(best_before, sc)
+	var got: Array = []
+	if drums_daily:
+		got = Drums.pay(save, sc)
+		save["drums"]["day"] = Drums.today()
+		drums_daily = false
+	SaveData.store(save)
+	var txt = "Score : %d %%  (meilleure série : %d)" % [sc, drums.best_combo]
+	if sc > best_before:
+		txt += "\nNouveau record !"
+	if not got.is_empty():
+		txt += "\nRécompense :"
+	elif Drums.prizes(sc).is_empty() and w["drums-go"].text == "Jouer":
+		txt += "\nPas de récompense cette fois."
+	w["drums-text"].text = txt
+	var box: VBoxContainer = w["drums-prizes"]
+	for ch in box.get_children():
+		box.remove_child(ch)
+		ch.queue_free()
+	for g in got:
+		var h = _hbox(5)
+		h.alignment = BoxContainer.ALIGNMENT_CENTER
+		h.add_child(_icon_rect(icon(g["icon"]), 14))
+		h.add_child(_label(g["name"], ts("s"), GOLD, 0))
+		box.add_child(h)
+	w["drums-go"].text = "S'entraîner"
+	w["drums-panel"].visible = true
+	Audio.sfx("record" if sc >= 75 else ("quest" if sc >= 30 else "no"))
+	if not got.is_empty():
+		confetti(30)
+
+func _drums_leave() -> void:
+	drums = null
+	go("menu")
+
+## The drums' picture: two big drums at the bottom, low on the left, high on the right; the beats fall
+## from the top onto them.
+class DrumsView extends Control:
+	var main: Node
+	func _process(delta: float) -> void:
+		if main.state == "drums":
+			main._drums_step(minf(delta, 0.05))
+	func _gui_input(event: InputEvent) -> void:
+		var pos = Vector2(-1, -1)
+		if event is InputEventScreenTouch and event.pressed:
+			pos = event.position
+		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.device != InputEvent.DEVICE_ID_EMULATION:
+			pos = event.position
+		if pos.x >= 0:
+			main.drums_hit(0 if pos.x < size.x / 2 else 1)
+			accept_event()
+	func _unhandled_key_input(event: InputEvent) -> void:
+		if main.state != "drums" or not (event is InputEventKey and event.pressed and not event.echo):
+			return
+		if event.keycode in [KEY_LEFT, KEY_A, KEY_Q, KEY_F]:
+			main.drums_hit(0)
+		elif event.keycode in [KEY_RIGHT, KEY_D, KEY_J, KEY_L]:
+			main.drums_hit(1)
+	func _draw() -> void:
+		var k = size.x / 569.0                       # art pixels to screen units
+		var d: Drums = main.drums
+		var xs = [150.0 * k, 419.0 * k]              # the two drums, low on the left, high on the right
+		var ring_y = 224.0 * k                       # where the beats are hit: on the drum's skin
+		var top = 40.0 * k                           # where they come from
+		var cols = [Color("#e0a050"), Color("#6ce0d0")]
+		var fl = d.flashes if d != null else [0.0, 0.0]
+		for i in 2:                                  # each lane: a band falling to its drum
+			draw_rect(Rect2(xs[i] - 30 * k, top, 60 * k, ring_y - top), Color(1, 1, 1, 0.05))
+			draw_line(Vector2(xs[i], top), Vector2(xs[i], ring_y), Color(cols[i], 0.18), 2 * k)
+		var dt: Texture2D = main.icon("ico-drum")
+		for i in 2:                                  # the big drums, bouncing when hit, and the ring on them
+			if dt != null:
+				var s_ = 120 * k * (1.0 + 0.06 * fl[i])
+				draw_texture_rect(dt, Rect2(Vector2(xs[i] - s_ / 2, ring_y - 22 * k - 0.04 * s_ * fl[i]), Vector2(s_, s_)), false)
+			draw_circle(Vector2(xs[i], ring_y), (22 + 6 * fl[i]) * k, Color(cols[i], 0.15 + 0.5 * fl[i]))
+			draw_arc(Vector2(xs[i], ring_y), 22 * k, 0, TAU, 40, cols[i], 3 * k)
+		if d == null:
+			return
+		var travel: float = Drums.cfg["travel"]
+		var font = main.bold
+		for n in d.notes:                            # the beats falling to the drums
+			var dt_ = n["t"] - d.t
+			if dt_ > travel or dt_ < -0.3 or n["hit"] == "perfect" or n["hit"] == "good":
+				continue
+			var y = ring_y - (ring_y - top) * dt_ / travel
+			var x = xs[n["lane"]]
+			var miss = n["hit"] == "miss"
+			draw_circle(Vector2(x, y), 15 * k, Color("#1a1024"))
+			draw_circle(Vector2(x, y), 12 * k, Color(0.4, 0.4, 0.45) if miss else cols[n["lane"]])
+			draw_circle(Vector2(x - 4 * k, y - 4 * k), 4 * k, Color(1, 1, 1, 0.5))
+		for j in d.judged:                           # the words: Parfait !, Bien, Raté, over the drum
+			var a_ = clampf(1.0 - (d.t - j["t"]) / 0.6, 0, 1)
+			var col = Color("#ffd35c") if j["text"] == "Parfait !" else (Color("#6cc22e") if j["text"] == "Bien" else Color("#ff6b6b"))
+			col.a = a_
+			if font != null:
+				draw_string(font, Vector2(xs[j["lane"]] - 60 * k, ring_y - 34 * k - (1.0 - a_) * 14 * k), j["text"], HORIZONTAL_ALIGNMENT_CENTER, 120 * k, int(10 * k), col)
+		if font != null and d.combo >= 3:            # the run of beats, between the drums
+			draw_string(font, Vector2(0, 150 * k), "%d" % d.combo, HORIZONTAL_ALIGNMENT_CENTER, size.x, int(22 * k), Color(1, 0.83, 0.36, 0.9))
+			draw_string(font, Vector2(0, 166 * k), "COMBO", HORIZONTAL_ALIGNMENT_CENTER, size.x, int(8 * k), Color(1, 0.97, 0.9, 0.7))
+		if d.t < 0 and font != null:                 # the count-in
+			draw_string(font, Vector2(0, 150 * k), str(ceili(-d.t)), HORIZONTAL_ALIGNMENT_CENTER, size.x, int(30 * k), Color("#fff8e6"))
 
 ## An animal on the road or not (the Montures tab: its box, or its card's button).
 func _toggle_mount(mk: String) -> void:
@@ -2782,6 +3402,8 @@ func bank() -> void:
 	_roll_biome()                                    # the next Run illimitée, somewhere else maybe
 	save["coins"] += run.gold
 	save["loops"] += 1
+	Progress.add_feathers(save, run.feathers)       # (0.47: those over the limit paid in coins)
+	save["urns"] = int(save["urns"]) + run.urns
 	if not run.debug and Net.enabled():              # the friends' board (once the server is up)
 		net.send_score(save, run.mode, floori(run.dist))
 	if run.debug:
@@ -2801,6 +3423,8 @@ func go(name: String) -> void:
 			Audio.duck(true)
 			return
 	Audio.duck(name == "settings" and state == "pause")   # (the settings opened from the pause: still quiet)
+	if state == "shop" and name != "shop":
+		Skins.apply(save["skins"]["worn"])
 	_menu_tip("")
 	_peek(false)
 	_stop_over()
@@ -2850,6 +3474,8 @@ func go(name: String) -> void:
 			ch.queue_free()
 		state = "play"
 		show_screen("hud")
+		_hide_offer()
+		run.knives = SaveData.stock(save, "knife") if not run.coop else 0
 		Progress.start_run(save)
 		run_xp0 = save["xp"]                         # (the end counts the experience and moves the objectives from here)
 		run_quests0 = save["quests"].map(func(q): return {"q": q, "p": float(q["p"])})
@@ -2869,6 +3495,8 @@ func go(name: String) -> void:
 	if name == "friends":
 		refresh_friends()
 		_load_friends()
+	if name == "drums":
+		_drums_intro()
 	if name == "settings":
 		w["save-code"].text = ""
 		_msg("")
@@ -3510,6 +4138,8 @@ func show_levels(after: Callable = Callable()) -> void:
 	pay.alignment = BoxContainer.ALIGNMENT_CENTER
 	pay.add_child(_label("Récompense : +%d" % coins, ts("m"), INK, 0))
 	pay.add_child(_icon_rect(icon("coin-icon"), 13))
+	pay.add_child(_label("  +%d" % levels.size(), ts("m"), INK, 0))   # 0.47: an urn per level
+	pay.add_child(_icon_rect(icon("ico-urn"), 16))
 	col.add_child(pay)
 	if unlocked.is_empty():
 		var none = _label("Rien de nouveau à débloquer cette fois.", ts("s"), DIM, 0)
@@ -3546,6 +4176,100 @@ func show_levels(after: Callable = Callable()) -> void:
 	confetti(30)
 
 ## A short notice at the top of the screen: objective done, level gained.
+## 0.47: out of the temple (the camera with him), alone, the consumables in stock are offered for OFFER_TIME
+## seconds: one may be taken (the Couteau suisse is not offered, it waits for a capture).
+## Caught: the knife's offer, then the escape, over the game (Game keeps the state).
+func _esc_view() -> void:
+	if not w.has("esc") or not is_instance_valid(w["esc"]):
+		return
+	var c = run.caught if run != null else null
+	var ph: String = c.phase if c != null else ""
+	w["esc"].visible = ph == "offer" or ph == "escape"
+	if ph == "offer":
+		w["esc-label"].text = "Capturé ! Couteau suisse : %d" % SaveData.stock(save, "knife")
+		w["esc-knife"].visible = true
+		w["esc-bar"].visible = false
+		set_bar(w["esc-time"], c.timer / Game.ESC_OFFER)
+	elif ph == "escape":
+		var e: Dictionary = c.esc
+		w["esc-label"].text = "Ronge les cordes ! Encore %d" % e.rope
+		w["esc-knife"].visible = false
+		w["esc-bar"].visible = true
+		w["esc-bar"].e = e
+		w["esc-bar"].queue_redraw()
+		set_bar(w["esc-time"], maxf(0, e.time) / e.full)
+
+## The Couteau suisse taken from the stock: the escape begins.
+func _use_knife() -> void:
+	if run == null or run.caught == null or run.caught.phase != "offer":
+		return
+	if SaveData.use(save, "knife") and Game.escape_start(run):
+		Audio.sfx("buy")
+
+func _offer_tick(delta: float) -> void:
+	if state != "play" or run == null:
+		return
+	if not run.offered and not run.coop and run.exploded and run.out == 2 and not run.dead:
+		run.offered = true
+		var cs = SaveData.CONSUMABLES.filter(func(c): return not c.get("stock", false) and SaveData.stock(save, c["id"]) > 0)
+		if not cs.is_empty():
+			_show_offer(cs)
+	if offer_t > 0:
+		offer_t -= delta
+		set_bar(w["offer-bar"], offer_t / OFFER_TIME)
+		if offer_t <= 0:
+			_hide_offer()
+
+func _show_offer(cs: Array) -> void:
+	var box: HBoxContainer = w["offer"]
+	for ch in box.get_children():
+		box.remove_child(ch)
+		ch.queue_free()
+	for c in cs:
+		var id: String = c["id"]
+		var b = Button.new()
+		b.focus_mode = Control.FOCUS_NONE
+		_style_button(b, "square")
+		b.custom_minimum_size = Vector2(a(46), a(46))
+		b.icon = icon("ico-" + c["icon"])
+		b.expand_icon = true
+		b.add_theme_constant_override("icon_max_width", roundi(a(30)))
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var n = _label("×%d" % SaveData.stock(save, id), ts("m"), GOLD, 0)
+		n.label_settings.outline_size = roundi(a(3))
+		n.label_settings.outline_color = LINE
+		n.position = Vector2(a(25), a(27))
+		b.add_child(n)
+		var on_take = func() -> void:
+			_take(id)
+		b.button_down.connect(on_take)
+		box.add_child(b)
+	box.visible = true
+	w["offer-bar"].visible = true
+	offer_t = OFFER_TIME
+	box.modulate.a = 0
+	create_tween().tween_property(box, "modulate:a", 1.0, 0.2)
+
+func _hide_offer() -> void:
+	offer_t = 0
+	if w.has("offer") and is_instance_valid(w["offer"]):
+		w["offer"].visible = false
+		w["offer-bar"].visible = false
+
+## A consumable taken from the stock, at once on the run.
+func _take(id: String) -> void:
+	if offer_t <= 0 or run == null or not SaveData.use(save, id):
+		return
+	match id:
+		"shield": run.shield = true
+		"magnet": run.cons_magnet = true
+		"idol": run.idol = true
+		"horn": Game.call_mount(run)
+	var c = SaveData.consumable(id)
+	Audio.sfx("buy")
+	toast("ico-" + c["icon"], c["name"], 0, 0)
+	_hide_offer()
+
 func toast(ico: String, text: String, coins: int, xp: int) -> void:
 	var box = _box()
 	var row = _hbox(7)
@@ -3593,6 +4317,7 @@ func hint(step: int) -> void:
 		hint_timer = 3.5
 
 func hud() -> void:
+	_esc_view()
 	if w.has("say") and is_instance_valid(w["say"]):  # the guards' line, typed out 40 letters a second
 		var on = run.saying != ""
 		w["say"].visible = on
@@ -3637,6 +4362,9 @@ func hud() -> void:
 # ---------- input ----------
 
 func press() -> void:
+	if state == "play" and run != null and run.caught != null and run.caught.phase == "escape":
+		Game.escape_tap(run)                         # the escape: a touch anywhere bites the rope
+		return
 	if state == "play":
 		input.pressed = true
 		input.hold = true
@@ -3790,9 +4518,19 @@ func _step(h: float) -> void:
 			"bossfall": banner("Écrasée !")
 			"bossdown": banner("Vorace est vaincue !")
 			"hurt", "rewind", "hit": stats["hurt"] = true
-			"life":                                 # a floating life picked up: one more heart
-				Audio.sfx("level")
+			"feather":                              # 0.47: a toucan's feather, an urn
+				toast("ico-feather", "Plume de toucan", 0, 0)
+			"urn":
+				toast("ico-urn", "Une urne !", 0, 0)
+			"shield":
+				banner("Bouclier brisé !")
+			"free":                                 # escaped: the next fall will have its own photo
+				banner("Libre !")
+				photo_taken = false
+				photo = null
 				_fill_hud()
+			"held":
+				banner("La corde a tenu…")
 			"brake":                                # a floating brake: 4 m/s less, for good
 				Audio.sfx("slow")
 			"fatal":                                # the blow that ends the run: the photo, now (thrown ahead,
@@ -3859,6 +4597,7 @@ func _process(delta: float) -> void:
 			if hint_timer <= 0:
 				hint(0)
 		hud()
+		_offer_tick(delta)
 		if state == "play" and run.dead:
 			if not photo_taken:
 				photo_taken = true

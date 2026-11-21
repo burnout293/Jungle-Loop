@@ -151,6 +151,24 @@ const CATCH_FIGHT := 2.5
 const CATCH_WALK := 240.0
 const CATCH_END := 7.5
 const CATCH_SHIFT := 0.2           # (meanwhile the camera steps back this much of the screen: the scene in the middle)
+# 0.47: the pygmies come back for him wherever he falls (alone, no boss): from off the screen they run in first
+# (CATCH_COME). Tied to the spit, the Couteau suisse is offered ESC_OFFER s (the spit going on slowly, CATCH_SLOW);
+# used: the escape, a cursor and a zone going to and fro on a bar; a touch with the cursor in the zone cuts a
+# rope (ESC_ROPE, one more per escape already made this run), out of it costs ESC_MISS s of ESC_TIME. The zone:
+# ESC_ZONE of the bar, ESC_LANTERN more per lantern lit (ESC_ZONE_MAX at most), 15 % less per escape made; the
+# cursor ESC_CURSOR bars a second, the zone drifting ESC_DRIFT, both ESC_HARDER faster per escape made.
+const CATCH_COME := 0.8
+const CATCH_SLOW := 40.0
+static var ESC_OFFER := 5.0
+static var ESC_TIME := 6.0
+static var ESC_MISS := 1.2
+static var ESC_ROPE := 3
+static var ESC_ZONE := 0.16
+static var ESC_LANTERN := 0.01
+static var ESC_ZONE_MAX := 0.4
+static var ESC_CURSOR := 1.1
+static var ESC_DRIFT := 0.3
+static var ESC_HARDER := 0.25
 const GAP_FILL := 640.0
 const DECOR_RATE := 0.12
 const HOVER_W := 60.0
@@ -235,6 +253,14 @@ const WAVE_JUMP := 0.8
 # of his speed off, for the rest of the run, or of the scenery in Histoire). The hourglass, once on the
 # screen, goes on ahead at BRAKE_PACE of his speed: it stays in sight a long time.
 static var BONUS_EVERY := [1400.0, 2400.0]   # metres between two
+# 0.47: what floats there, alone (for two: nothing, their bubble is their second chance). BONUS_SHARE: the
+# hourglass's share, then the feather's; the rest an urn, once a run at most, from URN_FROM metres.
+static var BONUS_SHARE := [0.4, 0.45]
+static var URN_FROM := 600.0
+# The consumables (main.gd offers them for 3 s out of the temple, one only): the Aimant simple works as the
+# Aimant at this level; the Idole dorée adds this share to every coin picked up.
+static var CONS_MAGNET := 2
+static var IDOL_MUL := 0.5
 const BONUS_LOW := 60.0                 # (0.44: a much wider zigzag, BONUS_ZIG seconds each way)
 const BONUS_HIGH := 290.0
 const BONUS_ZIG := 0.7
@@ -609,7 +635,18 @@ class Run:
 	var zone_k := 1.0              # (unused)
 	var mounts: Array = ["gorilla", "rhino", "dragonfly"]   # the animals that may wait on the road (Montures: on / off)
 	var brake := 0.0               # what the brakes picked up take off his speed, for good
-	var bonuses: Array = []        # the rare floating things (Item: kind "life" or "brake")
+	var bonuses: Array = []        # the rare floating things (Item: kind "brake", "feather" or "urn")
+	var urn_laid := false          # an urn floats once a run at most
+	var feathers := 0              # picked up this run: toucan feathers (to change an objective), urns
+	var urns := 0
+	var lanterns := 0              # the forest's lanterns lit as he ran past (0.47: the escape's zone grows)
+	var shield := false            # the consumables taken out of the temple (main.gd): the old wooden shield,
+	var cons_magnet := false       # the Aimant simple, the Idole dorée (and what it has added so far, in
+	var idol := false              # hundredths)
+	var idol_acc := 0.0
+	var offered := false           # the consumables have been offered (main.gd)
+	var knives := 0                # the Couteaux suisses in stock (main.gd sets it), and the escapes made this run
+	var escapes := 0
 	var next_bonus := 0.0          # metres
 	var camp_y := 0.0              # the height he has kept (the Vol), and for how long
 	var camp_t := 0.0
@@ -1188,13 +1225,24 @@ static func _nest(run: Run, x: float) -> float:
 		add_hover(run, at, h)
 	return (n - 1) * NEST_STEP + HOVER_W
 
-## A rare floating thing: a life or a brake, zigzagging up and down within reach of a jump.
+## A rare floating thing: an hourglass (a brake), a toucan's feather or, once a run, an urn, zigzagging up and
+## down within reach of a jump. For two: nothing (the hourglass would change one player's speed; the bubble is
+## their second chance).
 static func add_bonus(run: Run, x: float) -> void:
+	var roll = W.randf()
+	var ph = wrnd(0, 2)
+	if run.coop:
+		return
 	var it = Item.new()
 	it.x = x
-	var roll = W.randf()
-	it.kind = "life" if roll < 0.5 or run.coop else "brake"   # (no hourglass in coop: it would change his speed)
-	it.ph = wrnd(0, 2)
+	if roll < BONUS_SHARE[0]:
+		it.kind = "brake"
+	elif roll < BONUS_SHARE[0] + BONUS_SHARE[1] or run.urn_laid or x / PPM < URN_FROM:
+		it.kind = "feather"
+	else:
+		it.kind = "urn"
+		run.urn_laid = true
+	it.ph = ph
 	it.y = floor_at(run, x) - BONUS_LOW
 	run.bonuses.append(it)
 
@@ -2208,6 +2256,13 @@ static func hit(run: Run, o: Obs) -> void:
 	if run.mount != null:
 		dismount(run)
 		return
+	if run.shield:                                   # the old wooden shield takes the blow, and breaks
+		run.shield = false
+		run.p.inv = HURT_INV
+		run.shake = 0.45
+		burst(run, run.cam + run.sx - 14, run.p.y - 40, Color("#a8763e"), 18, 320)
+		run.events.append("shield")
+		return
 	if not run.god:                                  # the debug menu's invincibility
 		run.hearts -= 1
 	run.shake = 0.6
@@ -2363,7 +2418,12 @@ static func guards_after(run: Run) -> bool:
 ## world) while the camera has not caught him up, then in fast to their place behind him; turned back, they
 ## run off to the left. Caught: _capture moves them.
 static func _guards(run: Run, d: float, hv: float) -> void:
-	if run.mode != "story" or run.blast_t < 0 or run.caught != null:
+	if run.caught != null:
+		return
+	if run.mode != "story" or run.blast_t < 0:       # (0.47: after an escape, they run off, whatever the mode)
+		for g in run.guards:
+			g.v = move_toward(g.v, -GUARD_FLEE, 1600 * d)
+			g.x += g.v * d
 		return
 	if run.guards.is_empty():
 		for i in 2:
@@ -2401,6 +2461,10 @@ static func _capture(run: Run, d: float, px: float, fl: float) -> bool:
 	run.held -= sx2 - run.sx
 	run.sx = sx2
 	run.dist = (run.cam - run.held) / PPM
+	if c.t < 0:                                      # from far behind: they run in (0.47)
+		if floori(c.t / 0.28) > floori(t0 / 0.28):
+			run.events.append("wriggle")
+		return false
 	if c.t < CATCH_LEAP:                             # his legs still kicking; they come
 		if floori(c.t / 0.28) > floori(t0 / 0.28):
 			run.events.append("wriggle")
@@ -2422,13 +2486,134 @@ static func _capture(run: Run, d: float, px: float, fl: float) -> bool:
 		run.events.append("skewer")
 		for i in 16:
 			part(run, px + rnd(-60, 60), fl - rnd(0, 40), rnd(-200, 200), rnd(-200, -40), rnd(0.4, 0.7), colour_of(["#e8dcc0", "#c9b89a"]), rnd(6, 11), 500)
+		c.phase = "offer" if run.knives > 0 else "gone"   # a Couteau suisse in stock: it is offered (main.gd)
+		c.timer = ESC_OFFER
 	if t0 < CATCH_FIGHT + 0.6 and c.t >= CATCH_FIGHT + 0.6:
 		run.events.append("snap")                    # (the photo: him on the spit)
-	c.x -= CATCH_WALK * d
-	if c.x < run.cam - 160 or c.t > CATCH_END:
-		die(run)
-		return true
+	match c.phase:
+		"offer":                                     # the knife offered: slowly on, staying in sight
+			c.timer -= d
+			c.x = maxf(c.x - CATCH_SLOW * d, run.cam + run.view_w * 0.3)
+			if c.timer <= 0:
+				c.phase = "gone"
+		"escape":
+			c.x = maxf(c.x - CATCH_SLOW * d, run.cam + run.view_w * 0.3)
+			_escape_step(run, d)
+		_:                                           # carried off to the temple: the end
+			c.gone_t += d
+			c.x -= CATCH_WALK * d
+			if c.x < run.cam - 160 or c.gone_t > CATCH_END - CATCH_FIGHT:
+				die(run)
+				return true
 	return false
+
+## Alone, any mode, no boss: whether the pygmies come for him when he falls (0.47: wherever he is).
+static func capture_ok(run: Run) -> bool:
+	return not run.coop and not run.dead and run.boss == null and run.exploded
+
+## The Couteau suisse used (main.gd took it from the stock): the escape begins. False if not offered now.
+static func escape_start(run: Run) -> bool:
+	var c = run.caught
+	if c == null or c.phase != "offer":
+		return false
+	run.knives = maxi(0, run.knives - 1)
+	var n = run.escapes
+	var harder = 1.0 + ESC_HARDER * n
+	var zw = clampf(ESC_ZONE + ESC_LANTERN * run.lanterns, 0.05, ESC_ZONE_MAX) * pow(0.85, n)
+	c.phase = "escape"
+	c.esc = {"time": ESC_TIME, "full": ESC_TIME, "rope": ESC_ROPE + n, "ropes": ESC_ROPE + n, "cur": 0.0, "cv": ESC_CURSOR * harder,
+		"zone": 0.5, "zv": ESC_DRIFT * harder * (1.0 if rnd(0, 1) < 0.5 else -1.0), "w": zw}
+	run.events.append("knife")
+	return true
+
+## The escape going on: the cursor and the zone to and fro, the time running out.
+static func _escape_step(run: Run, d: float) -> void:
+	var e: Dictionary = run.caught.esc
+	e.time -= d
+	e.cur += e.cv * d
+	if e.cur > 1.0 or e.cur < 0.0:
+		e.cur = clampf(e.cur, 0.0, 1.0)
+		e.cv = -e.cv
+	var half = e.w / 2
+	e.zone += e.zv * d
+	if e.zone > 1.0 - half or e.zone < half:
+		e.zone = clampf(e.zone, half, 1.0 - half)
+		e.zv = -e.zv
+	if e.time <= 0:
+		run.caught.phase = "gone"                    # the rope held: carried off
+		run.events.append("held")
+
+## A touch during the escape: the cursor in the zone cuts a rope (the last one: free), out of it costs time.
+static func escape_tap(run: Run) -> void:
+	var c = run.caught
+	if c == null or c.phase != "escape":
+		return
+	var e: Dictionary = c.esc
+	if absf(e.cur - e.zone) <= e.w / 2:
+		e.rope -= 1
+		run.events.append("cut")
+		if e.rope <= 0:
+			_release(run)
+	else:
+		e.time -= ESC_MISS
+		run.events.append("miss")
+
+## Free: he drops from the spit where it is, the pygmies dazed run off, the road ahead is cleared and the
+## camera catches him up; one heart, a moment untouchable.
+static func _release(run: Run) -> void:
+	var c = run.caught
+	var x: float = c.x
+	run.escapes += 1
+	run.caught = null
+	run.leap = null
+	run.fatal = false
+	run.hearts = maxi(1, run.hearts)
+	var p = run.p
+	p.roll = 0
+	p.vy = -520
+	p.ground = false
+	p.plat = null
+	p.jumps = 1
+	p.y = floor_at(run, x) - 30
+	p.inv = 2.5
+	run.sx = x - run.cam
+	run.out = 1                                      # the camera catches him up (as out of the temple)
+	run.catch_from = run.sx
+	run.catch_t = 0
+	for o in run.obs:
+		if o.x < run.cam + run.view_w + 700:
+			o.gone = true
+	run.fm = null
+	run.guards = [{"x": x - 40, "v": -GUARD_FLEE * 0.4, "on": true}, {"x": x + 40, "v": -GUARD_FLEE * 0.3, "on": true}]
+	if run.guards_off < 0:
+		run.guards_off = run.t
+	for i in 18:
+		part(run, x + rnd(-40, 40), p.y - rnd(0, 40), rnd(-260, 260), rnd(-320, -60), rnd(0.4, 0.8), colour_of(["#e0c98e", "#8a5a2b", "#fff3a8"]), rnd(4, 9), 700)
+	run.events.append("free")
+
+## Coins picked up: with the Idole dorée, IDOL_MUL more (its fractions kept until they make a coin).
+static func add_gold(run: Run, v: int) -> void:
+	var extra = 0
+	if run.idol:
+		run.idol_acc += v * IDOL_MUL
+		extra = floori(run.idol_acc)
+		run.idol_acc -= extra
+	run.gold += v + extra
+
+## The Corne de brousse: an animal answers, and waits for him just ahead (one he lets on the road, any if none).
+static func call_mount(run: Run) -> void:
+	var kinds: Array = run.mounts if not run.mounts.is_empty() else MOUNT_KINDS
+	var it = Item.new()
+	it.kind = pick(kinds)
+	var px = run.cam + run.sx
+	it.x = px + 520
+	it.ph = rnd(0, ZIG_PERIOD * 2)
+	it.y = floor_at(run, it.x) - ZIG_LOW
+	run.items.append(it)
+	for o in run.obs:                                # nothing in the way to it
+		if o.x + o.w > px + 60 and o.x < it.x + 260:
+			o.gone = true
+	run.events.append("horn")
 
 static func die(run: Run) -> void:
 	_fatal(run)
@@ -2540,7 +2725,7 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 			if dashing:
 				f.hit = true
 				f.sx = -999
-				run.gold += 3
+				add_gold(run, 3)
 				burst(run, px + 40, y0 + FM_H * FM_THICK / 2, Color("#7fe0c8"), 18, 340)
 				run.shake = maxf(run.shake, 0.3)
 				run.events.append("break")
@@ -2836,7 +3021,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.cam += move + back
 		if talk_hold(run):
 			run.held += move + back                  # (alone, while the guards talk: the distance waits)
-	run.dist = (run.cam - run.held) / PPM
+	var nd = (run.cam - run.held) / PPM
+	if nd < run.dist and not run.coop:               # (after an escape the camera may go back a little: the
+		run.held = run.cam - run.dist * PPM          # distance waits instead)
+	else:
+		run.dist = nd
 	var px = run.cam + run.sx
 	_guards(run, d, (px - px0) / d if d > 0 else 0.0)
 	var fl = floor_at(run, px)                      # the floor right under him
@@ -2876,8 +3065,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				for i in 14:                         # a spray of earth
 					part(run, px + rnd(-16, 16), fl - 2, rnd(-220, 220), rnd(-380, -120), rnd(0.4, 0.7), colour_of(["#8a6a42", "#6a4f30", "#b08a58", "#f4f0e0"]), rnd(5, 11), 1400)
 				run.shake = maxf(run.shake, 0.6)
-				if guards_after(run):
-					run.caught = {"t": 0.0, "x": px, "sx0": run.sx, "gx": run.guards.map(func(g): return g.x)}
+				if capture_ok(run):
+					var near = guards_after(run)     # at his heels (Histoire, before their turn), or from far behind
+					var gx: Array = run.guards.map(func(g): return g.x) if near else [px - GUARD_GAP, px - GUARD_GAP - GUARD_STEP]
+					var gx0: Array = gx.duplicate() if near else [run.cam - 120.0, run.cam - 220.0]
+					run.caught = {"t": 0.0 if near else -CATCH_COME, "x": px, "sx0": run.sx, "gx": gx, "gx0": gx0, "phase": "fight", "timer": 0.0, "gone_t": 0.0, "esc": {}}
 					for o in run.obs:                # (what he left behind him: gone)
 						if o.x + o.w < px:
 							o.gone = true
@@ -3099,10 +3291,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			if it.y < p.y - tall_b - 30 or it.y > p.y + 10:
 				continue
 			it.gone = true
-			if it.kind == "life":
-				run.hearts += 1
-				run.max_hearts = maxi(run.max_hearts, run.hearts)
-				burst(run, it.x, it.y, Color("#ff4d6d"), 16, 260)
+			if it.kind == "feather":
+				run.feathers += 1
+				burst(run, it.x, it.y, Color("#ffb03c"), 16, 260)
+			elif it.kind == "urn":
+				run.urns += 1
+				burst(run, it.x, it.y, Color("#ffd35c"), 22, 300)
 			else:
 				run.brake += run.own * BRAKE_SHARE              # 20 % of his speed, now
 				burst(run, it.x, it.y, Color("#7fd8ff"), 16, 260)
@@ -3364,6 +3558,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			if px < cx - 20 or px > cx + 90:
 				continue
 			run.touched[i] = run.t
+			if pr["kind"] == PROP_LANTERN:
+				run.lanterns += 1                    # lit: counted (the escape's zone grows with them)
+				run.events.append("lantern")
 			for k in react[1]:
 				part(run, cx + rnd(-40, 40), fl - rnd(60, 150), rnd(-50, 90), rnd(-150, -30), rnd(0.7, 1.4), Color(react[0]), rnd(4, 8), 90)
 			run.events.append("shroom" if pr["kind"] == PROP_SHROOM else "rustle")
@@ -3381,6 +3578,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 
 	# --- coins and gems ---
 	var reach: float = MAGNET[run.lvl("magnet")]
+	if run.cons_magnet:                              # the Aimant simple (a consumable)
+		reach = maxf(reach, MAGNET[mini(CONS_MAGNET, MAGNET.size() - 1)])
 	var mm = run.lvl(run.mount.kind + "Magnet") if run.mount != null else 0   # the mount's own Aimant
 	if mm > 0:
 		reach = maxf(reach, MOUNT_MAGNET[mini(mm, MOUNT_MAGNET.size() - 1)])
@@ -3444,16 +3643,16 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				if run.hearts < run.max_hearts:
 					run.hearts += 1
 				else:
-					run.gold += HEART_GOLD
+					add_gold(run, HEART_GOLD)
 				run.events.append("heart")
 				burst(run, c.x, c.y, Color("#ff6b8a"), 14, 260)
 			elif c.gem != "":
-				run.gold += GEMS.get(c.gem, 10)
+				add_gold(run, GEMS.get(c.gem, 10))
 				run.gems += 1
 				run.events.append("gem")
 				burst(run, c.x, c.y, Color({"y": "#ffe36a", "r": "#ff6b6b"}.get(c.gem, "#5cc8ff")), 10, 220)
 			else:
-				run.gold += 1
+				add_gold(run, 1)
 				run.events.append("coin")
 				burst(run, c.x, c.y, Color("#fff3a8"), 4, 150)
 			continue

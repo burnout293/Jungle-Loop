@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.46.0** (20/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.47.0** (21/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,27 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.47.0
+
+Ses choix du 21/11 (l'équilibrage complet, la suite du jeu) :
+- **Objets sur la route** : plus de vies volantes ; une plume de toucan (change un défi, 3 au plus), une urne
+  (une par course au plus) ; les lanternes de la forêt allumées sont comptées.
+- **Consommables** en stock : Bouclier, Aimant simple, Idole dorée (+50 % de pièces), Corne de brousse (une
+  monture à la sortie) ; proposés 3 s à la sortie du temple, on en prend un. Le Couteau suisse sert à l'évasion.
+- **Capture partout** (seul, hors boss) : les pygmées reviennent le chercher, même après leur demi-tour, même en
+  Run illimitée. **Évasion** avec un couteau : un curseur, une zone, des cordes ; la zone grandit avec les
+  lanternes, l'évasion durcit à chaque fois dans la même course.
+- **Urnes** : une par niveau (en plus des pièces), ouvertes dans le Trésor (bouton de l'accueil) ; commune, rare,
+  légendaire ; garanties (rare /10, légendaire /50) ; les doublons donnent des éclats.
+- **Skins** standards en couleurs, faits en code (17) ; onglet Skins de la boutique (aperçu, porter, éclats).
+- **Tambours des pygmées** : un mini-jeu de rythme quotidien (deux gros tambours, les coups tombent d'en haut),
+  récompense selon le score.
+- **Rééquilibrage** : premiers niveaux à 300, 500, 700 points ; défis longs payés selon l'effort, un seul à la
+  fois ; la fin de boutique bien plus chère (le joueur moyen finit vers la course 725). Modèle :
+  `tools/eco_model.py`.
+- Icônes des nouveaux objets et du tambour : PixelLab (`assets/src/items-046.png`, `drum-047.png`).
+- Essai : `-- --bac --test --tour47 --shots=<dossier>` (urnes, skins, offre, évasion, Tambours en images).
 
 ## 0.46.0
 

@@ -38,7 +38,9 @@ def read_prog(path=PROG):
             ups[c[0]] = {'unlock': int(c[1]), 'costs': [int(v) for v in c[2].split('/')]}
             order.append(c[0])
         elif sec == 'defis':
-            quests.setdefault(c[0], []).append({'goal': float(c[1]), 'reward': int(c[2]), 'xp': int(c[3])})
+            if c[0] in ('longs a la fois',):
+                continue
+            quests.setdefault(c[0], []).append({'goal': float(c[1]), 'reward': int(c[2]), 'xp': int(c[3]), 'long': len(c) > 4 and c[4] == 'long'})
     return ups, quests
 
 
@@ -76,7 +78,7 @@ def stats_of(d, coins, owned, rng):
     }
 
 
-def simulate(scale=1.0, runs=800, seed=1, ups=None, quests=None, extra_items=None, verbose=False, slots=3, cap_long=None, lvl_cap=10**9):
+def simulate(scale=1.0, runs=800, seed=1, ups=None, quests=None, extra_items=None, verbose=False, slots=3, cap_long=1, lvl_cap=10**9, urn_coins=182, steps=(300, 500, 700, 1000), drums_every=10, drums_coins=450):
     rng = random.Random(seed)
     if ups is None:
         ups, quests = read_prog()
@@ -88,13 +90,17 @@ def simulate(scale=1.0, runs=800, seed=1, ups=None, quests=None, extra_items=Non
         items.append(dict(it))
     total_cost = sum(i['price'] for i in items)
     owned, coins, xp, best = {}, 0.0, 0.0, 0.0
-    steps, active, last = {}, [], ''
+    qsteps, active, last = {}, [], ''
     spent, bought_at = 0.0, {}
     income = {'route': 0.0, 'niveaux': 0.0, 'defis': 0.0}
     snap = {}
 
     def level():
-        return 1 + int(xp // 1000)
+        l, rest = 1, xp
+        while rest >= steps[min(l - 1, len(steps) - 1)]:
+            rest -= steps[min(l - 1, len(steps) - 1)]
+            l += 1
+        return l
 
     def fill():
         nonlocal active
@@ -107,11 +113,11 @@ def simulate(scale=1.0, runs=800, seed=1, ups=None, quests=None, extra_items=Non
                 if len(longs) >= cap_long:
                     free = [k for k in free if not is_long(k)]
             k = rng.choice(free)
-            st = quests[k][min(steps.get(k, 0), len(quests[k]) - 1)]
+            st = quests[k][min(qsteps.get(k, 0), len(quests[k]) - 1)]
             active.append({'k': k, 'goal': st['goal'], 'p': 0.0, 'reward': st['reward'], 'xp': st['xp'], 'long': is_long(k)})
 
     def is_long(k):
-        return k in ('gorilla', 'rhino', 'dragonfly') or (k == 'dartsT' and steps.get(k, 0) >= 1)
+        return quests[k][min(qsteps.get(k, 0), len(quests[k]) - 1)].get('long', False)
 
     fill()
     quests_done = 0
@@ -139,7 +145,7 @@ def simulate(scale=1.0, runs=800, seed=1, ups=None, quests=None, extra_items=Non
             coins += a['reward']
             income['defis'] += a['reward']
             gained_xp += a['xp']
-            steps[a['k']] = steps.get(a['k'], 0) + 1
+            qsteps[a['k']] = qsteps.get(a['k'], 0) + 1
             last = a['k']
             quests_done += 1
         if done:
@@ -147,8 +153,11 @@ def simulate(scale=1.0, runs=800, seed=1, ups=None, quests=None, extra_items=Non
         l0 = level()
         xp += gained_xp
         for l in range(l0 + 1, level() + 1):
-            coins += 20 * min(l, lvl_cap)
-            income['niveaux'] += 20 * min(l, lvl_cap)
+            coins += 20 * min(l, lvl_cap) + urn_coins
+            income['niveaux'] += 20 * min(l, lvl_cap) + urn_coins
+        if drums_every and k % drums_every == 0:        # the drums of the day, now and then
+            coins += drums_coins
+            income['niveaux'] += drums_coins
         # shopping: the cheapest thing unlocked whose previous level is owned
         while True:
             cands = [i for i in items if i['unlock'] <= level() and owned.get(i['id'], 0) == i['lvl'] - 1 and i['price'] <= coins]

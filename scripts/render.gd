@@ -162,7 +162,7 @@ func guard_at(c: CanvasItem, i: int, x: float, foot: float, flip: bool, frame: i
 	c.draw_texture_rect_region(im, Rect2(snap(x - dw / 2), snap(foot - dh + 3 - lift), -dw if flip else dw, dh), Rect2((frame % 8) * fw, 0, fw, im.get_height()), Color(0.92, 0.92, 0.96))
 
 func draw_guards(c: CanvasItem) -> void:
-	if run.mode != "story" or run.blast_t < 0 or run.boss != null or run.caught != null:
+	if run.guards.is_empty() or run.boss != null or run.caught != null:
 		return
 	for i in run.guards.size():
 		var g = run.guards[i]
@@ -185,7 +185,15 @@ func draw_capture(c: CanvasItem) -> void:
 		return
 	var hx = n(run.sx)
 	var fy = floor_px(hx)
-	if k.t < Game.CATCH_LEAP:                        # his legs kicking, they come and leap on him
+	if k.t < 0:                                      # 0.47: from far behind, they run in
+		draw_hero(c, seat)
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		var u = clampf(1.0 + k.t / Game.CATCH_COME, 0, 1)
+		for i in [1, 0]:
+			var x = lerpf(sx(k.gx0[i]), sx(k.gx[i]), u)
+			shadow(c, x, floor_px(x) - 1, 16)
+			guard_at(c, i, x, floor_px(x), false, floori(t * 16 + i * 3))
+	elif k.t < Game.CATCH_LEAP:                      # his legs kicking, they come and leap on him
 		draw_hero(c, seat)
 		c.draw_set_transform_matrix(Transform2D.IDENTITY)
 		for i in [1, 0]:
@@ -1091,6 +1099,12 @@ func _draw_hero_layer(c: CanvasItem) -> void:
 		return
 	draw_hero(c, seat)
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	if run.shield and run.leap == null and run.mount == null:              # the old wooden shield on his back (0.47)
+		var sh: Texture2D = Art.tex.get("pick-shield")
+		if sh != null:
+			var hx = sx(run.cam + run.sx)
+			var hy = n(run.p.y)
+			c.draw_texture(sh, Vector2(snap(hx - 17), snap(hy - 30)))
 
 # The partner is Pépito too, his colours turned round the wheel: green leaves go orange, the teal scarf gold.
 const MATE_SHADER := """
@@ -1623,6 +1637,18 @@ func _draw_bonuses(c: CanvasItem) -> void:
 		if x > view_w + 30 or x < -30:
 			continue
 		var y = n(it.y)
+		if it.kind == "feather" or it.kind == "urn":   # 0.47: a toucan's feather, an urn (golden glow, rocking)
+			var urn = it.kind == "urn"
+			glow(c, x, y, (26 if urn else 20) + 2 * sin(t * 5), Color(1, 0.8, 0.3, 0.5 if urn else 0.35))
+			var pic: Texture2D = Art.tex.get("pick-" + it.kind)
+			if pic != null:
+				c.draw_set_transform(Vector2(x, y), (0.12 if urn else 0.3) * sin(t * 3 + it.ph), Vector2.ONE)
+				c.draw_texture(pic, Vector2(-pic.get_width() / 2.0, -pic.get_height() / 2.0))
+				c.draw_set_transform(Vector2.ZERO)
+			if sin(t * 6 + it.ph * 3) > 0.6:         # a glint
+				rect(c, x + 6, y - 9, 1, 3, Color.WHITE)
+				rect(c, x + 5, y - 8, 3, 1, Color.WHITE)
+			continue
 		var life = it.kind == "life"
 		var tint = Color(1, 0.3, 0.42) if life else Color(0.45, 0.85, 1)
 		if not life:                                 # the hourglass: bigger, out of any bubble, rocking

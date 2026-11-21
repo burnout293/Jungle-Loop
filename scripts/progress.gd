@@ -8,7 +8,7 @@ extends RefCounted
 # level pays, each upgrade's level and prices, each objective's goal and rewards. load_config reads it
 # over these defaults; a missing or wrong line keeps the default.
 
-static var cfg := {"mpp": 20.0, "per_level": 1000.0, "level_coins": 20}
+static var cfg := {"mpp": 20.0, "per_level": 1000.0, "steps": [1000.0], "level_coins": 20, "long_max": 1, "feather_max": 3, "feather_coins": 25}
 static var quest_cfg := {}                   # kind -> [{"goal", "reward", "xp"}, ...]: its steps, in order
 
 static func load_config(text: String) -> void:
@@ -31,8 +31,17 @@ static func load_config(text: String) -> void:
 					continue
 				match cols[0].to_lower():
 					"metres par point", "mètres par point": cfg["mpp"] = v
-					"points par niveau": cfg["per_level"] = v
+					"points par niveau":                  # one per level, the last for all the next ones
+						var steps = Array(cols[1].split("/")).map(func(c): return float(c.strip_edges())).filter(func(c): return c > 0)
+						if steps.size() > 0:
+							cfg["steps"] = steps
+							cfg["per_level"] = steps[steps.size() - 1]
 					"pieces par niveau", "pièces par niveau": cfg["level_coins"] = int(v)
+			"plumes":
+				var v = int(cols[1])
+				match cols[0].to_lower():
+					"au plus": cfg["feather_max"] = maxi(1, v)
+					"une de trop", "une de trop vaut": cfg["feather_coins"] = maxi(0, v)
 			"ameliorations", "améliorations":
 				var u = SaveData.upgrade(cols[0])
 				if u.is_empty() or cols.size() < 3:
@@ -43,17 +52,35 @@ static func load_config(text: String) -> void:
 				if costs.size() > 0:
 					u["costs"] = costs
 			"defis", "défis":                    # the same kind on several lines: its steps, one after the other
-				if KINDS.has(cols[0]) and cols.size() >= 4 and cols[1].is_valid_float():
+				if cols[0].to_lower() in ["longs a la fois", "longs à la fois"] and cols[1].is_valid_int():
+					cfg["long_max"] = maxi(0, int(cols[1]))
+				elif KINDS.has(cols[0]) and cols.size() >= 4 and cols[1].is_valid_float():
 					if not quest_cfg.has(cols[0]):
 						quest_cfg[cols[0]] = []
-					quest_cfg[cols[0]].append({"goal": maxi(1, int(cols[1])), "reward": maxi(0, int(cols[2])), "xp": maxi(0, int(cols[3]))})
+					quest_cfg[cols[0]].append({"goal": maxi(1, int(cols[1])), "reward": maxi(0, int(cols[2])), "xp": maxi(0, int(cols[3])),
+						"long": cols.size() >= 5 and cols[4].to_lower() == "long"})
 
 # ---------- level: a point of experience every cfg.mpp metres, plus what the objectives pay ----------
 
 static func level_info(xp: float) -> Dictionary:
-	var need = cfg["per_level"]
-	var level = 1 + floori(xp / need)
-	return {"level": level, "into": floori(fmod(xp, need)), "need": int(need)}
+	var steps: Array = cfg["steps"]
+	var level = 1
+	var rest = xp
+	while true:
+		var need: float = steps[mini(level - 1, steps.size() - 1)]
+		if rest < need:
+			return {"level": level, "into": floori(rest), "need": int(need)}
+		rest -= need
+		level += 1
+	return {}
+
+## The experience at which a level begins.
+static func level_start(level: int) -> float:
+	var steps: Array = cfg["steps"]
+	var x = 0.0
+	for l in range(1, level):
+		x += steps[mini(l - 1, steps.size() - 1)]
+	return x
 
 static func level_reward(level: int) -> int:
 	return int(cfg["level_coins"]) * level
@@ -66,6 +93,7 @@ static func add_xp(save: Dictionary, points: float) -> Array:
 	var gained: Array = []
 	for l in range(before + 1, after + 1):
 		save["coins"] += level_reward(l)
+		save["urns"] = int(save.get("urns", 0)) + 1      # 0.47: and an urn
 		gained.append(l)
 	return gained
 
@@ -128,6 +156,8 @@ static func fill(save: Dictionary) -> void:
 				continue
 			if KINDS[k].has("seen") and maxi(int(save["best"]), int(save["bestEndless"])) < KINDS[k]["seen"]:
 				continue                             # a mount never met yet: not its objectives
+			if quest_step(save, k).get("long", false) and save["quests"].filter(func(q): return q.get("long", false)).size() >= int(cfg["long_max"]):
+				continue                             # one long objective at a time (they would take every place)
 			if KINDS[k].has("needs"):
 				var ok = false
 				for id in KINDS[k]["needs"]:
@@ -140,7 +170,36 @@ static func fill(save: Dictionary) -> void:
 		var qc: Dictionary = quest_step(save, chosen)
 		if qc.is_empty():
 			qc = {"goal": KINDS[chosen]["base"] + KINDS[chosen]["step"] * tier, "reward": 30 + 15 * tier, "xp": 40 + 20 * tier}
-		save["quests"].append({"k": chosen, "goal": qc["goal"], "p": 0, "reward": qc["reward"], "xp": qc["xp"]})
+		var nq = {"k": chosen, "goal": qc["goal"], "p": 0, "reward": qc["reward"], "xp": qc["xp"]}
+		if qc.get("long", false):
+			nq["long"] = true
+		save["quests"].append(nq)
+
+## A toucan's feather spent: this objective goes, another kind takes its place (at the same place on the
+## list). False when there is no feather.
+static func reroll(save: Dictionary, q: Dictionary) -> bool:
+	var i = save["quests"].find(q)
+	if i < 0 or int(save["feathers"]) <= 0:
+		return false
+	save["feathers"] = int(save["feathers"]) - 1
+	save["quests"].remove_at(i)
+	var was = save["lastQuest"]
+	save["lastQuest"] = q["k"]                       # (not the same kind again at once)
+	fill(save)
+	save["lastQuest"] = was
+	var nq = save["quests"].pop_back()
+	save["quests"].insert(i, nq)
+	return true
+
+## Feathers picked up in a run: kept up to cfg.feather_max, each one more paying cfg.feather_coins.
+## Returns the coins paid.
+static func add_feathers(save: Dictionary, n: int) -> int:
+	var room = maxi(0, int(cfg["feather_max"]) - int(save["feathers"]))
+	var kept = mini(room, n)
+	save["feathers"] = int(save["feathers"]) + kept
+	var paid = (n - kept) * int(cfg["feather_coins"])
+	save["coins"] += paid
+	return paid
 
 static func start_run(save: Dictionary) -> void:
 	for q in save["quests"]:

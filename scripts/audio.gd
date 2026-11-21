@@ -262,6 +262,23 @@ func _recipes() -> Dictionary:
 		"impact": [T(110, 0.42, "sine", 0.55, 0, 44), N(0.24, 0.38, 900), T(660, 0.3, "triangle", 0.15, 0.03, 990)],   # the count's punch
 		"quest": arp([7, 12, 16], 0.2, "triangle", 0.2, 0.08),
 		"level": arp([0, 4, 7, 12, 16], 0.3, "triangle", 0.2, 0.08),
+		# 0.47: a toucan's feather (a soft whoosh up), an urn (a clay knock, then a glint), the wooden shield
+		# breaking, the bush horn calling, a lantern lit (a faint chime)
+		"feather": [T(900, 0.22, "sine", 0.14, 0, 1800), N(0.18, 0.08, 5200, 0.02)],
+		"urn": [T(220, 0.12, "triangle", 0.3, 0, 160), N(0.1, 0.2, 1400), T(hz(19), 0.18, "triangle", 0.14, 0.12), T(hz(24), 0.3, "triangle", 0.14, 0.2)],
+		"shield": [N(0.25, 0.5, 700), T(160, 0.2, "square", 0.16, 0, 70), N(0.12, 0.3, 2400, 0.08)],
+		"horn": [T(196, 0.7, "sawtooth", 0.16, 0, 233), T(294, 0.5, "sawtooth", 0.1, 0.1, 330)],
+		"lantern": [T(hz(24), 0.25, "sine", 0.06), T(hz(31), 0.3, "sine", 0.04, 0.05)],
+		# the escape: the knife out (a metal flick), a rope bitten through, a miss, free, the rope that held
+		"knife": [T(1800, 0.06, "square", 0.08, 0, 2600), T(2400, 0.12, "triangle", 0.1, 0.05, 1600)],
+		"cut": [N(0.08, 0.35, 2600), T(700, 0.08, "square", 0.1, 0, 1400)],
+		"miss": [T(200, 0.18, "square", 0.14, 0, 120)],
+		"free": arp([0, 4, 7, 12, 19], 0.22, "triangle", 0.2, 0.06),
+		"held": [T(300, 0.5, "triangle", 0.18, 0, 110)],
+		# the pygmies' drums: the low one, the high one, the shaker keeping time
+		"drumlo": [T(90, 0.32, "sine", 0.7, 0, 48), N(0.05, 0.3, 280)],
+		"drumhi": [T(300, 0.14, "triangle", 0.32, 0, 190), N(0.05, 0.35, 2600)],
+		"shaker": [N(0.035, 0.07, 7000)],
 	}
 
 ## Renders a list of voices into one sound, as Web Audio played them: each voice's volume falls

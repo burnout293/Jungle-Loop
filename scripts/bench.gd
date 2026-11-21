@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour47": false, "showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -39,6 +39,7 @@ func _ready() -> void:
 			"still": opts["still"] = true
 			"hitbox": opts["hitbox"] = true
 			"tour": opts["tour"] = true
+			"tour47": opts["tour47"] = true        # 0.47's new things in pictures: urns, skins, the offer, the escape
 			"prof": opts["prof"] = true
 			"quality": opts["quality"] = kv[1]
 			"showcase": opts["showcase"] = true
@@ -110,7 +111,8 @@ func _start() -> void:
 		o.biome = r.biome
 		Game.add_bonus(r, px + 330)
 		Game.add_bonus(r, px + 420)
-		r.bonuses[1].kind = "brake" if r.bonuses[0].kind == "life" else "life"
+		r.bonuses[0].kind = "feather"
+		r.bonuses[1].kind = "urn"
 		Game.add_hover(r, px + 760, Game.HEAD)
 		Game.add_hover(r, px + 900, Game.LOW)
 		r.wait = 0
@@ -122,6 +124,9 @@ func _process(delta: float) -> void:
 	t += delta
 	if opts["tour"]:
 		await _tour()
+		return
+	if opts["tour47"]:
+		await _tour47()
 		return
 	if opts["coop"] != "":                           # two browsers, one run: see _coop_bench
 		if opts["slow"] > 0:
@@ -203,6 +208,96 @@ func _shoot(delta: float) -> void:
 		var im := get_viewport().get_texture().get_image()
 		im.save_png(opts["shots"].path_join("shot-%03d.png" % shot_n))
 		shot_n += 1
+
+## --tour47: the 0.47 things, in pictures: the Trésor and its urns, the Skins tab, the feathers on the
+## objectives, the consumables offered out of the temple, the shield, the capture far away and the escape.
+func _tour47() -> void:
+	var steps = [
+		[0.5, "setup", ""], [1.0, "shot", "47-01-menu-urns"],
+		[1.1, "treasure", ""], [1.8, "shot", "47-02-treasure"],
+		[1.9, "urn", ""], [2.9, "shot", "47-03-urn-open"],
+		[3.0, "urnleg", ""], [4.0, "shot", "47-04-urn-legendary"],
+		[4.1, "untreasure", ""], [4.2, "go", "shop"], [4.3, "tab", "skin"], [5.3, "shot", "47-05-skins"],
+		[5.4, "skin", "pepito-autumn"], [6.6, "shot", "47-06-skin-pepito"],
+		[6.7, "skin", "gorilla-yeti"], [7.9, "shot", "47-07-skin-gorilla"],
+		[8.0, "skin", "pygmies-fire"], [8.05, "scrolldown", ""], [8.9, "shot", "47-08-skin-pygmies"],
+		[9.0, "go", "menu"], [9.8, "shot", "47-09-menu-feathers"],
+		[9.9, "play", ""], [12.6, "shot", "47-10-offer"], [12.7, "take", "shield"], [13.4, "shot", "47-11-shield"],
+		[13.5, "fall", ""], [14.1, "shot", "47-12-they-come"], [15.0, "shot", "47-13-cloud"],
+		[18.4, "shot", "47-14-knife-offer"], [18.6, "knife", ""], [19.0, "shot", "47-15-escape"],
+		[19.1, "autoesc", ""], [22.5, "shot", "47-16-free"],
+		[22.6, "pause", ""], [22.7, "go", "menu"], [23.6, "shot", "47-17-menu-drums"],
+		[23.7, "go", "drums"], [24.6, "shot", "47-18-drums-intro"], [24.7, "drumsgo", ""], [25.0, "autodrum", ""],
+		[30.0, "shot", "47-19-drums-play"], [36.0, "shot", "47-20-drums-faster"], [60.0, "shot", "47-21-drums-end"],
+		[60.1, "quit", ""],
+	]
+	if opts.get("autodrum", false) and main.drums != null:   # a fair drummer: most beats, some a little late, a few missed
+		for nn in main.drums.notes:
+			if nn["hit"] == "" and not nn.has("tried") and main.drums.t >= nn["t"] + nn.get("late", 0.0):
+				nn["tried"] = true
+				if randf() < 0.85:
+					main.drums_hit(nn["lane"])
+			if nn["hit"] == "" and not nn.has("late"):
+				nn["late"] = randf_range(-0.02, 0.1)
+	if opts.get("autoesc", false) and main.run != null and main.run.caught != null and main.run.caught.phase == "escape":
+		var e = main.run.caught.esc
+		if absf(e.cur - e.zone) < e.w * 0.3:
+			main.press()
+	while tour_i < steps.size() and t >= steps[tour_i][0]:
+		var st = steps[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				var s: Dictionary = main.save
+				s["seenIntro"] = true
+				s["mode"] = "endless"
+				s["urns"] = 4
+				s["feathers"] = 2
+				s["shards"] = 130
+				s["best"] = 2000
+				s["stock"] = {"shield": 2, "magnet": 1, "idol": 1, "horn": 1, "knife": 2}
+				s["skins"]["owned"] = ["pepito-autumn"]
+				main.refresh_menu()
+			"treasure": main._treasure()
+			"untreasure": main._close_treasure()
+			"urn": main._break_urn()
+			"urnleg":
+				main.save["urnPity"]["l"] = 49
+				main._break_urn()
+			"go": main.go(arg)
+			"tab":
+				main.tab = arg
+				main.refresh_shop()
+			"skin":
+				main.picked_skin = arg
+				main.refresh_shop()
+			"scrolldown":
+				var sc: ScrollContainer = main.w["shop-scroll"]
+				sc.scroll_vertical = 100000
+			"play":
+				main.save["mode"] = "endless"
+				main.go("play")
+			"take": main._take(arg)
+			"fall":
+				var r = main.run
+				r.shield = false
+				r.obs.clear()
+				r.god = false
+				r.hearts = 1
+				r.p.inv = 0
+				if r.mount != null:
+					Game.dismount(r)
+				Game.hit(r, null)
+			"knife": main._use_knife()
+			"autoesc": opts["autoesc"] = true
+			"pause": main.pause()
+			"drumsgo": main._drums_start()
+			"autodrum": opts["autodrum"] = true
+			"quit": get_tree().quit()
 
 ## --tour: every screen in turn, with pictures taken while they slide (the menus' check).
 func _tour() -> void:
