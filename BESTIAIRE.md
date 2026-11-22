@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 18/11/2026, version Godot 0.47.0 (le jeu à l'adresse principale ; l'ancienne version web sur `web.html`). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 18/11/2026, version Godot 0.47.0 (le jeu à l'adresse principale). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -56,7 +56,7 @@ Inoffensif ; il se casse avec Brise-tout, l'Esquive, les Bottes de métal, la TN
 | | Forêt | Ruines | Donjon | Cité |
 |---|---|---|---|---|
 | **Plateforme** | 0.49 : morceau de colline flottant, mousse dessus, pierres gravées et racines dessous (PixelLab, deux tailles) ; toujours devant le monticule dont il semble tiré ; 0.50 : une sur deux en pente fixe (elle monte, et la dernière d'un passage peut descendre) | bloc de sol flottant (dalles) | passerelle de planches pendue à deux chaînes | plateforme en lévitation sur 3 réacteurs cyan |
-| **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche ; 0.49 : monticule de pierres gravées et de racines (PixelLab), toujours derrière les plateformes ; 0.50 : assombri, et trois autres (pierres gravées, souche creuse, tronc couché) | murs de pierres carrées effondrés | aucune (0.44) | immeubles éclairés, conteneurs rouillés |
+| **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche ; 0.49 : monticule de pierres gravées et de racines (PixelLab), toujours derrière les plateformes ; 0.50 : assombri, et trois autres (pierres gravées, souche creuse, tronc couché) | murs de pierres carrées effondrés | aucune de 0.44 à 0.50 ; 0.51 : quatre éboulis (colonne couchée, cage rouillée, gargouille tombée, lustre écrasé sur des tonneaux) | immeubles éclairés, conteneurs rouillés |
 | **Lianes** | pendent du haut de l'écran ici et là | idem | chaînes à crochet ou anneau | câbles à prise lumineuse, câbles tendus en arc |
 
 Derrière le sol de la forêt (0.44) : fougères, fleurs, champignons et lanterne (ils s'allument quand il les frôle),
@@ -105,10 +105,11 @@ disque-soleil doré, un masque de pierre au centre avec le cœur au front, les q
 4 essais dans `propositions/0.49/` du dépôt Godot). Vorace repousse (c'est une fleur) tant que le gardien
 suivant n'existe pas. Ce sont les pygmées, non plus la relique, qui ramènent Pépito au temple à chaque chute.
 
-**0.50 : un masque de jaguar** (proposition B3, sans son treillis doré ni ses lianes), coupé en cinq pièces qui
-s'emboîtent : le **cœur** au front (cyan), la **couronne** de feuilles (jade, Vorace), la **tête gauche** (ambre),
-la **mâchoire** (lune, violette) et la **tête droite** (braise, rouge). Les images sont prêtes
-(`assets/img/relic/` du dépôt Godot), pas encore montrées dans le jeu.
+**0.50 : un masque de jaguar** (proposition B3, sans son treillis doré ni ses lianes). **0.51 : quatre pièces**,
+chacune une dalle avec son épaisseur : la **couronne** de feuilles (jade, Vorace) où est serti le **cœur** (cyan),
+la **tête gauche** (ambre), la **tête droite** (braise, rouge), coupées droit au milieu, et la **mâchoire** (lune),
+toute violette, ses crocs compris. Les images sont prêtes (`assets/img/relic/` du dépôt Godot), pas encore
+montrées dans le jeu.
 
 ## Boss à l'étude (0.48, sans dessins)
 
