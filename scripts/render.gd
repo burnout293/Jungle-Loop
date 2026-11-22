@@ -707,8 +707,8 @@ func draw_hills(c: CanvasItem) -> void:
 		var x = snap(hl.x / PIXEL - cam)
 		var w = roundi(hl.w / PIXEL)
 		var h = roundi(hl.h / PIXEL)
-		if x > view_w or x + w < 0 or hl.biome == 3:
-			continue                                 # (the dungeon has no hill since 0.44: its walls looked stuck on)
+		if x > view_w or x + w < 0:
+			continue                                 # (0.44 to 0.50 the dungeon had none: its walls looked stuck on)
 		var pics: Array = Art.hill_sets[hl.biome] if hl.biome < Art.hill_sets.size() else []
 		if hl.isles and hl.biome == 0 and pics.size() >= 3:   # 0.49: behind the platforms, the mounds they come from
 			pics = pics.slice(2)                     # (0.50: four of them, darker: tools/prep_mounds.py)

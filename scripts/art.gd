@@ -50,7 +50,7 @@ static var hills := {}
 # What stands behind the path, per scenery (0.43, PixelLab, tools/prep_hills.py): the forest's mossy rocks
 # and arched roots, the ruins' broken walls of square stones, the dungeon's walls with a wooden door or iron
 # bars, the city's buildings and containers. A little darker than what can be touched.
-const HILL_SETS := [["hill-forest-1", "hill-forest-2", "hill-forest-3", "hill-forest-4", "hill-forest-5", "hill-forest-6"], ["hill-ruins-1", "hill-ruins-2"], ["hill-city-1", "hill-city-2"], []]   # (the dungeon: none since 0.44)
+const HILL_SETS := [["hill-forest-1", "hill-forest-2", "hill-forest-3", "hill-forest-4", "hill-forest-5", "hill-forest-6"], ["hill-ruins-1", "hill-ruins-2"], ["hill-city-1", "hill-city-2"], ["hill-dungeon-1", "hill-dungeon-2", "hill-dungeon-3", "hill-dungeon-4"]]   # (the dungeon: none from 0.44, heaps of its masonry since 0.51)
 static var hill_sets: Array = []
 static var hill_order: Array = []
 static var ready := false

@@ -90,9 +90,37 @@ const MAX_EQUIPPED := 3
 
 ## "--bac" on the command line plays on a separate, throw-away save: for trying things without
 ## touching the real one.
-static func path() -> String:
-	var bac = "--bac" in OS.get_cmdline_user_args() or "--bac" in OS.get_cmdline_args()
-	return "user://jungle-loop-save-v1" + ("-bac" if bac else "") + ".json"
+static func _bac() -> bool:
+	return "--bac" in OS.get_cmdline_user_args() or "--bac" in OS.get_cmdline_args()
+
+## 0.51: three games (« parties ») side by side, each its own save; the one played is remembered
+## (user://jungle-loop-slot.txt). Partie 1 is the save of before (same file), 2 and 3 have "-p2", "-p3".
+const SLOTS := 3
+static var slot := 0
+
+static func current_slot() -> int:
+	if slot == 0:
+		var f = "user://jungle-loop-slot" + ("-bac" if _bac() else "") + ".txt"
+		slot = clampi(FileAccess.get_file_as_string(f).strip_edges().to_int(), 1, SLOTS) if FileAccess.file_exists(f) else 1
+	return slot
+
+static func set_slot(n: int) -> void:
+	slot = clampi(n, 1, SLOTS)
+	var f = FileAccess.open("user://jungle-loop-slot" + ("-bac" if _bac() else "") + ".txt", FileAccess.WRITE)
+	if f != null:
+		f.store_string(str(slot))
+		f.close()
+
+static func path(n: int = 0) -> String:
+	var k = n if n > 0 else current_slot()
+	return "user://jungle-loop-save-v1" + ("-bac" if _bac() else "") + ("" if k == 1 else "-p%d" % k) + ".json"
+
+## Whether a partie has been played (its file is there).
+static func slot_used(n: int) -> bool:
+	return FileAccess.file_exists(path(n)) or FileAccess.file_exists(path(n) + ".new")
+
+## What a device keeps whatever the partie: carried from one partie to the other when switching.
+const DEVICE := ["musicVol", "sfxVol", "quality", "pixelFont", "dangerRim", "alertShift", "showFps", "full"]
 
 static func upgrade(id: String) -> Dictionary:
 	for u in UPGRADES:
@@ -228,8 +256,8 @@ static func sanitize(raw) -> Dictionary:
 
 ## The save; if it was cut short (the phone stopped the game while it was being written), the copy written
 ## just before it (0.48: before, a cut save came back empty, all progress gone).
-static func load_save() -> Dictionary:
-	for p in [path(), path() + ".new"]:
+static func load_save(n: int = 0) -> Dictionary:
+	for p in [path(n), path(n) + ".new"]:
 		if FileAccess.file_exists(p):
 			var raw = JSON.parse_string(FileAccess.get_file_as_string(p))
 			if raw is Dictionary:
@@ -237,17 +265,17 @@ static func load_save() -> Dictionary:
 	return sanitize(null)
 
 ## Written twice, one copy after the other: whenever the game is stopped, one of the two is whole.
-static func store(save: Dictionary) -> void:
+static func store(save: Dictionary, n: int = 0) -> void:
 	var text = JSON.stringify(save)
-	for p in [path() + ".new", path()]:
+	for p in [path(n) + ".new", path(n)]:
 		var f = FileAccess.open(p, FileAccess.WRITE)
 		if f == null:
 			return
 		f.store_string(text)
 		f.close()
 
-static func reset() -> Dictionary:
-	for p in [path(), path() + ".new"]:
+static func reset(n: int = 0) -> Dictionary:
+	for p in [path(n), path(n) + ".new"]:
 		if FileAccess.file_exists(p):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 	return sanitize(null)

@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.50.0"
+const VERSION := "0.51.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -56,7 +56,8 @@ var picked := "doubleJump"
 var tab := "up"
 var picked_mount := "gorilla"
 var in_run := false                    # the settings were opened from the pause screen: the run waits behind them
-var set_tab := "read"
+var set_tab := "game"                  # Réglages: the category open (0.51: Jeu, Affichage, Son, Sauvegarde)
+var open_slot := 0                     # the partie a save file being opened goes to
 var fk := 0.95                         # evens out the sizes of the typefaces
 var font: Font
 var bold: Font                         # buttons, the HUD and titles: the bold cut
@@ -122,7 +123,7 @@ var update_sure := false               # « à jour » said: pressing again relo
 var update_notes := ""                 # 0.49.1: what the new version brings (nouveautes.txt beside the game)
 var update_offered := false            # 0.49.1: the update offered once this session (a window at the start)
 const INVITE_SCREENS := ["menu", "shop", "friends", "over", "tally", "settings"]
-var friends_tab := "friends"
+var friends_tab := "list"              # Amis: list, group, scores (0.51)
 var board: Array = []                  # the friends' board, as the server sent it
 var offer_t := 0.0                     # the consumables offered out of the temple: seconds left (0.47)
 var treasure: CanvasLayer = null       # the Trésor (0.47): the urns to break, what is in the bag
@@ -1352,11 +1353,9 @@ func _race_ready() -> bool:
 ## A mode picked in the list: for two the host starts it for both; Affrontement is the race of the group.
 func _pick_mode(mode: String) -> void:
 	_home_modes(false)
-	if mode == "race":
-		if race.role == "host":
-			_race_go()
-		else:
-			_menu_note("C'est l'hôte de la course qui la lance.")
+	if mode == "race":                               # 0.51: the group's room first, where the bets are made
+		race_seen = true
+		go("race")
 		return
 	if coop.state == "ready":                        # linked for two: the host starts it for both
 		if coop.role == "host":
@@ -2042,117 +2041,105 @@ func _build_shop() -> void:
 	prev.add_child(pc)
 	s.add_child(prev)
 
-## Réglages, nothing to scroll: on the left the sound and the picture; on the right three tabs, Lisibilité
-## (the typeface, the dangers' outline, the warnings further in), Sauvegarde (its code, its file, erasing
-## all), Version (in a browser, « Mettre à jour »). Opened from the pause, the Sauvegarde tab only says it
-## waits for the end of the run.
+## Réglages (0.51), laid out as the shop: the categories down the left side (Retour, Jeu, Affichage, Son,
+## Sauvegarde), the one open in a stone pane in the middle. Sauvegarde holds the three parties (SaveData
+## slots): each one's level and coins, « Jouer » to switch to it, its code out and in, erasing it. Opened
+## from the pause, Sauvegarde only says it waits for the end of the run.
+const SET_TABS := [["game", "target", "Jeu"], ["show", "gems", "Affichage"], ["sound", "drum", "Son"], ["save", "shield", "Sauvegarde"]]
+
 func _build_settings() -> void:
 	var s = _screen("settings", true)
-	var back = _button("Retour", "", func() -> void: go("menu"))
-	_place(back, M, 6, 152, 38)
-	s.add_child(back)
-	_head(s, "Réglages")
-	var left = _pane(s, false, 262)
-	w["set-left"] = left
-	var col = _vbox(3)
-	col.add_child(_label("SON", ts("s"), RELIC, 0))
+	var on_set_tab = func(key: String) -> void:
+		set_tab = key
+		refresh_settings()
+	_side_tabs(s, SET_TABS, "settab-", on_set_tab)
+	w["set-title"] = _label("", ts("s"), RELIC, 1.5)
+	w["set-title"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_place(w["set-title"], 133, 11, 361, 14)
+	s.add_child(w["set-title"])
+	var pane = PanelContainer.new()
+	pane.add_theme_stylebox_override("panel", _kit_tall("intro-pane"))   # 361 wide, its middle rows repeated
+	pane.mouse_filter = Control.MOUSE_FILTER_STOP
+	_place(pane, 133, 30, 361, 282)
+	s.add_child(pane)
+	w["set-pane"] = pane
+	var all = _vbox(0)
+	# Jeu
+	var game = _vbox(4)
+	for spec in [["Contours des dangers", "tg-rim", "Un liseré rouge autour de tout ce qui fait mal."],
+			["Signalements décalés", "tg-shift", "Les alertes des Fonceurs apparaissent plus à gauche, loin du pouce."],
+			["Images par seconde", "tg-fps", "Leur nombre, affiché pendant la course."]]:
+		game.add_child(_set_toggle(spec[0], spec[1], spec[2]))
+	var vrow = _toggle_row("Version " + VERSION)
+	if OS.has_feature("web"):                        # the browser keeps the game's files: a fresh copy on demand
+		var ub = _button("Mettre à jour", "small", _check_update)
+		ub.custom_minimum_size.x = a(110)
+		vrow.add_child(ub)
+	game.add_child(vrow)
+	var um = _label(update_text if OS.has_feature("web") else "Une nouvelle version : le jeu la reçoit en se relançant.", ts("s"), DIM, 0)
+	um.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	um.custom_minimum_size.x = a(300)
+	w["upd-msg"] = um
+	game.add_child(um)
+	w["panel-game"] = game
+	all.add_child(game)
+	# Affichage
+	var show = _vbox(4)
+	var qual = _set_toggle("Qualité", "tg-quality", "")
+	w["q-sub"] = qual.get_meta("sub")
+	show.add_child(qual)
+	var full = _set_toggle("Plein écran", "tg-full", "Le jeu prend tout l'écran.")
+	full.visible = _can_full()
+	show.add_child(full)
+	show.add_child(_set_toggle("Police pixel", "tg-font", "Non : une police ronde, plus facile à lire."))
+	w["panel-show"] = show
+	all.add_child(show)
+	# Son
+	var sound = _vbox(8)
 	for spec in [["Musique", "musicVol"], ["Effets", "sfxVol"]]:
 		var key: String = spec[1]
 		var row = _toggle_row(spec[0])
 		var vol = _hbox(4)
 		vol.add_child(_small_square("−", func() -> void: _volume(key, -1)))
-		var bar = _bar(66, 12, GOLD)
+		var bar = _bar(110, 12, GOLD)
 		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		vol.add_child(bar)
 		w["vol-" + key] = bar
 		vol.add_child(_small_square("+", func() -> void: _volume(key, 1)))
 		row.add_child(vol)
-		col.add_child(row)
-	col.add_child(_label("IMAGE", ts("s"), RELIC, 0))
-	for spec in [["Qualité", "tg-quality"], ["Plein écran", "tg-full"], ["Images par seconde", "tg-fps"]]:
-		var row = _toggle_row(spec[0])
-		var id: String = spec[1]
-		var b = _button("", "small on", func() -> void: _toggle(id))
-		b.custom_minimum_size.x = a(110)
-		row.add_child(b)
-		w[id] = b
-		col.add_child(row)
-		if id == "tg-full":
-			row.visible = _can_full()
-		if id == "tg-quality":
-			var sub = _label("", ts("s"), DIM, 0)
-			sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			sub.custom_minimum_size.x = a(220)
-			w["q-sub"] = sub
-			col.add_child(sub)
-	left.add_child(_fixed(col))
-	var right = _pane(s, true, 262)
-	w["set-right"] = right
-	var rc = _vbox(6)
-	var tabs = _hbox(3)
-	for spec in [["read", "Lisibilité"], ["save", "Sauvegarde"], ["version", "Version"]]:
-		var key: String = spec[0]
-		var on_set_tab = func() -> void:
-			set_tab = key
-			refresh_settings()
-		var b = _button(spec[1], "tab", on_set_tab)
-		b.custom_minimum_size = Vector2(a(70), a(22))
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tabs.add_child(b)
-		w["settab-" + key] = b
-	rc.add_child(tabs)
-	var read = _vbox(5)                              # Lisibilité
-	for spec in [["Police pixel", "tg-font", "Non : une police ronde, plus facile à lire."],
-			["Contour rouge des dangers", "tg-rim", "Un liseré rouge autour de tout ce qui fait mal."],
-			["Signalements décalés", "tg-shift", "Les alertes des Fonceurs apparaissent plus à gauche, loin du pouce."]]:
-		var row = _toggle_row(spec[0])
-		var id: String = spec[1]
-		var b = _button("", "small on", func() -> void: _toggle(id))
-		b.custom_minimum_size.x = a(70)
-		row.add_child(b)
-		w[id] = b
-		read.add_child(row)
-		var sub = _label(spec[2], ts("s"), DIM, 0)
-		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		sub.custom_minimum_size.x = a(220)
-		read.add_child(sub)
-	w["panel-read"] = read
-	rc.add_child(read)
-	var keep = _vbox(5)                              # Sauvegarde
-	var sub_s = _label("Elle se fait toute seule. Pour changer d'appareil, exporte le code puis importe-le (il marche aussi avec la version web).", ts("s"), DIM, 0)
-	sub_s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	sub_s.custom_minimum_size.x = a(220)
-	keep.add_child(sub_s)
-	w["save-code"] = TextEdit.new()
-	w["save-code"].placeholder_text = "Code de sauvegarde"
-	w["save-code"].custom_minimum_size = Vector2(a(220), a(26))
-	w["save-code"].add_theme_font_size_override("font_size", roundi(7 * U))
-	w["save-code"].wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
-	keep.add_child(w["save-code"])
-	var grid = GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", roundi(a(4)))
-	grid.add_theme_constant_override("v_separation", roundi(a(4)))
-	var on_export = func() -> void:
-		var code = SaveData.export_code(save)
-		w["save-code"].text = code
-		DisplayServer.clipboard_set(code)
-		_msg("Code copié.")
-	grid.add_child(_button("Exporter", "small", on_export))
-	grid.add_child(_button("Importer", "small", _import_field))
-	grid.add_child(_button("Fichier", "small", _save_file))
-	grid.add_child(_button("Ouvrir", "small", _open_file))
-	keep.add_child(grid)
-	var do_reset = func() -> void:
-		save = SaveData.reset()
-		SaveData.store(save)
-		_after_load()
-		_msg("Progression effacée.")
-	var ask_reset = func() -> void:
-		_confirm("Effacer toute la progression ? C'est définitif.", do_reset)
-	var reset = _button("Tout effacer", "small danger", ask_reset)
-	reset.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	keep.add_child(reset)
+		sound.add_child(row)
+	w["panel-sound"] = sound
+	all.add_child(sound)
+	# Sauvegarde: the three parties
+	var keep = _vbox(6)
+	for n in range(1, SaveData.SLOTS + 1):
+		var card = _vbox(3)
+		var head = _hbox(6)
+		var name_l = _label("PARTIE %d" % n, ts("m"), INK, 0)
+		head.add_child(name_l)
+		var info = _label("", ts("s"), DIM, 0)
+		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		info.clip_text = true
+		head.add_child(info)
+		var on_l = _label("EN COURS", ts("s"), RELIC, 0)
+		head.add_child(on_l)
+		var play = _button("Jouer", "small gold", func() -> void: _slot_play(n))
+		play.custom_minimum_size.x = a(64)
+		head.add_child(play)
+		card.add_child(head)
+		var acts = _hbox(4)
+		var specs = [["Exporter", func() -> void: _slot_export(n)], ["Importer", func() -> void: _slot_import(n)], ["Réinitialiser", func() -> void: _slot_reset(n)]]
+		for spec in specs:
+			var b = _button(spec[0], "small danger" if spec[0] == "Réinitialiser" else "small", spec[1])
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			acts.add_child(b)
+		card.add_child(acts)
+		keep.add_child(card)
+		w["slot-%d" % n] = {"name": name_l, "info": info, "on": on_l, "play": play}
+	w["save-msg"] = _label("", ts("s"), DIM, 0)
+	w["save-msg"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	w["save-msg"].custom_minimum_size.x = a(300)
+	keep.add_child(w["save-msg"])
 	var forget = func() -> void:                     # 0.48: the player's data on the server (the stores ask for it)
 		_confirm("Effacer tes données en ligne ? Ton pseudo, ton code ami, tes records et tes amitiés disparaissent du serveur. Ta progression reste.", func() -> void:
 			coop.leave()
@@ -2166,27 +2153,61 @@ func _build_settings() -> void:
 	keep.add_child(wipe)
 	w["save-online"] = wipe
 	w["panel-save"] = keep
-	rc.add_child(keep)
+	all.add_child(keep)
 	var later = _wrap("Pendant une course, la sauvegarde attend la fin : reviens ici depuis l'accueil.", DIM)
 	w["panel-save-later"] = later
-	rc.add_child(later)
-	w["save-msg"] = _label("", ts("s"), DIM, 0)
-	rc.add_child(w["save-msg"])
-	var ver = _vbox(6)                               # Version
-	var vrow = _toggle_row("Version " + VERSION)
-	if OS.has_feature("web"):                        # the browser keeps the game's files: a fresh copy on demand
-		var ub = _button("Mettre à jour", "small", _check_update)
-		ub.custom_minimum_size.x = a(110)
-		vrow.add_child(ub)
-	ver.add_child(vrow)
-	var um = _label(update_text if OS.has_feature("web") else "Une nouvelle version : le jeu la reçoit en se relançant.", ts("s"), DIM, 0)
-	um.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	um.custom_minimum_size.x = a(220)
-	w["upd-msg"] = um
-	ver.add_child(um)
-	w["panel-version"] = ver
-	rc.add_child(ver)
-	right.add_child(_fixed(rc))
+	all.add_child(later)
+	pane.add_child(_fixed(all))
+
+## The shop's left column for any screen (0.51: Réglages too): Retour, then one tab per [key, icon, name],
+## at the pictures' exact sizes (54 x 36, 54 x 64). `prefix`: where the tabs go in `w` (prefix + key).
+func _side_tabs(s: Control, specs: Array, prefix: String, on_tab: Callable) -> void:
+	var side = _vbox(4)
+	_place(side, 6, 6, 54, 308)
+	var back = _button("Retour", "tab", func() -> void: go("menu"))
+	_shop_skin(back, "back", false)
+	back.custom_minimum_size = Vector2(a(54), a(36))
+	back.add_theme_font_size_override("font_size", roundi(6.5 * U))
+	side.add_child(back)
+	for spec in specs:
+		var key: String = spec[0]
+		var b = _button(spec[2], "tab", func() -> void: on_tab.call(key))
+		b.icon = icon("ico-" + spec[1])
+		b.expand_icon = true
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+		b.add_theme_constant_override("icon_max_width", roundi(a(26)))
+		b.clip_text = true
+		b.custom_minimum_size = Vector2(a(54), a(64))  # the picture's exact size
+		side.add_child(b)
+		w[prefix + key] = b
+	s.add_child(side)
+
+## Paints a left column's tabs: the open one in its "selected" picture; each name as big as fits its stone.
+func _paint_side_tabs(specs: Array, prefix: String, sel: String) -> void:
+	for spec in specs:
+		var b: Button = w[prefix + spec[0]]
+		_shop_skin(b, "tab", spec[0] == sel)
+		var fs = 5.5 * U
+		while fs > 4.0 * U and bold.get_string_size(spec[2], HORIZONTAL_ALIGNMENT_LEFT, -1, roundi(fs)).x > a(54 - 14):
+			fs -= 0.25 * U
+		b.add_theme_font_size_override("font_size", roundi(fs))
+
+## A setting's row: its name, its button (« Oui » / « Non », or Qualité's), and a line under it.
+func _set_toggle(text: String, id: String, sub_text: String) -> VBoxContainer:
+	var box = _vbox(1)
+	var row = _toggle_row(text)
+	var b = _button("", "small on", func() -> void: _toggle(id))
+	b.custom_minimum_size.x = a(80)
+	row.add_child(b)
+	w[id] = b
+	box.add_child(row)
+	var sub = _label(sub_text, ts("s"), DIM, 0)
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.custom_minimum_size.x = a(300)
+	box.add_child(sub)
+	box.set_meta("sub", sub)
+	return box
 
 func _toggle_row(text: String) -> HBoxContainer:
 	var row = _hbox(4)
@@ -2442,14 +2463,142 @@ func refresh_settings() -> void:
 		"eco": "30 images/s : la batterie dure plus."}[quality()]
 	for key in ["musicVol", "sfxVol"]:
 		set_bar(w["vol-" + key], save[key] / 10.0)
-	if not set_tab in ["read", "save", "version"]:
-		set_tab = "read"
-	for key in ["read", "save", "version"]:
-		w["panel-" + key].visible = set_tab == key and not (key == "save" and in_run)
-		_style_button(w["settab-" + key], "tab sel" if set_tab == key else "tab")
-		w["settab-" + key].custom_minimum_size = Vector2(a(70), a(22))
+	var keys = SET_TABS.map(func(t): return t[0])
+	if not set_tab in keys:
+		set_tab = "game"
+	_paint_side_tabs(SET_TABS, "settab-", set_tab)
+	for spec in SET_TABS:
+		w["panel-" + spec[0]].visible = set_tab == spec[0] and not (spec[0] == "save" and in_run)
+		if spec[0] == set_tab:
+			w["set-title"].text = spec[2].to_upper()
 	w["panel-save-later"].visible = set_tab == "save" and in_run   # opened from the pause: the save waits
-	w["save-msg"].visible = set_tab == "save"
+	var cur = SaveData.current_slot()
+	for n in range(1, SaveData.SLOTS + 1):
+		var sl: Dictionary = w["slot-%d" % n]
+		var on = n == cur
+		sl["name"].add_theme_color_override("font_color", GOLD if on else INK)
+		sl["on"].visible = on
+		sl["play"].visible = not on
+		sl["info"].text = _slot_line(save if on else (SaveData.load_save(n) if SaveData.slot_used(n) else {}))
+
+## A partie in a line: its level, its coins, its record; « Nouvelle partie » when it has not been played.
+func _slot_line(s: Dictionary) -> String:
+	if s.is_empty():
+		return "Nouvelle partie"
+	return "Niv. %d · %d pièces · %d m" % [Progress.level_info(s["xp"])["level"], int(s["coins"]), int(s["best"])]
+
+# ---------- the three parties (0.51) ----------
+
+## Plays partie n from now on: this one kept as it is, the other one loaded with this device's settings.
+func _slot_play(n: int) -> void:
+	if SaveData.slot_used(n):
+		_switch_slot(n)
+	else:
+		_confirm("Commencer une nouvelle partie dans la Partie %d ?\nLes autres restent comme elles sont." % n, func() -> void: _switch_slot(n))
+
+func _switch_slot(n: int) -> void:
+	SaveData.store(save)
+	coop.leave()                                     # (each partie is its own player online)
+	race.leave()
+	var dev := {}
+	for k in SaveData.DEVICE:
+		dev[k] = save[k]
+	SaveData.set_slot(n)
+	save = SaveData.load_save()
+	for k in dev:
+		save[k] = dev[k]
+	SaveData.store(save)
+	coop.save = save
+	race.save = save
+	board = []
+	board_cache = []
+	rebuild_due = true                               # (its buttons may be of stone)
+	_after_load()
+	_msg("Partie %d : en route !" % n)
+
+func _slot_export(n: int) -> void:
+	var cur = n == SaveData.current_slot()
+	if not cur and not SaveData.slot_used(n):
+		_msg("La Partie %d est vide : rien à exporter." % n)
+		return
+	var code = SaveData.export_code(save if cur else SaveData.load_save(n))
+	var copy = func() -> void:
+		DisplayServer.clipboard_set(code)
+		_msg("Partie %d : code copié. Colle-le où tu veux le garder." % n)
+	var to_file = func() -> void: _save_file(code)
+	_choose("Exporter la Partie %d :" % n, [["Copier le code", copy], ["Fichier", to_file]])
+
+func _slot_import(n: int) -> void:
+	var paste = func() -> void:
+		var code := ""
+		if OS.has_feature("web"):                    # a browser asks for it (a phone's field cannot be typed in)
+			var got = JavaScriptBridge.eval("window.prompt('Colle ici ton code de sauvegarde :') || ''", true)
+			code = str(got) if got != null else ""
+		else:
+			code = DisplayServer.clipboard_get()
+		if code.strip_edges() == "":
+			_msg("Copie d'abord un code de sauvegarde, puis reviens ici.")
+			return
+		_import(code, n)
+	var from_file = func() -> void: _open_file(n)
+	_choose("Importer dans la Partie %d :" % n, [["Coller un code", paste], ["Fichier", from_file]])
+
+func _slot_reset(n: int) -> void:
+	var do_reset = func() -> void:
+		if n == SaveData.current_slot():
+			save = SaveData.reset()
+			coop.save = save
+			race.save = save
+			SaveData.store(save)
+			_after_load()
+		else:
+			SaveData.reset(n)
+		_msg("Partie %d effacée." % n)
+		refresh_settings()
+	_confirm("Effacer la Partie %d ? C'est définitif." % n, do_reset)
+
+## A question with two answers or more (each [text, what it does]), and « Annuler ».
+func _choose(text: String, choices: Array) -> void:
+	if modal != null:
+		modal.queue_free()
+	var layer = CanvasLayer.new()
+	layer.layer = 40
+	add_child(layer)
+	var root = Control.new()
+	root.size = Vector2(W, H)
+	root.theme = ui.theme
+	layer.add_child(root)
+	var shade = ColorRect.new()
+	shade.color = Color(8 / 255.0, 10 / 255.0, 24 / 255.0, 0.7)
+	shade.size = Vector2(W, H)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(shade)
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	_place(p, 569 / 2.0 - 150, 80, 300, 110)
+	var col = _vbox(10)
+	var l = _label(text, ts("m"), INK, 0)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.custom_minimum_size.x = a(258)
+	col.add_child(l)
+	var row = _hbox(8)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var close = func() -> void:
+		layer.queue_free()
+		modal = null
+	row.add_child(_button("Annuler", "small plain", close))
+	for c in choices:
+		var fn: Callable = c[1]
+		var pick = func() -> void:
+			close.call()
+			fn.call()
+		row.add_child(_button(c[0], "small gold", pick))
+	col.add_child(row)
+	p.add_child(col)
+	root.add_child(p)
+	modal = layer
 
 func _volume(key: String, d: int) -> void:
 	save[key] = clampi(save[key] + d, 0, 10)
@@ -2510,17 +2659,27 @@ func _apply_fullscreen() -> void:
 func _msg(t: String) -> void:
 	w["save-msg"].text = t
 
-func _import(code: String) -> void:
+## A code put in partie n (0.51: any of the three), once the player says yes.
+func _import(code: String, n: int = 0) -> void:
 	var s = SaveData.import_code(code)
+	var k = n if n > 0 else SaveData.current_slot()
 	if s == null:
 		_msg("Code invalide : rien n'a été changé.")
 		return
 	var do_import = func() -> void:
-		save = s
-		SaveData.store(save)
-		_after_load()
-		_msg("Partie importée.")
-	_confirm("Remplacer la partie actuelle par celle-ci ?\n%d pièces · record %d m · %d courses" % [s["coins"], s["best"], s["loops"]], do_import)
+		if k == SaveData.current_slot():
+			save = s
+			coop.save = save
+			race.save = save
+			SaveData.store(save)
+			rebuild_due = true
+			_after_load()
+		else:
+			SaveData.store(s, k)
+		_msg("Partie importée dans la Partie %d." % k)
+		refresh_settings()
+	var verb = "Remplacer la Partie %d par celle-ci ?" if SaveData.slot_used(k) or k == SaveData.current_slot() else "Mettre cette partie dans la Partie %d ?"
+	_confirm((verb % k) + "\n%d pièces · record %d m · %d courses" % [s["coins"], s["best"], s["loops"]], do_import)
 
 func _after_load() -> void:
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
@@ -2570,20 +2729,8 @@ func _confirm(text: String, fn: Callable, yes_text: String = "Oui", no_text: Str
 	root.add_child(p)
 	modal = layer
 
-func _import_field() -> void:
-	var code: String = w["save-code"].text.strip_edges()
-	if code == "" and OS.has_feature("web"):         # on a phone the field cannot be typed in: the browser asks
-		var got = JavaScriptBridge.eval("window.prompt('Colle ici ton code de sauvegarde :') || ''", true)
-		code = str(got) if got != null else ""
-		w["save-code"].text = code
-	if code == "":
-		_msg("Colle d'abord un code dans le champ.")
-		return
-	_import(code)
-
 ## The code in a file: downloaded in a browser, saved where the player chooses elsewhere.
-func _save_file() -> void:
-	var code = SaveData.export_code(save)
+func _save_file(code: String) -> void:
 	if OS.has_feature("web"):
 		JavaScriptBridge.download_buffer(code.to_utf8_buffer(), "jungle-loop-sauvegarde.txt", "text/plain")
 		return
@@ -2602,7 +2749,9 @@ func _save_file() -> void:
 	add_child(d)
 	d.popup_centered_ratio(0.6)
 
-func _open_file() -> void:
+## A save file opened, for partie n (0.51).
+func _open_file(n: int = 0) -> void:
+	open_slot = n
 	if OS.has_feature("web"):                        # a file picker of the browser's; the text comes back here
 		var win = JavaScriptBridge.get_interface("window")
 		var cb = JavaScriptBridge.create_callback(_on_opened)
@@ -2616,13 +2765,13 @@ func _open_file() -> void:
 	d.use_native_dialog = true
 	d.filters = PackedStringArray(["*.txt, *.json ; Sauvegarde"])
 	var on_file = func(path: String) -> void:
-		_import(FileAccess.get_file_as_string(path))
+		_import(FileAccess.get_file_as_string(path), n)
 	d.file_selected.connect(on_file)
 	add_child(d)
 	d.popup_centered_ratio(0.6)
 
 func _on_opened(args: Array) -> void:
-	_import(str(args[0]) if args.size() > 0 else "")
+	_import(str(args[0]) if args.size() > 0 else "", open_slot)
 
 # ---------- the browser (web only) ----------
 
@@ -3768,7 +3917,6 @@ func go(name: String) -> void:
 	if name == "drums":
 		_drums_intro()
 	if name == "settings":
-		w["save-code"].text = ""
 		_msg("")
 		refresh_settings()
 	Audio.music("" if name == "intro" else ("run" if in_run else "menu"))
@@ -3918,83 +4066,108 @@ func _wrap(text: String, colour: Color) -> Label:
 	l.custom_minimum_size.x = a(224)
 	return l
 
+## Amis (0.51), in three tabs along the top, one thing each: Liste d'amis (the list on the left, a friend's
+## card or my own on the right: my code, QR, link, adding one), Groupe (the race group of up to four on the
+## left, its races launched from the home screen, JOUER → AFFRONTEMENT, where the bets are made; playing for
+## two on the right), Scores (the friends' ranking, Histoire or Sans fin, this week or ever; mine on the right).
+const FR_TABS := [["list", "Liste d'amis"], ["group", "Groupe"], ["scores", "Scores"]]
+var sc_mode := "endless"               # Amis > Scores: which records (endless, story)
+var sc_week := true                    # ... this week's, or ever
+
 func _build_friends() -> void:
 	var s = _screen("friends", true)
 	var back = _button("Retour", "", func() -> void: go("menu"))
 	_place(back, M, 6, 152, 38)
 	s.add_child(back)
-	_head(s, "Amis")
-	var mine_b = _button("Ajouter", "small", func() -> void:
-		friends_tab = "friends"
-		fr_sel = ""
-		refresh_friends())
-	_place(mine_b, 569 - M - 110, 10, 110, 30)
-	s.add_child(mine_b)
-	var left = _pane(s, false, 262)
-	var col = _vbox(6)
 	var tabs = _hbox(4)
-	for spec in [["friends", "Amis"], ["coop", "À deux"], ["race", "Course à 4"]]:
+	_place(tabs, 168, 7, 569 - M - 168, 36)
+	for spec in FR_TABS:
 		var key: String = spec[0]
 		var on_tab = func() -> void:
 			friends_tab = key
+			fr_sel = ""
 			refresh_friends()
 		var b = _button(spec[1], "tab", on_tab)
-		b.custom_minimum_size = Vector2(a(72), a(22))
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tabs.add_child(b)
 		w["frtab-" + key] = b
-	col.add_child(tabs)
-	var fl = _vbox(4)                                   # Amis: the list, each one a touch away from his card
+	s.add_child(tabs)
+	var left = _pane(s, false, 262)
+	var col = _vbox(5)
+	# Liste d'amis: each one a touch away from his card
+	var fl = _vbox(4)
+	w["fr-count"] = _label("", ts("s"), RELIC, 0)
+	fl.add_child(w["fr-count"])
 	w["fr-list"] = _vbox(3)
 	fl.add_child(w["fr-list"])
 	var again = _button("Actualiser", "small", _load_friends)
 	again.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	fl.add_child(again)
-	w["panel-friends"] = fl
+	w["panel-list"] = fl
 	col.add_child(fl)
-	var co = _vbox(6)                                   # À deux: a room, its four letters
-	w["co-room"] = _plain(_label("", ts("huge"), GOLD), "huge")
-	w["co-room"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	co.add_child(w["co-room"])
-	w["co-text"] = _wrap("", INK)
-	co.add_child(w["co-text"])
-	w["co-host"] = _button("Créer un salon", "small", _coop_host)
-	w["co-host"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	co.add_child(w["co-host"])
-	var join_row = _hbox(4)
-	w["co-code"] = _field("ABCD", 4, "Les 4 lettres du salon :", _coop_join)
-	join_row.add_child(w["co-code"])
-	join_row.add_child(_button("Rejoindre", "small", _coop_join))
-	w["co-join-row"] = join_row
-	co.add_child(join_row)
-	var go_row = _hbox(6)
-	w["co-leave"] = _button("Quitter", "small plain", func() -> void: coop.leave())
-	w["co-leave"].size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	go_row.add_child(w["co-leave"])
-	co.add_child(go_row)
-	w["panel-coop"] = co
-	col.add_child(co)
-	var ra = _vbox(6)                                   # Course à 4 (0.48)
-	w["ra-text"] = _wrap("", INK)
-	ra.add_child(w["ra-text"])
-	w["ra-host"] = _button("Créer une course", "small", _race_host)
+	# Groupe: its four places
+	var gr = _vbox(4)
+	w["gr-title"] = _label("", ts("s"), RELIC, 0)
+	gr.add_child(w["gr-title"])
+	for i in Race.SEATS:
+		var row = _hbox(6)
+		var nm = _label("", ts("m"), INK, 0)
+		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		nm.clip_text = true
+		row.add_child(nm)
+		var st = _label("", ts("s"), DIM, 0)
+		row.add_child(st)
+		gr.add_child(row)
+		w["gr-seat-%d" % i] = {"name": nm, "state": st}
+	w["gr-text"] = _wrap("", DIM)
+	w["gr-text"].custom_minimum_size.x = a(228)
+	gr.add_child(w["gr-text"])
+	w["ra-host"] = _button("Créer un groupe", "small", _race_host)
 	w["ra-host"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	ra.add_child(w["ra-host"])
+	gr.add_child(w["ra-host"])
 	var rj = _hbox(4)
-	w["ra-code"] = _field("ABCD", 4, "Les 4 lettres de la course :", _race_join)
+	w["ra-code"] = _field("ABCD", 4, "Les 4 lettres du groupe :", _race_join)
 	rj.add_child(w["ra-code"])
 	rj.add_child(_button("Rejoindre", "small", _race_join))
 	w["ra-join-row"] = rj
-	ra.add_child(rj)
-	w["ra-open"] = _button("Ouvrir le salon", "small gold", func() -> void: go("race"))
-	w["ra-open"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	ra.add_child(w["ra-open"])
-	w["panel-race"] = ra
-	col.add_child(ra)
+	gr.add_child(rj)
+	w["ra-leave"] = _button("Quitter le groupe", "small danger", func() -> void:
+		race.leave()
+		refresh_friends())
+	w["ra-leave"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	gr.add_child(w["ra-leave"])
+	w["panel-group"] = gr
+	col.add_child(gr)
+	# Scores: the ranking
+	var sc = _vbox(4)
+	var modes = _hbox(4)
+	for spec in [["story", "Histoire"], ["endless", "Sans fin"]]:
+		var key: String = spec[0]
+		var b = _button(spec[1], "tab", func() -> void:
+			sc_mode = key
+			refresh_friends())
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		modes.add_child(b)
+		w["sc-" + key] = b
+	sc.add_child(modes)
+	var whens = _hbox(4)
+	for spec in [["week", "Cette semaine"], ["ever", "Toujours"]]:
+		var key: String = spec[0]
+		var b = _button(spec[1], "tab", func() -> void:
+			sc_week = key == "week"
+			refresh_friends())
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		whens.add_child(b)
+		w["sc-" + key] = b
+	sc.add_child(whens)
+	w["sc-list"] = _vbox(2)
+	sc.add_child(w["sc-list"])
+	w["panel-scores"] = sc
+	col.add_child(sc)
 	left.add_child(_fixed(col))
-	var right = _pane(s, true, 262)                     # my card (code, QR, link, adding), or the friend chosen
+	var right = _pane(s, true, 262)
 	var rc = _vbox(5)
-	var mine = _vbox(4)
+	var mine = _vbox(4)                                 # Liste: my card (code, QR, link, adding a friend)
 	mine.add_child(_label("TON CODE AMI", ts("s"), RELIC, 0))
 	w["fr-code"] = _plain(_label("…", ts("xl"), GOLD), "xl")
 	mine.add_child(w["fr-code"])
@@ -4022,17 +4195,17 @@ func _build_friends() -> void:
 	mine.add_child(w["fr-msg"])
 	w["fr-me"] = mine
 	rc.add_child(mine)
-	var card = _vbox(5)
+	var card = _vbox(5)                                 # Liste: the friend chosen
 	w["fr-big"] = _plain(_label("", ts("xl"), GOLD), "xl")
 	card.add_child(w["fr-big"])
 	w["fr-their-code"] = _plain(_label("", ts("s"), RELIC, 0), "s")
 	card.add_child(w["fr-their-code"])
 	w["fr-records"] = _wrap("", INK)
 	card.add_child(w["fr-records"])
+	w["fr-inv4"] = _button("Inviter dans le groupe", "small gold", func() -> void: _race_invite(fr_sel, _sel_name()))
+	card.add_child(w["fr-inv4"])
 	w["fr-inv2"] = _button("Inviter à deux", "small", func() -> void: _invite(fr_sel, _sel_name()))
 	card.add_child(w["fr-inv2"])
-	w["fr-inv4"] = _button("Inviter à la course", "small gold", func() -> void: _race_invite(fr_sel, _sel_name()))
-	card.add_child(w["fr-inv4"])
 	var low = _hbox(4)
 	var back_me = _button("Ma fiche", "small plain", func() -> void:
 		fr_sel = ""
@@ -4045,6 +4218,34 @@ func _build_friends() -> void:
 	card.add_child(low)
 	w["fr-card"] = card
 	rc.add_child(card)
+	var co = _vbox(6)                                   # Groupe: playing for two (the same road, the bubble)
+	co.add_child(_label("À DEUX", ts("s"), RELIC, 0))
+	w["co-room"] = _plain(_label("", ts("huge"), GOLD), "huge")
+	w["co-room"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	co.add_child(w["co-room"])
+	w["co-text"] = _wrap("", INK)
+	co.add_child(w["co-text"])
+	w["co-host"] = _button("Créer un salon", "small", _coop_host)
+	w["co-host"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	co.add_child(w["co-host"])
+	var join_row = _hbox(4)
+	w["co-code"] = _field("ABCD", 4, "Les 4 lettres du salon :", _coop_join)
+	join_row.add_child(w["co-code"])
+	join_row.add_child(_button("Rejoindre", "small", _coop_join))
+	w["co-join-row"] = join_row
+	co.add_child(join_row)
+	w["co-leave"] = _button("Quitter", "small plain", func() -> void: coop.leave())
+	w["co-leave"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	co.add_child(w["co-leave"])
+	w["panel-duo"] = co
+	rc.add_child(co)
+	var me_sc = _vbox(6)                                # Scores: mine
+	me_sc.add_child(_label("TOI", ts("s"), RELIC, 0))
+	w["sc-mine"] = _vbox(6)
+	me_sc.add_child(w["sc-mine"])
+	me_sc.add_child(_wrap("Les records de tes amis t'attendent aussi sur des panneaux, le long de tes courses.", DIM))
+	w["panel-myscores"] = me_sc
+	rc.add_child(me_sc)
 	right.add_child(_fixed(rc))
 
 func refresh_friends() -> void:
@@ -4052,12 +4253,16 @@ func refresh_friends() -> void:
 		return
 	if w.has("menu-friends") and is_instance_valid(w["menu-friends"]):
 		w["menu-friends"].visible = Net.enabled()
-	for key in ["friends", "coop", "race"]:
-		_style_button(w["frtab-" + key], "tab sel" if key == friends_tab else "tab")
-		w["frtab-" + key].custom_minimum_size = Vector2(a(72), a(22))
-	w["panel-friends"].visible = friends_tab == "friends"
-	w["panel-coop"].visible = friends_tab == "coop"
-	w["panel-race"].visible = friends_tab == "race"
+	if friends_tab in ["friends"]:                   # (the tabs before 0.51)
+		friends_tab = "list"
+	elif friends_tab in ["coop", "race"]:
+		friends_tab = "group"
+	for spec in FR_TABS:
+		_style_button(w["frtab-" + spec[0]], "tab sel" if spec[0] == friends_tab else "tab")
+	w["frtab-group"].text = "Groupe · %d/%d" % [race.count(), Race.SEATS] if race.state == "lobby" else "Groupe"
+	w["panel-list"].visible = friends_tab == "list"
+	w["panel-group"].visible = friends_tab == "group"
+	w["panel-scores"].visible = friends_tab == "scores"
 	var on: Dictionary = save.get("online", {})
 	w["fr-code"].text = on.get("code", "…")
 	if w["fr-name"].text == "" and on.get("name", "") != "":
@@ -4065,21 +4270,24 @@ func refresh_friends() -> void:
 	var sel = _friend(fr_sel)
 	if sel.is_empty():
 		fr_sel = ""
-	w["fr-me"].visible = fr_sel == ""
-	w["fr-card"].visible = fr_sel != ""
+	w["fr-me"].visible = friends_tab == "list" and fr_sel == ""
+	w["fr-card"].visible = friends_tab == "list" and fr_sel != ""
+	w["panel-duo"].visible = friends_tab == "group"
+	w["panel-myscores"].visible = friends_tab == "scores"
 	coop.save = save
 	race.save = save
 	var st = coop.state
 	var can = Coop.supported()
 	var mate_name: String = coop.mate.get("name", "") if coop.mate.get("name", "") != "" else "ton ami"
 	var idle = st in ["idle", "failed"]
+	var dist = func(v) -> String: return ("%d m" % int(v)) if int(v) > 0 else "—"
 	if fr_sel != "":
-		var dist = func(v) -> String: return ("%d m" % int(v)) if int(v) > 0 else "—"
 		w["fr-big"].text = str(sel.get("name", "?"))
 		w["fr-their-code"].text = str(sel.get("code", ""))
-		w["fr-records"].text = "Jouer : %s (cette semaine %s)\nHistoire : %s (cette semaine %s)" % [dist.call(sel.get("endless", 0)), dist.call(sel.get("endless_week", 0)), dist.call(sel.get("best", 0)), dist.call(sel.get("week", 0))]
+		w["fr-records"].text = "Sans fin : %s (cette semaine %s)\nHistoire : %s (cette semaine %s)" % [dist.call(sel.get("endless", 0)), dist.call(sel.get("endless_week", 0)), dist.call(sel.get("best", 0)), dist.call(sel.get("week", 0))]
 		w["fr-inv2"].visible = can and idle and Net.enabled()
 		w["fr-inv4"].visible = can and Net.enabled() and not race.running and (race.role in ["", "host"])
+	# Groupe, for two
 	w["co-host"].visible = can and idle
 	w["co-join-row"].visible = can and idle
 	w["co-room"].text = coop.room if coop.role == "host" and st in ["waiting", "linking", "ready"] else ""
@@ -4090,63 +4298,135 @@ func refresh_friends() -> void:
 		txt = "Jouer à deux marche dans le navigateur, sur la page du jeu."
 	else:
 		match st:
-			"idle": txt = "Invite un ami de ta liste (sa fiche, Inviter à deux), ou crée un salon et donne-lui ses 4 lettres. Vous courez la même route, avec l'équipement de celui qui invite ; si l'un tombe, il flotte dans une bulle : l'autre saute dedans pour le ramener."
+			"idle": txt = "La même route, l'équipement de celui qui invite ; si l'un tombe, l'autre le ramène de sa bulle. Invite un ami de ta liste (sa fiche), ou crée un salon et donne-lui ses 4 lettres."
 			"opening": txt = "Ouverture du salon…"
 			"waiting": txt = ("Invitation envoyée à %s. En attente de sa réponse… (ou donne-lui ces 4 lettres)" % coop.invited) if coop.invited != "" else "Donne ces 4 lettres à ton ami. En attente…"
 			"joining": txt = "Recherche du salon…"
 			"linking": txt = "Connexion avec %s…" % mate_name
-			"ready": txt = ("Connecté avec %s ! Sur l'accueil, Jouer ou Histoire vous lance tous les deux." % mate_name) if coop.role == "host" else ("Connecté avec %s ! Il lance la course depuis l'accueil." % mate_name)
+			"ready": txt = ("Connecté avec %s ! Sur l'accueil, JOUER lance Histoire ou Sans fin pour vous deux." % mate_name) if coop.role == "host" else ("Connecté avec %s ! Il lance la course depuis l'accueil." % mate_name)
 			"failed": txt = coop.info
 	w["co-text"].text = txt
+	# Groupe, up to four
 	var rst = race.state
 	var r_idle = rst in ["idle", "failed"]
 	w["ra-host"].visible = can and r_idle and Net.enabled()
 	w["ra-join-row"].visible = can and r_idle and Net.enabled()
-	w["ra-open"].visible = not r_idle
+	w["ra-leave"].visible = not r_idle
+	w["gr-title"].text = ("TON GROUPE %s · JUSQU'À 4" % race.room) if not r_idle and race.room != "" else "TON GROUPE · JUSQU'À 4"
+	var pending = race.invited.values()
+	for i in Race.SEATS:
+		var seat: Dictionary = race.seats.get(i, {}) if not r_idle else {}
+		var row: Dictionary = w["gr-seat-%d" % i]
+		var nm = ""
+		var sub = ""
+		if not seat.is_empty():
+			nm = "Toi" if i == race.me else str(seat.get("name", "?"))
+			sub = "chef du groupe" if i == 0 else ("parti" if seat.get("gone", false) else "prêt")
+		elif not pending.is_empty() and race.role == "host":
+			nm = pending.pop_front()
+			sub = "invité…"
+		elif i == 0 and r_idle:
+			nm = "Toi"
+			sub = "seul pour l'instant"
+		else:
+			nm = "—"
+			sub = "place libre"
+		row["name"].text = nm
+		row["name"].add_theme_color_override("font_color", GOLD if nm == "Toi" else (INK if sub != "place libre" else DIM))
+		row["state"].text = sub
 	if not can:
-		w["ra-text"].text = "La course à 4 marche dans le navigateur, sur la page du jeu."
+		w["gr-text"].text = "Le groupe marche dans le navigateur, sur la page du jeu."
 	elif rst == "failed":
-		w["ra-text"].text = race.info
+		w["gr-text"].text = race.info
 	elif r_idle:
-		w["ra-text"].text = "Jusqu'à 4 sur la même route, chacun la sienne, les autres en fantômes. Avant le départ, chacun mise des pièces sur celui qui ira le plus loin."
+		w["gr-text"].text = "Crée un groupe, puis invite tes amis depuis leur fiche (Liste d'amis), ou donne-leur ses 4 lettres. Vos courses se lancent depuis l'accueil : JOUER → AFFRONTEMENT."
 	else:
-		w["ra-text"].text = "Tu es dans une course (%d joueurs)." % race.count()
+		w["gr-text"].text = "Vos courses se lancent depuis l'accueil : JOUER → AFFRONTEMENT. Les mises se font là, avant le départ."
+	# the list
 	var holder: VBoxContainer = w["fr-list"]
 	for ch in holder.get_children():
 		holder.remove_child(ch)
 		ch.queue_free()
-	if board.size() <= 1:
+	var n_friends = board.filter(func(e): return not e.get("me", false)).size()
+	w["fr-count"].text = "TES AMIS · %d" % n_friends
+	if n_friends == 0:
 		holder.add_child(_wrap("Ajoute un ami avec son code, son lien ou son code QR : vos records s'afficheront ici, et sur la route." if Net.enabled() else "Le serveur n'est pas encore en ligne.", DIM))
 	for e in board:
 		if e.get("me", false):
 			continue
 		var code = str(e.get("code", ""))
-		var row = Button.new()
-		row.focus_mode = Control.FOCUS_NONE
-		_style_button(row, "tab sel" if code == fr_sel else "tab")
-		row.custom_minimum_size = Vector2(0, a(22))
-		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var h = _hbox(6)
-		h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		h.offset_left = a(6)
-		h.offset_right = -a(6)
-		var nm = _plain(_label(str(e.get("name", "?")), ts("s"), GOLD if code == fr_sel else INK, 0), "m")
-		nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		nm.clip_text = true
-		nm.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		h.add_child(nm)
-		var rec = _label(("%d m" % int(e.get("endless", 0))) if int(e.get("endless", 0)) > 0 else "—", ts("s"), DIM, 0)
-		rec.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		rec.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		h.add_child(rec)
-		row.add_child(h)
+		var in_group = false
+		for seat in race.seats.values():
+			in_group = in_group or str(seat.get("code", "")) == code
+		holder.add_child(_list_row(str(e.get("name", "?")), "dans ton groupe" if in_group else code, code == fr_sel, func() -> void:
+			fr_sel = code
+			refresh_friends()))
+	# Scores
+	for k in ["story", "endless"]:
+		_style_button(w["sc-" + k], "tab sel" if sc_mode == k else "tab")
+	_style_button(w["sc-week"], "tab sel" if sc_week else "tab")
+	_style_button(w["sc-ever"], "tab sel" if not sc_week else "tab")
+	var field = ("endless_week" if sc_week else "endless") if sc_mode == "endless" else ("week" if sc_week else "best")
+	var ranked = board.duplicate()
+	ranked.sort_custom(func(x, y): return int(x.get(field, 0)) > int(y.get(field, 0)))
+	var sl: VBoxContainer = w["sc-list"]
+	for ch in sl.get_children():
+		sl.remove_child(ch)
+		ch.queue_free()
+	var my_place = 0
+	var to_beat = ""
+	for i in ranked.size():
+		var e: Dictionary = ranked[i]
+		var me = e.get("me", false)
+		if me:
+			my_place = i + 1
+			if i > 0:
+				to_beat = "%s · %s" % [ranked[i - 1].get("name", "?"), dist.call(ranked[i - 1].get(field, 0))]
+		sl.add_child(_list_row("%d. %s" % [i + 1, "Toi" if me else str(e.get("name", "?"))], dist.call(e.get(field, 0)), me, Callable()))
+	if ranked.is_empty():
+		sl.add_child(_wrap("Pas encore de scores : ajoute des amis (Liste d'amis).", DIM))
+	var mine_box: VBoxContainer = w["sc-mine"]
+	for ch in mine_box.get_children():
+		mine_box.remove_child(ch)
+		ch.queue_free()
+	var mode_name = "Sans fin" if sc_mode == "endless" else "Histoire"
+	var my_best = int(save["bestEndless"]) if sc_mode == "endless" else int(save["best"])
+	for pair in [["TON RECORD (%s)" % mode_name.to_upper(), dist.call(my_best), INK],
+			["TA PLACE " + ("CETTE SEMAINE" if sc_week else "DE TOUJOURS"), ("%d / %d" % [my_place, ranked.size()]) if my_place > 0 else "—", GOLD],
+			["À BATTRE", to_beat if to_beat != "" else ("personne : tu es devant !" if my_place == 1 else "—"), RELIC]]:
+		mine_box.add_child(_label(pair[0], ts("s"), DIM, 0))
+		mine_box.add_child(_label(pair[1], ts("m"), pair[2], 0))
+
+## A row of a list (Amis): a name, a note on its right; the one chosen in gold. `fn` empty: not a button.
+func _list_row(name: String, note: String, sel: bool, fn: Callable) -> Control:
+	var row = Button.new()
+	row.focus_mode = Control.FOCUS_NONE
+	_style_button(row, "tab sel" if sel else "tab")
+	row.custom_minimum_size = Vector2(0, a(22))
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var h = _hbox(6)
+	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	h.offset_left = a(6)
+	h.offset_right = -a(6)
+	var nm = _plain(_label(name, ts("s"), GOLD if sel else INK, 0), "m")
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nm.clip_text = true
+	nm.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(nm)
+	var rec = _label(note, ts("s"), DIM, 0)
+	rec.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	rec.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	h.add_child(rec)
+	row.add_child(h)
+	if fn.is_valid():
 		row.pressed.connect(func() -> void:
 			Audio.sfx("click")
-			fr_sel = code
-			refresh_friends())
-		holder.add_child(row)
+			fn.call())
+	else:
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return row
 
 ## The friend of this code in the list as last heard ({} if none).
 func _friend(code: String) -> Dictionary:
@@ -4570,7 +4850,7 @@ func _race_host() -> void:
 func _race_join() -> void:
 	var code = w["ra-code"].text.strip_edges().to_upper()
 	if code.length() != 4:
-		w["ra-text"].text = "Le code d'une course a 4 lettres."
+		w["gr-text"].text = "Le code d'un groupe a 4 lettres."
 		return
 	race.save = save
 	race_note = ""

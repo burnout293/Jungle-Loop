@@ -1,4 +1,5 @@
-"""Puts the web export on the site: copies export/web/* into ../Jungle-Loop (the GitHub Pages repository)
+"""Puts the web export on the site: copies export/web/* into site/ (the GitHub Pages repository,
+branch main, kept inside this folder since 0.51)
 and writes version.txt beside it, the version of scripts/main.gd, and copies reglages/nouveautes.txt (what
 the window offering the update says, 0.49.1). The game reads version.txt for
 « Mettre à jour » (Réglages) and for the « ! » on the gear when a newer version is online.
@@ -14,7 +15,7 @@ import shutil
 import sys
 
 here = pathlib.Path(__file__).resolve().parent.parent
-site = here.parent / 'Jungle-Loop'
+site = here / 'site'
 web = here / 'export' / 'web'
 
 version = re.search(r'const VERSION := "([\d.]+)"', (here / 'scripts' / 'main.gd').read_text(encoding='utf-8')).group(1)

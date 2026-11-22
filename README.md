@@ -1,15 +1,16 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.50.0** (22/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.51.0** (22/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
 environ 1 ms de calcul, 60 images/s). Pas encore essayé à la main sur téléphone.
 
 Publiée à l'adresse principale, https://burnout293.github.io/Jungle-Loop/ (installable sur l'écran d'accueil) :
-l'export web est copié à la racine de la branche `main`. L'ancienne version web y reste jouable sur
-`web.html` ; `godot/` (l'essai) renvoie à la racine. Au premier lancement dans un navigateur, la partie de
+l'export web est copié à la racine de la branche `main`, dont le dépôt est le dossier `site/` d'ici (0.51 :
+un seul dossier pour le jeu, `Projects/Jungle-Loop` ; ce qui ne sert plus va dans `Projects/Archives/Jungle-Loop`,
+dont l'ancienne version web 0.28, retirée du site). `godot/` (l'essai) renvoie à la racine. Au premier lancement dans un navigateur, la partie de
 l'ancienne version web (localStorage `jungle-loop-save-v1`, même adresse) est reprise si elle est plus
 avancée (plus d'expérience) ; celle d'avant est gardée dans `user://jungle-loop-save-before-web.json`.
 
@@ -103,6 +104,37 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.51.0
+
+- **Un seul dossier** : le jeu est `Projects/Jungle-Loop` (ce dépôt, branche `godot`), le site publié son
+  sous-dossier `site/` (le dépôt de la branche `main`, ignoré ici, avec un `.gdignore`) ; `tools/publish_web.py`
+  y copie l'export. Ce qui ne sert plus est rangé dans `Projects/Archives/Jungle-Loop` (son `LISEZMOI.md`) :
+  l'ancienne version web (retirée du site), les propositions tranchées, les pistes des ruines, les images que le
+  jeu ne charge plus (anciens boutons et panneaux), l'outil du kit de pierre.
+- **Réglages** rangés comme les Améliorations : la colonne de gauche (Retour, **Jeu**, **Affichage**, **Son**,
+  **Sauvegarde** : `SET_TABS`, `_side_tabs`, `_paint_side_tabs`, le nom de chaque onglet aussi grand que sa
+  pierre le permet), l'onglet ouvert dans un panneau de pierre au milieu. Jeu : contours des dangers,
+  signalements décalés, images par seconde, version (« Mettre à jour »). Affichage : qualité, plein écran,
+  police. Son : musique, effets (pas dans sa liste, gardé dans son onglet).
+- **Trois parties** (`SaveData.SLOTS`, `current_slot`, `set_slot`, `path(n)`) : la partie 1 est le fichier
+  d'avant, les autres `-p2`, `-p3` ; celle qu'on joue est retenue (`user://jungle-loop-slot.txt`). Chacune :
+  son niveau, ses pièces, son record, **Jouer** (on passe à elle : `_switch_slot`, les réglages de l'appareil
+  la suivent, `SaveData.DEVICE`), **Exporter** (copier le code ou un fichier), **Importer** (coller un code ou
+  ouvrir un fichier), **Réinitialiser** (après un oui). Chaque partie est son propre joueur en ligne.
+- **Amis en trois onglets** (en haut, à côté de Retour : `FR_TABS`) : **Liste d'amis** (la liste ; la fiche
+  d'un ami : inviter dans le groupe, à deux, retirer ; sinon la mienne : code, QR, partage, ajouter, pseudo),
+  **Groupe** (ses 4 places, créer, rejoindre par 4 lettres, quitter ; à droite, jouer à deux), **Scores**
+  (Histoire ou Sans fin, cette semaine ou toujours ; à droite mon record, ma place, celui à battre). Les mises
+  ne sont plus dans Amis : JOUER → **Affrontement** ouvre le salon de la course, où chacun mise avant le départ.
+- **Relique** refaite (`tools/cut_relic.py`) : **quatre pièces**, le cœur serti dans la couronne ; la tête sous
+  la couronne repeinte par PixelLab (`assets/src/relique/tete-nue.png`), coupée droit au milieu ; la mâchoire
+  toute en violet (ses crocs dans les violets les plus pâles) ; chaque pièce une dalle avec son épaisseur (son
+  flanc sombre dessous, ses bords éclairés en haut à gauche). Toujours pas montrée dans le jeu.
+- **Donjon** : quatre monticules (PixelLab : éboulis et colonne couchée, cage rouillée, gargouille tombée,
+  lustre écrasé sur des tonneaux), `tools/prep_mounds.py`, `hill-dungeon-1` à `4`, de nouveau derrière la route.
+- **Écran de chargement** allégé : fond noir, rien que les coureurs (66 Kio au lieu de 187).
+- Bancs : `--tour51` (Réglages, parties, Amis, donjon).
 
 ## 0.50.0
 
@@ -605,7 +637,7 @@ Godot --headless --path . --export-release "Web" export/web/index.html
 ```
 
 Résultat : 44 Mo dans `export/web` (moteur `index.wasm` 39,5 Mo, jeu `index.pck` 6,5 Mo), jamais committé.
-Puis `python tools/publish_web.py` : copie l'export dans le dépôt du site (`../Jungle-Loop`) et y écrit
+Puis `python tools/publish_web.py` : copie l'export dans le dépôt du site (`site/`) et y écrit
 `version.txt` (la version de `main.gd`), que le jeu lit pour « Mettre à jour » (Réglages) et le « ! » sur la
 roue dentée ; il refuse un export plus ancien que les scripts.
 L'export est une appli installable (PWA) : plein écran, couchée, icônes `assets/pwa/`, écran de chargement

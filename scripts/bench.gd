@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -42,6 +42,7 @@ func _ready() -> void:
 			"tour47": opts["tour47"] = true        # 0.47's new things in pictures: urns, skins, the offer, the escape
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour51": opts["tour51"] = true        # 0.51's: Réglages in four categories, the three parties, Amis in three tabs
 			"tour50": opts["tour50"] = true        # 0.50's: the home screen B3 (modes, Défis), the wood buttons, the stone skin
 			"race": opts["race"] = kv[1]           # 0.48, the race for four: host | guest (in a browser, with ?net=)
 			"friends": opts["friends"] = kv[1]     # race=host: the friend codes to add and invite, separated by commas
@@ -142,6 +143,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour50"]:
 		await _tour50()
+		return
+	if opts["tour51"]:
+		await _tour51()
 		return
 	if opts["race"] != "":                           # four browsers, one race: see _race_bench
 		_race_bench(delta)
@@ -448,6 +452,90 @@ func _tour50() -> void:
 					rc.role = ""
 					rc.state = "idle"
 					rc.seats = {}
+
+## --tour51: 0.51 in pictures: Réglages's four categories, the three parties (exporting one, starting a
+## new one, back to the first), then Amis's three tabs (a few friends made up).
+var steps51: Array = []
+
+func _tour51() -> void:
+	if steps51.is_empty():
+		steps51 = [
+			[0.5, "setup", ""], [0.6, "go", "settings"], [1.5, "shot", "51-01-reglages-jeu"],
+			[1.6, "settab", "show"], [1.9, "shot", "51-02-reglages-affichage"],
+			[2.0, "settab", "sound"], [2.3, "shot", "51-03-reglages-son"],
+			[2.4, "settab", "save"], [2.7, "shot", "51-04-reglages-sauvegarde"],
+			[2.8, "export", "1"], [3.1, "shot", "51-05-exporter"], [3.2, "unmodal", ""],
+			[3.3, "newslot", "2"], [3.6, "shot", "51-06-nouvelle-partie"], [3.7, "unmodal", ""],
+			[3.8, "switch", "2"], [4.1, "shot", "51-07-partie-2"], [4.2, "switch", "1"], [4.3, "wipe", "2"], [4.6, "shot", "51-08-partie-1"],
+			[4.7, "fakefriends", ""], [4.8, "go", "friends"], [5.7, "shot", "51-09-amis-liste"],
+			[5.8, "frtab", "group"], [6.1, "shot", "51-10-amis-groupe"],
+			[6.2, "frtab", "scores"], [6.5, "shot", "51-11-amis-scores"],
+			[6.6, "go", "menu"], [7.4, "shot", "51-12-accueil"],
+			[7.5, "dungeon", ""], [8.6, "hills", ""], [9.6, "shot", "51-13-donjon"], [10.6, "shot", "51-14-donjon-bis"],
+			[10.8, "quit", ""],
+		]
+	while tour_i < steps51.size() and t >= steps51[tour_i][0]:
+		var st = steps51[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				var s: Dictionary = main.save
+				s["seenIntro"] = true
+				s["coins"] = 3450
+				s["best"] = 1240
+				main.refresh_menu()
+			"go": main.go(arg)
+			"settab":
+				main.set_tab = arg
+				main.refresh_settings()
+			"export": main._slot_export(int(arg))
+			"newslot": main._slot_play(int(arg))
+			"switch": main._switch_slot(int(arg))
+			"wipe": SaveData.reset(int(arg))
+			"unmodal":
+				if main.modal != null:
+					main.modal.queue_free()
+					main.modal = null
+			"fakefriends": _fake_friends51()
+			"dungeon":                                # a run in the dungeon, to see its mounds (0.51)
+				main.race.state = "idle"
+				main.race.seats = {}
+				main.endless_biome = 3
+				main.save["mode"] = "endless"
+				main.go("play")
+				main.run.god = true
+			"hills":
+				var r: Game.Run = main.run
+				Game.add_hill(r, r.cam + 700, 1500, 300)
+				Game.add_hill(r, r.cam + 2300, 1200, 300)
+			"frtab":
+				main.friends_tab = arg
+				main.refresh_friends()
+			"quit": get_tree().quit()
+
+## A few friends, a group of three and a board, as the server would send them (no server touched).
+func _fake_friends51() -> void:
+	main.save["online"] = {"id": "x", "secret": "x", "code": "PEPI-6ZAW", "name": "Pépito"}
+	main.save["bestEndless"] = 2340
+	main.board = [
+		{"code": "PEPI-6ZAW", "name": "Pépito", "me": true, "best": 1500, "week": 900, "endless": 2340, "endless_week": 1204},
+		{"code": "PEPI-K7QM", "name": "Léo", "best": 1200, "week": 1100, "endless": 2100, "endless_week": 1980},
+		{"code": "PEPI-INES", "name": "Inès", "best": 800, "week": 0, "endless": 1875, "endless_week": 700},
+		{"code": "PEPI-PAPA", "name": "Papa", "best": 400, "week": 400, "endless": 1210, "endless_week": 0},
+		{"code": "PEPI-SAMS", "name": "Sam", "best": 0, "week": 0, "endless": 0, "endless_week": 0},
+	]
+	main.board_cache = main.board
+	var rc: Race = main.race
+	rc.role = "host"
+	rc.state = "lobby"
+	rc.room = "KQ7M"
+	rc.me = 0
+	rc.seats = {0: {"name": "Pépito", "code": "PEPI-6ZAW", "on": 0, "bet": 0}, 1: {"name": "Léo", "code": "PEPI-K7QM", "on": 1, "bet": 0}}
+	rc.invited = {"PEPI-INES": "Inès"}
 
 ## The steps of the full 0.48 tour (after the mock-up pictures).
 func _steps48() -> Array:
@@ -929,13 +1017,13 @@ func _coop_bench(delta: float) -> void:
 			print("COOP CODE ", me.get("code", "?"))
 			coop_step = 10                           # then: the invitation (main polls every few seconds)
 		elif host and opts["friend"] != "":
-			main.friends_tab = "friends"
+			main.friends_tab = "list"
 			main.go("friends")
 			main.w["fr-add"].text = opts["friend"]
 			await main._add_friend()
 			coop_step = 2
 		else:
-			main.friends_tab = "coop"
+			main.friends_tab = "group"
 			main.go("friends")
 			if host:
 				main._coop_host()

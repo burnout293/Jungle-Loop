@@ -7,20 +7,15 @@
 <!-- Jungle Loop's page (0.50): the game's canvas, and over it while the game loads a little chase drawn
      with the game's own pictures, one of four at random: they come in from the left, run on the spot while
      it loads, run off to the right when the home screen is ready, then the page fades onto it.
+     0.51: on black, nothing but the runners (the least to load).
      Source of html/shell.html: python html/make_shell.py (the pictures are put inside it). -->
 <style>
 html, body, #canvas { margin: 0; padding: 0; border: 0; }
-body { color: #fff8e6; background-color: #0a0f14; overflow: hidden; touch-action: none; }
+body { color: #fff8e6; background-color: #000; overflow: hidden; touch-action: none; }
 #canvas { display: block; }
 #canvas:focus { outline: none; }
-@font-face { font-family: 'JLSilk'; src: url({{FONT}}) format('truetype'); }
-#jl-load { position: fixed; inset: 0; z-index: 10; overflow: hidden; background: #0a0f14; transition: opacity .6s ease; }
+#jl-load { position: fixed; inset: 0; z-index: 10; overflow: hidden; background: #000; transition: opacity .6s ease; }
 #jl-load.gone { opacity: 0; pointer-events: none; }
-#jl-bg { position: absolute; inset: 0; background: url({{BG}}) center bottom / cover no-repeat; image-rendering: pixelated; filter: brightness(.55) saturate(.8); }
-#jl-shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(10,15,20,.55), rgba(10,15,20,0) 40%, rgba(10,15,20,0) 70%, rgba(10,15,20,.6)); }
-#jl-ground { position: absolute; left: 0; right: 0; background: url({{GROUND}}) 0 0 repeat-x; image-rendering: pixelated; }
-#jl-title { position: absolute; left: 0; right: 0; text-align: center; font-family: 'JLSilk', monospace; color: #ffe9a0; letter-spacing: .08em; }
-#jl-note { position: absolute; left: 0; right: 0; text-align: center; font-family: 'JLSilk', monospace; color: #c9d6c3; letter-spacing: .1em; }
 #jl-group { position: absolute; left: 0; will-change: transform; }
 .jl-spr { position: absolute; bottom: 0; background-repeat: no-repeat; image-rendering: pixelated; animation: jl-run var(--d) steps(var(--n)) infinite; }
 @keyframes jl-run { from { background-position: 0 0; } to { background-position: calc(-1 * var(--n) * var(--w)) 0; } }
@@ -34,12 +29,7 @@ $GODOT_HEAD_INCLUDE
 <canvas id="canvas">Ton navigateur ne sait pas afficher le jeu.</canvas>
 <noscript>Le jeu a besoin de JavaScript.</noscript>
 <div id="jl-load" aria-label="Chargement de Jungle Loop">
-	<div id="jl-bg"></div>
-	<div id="jl-shade"></div>
-	<div id="jl-title">JUNGLE LOOP</div>
-	<div id="jl-ground"></div>
 	<div id="jl-group"></div>
-	<div id="jl-note">CHARGEMENT</div>
 </div>
 <div id="status-notice"></div>
 <script src="$GODOT_URL"></script>
@@ -67,15 +57,12 @@ const engine = new Engine(GODOT_CONFIG);
 	];
 	const load = document.getElementById('jl-load');
 	const group = document.getElementById('jl-group');
-	const ground = document.getElementById('jl-ground');
-	const title = document.getElementById('jl-title');
-	const note = document.getElementById('jl-note');
 	// to try it: ?chase=1 to 4 picks the scene, ?lent=5 keeps them running on the spot 5 seconds at least
 	const ask = new URLSearchParams(location.search);
 	const pick = parseInt(ask.get('chase') || '', 10);
 	const scene = SCENES[pick >= 1 && pick <= SCENES.length ? pick - 1 : Math.floor(Math.random() * SCENES.length)];
 	const hold = Math.min(30, Math.max(.25, parseFloat(ask.get('lent') || '') || .25));
-	let s = 1, gw = 0, x = 0, phase = 'enter', t0 = performance.now(), from = 0, to = 0, scroll = 0, last = t0;
+	let s = 1, gw = 0, x = 0, phase = 'enter', t0 = performance.now(), from = 0, to = 0, last = t0;
 	let started = false, ready = false, done = false;
 
 	function build() {
@@ -113,18 +100,10 @@ const engine = new Engine(GODOT_CONFIG);
 			}
 			gw = Math.max(gw, at * s + w);
 		}
-		const floor = 282 * s;                              // the game's floor line (render.gd GN 280)
+		const floor = 210 * s;                              // a little below the middle (no floor drawn)
 		group.style.top = '0px';
 		group.style.height = floor + 'px';
 		group.style.width = gw + 'px';
-		ground.style.top = (floor - 8 * s) + 'px';
-		ground.style.height = (60 * s) + 'px';
-		ground.style.backgroundSize = (480 * s) + 'px ' + (60 * s) + 'px';
-		title.style.top = (34 * s) + 'px';
-		title.style.fontSize = (26 * s) + 'px';
-		title.style.textShadow = [[0, 2], [2, 0], [-2, 0], [0, -2], [0, 4]].map(([a, b]) => (a * s / 2) + 'px ' + (b * s / 2) + 'px 0 #1a1024').join(',');
-		note.style.top = (300 * s) + 'px';
-		note.style.fontSize = (8 * s) + 'px';
 		if (phase === 'enter') { from = -gw - 10 * s; to = (window.innerWidth - gw) / 2; }
 		else if (phase === 'wait') { x = (window.innerWidth - gw) / 2; }
 	}
@@ -139,15 +118,13 @@ const engine = new Engine(GODOT_CONFIG);
 		if (phase === 'enter') {                            // in from the left edge to the middle
 			x = from + (to - from) * ease(Math.min(1, k / 1.3), true);
 			if (k >= 1.3) { phase = 'wait'; t0 = now; }
-		} else if (phase === 'wait') {                      // on the spot, the floor running under them
-			scroll += 230 * s * dt;
+		} else if (phase === 'wait') {                      // on the spot
 			if (ready && k > hold) { phase = 'exit'; t0 = now; from = x; to = window.innerWidth + 20 * s; }
 		} else if (phase === 'exit') {                      // off to the right edge, then the home screen
 			x = from + (to - from) * ease(Math.min(1, k / .95), false);
 			if (k >= .95) { phase = 'fade'; load.classList.add('gone'); setTimeout(() => { done = true; load.remove(); }, 650); }
 		}
 		group.style.transform = 'translateX(' + x + 'px)';
-		ground.style.backgroundPositionX = (-scroll) + 'px';
 		requestAnimationFrame(frame);
 	}
 
@@ -157,10 +134,9 @@ const engine = new Engine(GODOT_CONFIG);
 
 	// the game says when its home screen is up (main.gd: window.jlReady); after the engine has started,
 	// eight seconds at most
-	window.jlReady = function () { ready = true; note.textContent = ''; };
+	window.jlReady = function () { ready = true; };
 	function onStarted() {
 		started = true;
-		note.textContent = 'PRESQUE PRÊT…';
 		setTimeout(() => { ready = true; }, 8000);
 	}
 
@@ -184,11 +160,7 @@ const engine = new Engine(GODOT_CONFIG);
 			fail('Ce navigateur ne peut pas lancer le jeu. Il manque :\n' + missing.join('\n'));
 		}
 	} else {
-		engine.startGame({
-			'onProgress': function (current, total) {
-				if (!started && current > 0 && total > 0) note.textContent = 'CHARGEMENT ' + Math.min(99, Math.floor(current * 100 / total)) + ' %';
-			},
-		}).then(onStarted, fail);
+		engine.startGame().then(onStarted, fail);
 	}
 }());
 </script>
