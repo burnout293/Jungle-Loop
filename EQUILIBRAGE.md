@@ -1,9 +1,9 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 21/11/2026, **version Godot 0.47.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 22/11/2026, **version Godot 0.49.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) reste jouable sur
 `web.html` ; là où elle diffère, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
-existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
+existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil ; depuis la 0.48, un mot de passe le protège dans les versions publiées) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
 (« Sprint : +30 % », « mosquitos dès 300 m »…).
 
 **Tout se règle sans toucher au code**, dans le dossier `reglages/` du dépôt Godot : `equilibrage.txt`
@@ -18,7 +18,7 @@ L'écran fait 720 unités de haut (18 m), le sol est à 630. Les vitesses sont d
 
 | Mode | Ce qui change | Où |
 |---|---|---|
-| Histoire | une scène au départ (caméra figée, les gardes et Pépito parlent, puis l'entrée du temple explose ; seul, chaque réplique attend une touche, l'explosion vient après la dernière) ; la caméra reste figée pendant qu'il sort et court jusqu'à 24 % de l'écran au-delà de sa place, les gardes sortent derrière lui 0,7 et 1,1 s après l'explosion, puis la caméra le rattrape en 1 s (0.45) ; les gardes (deux guerriers masqués, décor) reviennent alors juste derrière lui (5,2 et 7,1 m) et le poursuivent sur le bord gauche jusqu'à la réplique « DEMI-TOUR » ; des dialogues en route (`reglages/dialogues.txt`) ; avec les boss (aujourd'hui Vorace vers 1500 m, dans la forêt) ; les ruines viennent après sa défaite, puis un décor tous les 2000 m dès 4000 m | `newRun(…, 'story')` |
+| Histoire | **0.49 : 2 cœurs, aucune amélioration ni consommable** : seulement les pouvoirs des morceaux de la relique gagnés (jade de Vorace : double saut ; ambre : Esquive ; lune : Sablier ; braise : Vol), gardés d'une course à l'autre ; **un dialogue par essai** (au temple et à 1000 m, `reglages/dialogues.txt`), les essais comptés depuis le dernier morceau gagné ; vitesse plafonnée à 26 m/s, et elle ne monte pas pendant les dialogues. Une scène au départ (caméra figée, les gardes et Pépito parlent, puis l'entrée du temple explose ; seul, chaque réplique attend une touche, l'explosion vient après la dernière) ; la caméra reste figée pendant qu'il sort et court jusqu'à 24 % de l'écran au-delà de sa place, les gardes sortent derrière lui 0,7 et 1,1 s après l'explosion, puis la caméra le rattrape en 1 s (0.45) ; les gardes (deux guerriers masqués, décor) reviennent alors juste derrière lui (5,2 et 7,1 m) et le poursuivent sur le bord gauche jusqu'à la réplique « DEMI-TOUR » ; des dialogues en route (`reglages/dialogues.txt`) ; avec les boss (aujourd'hui Vorace vers 1500 m, dans la forêt) ; les ruines viennent après sa défaite, puis un décor tous les 2000 m dès 4000 m | `newRun(…, 'story')` |
 | Run illimitée (bouton « Jouer ») | aucun boss : un nouveau décor tous les 800 m ; la course part d'un décor tiré au hasard, déjà visible derrière l'écran d'accueil (le temple y est, immobile) | `newRun(…, 'endless')`, `endless_biome` |
 | Records | un par mode (Histoire : l'ancien record ; Run illimitée : le sien) | `save.best`, `save.bestEndless` |
 
@@ -29,8 +29,8 @@ L'accueil a un bouton par mode ; « Rejouer » relance le dernier mode choisi.
 | Valeur | Aujourd'hui | Où (js/game.js) |
 |---|---|---|
 | Vitesse au départ | 9 m/s (360 u/s) ; en Histoire, chaque décor a la sienne (ligne « Nouveau décor ») | `SPEED_BASE` |
-| Accélération | Run illimitée : +0,125 m/s chaque seconde ; Histoire : +0,18 m/s chaque seconde | `SPEED_GAIN`, `STORY_GAIN` |
-| Vitesse maximale | aucune : 16,5 m/s après 1 min, 24 m/s après 2 min, 39 m/s après 4 min (Run illimitée ; en Histoire elle repart à chaque décor de la vitesse de ce décor) | |
+| Accélération | Run illimitée : +0,125 m/s chaque seconde ; Histoire : +0,18 m/s chaque seconde ; **0.49 : seul, elle s'arrête pendant les dialogues** (au temple et en route : horloge à part, `pace_t`) | `SPEED_GAIN`, `STORY_GAIN`, `pace_t` |
+| Vitesse maximale | **0.49 : 30 m/s en Run illimitée** (atteinte vers 2 min 48 s, à 3,3 km) **et 26 m/s en Histoire** ; ensuite c'est l'agencement qui durcit (section 4, « Agencement ») ; les montures Gorille et Libellule aussi plafonnées, le Rhino et RedMonster restent à deux fois ta vitesse | `SPEED_CAP`, `STORY_CAP` |
 | **Sprint** | départ à 11 m/s : **+57 %** (+4 m/s, gardés toute la course) | `SPEED.sprint` |
 | Sortie du temple | vitesse × 1,8 jusqu'à sa place à l'écran | `update` |
 | Esquive | +200 m/s pendant 0,2 s, soit 40 m d'un coup : casse tout ce qui se casse sur le chemin (créatures, décor, nuée), traverse le reste (l'acide de Vorace), ramasse les pièces traversées ; 0,3 s d'invincibilité ensuite | `DODGE_*`, `update` |
@@ -54,13 +54,13 @@ L'accueil a un bouton par mode ; « Rejouer » relance le dernier mode choisi.
 | Vol | chaque appui : montée à **12 m/s** tant qu'on tient (niveau 2 : 13,5 ; niveau 3 : 15) ; relâché : la montée s'arrête net, puis chute **1,2** fois plus rapide qu'un saut, jusqu'à toucher le sol | `FLAP_LV`, `VOL_STOP`, `VOL_DROP`, `flew` |
 | Plafond | à 0,6 m du haut de l'écran | `CEIL` |
 | Appui juste avant d'atterrir | retenu 0,12 s | `p.buf` |
-| Corps du héros (collisions) | 0,7 m de large, 2 m de haut, 0,15 m de marge sur chaque obstacle | `HERO_HALF`, `HERO_H` |
+| Corps du héros (collisions) | **0.49 : tout 15 % plus grand** (héros, dangers, pièces, objets ; dessins et boîtes) : 0,8 m de large, 2,3 m de haut, 0,15 m de marge sur chaque obstacle | `SIZE`, `HERO_HALF`, `HERO_H` |
 
 ## 3. Vies
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Cœurs | 1, et un de plus par niveau de Vitalité (jusqu'à 4) ; le compteur est caché quand il n'y en a qu'un | `HEARTS` |
+| Cœurs | Run illimitée : 1, et un de plus par niveau de Vitalité (jusqu'à 4) ; le compteur est caché quand il n'y en a qu'un. **Histoire : 2** (0.49, sans Vitalité) | `HEARTS`, `STORY_HEARTS` |
 | Invincible après un coup | 1,6 s | `hit` |
 | Invincible après la perte d'une monture | 1,5 s | `dismount` |
 | Rembobinage | 1 fois par course, rend tous les cœurs, 2 s d'invincibilité | `hit` |
@@ -75,7 +75,9 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | 70 premiers mètres | hérisson ×2, pièces, plateforme, corniche, creux (sans danger pendant ces 70 m) | 6 entrées (hérisson 33 %) |
 | Après Vorace | 9 m après les gemmes bleues : pièces seulement, puis 65 m de route douce (hérisson, pièces ×2, plateforme, corniche, creux) | `DEATH.calm`, `DEATH.easy` |
 | Ensuite | hérisson ×2, doublé (deux hérissons), perchoir (plateforme au-dessus d'un hérisson), saut doré (hérisson sous une arche de pièces), volant, pièces, plateforme ×2, grotte, tronc, galerie, escalier de plateformes, corniche ×2, creux (un hérisson au fond), colline aux plateformes ×3, chaîne de plateformes ×3, montée de plateformes ×2 | 24 entrées, près de la moitié pour grimper |
-| Dès 150 m | + suspendu ×3 | 18 entrées |
+| Dès 150 m | + suspendu ×5, + file d'araignées ×5 | |
+| **Ordre d'apparition (0.49)** | araignées dès **150 m**, nuées dès **300 m**, volants (Fonceurs, missiles) et leurs vagues dès **400 m** (aucun volant avant, même avec le Vol), nids d'araignées dès **900 m** ; mesuré sur 4 graines : 150, 321, 403 et ~950 m | `FROM_LOW`, `FM_FIRST`, `FROM_DARTS`, `FROM_NESTS` |
+| **Agencement (0.49)** | une fois la vitesse plafonnée, la difficulté vient de l'agencement : de 300 m à 3300 m (en Histoire 60 % au plus), écarts entre motifs jusqu'à 25 % plus courts (le temps laissé pour retomber jusqu'à 12 % plus court), files d'araignées, nids et vagues jusqu'à deux fois plus fréquents, files jusqu'à 4 araignées (un volant de plus dans les grands écarts : réglage laissé à 0, il créait un passage impossible à deux). Mesuré (Run illimitée, 8 graines, sans monture ni sablier) : 0,81 danger/s à 2 km (0,74 sans), 0,82 à 4 km (0,71), 1,01 à 7 km (0,83) ; les bancs d'équité (à pied et au Vol, seul et à deux, 200-1700 m et 2600-6100 m) ne trouvent aucun passage impossible | `PRESS_*`, `pressure` |
 | Dessins de pièces | + dessin ×2 (ceux de `assets/patterns.txt` dont le sommet est atteignable) ; sans le Vol, + dessin dans le ciel ×1 (hors d'atteinte : l'envie du Vol) | +2 ou +3 entrées |
 | Avec Double saut | + volant | +1 entrée |
 | Sans le Vol (à pied) | le volant seul retiré ; + hérisson, + araignée jaune ×2 (dès 150 m, une arche de pièces au-dessus) : moins de volants, plus de dangers au sol | `spawn_pattern` |
@@ -88,7 +90,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
 | Écart entre deux motifs | le plus grand de 10,5 m et (vitesse × 0,72 s + 2,75 m), × hasard de 0,85 à 1,3 ; × 1,3 après des pièces. Compté en distance : la route garde sa densité quand la vitesse monte (2 dangers par 100 m vers 13-21 m/s, 3 à 4 au-delà) | `GAP` |
-| Remplissage des grands écarts | écart de plus de 16 m : au milieu, un suspendu à hauteur de tête (dès 1500 m, 1 fois sur 2), sinon un volant (dès 150 m : 35 % avec le Vol, 15 % sans) | `GAP_FILL` |
+| Remplissage des grands écarts | écart de plus de 16 m : au milieu, un suspendu à hauteur de tête (dès 1500 m, 1 fois sur 2), sinon un volant (dès 400 m : 35 % avec le Vol, 15 % sans) | `GAP_FILL` |
 | Dangers (rôles) | chacun a son dessin dans chaque décor (forêt / ruines / cité / donjon) | `ROLE`, js/render.js |
 | Au sol, à sauter | hérisson / boule de ronces (verte depuis la 0.34 : elle se confondait avec les ruines) / robot à pointes à l'œil bleu clignotant (cité) / piège à loup (posé au sol, sa chaîne devant lui) ; 1,7 m × 1,35 m | `SPIKY`, `SINK` |
 | Volant | coléoptère / vautour / missile / flèche : un gros panneau rouge « ! » qui pulse au bord droit (à 64 % de la largeur avec « Signalements décalés »), à sa hauteur, avec sa trajectoire en pointillés et un klaxon à deux tons joué deux fois (pas deux fois en moins de 1,6 s), pendant 2 s (0.44) ; pendant ce temps il rejoint ta hauteur lentement, en retard (au plus 4 m/s, 0.45 ; `suivi`) ; puis il traverse l'écran à 20 m/s de plus que toi, à la hauteur au-dessus du sol qu'il avait en partant ; plusieurs « ! » sur une même ligne se mettent côte à côte | `DART_*`, `warn_mark` |
@@ -180,7 +182,7 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
-| Première nuée | entre 150 et 230 m | `newRun` |
+| Première nuée | entre 300 et 380 m (0.49 ; avant : 150-230) | `newRun` |
 | Suivantes | 170 à 300 m après | `followers` |
 | Vagues par nuée | 1 ; +1 dans 60 % des cas après 450 m ; +1 dans 50 % des cas après 900 m | `followers` |
 | Temps pour viser | 1,7 s la première vague, 1,15 s les suivantes | `followers` |
@@ -305,6 +307,21 @@ les défis de l'accueil) ; 3 plumes au plus, une de trop vaut 25 pièces (`[plum
 | Bulle | au dernier cœur perdu (après le Rembobinage s'il reste) : une bulle de 1,25 m de rayon, 3,75 m au-dessus du sol sous l'autre, 0,5 m derrière lui, qui ondule ; il faut sauter dedans (au sol, rien) ; ramené : 1 s d'invincibilité, un cœur | `BUBBLE_*`, `to_bubble`, `_rescue_check`, `back` |
 | Fin | quand les deux sont dans une bulle (ou que l'autre est parti et qu'on flotte) ; chacun garde sa distance et ses pièces | `_float` |
 | Connexion | 30 s pour se trouver ; directe si possible, sinon par le relais TURN de Cloudflare (accès de 4 h donnés par le serveur, clé posée par `server/turn.ps1`) ; sans relais, un message le dit | `LINK_TIME`, route `ice` |
+
+## 10 ter. Course à 4, mises et panneaux de record (0.48)
+
+| Valeur | Aujourd'hui | Où |
+|---|---|---|
+| Où | navigateur seulement (WebRTC), comme à deux ; écran Amis › Course à 4 : « Créer une course » (4 lettres) ou « Rejoindre » ; ou la fiche d'un ami › « Inviter à la course » (une course s'ouvre si besoin) ; invitations reçues sur n'importe quel écran hors course | `race.gd`, `_race_invite` |
+| Places | l'hôte et 3 invités ; chacun relié à l'hôte, qui fait passer à tous ce que dit chacun ; la salle du serveur dure 10 min (rouverte d'elle-même pour inviter après 9 min ; ceux qui sont reliés le restent) | `Race.SEATS`, `ROOM_LIFE` |
+| Mises | au salon, chacun choisit combien (0, 50, 100, 250, 500, 1000 pièces, pas plus que ce qu'il a) et sur qui (lui-même par défaut) ; payées au départ | `[course a 4]`, `Race.bet` |
+| Cagnotte | toutes les mises ; au vainqueur (le plus loin, égalité possible) : partagée entre ceux qui ont misé sur lui, en proportion de leur mise (l'arrondi au premier) ; si personne n'a misé sur lui, elle est à lui | `Race.settle` |
+| La course | Run illimitée, même graine et même route pour tous, l'équipement de l'hôte pour tous, départ 3 s après « Lancer la course » ; chacun joue chaque instant du temps réel (comme à deux) ; pas de montures, de consommables ni de capture ; qui tombe est sorti (pas de bulle) | `_race_go`, `run.race` |
+| Fantômes | les autres, pâles (62 %), Pépito tourné à leur couleur (hôte doré, puis bleu, violet, vert), leur nom au-dessus ; hors de vue : leur nom au bord de l'écran avec l'écart en mètres ; 12 positions par seconde, dessinées un peu dans le passé | `Race.views`, `_draw_ghost` |
+| Fin | quand tous sont tombés, ou que le dernier en course a dépassé tous les autres (il continue pour son record, un bandeau le lui dit) ; écran du résultat : distances, vainqueur, ta mise et ce que tu reçois ; « Revanche » (l'hôte) ou « Changer les mises » | `_check_end`, `refresh_race` |
+| Départs | un invité qui part en cours de route : sa dernière distance compte, sa mise est perdue pour lui… sauf s'il ne reçoit jamais le résultat (l'hôte parti) : chacun récupère alors sa mise | `_lost`, `_fail` |
+| Panneaux de record | à la distance du record de chaque ami dans le mode joué (« Record de Léo »), et du tien (« Ton record », en pierre dorée) ; plantés 70 m avant d'y arriver, pas avant 50 m, jamais à moins de 25 m l'un de l'autre (le tien l'emporte), 12 au plus ; aussi seul, hors ligne pour le tien | `Game.signs_for`, `SIGN_*` |
+| Amis | retirer un ami (fiche › Retirer, après confirmation : les deux listes, et plus d'invitation entre vous) ; ajouter par code, par lien (`?ami=PEPI-XXXX`) ou par code QR (le lien, lu par l'appareil photo d'un téléphone) ; « Effacer mes données en ligne » (Réglages › Sauvegarde) | `_remove_friend`, `qr.gd`, `player/delete` |
 
 ## 10. Affichage et son
 

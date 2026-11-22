@@ -15,10 +15,11 @@ paysage et peut s'installer sur l'écran d'accueil.
 - `mockups/` : maquettes (à ouvrir servies, pas en fichier)
 - [EQUILIBRAGE.md](EQUILIBRAGE.md) : toutes les valeurs de jeu
 - [BESTIAIRE.md](BESTIAIRE.md) : dangers, boss, montures, plateformes, par décor
+- [confidentialite.html](confidentialite.html) : la politique de confidentialité (exigée par les magasins), en ligne sur https://burnout293.github.io/Jungle-Loop/confidentialite.html
 
 Pour essayer sans toucher à sa sauvegarde : ajouter `?bac` à l'adresse.
 
-**Depuis le 18/11/2026, le jeu est la version Godot** (0.47.0) : son code est dans la branche `godot`
+**Depuis le 18/11/2026, le jeu est la version Godot** (0.49.0) : son code est dans la branche `godot`
 (dossier `Projects/Jungle-Loop-Godot`), son export web est à la racine de cette branche `main` (`index.html`,
 `index.js`, `index.wasm`, `index.pck`… avec son propre cache hors ligne, `index.service.worker.js`).
 Au premier lancement dans le navigateur, la partie de l'ancienne version (même adresse) est reprise si elle

@@ -16,8 +16,11 @@ Tous ont un contour sombre et un bord éclairé (lisibilité 5) ; le décor de f
 |---|---|---|---|---|
 | **Au sol** : sauter | hérisson violet | boule de ronces verte | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
 | **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur (avec le Vol : la tienne, et il vient si tu restes trop à la même hauteur), puis il traverse l'écran | coléoptère | vautour | flèche enflammée | missile |
-| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m, à hauteur de tête (rester au sol) dès 1500 m ; avec le Vol aussi plus haut, et en rideaux (une colonne avec un seul passage) | araignée jaune (basse, immobile), rouge (plus haut, monte et descend de 5 m) | les mêmes araignées | chauve-souris | drone |
+| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m (nids dès 900 m), à hauteur de tête (rester au sol) dès 1500 m ; avec le Vol aussi plus haut, et en rideaux (une colonne avec un seul passage) | araignée jaune (basse, immobile), rouge (plus haut, monte et descend de 5 m) | les mêmes araignées | chauve-souris | drone |
 | **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | guêpes | feux follets | gros drones qui tirent un laser au lieu de foncer |
+
+0.49 : tous les dangers, le héros, les pièces et les objets sont dessinés 15 % plus grands. Ordre d'apparition :
+araignées 150 m, nuées 300 m, Fonceurs (missiles) 400 m, nids 900 m.
 
 Relique altérée (objet) : une partie des créatures et des nuées deviennent inoffensives (pâles, bleutées).
 
@@ -52,8 +55,8 @@ Inoffensif ; il se casse avec Brise-tout, l'Esquive, les Bottes de métal, la TN
 
 | | Forêt | Ruines | Donjon | Cité |
 |---|---|---|---|---|
-| **Plateforme** | bloc de sol flottant (terre et herbe) | bloc de sol flottant (dalles) | passerelle de planches pendue à deux chaînes | plateforme en lévitation sur 3 réacteurs cyan |
-| **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche | murs de pierres carrées effondrés | aucune (0.44) | immeubles éclairés, conteneurs rouillés |
+| **Plateforme** | 0.49 : morceau de colline flottant, mousse dessus, pierres gravées et racines dessous (PixelLab, deux tailles) ; toujours devant le monticule dont il semble tiré | bloc de sol flottant (dalles) | passerelle de planches pendue à deux chaînes | plateforme en lévitation sur 3 réacteurs cyan |
+| **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche ; 0.49 : monticule de pierres gravées et de racines (PixelLab), toujours derrière les plateformes | murs de pierres carrées effondrés | aucune (0.44) | immeubles éclairés, conteneurs rouillés |
 | **Lianes** | pendent du haut de l'écran ici et là | idem | chaînes à crochet ou anneau | câbles à prise lumineuse, câbles tendus en arc |
 
 Derrière le sol de la forêt (0.44) : fougères, fleurs, champignons et lanterne (ils s'allument quand il les frôle),
@@ -80,6 +83,28 @@ Feuilles d'automne, Nuit, Feu.
 - **Singes** dans les arbres, à saluer en passant.
 - **Plumes de toucan** et **urnes** (0.47, PixelLab), qui flottent comme le sablier.
 - **Pièces** (et 27 dessins de pièces dans `assets/patterns.txt`, dont certains dans le ciel, à n'attraper qu'avec le Vol), **gemmes** jaune, rouge, bleue, **cœurs**.
+
+## Sur la route avec les amis (0.48)
+
+- **Panneaux de record** : une planche de bois sur un poteau, « Record de Léo », à la distance de son record ;
+  le tien en pierre grise, écrit en or.
+- **Fantômes** de la course à 4 : les autres Pépito, pâles, chacun à sa couleur, avec son nom.
+
+## La relique (0.49)
+
+Cinq morceaux : le **cœur** (cyan, volé par Pépito au temple, aucun pouvoir) et quatre gemmes dans le ventre
+des gardiens de la jungle, chacune avec un pouvoir en Histoire : le **jade** (Vorace, forêt : double saut ; dans
+le jeu), l'**ambre** (ruines : Esquive), la **lune** (cité : Sablier), la **braise** (donjon : Vol). Complète : un
+disque-soleil doré, un masque de pierre au centre avec le cœur au front, les quatre gemmes en croix (PixelLab,
+4 essais dans `propositions/0.49/` du dépôt Godot). Vorace repousse (c'est une fleur) tant que le gardien
+suivant n'existe pas. Ce sont les pygmées, non plus la relique, qui ramènent Pépito au temple à chaque chute.
+
+## Boss à l'étude (0.48, sans dessins)
+
+Idées présentées sur la toile des maquettes (https://claude.ai/artifact/WrgYidBBFJyPb4DYx81pcH) : Horus,
+gardien solaire (ruines, ses 4 dessins existent) ; le Geôlier aux chaînes (donjon) ; le Titan d'acier (cité) ;
+le Grand Totem des pygmées (rythme, filet et couteau) ; la Reine des nuées (lanternes) ; le Double (la boucle du
+temps, avec les fantômes de la course). Rien n'est dans le jeu.
 
 ## Retirés
 
