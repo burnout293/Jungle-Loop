@@ -55,8 +55,8 @@ Inoffensif ; il se casse avec Brise-tout, l'Esquive, les Bottes de métal, la TN
 
 | | Forêt | Ruines | Donjon | Cité |
 |---|---|---|---|---|
-| **Plateforme** | 0.49 : morceau de colline flottant, mousse dessus, pierres gravées et racines dessous (PixelLab, deux tailles) ; toujours devant le monticule dont il semble tiré | bloc de sol flottant (dalles) | passerelle de planches pendue à deux chaînes | plateforme en lévitation sur 3 réacteurs cyan |
-| **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche ; 0.49 : monticule de pierres gravées et de racines (PixelLab), toujours derrière les plateformes | murs de pierres carrées effondrés | aucune (0.44) | immeubles éclairés, conteneurs rouillés |
+| **Plateforme** | 0.49 : morceau de colline flottant, mousse dessus, pierres gravées et racines dessous (PixelLab, deux tailles) ; toujours devant le monticule dont il semble tiré ; 0.50 : une sur deux en pente fixe (elle monte, et la dernière d'un passage peut descendre) | bloc de sol flottant (dalles) | passerelle de planches pendue à deux chaînes | plateforme en lévitation sur 3 réacteurs cyan |
+| **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche ; 0.49 : monticule de pierres gravées et de racines (PixelLab), toujours derrière les plateformes ; 0.50 : assombri, et trois autres (pierres gravées, souche creuse, tronc couché) | murs de pierres carrées effondrés | aucune (0.44) | immeubles éclairés, conteneurs rouillés |
 | **Lianes** | pendent du haut de l'écran ici et là | idem | chaînes à crochet ou anneau | câbles à prise lumineuse, câbles tendus en arc |
 
 Derrière le sol de la forêt (0.44) : fougères, fleurs, champignons et lanterne (ils s'allument quand il les frôle),
@@ -90,6 +90,12 @@ Feuilles d'automne, Nuit, Feu.
   le tien en pierre grise, écrit en or.
 - **Fantômes** de la course à 4 : les autres Pépito, pâles, chacun à sa couleur, avec son nom.
 
+## Le temple (0.50)
+
+Une pyramide de pierre verte moussue, son sanctuaire au sommet coiffé d'un cristal turquoise ; devant, un porche
+gravé de cristaux dont la porte est bloquée de rochers tenus par des lianes ; aux deux coins, des piliers à tête de
+jaguar. Trois couches (PixelLab) : la pyramide derrière le sol, le porche sur le sol, les piliers devant Pépito.
+
 ## La relique (0.49)
 
 Cinq morceaux : le **cœur** (cyan, volé par Pépito au temple, aucun pouvoir) et quatre gemmes dans le ventre
@@ -98,6 +104,11 @@ le jeu), l'**ambre** (ruines : Esquive), la **lune** (cité : Sablier), la **bra
 disque-soleil doré, un masque de pierre au centre avec le cœur au front, les quatre gemmes en croix (PixelLab,
 4 essais dans `propositions/0.49/` du dépôt Godot). Vorace repousse (c'est une fleur) tant que le gardien
 suivant n'existe pas. Ce sont les pygmées, non plus la relique, qui ramènent Pépito au temple à chaque chute.
+
+**0.50 : un masque de jaguar** (proposition B3, sans son treillis doré ni ses lianes), coupé en cinq pièces qui
+s'emboîtent : le **cœur** au front (cyan), la **couronne** de feuilles (jade, Vorace), la **tête gauche** (ambre),
+la **mâchoire** (lune, violette) et la **tête droite** (braise, rouge). Les images sont prêtes
+(`assets/img/relic/` du dépôt Godot), pas encore montrées dans le jeu.
 
 ## Boss à l'étude (0.48, sans dessins)
 
