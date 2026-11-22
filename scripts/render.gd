@@ -9,6 +9,7 @@ extends Node2D
 ## drawn four times finer), what passes in front of him, and the full-screen tints (never shaken).
 
 const PIXEL := Game.PIXEL
+const SIZE := Game.SIZE                 # 0.49: the hero, the dangers, the coins, the things picked up: 15 % bigger
 const VH := 320.0                      # play area height, in art pixels
 const GN := 280.0                      # floor line where the path is at its starting level
 const TEMPLE_X := -64.0                # temple's left edge, at camera 0
@@ -705,6 +706,8 @@ func draw_hills(c: CanvasItem) -> void:
 		if x > view_w or x + w < 0 or hl.biome == 3:
 			continue                                 # (the dungeon has no hill since 0.44: its walls looked stuck on)
 		var pics: Array = Art.hill_sets[hl.biome] if hl.biome < Art.hill_sets.size() else []
+		if hl.isles and hl.biome == 0 and pics.size() >= 3:   # 0.49: behind the platforms, the mound they come from
+			pics = [pics[2]]
 		if pics.is_empty():                          # (the pictures missing: the old mound, drawn)
 			blit(c, Art.hill(hl.biome, w, h, hl.seed % 997), x, GN + 6 - h)
 			continue
@@ -1088,6 +1091,13 @@ func put_region(c: CanvasItem, name: String, s_x: float, s_y: float, sw: float, 
 	var k = HI_K if fine != null else 1.0
 	c.draw_texture_rect_region(fine if fine != null else base, Rect2(dx, dy, dw, dh), Rect2(s_x * k, s_y * k, sw * k, sh * k))
 
+## 0.49: what follows is drawn SIZE bigger round (ax, ay) (its feet, its middle), until unbig().
+func big(c: CanvasItem, ax: float, ay: float) -> void:
+	c.draw_set_transform_matrix(Transform2D(0, Vector2(ax, ay)).scaled_local(Vector2(SIZE, SIZE)).translated_local(Vector2(-ax, -ay)))
+
+func unbig(c: CanvasItem) -> void:
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+
 ## An image centred on a point, turned by `rot` (radians, clockwise), inside the transform `xf`.
 func part(c: CanvasItem, xf: Transform2D, name: String, cx: float, cy: float, rot: float, mod: Color = Color.WHITE) -> void:
 	var base: Texture2D = Art.tex.get(name)
@@ -1126,7 +1136,9 @@ func _draw_hero_layer(c: CanvasItem) -> void:
 		if sh != null:
 			var hx = sx(run.cam + run.sx)
 			var hy = n(run.p.y)
+			big(c, hx, hy)
 			c.draw_texture(sh, Vector2(snap(hx - 17), snap(hy - 30)))
+			unbig(c)
 
 # The partner is Pépito too, his colours turned round the wheel: green leaves go orange, the teal scarf gold.
 const MATE_SHADER := """
@@ -1285,7 +1297,7 @@ func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN) -> void:
 	var ox = n(run.sx) if is_nan(at_x) else at_x
 	var oy = n(p.y)
 	if dashing:                                      # the relic's aura
-		glow(c, ox, oy - 18, 30 + sin(t * 30) * 2, Color(1, 211 / 255.0, 92 / 255.0, 0.6))
+		glow(c, ox, oy - 18 * SIZE, (30 + sin(t * 30) * 2) * SIZE, Color(1, 211 / 255.0, 92 / 255.0, 0.6))
 	if me and p.inv > 0 and leap == null and not (st != null and st["k"] < 1) and floori(t * 14) % 2 == 1:
 		return                                       # blinking while invincible
 	if p.ball != null:                               # the Sphère: a ball of leaves, rolling, swelling out of a puff
@@ -1295,7 +1307,7 @@ func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN) -> void:
 		var k = minf(1, p.balled / 0.18)
 		var s = 0.55 + 0.45 * k + 0.18 * sin(PI * k)
 		var h = float(base.get_height())
-		c.draw_set_transform_matrix(Transform2D(0, Vector2(ox, oy - h / 2 + 1)).rotated_local(p.roll).scaled_local(Vector2(s, s)))
+		c.draw_set_transform_matrix(Transform2D(0, Vector2(ox, oy - h * SIZE / 2 + 1)).rotated_local(p.roll).scaled_local(Vector2(s, s) * SIZE))
 		put(c, "hero-ball", -base.get_width() / 2.0, -h / 2)
 		return
 
@@ -1357,6 +1369,7 @@ func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN) -> void:
 		xf = xf.translated_local(Vector2(0, -22 + PLANT_SINK)).rotated_local(PI + 0.06 * sin(t * 5)).translated_local(Vector2(0, 22))
 	elif leap != null:                               # knocked out: he tumbles
 		xf = xf.translated_local(Vector2(0, -20)).rotated_local(p.roll).translated_local(Vector2(0, 20))
+	xf = xf.scaled_local(Vector2(SIZE, SIZE))        # (0.49: 15 % bigger, round his feet)
 	if shoes[0] != null:
 		part(c, xf, "far-shoe", shoes[0]["x"], shoes[0]["y"], shoes[0]["r"])
 	part(c, xf, "far-fist", fists[0]["x"], fists[0]["y"], 0)
@@ -1647,6 +1660,9 @@ func _draw_zones(c: CanvasItem) -> void:
 				z.of = bi
 			blit(c, z.im, x, GN)
 
+# 0.49: the forest's two platforms: the middle of what is walked on, and how far its top stands above it (art pixels).
+const ISLE_PICS := {"isle-forest-1": {"mid": 54.5, "top": 13}, "isle-forest-2": {"mid": 75.5, "top": 14}}
+
 func _draw_plats(c: CanvasItem) -> void:
 	for pl in run.plats:
 		var x = sx(pl.x)
@@ -1685,7 +1701,11 @@ func _draw_plats(c: CanvasItem) -> void:
 				kk += mid
 			region(c, im, im.get_width() - cap, 0, cap, ih, x + w - cap, top, cap, ih)
 		elif kind == "isle":
-			if S["isles"].size() > 0:
+			var pic: String = ("isle-forest-2" if pl.size == 2 else "isle-forest-1") if Game.biome_at(run, pl.x) == 0 else ""
+			if pic != "" and Art.tex.has(pic):     # 0.49: the forest's own, cut from its mound (PixelLab)
+				var IM: Dictionary = ISLE_PICS[pic]
+				blit(c, Art.tex[pic], snap(x + w / 2 - IM["mid"]), y - IM["top"])
+			elif S["isles"].size() > 0:
 				blit(c, S["isles"][pl.size], x, y - S["gtop"])
 		elif kind == "walk" and Art.tex.has("walkway"):  # the dungeon: planks hanging from two chains
 			var M: Dictionary = Art.meta["walkway"]
@@ -1730,15 +1750,19 @@ func coin_at(c: CanvasItem, co) -> void:
 		im = Art.tex.get("heart")
 	elif co.gem != "":
 		im = Art.tex.get("gem-" + co.gem, Art.tex.get("gem"))
+	big(c, sx(co.x), n(co.y))
 	if im != null:
 		blit(c, im, sx(co.x) - (im.get_width() >> 1), n(co.y) - (im.get_height() >> 1) + bob)
+		unbig(c)
 		return
 	var ct: Texture2D = Art.tex.get("coin")
 	if ct == null:
+		unbig(c)
 		return
 	var f = int(Art.meta["coin"]["frames"])
 	var fw = ct.get_width() / f
 	sheet(c, ct, f, floori(t * 10 + co.x * 0.01) % f, sx(co.x) - (fw >> 1), n(co.y) - (ct.get_height() >> 1) + (0.0 if f > 1 else bob))
+	unbig(c)
 
 ## Mounts waiting on the path: a warm glow and a bouncing arrow say "come here", not "watch out".
 ## The rare floating things: a life (a heart) or a brake (an hourglass) in a glowing bubble.
@@ -1756,7 +1780,7 @@ func _draw_bonuses(c: CanvasItem) -> void:
 			glow(c, x, y, (26 if urn else 20) + 2 * sin(t * 5), Color(1, 0.8, 0.3, 0.5 if urn else 0.35))
 			var pic: Texture2D = Art.tex.get("pick-" + it.kind)
 			if pic != null:
-				c.draw_set_transform(Vector2(x, y), (0.12 if urn else 0.3) * sin(t * 3 + it.ph), Vector2.ONE)
+				c.draw_set_transform(Vector2(x, y), (0.12 if urn else 0.3) * sin(t * 3 + it.ph), Vector2(SIZE, SIZE))
 				c.draw_texture(pic, Vector2(-pic.get_width() / 2.0, -pic.get_height() / 2.0))
 				c.draw_set_transform(Vector2.ZERO)
 			if sin(t * 6 + it.ph * 3) > 0.6:         # a glint
@@ -1768,16 +1792,18 @@ func _draw_bonuses(c: CanvasItem) -> void:
 		if not life:                                 # the hourglass: bigger, out of any bubble, rocking
 			glow(c, x, y, 22 + 2 * sin(t * 5), Color(tint.r, tint.g, tint.b, 0.35))
 			if slow_icon != null:
-				c.draw_set_transform(Vector2(x, y), 0.18 * sin(t * 3 + it.ph), Vector2.ONE)
+				c.draw_set_transform(Vector2(x, y), 0.18 * sin(t * 3 + it.ph), Vector2(SIZE, SIZE))
 				c.draw_texture_rect(slow_icon, Rect2(-12, -12, 24, 24), false)
 				c.draw_set_transform(Vector2.ZERO)
 			continue
 		glow(c, x, y, 20 + 2 * sin(t * 5), Color(tint.r, tint.g, tint.b, 0.45))
+		big(c, x, y)
 		c.draw_circle(Vector2(x, y), 10, Color(1, 1, 1, 0.16))
 		c.draw_arc(Vector2(x, y), 10, 0, TAU, 24, Color(1, 1, 1, 0.75), 1)
 		var im: Texture2D = Art.tex.get("heart") if life else slow_icon
 		if im != null:
 			c.draw_texture_rect(im, Rect2(x - 7, y - 7, 14, 14), false)
+		unbig(c)
 		if sin(t * 6 + it.ph * 3) > 0.6:             # a glint
 			rect(c, x + 5, y - 8, 1, 3, Color.WHITE)
 			rect(c, x + 4, y - 7, 3, 1, Color.WHITE)
@@ -1900,8 +1926,10 @@ func _draw_obstacles(c: CanvasItem) -> void:
 		if o.kind == "spiky":                        # on the floor
 			var shut = name == "beartrap" and absf(cx - n(run.sx)) < 30    # the trap snaps as he goes over it
 			var hop = -1.0 if (name == "spiky" and sin(t * 6 + o.x) > 0.6) else 0.0
-			shadow(c, cx, foot - 1, fw - 2 * pad)
+			shadow(c, cx, foot - 1, (fw - 2 * pad) * SIZE)
+			big(c, cx, foot)
 			sheet(c, im, frames, 1 if shut else 0, snap(cx - fw / 2), foot - im.get_height() + pad + hop + SINK.get(name, 0), mod)
+			unbig(c)
 			if name == "spikebot" and sin(t * 8 + o.x) > 0:   # its eye, blinking
 				glow(c, cx, foot - im.get_height() + 3, 9, Color(90 / 255.0, 240 / 255.0, 1, 0.8))
 		elif o.kind == "dart":                       # a "!" at the edge, at its height; then across in one go
@@ -1910,6 +1938,7 @@ func _draw_obstacles(c: CanvasItem) -> void:
 			elif o.state == "go":
 				var frame = floori(t * (14 if name == "fly" else 9) + o.ph) % frames if frames > 1 else 0
 				var x0 = snap(cx - fw / 2)
+				big(c, cx, cy)
 				for k in 3:                          # the wind it leaves behind
 					rect(c, x0 + fw - 4 + k * 6, snap(cy - 6 + k * 6), 14 + k * 4, 1, Color(1, 1, 1, 0.45))
 				if name == "missile":
@@ -1917,12 +1946,13 @@ func _draw_obstacles(c: CanvasItem) -> void:
 				if name == "arrow":                  # the dungeon's arrows burn: taller and brighter against the dark
 					_flames(c, x0, fw, cy, o.ph)
 				sheet(c, im, frames, frame, x0, snap(cy - im.get_height() / 2.0), mod)
+				unbig(c)
 		else:                                        # hanging still in mid-air, alive all the same
 			var bob = sin(t * 3 + o.ph) * 2
 			var top = snap(cy - im.get_height() / 2.0 + bob)
 			var frame = 0
-			if name.begins_with("spider"):
-				rect(c, snap(cx), -8, 1, top + 10, Color(235 / 255.0, 240 / 255.0, 1, 0.8))
+			if name.begins_with("spider"):               # (its thread down to its back, it is 15 % bigger: 0.49)
+				rect(c, snap(cx), -8, 1, snap(cy - (im.get_height() / 2.0 - bob) * SIZE) + 10, Color(235 / 255.0, 240 / 255.0, 1, 0.8))
 				frame = floori(t * 3 + o.ph) % 2
 			if name == "bat":
 				frame = 1 + (floori(t * 12 + o.ph) & 1)
@@ -1930,11 +1960,13 @@ func _draw_obstacles(c: CanvasItem) -> void:
 				glow(c, cx, top + im.get_height() * 0.4, 20, Color(1, 150 / 255.0, 40 / 255.0, 0.35 + 0.15 * sin(t * 4 + o.ph)))
 			var fl = floor_px(cx)
 			shadow(c, cx, fl - 1, maxf(8, 20 - (int(fl - top) >> 4)))
+			big(c, cx, cy)
 			sheet(c, im, frames, frame, snap(cx - fw / 2), top, mod)
 			if name == "drone":
 				var w = 6 + roundf(absf(sin(t * 40)) * 5)
 				rect(c, snap(cx - fw / 2 + 2), top + 1, w, 1, Color(220 / 255.0, 240 / 255.0, 1, 0.5))
 				rect(c, snap(cx + fw / 2 - 2 - w), top + 1, w, 1, Color(220 / 255.0, 240 / 255.0, 1, 0.5))
+			unbig(c)
 		if o.ghost:                                  # tipsy and harmless: hiccuping bubbles
 			for k in 3:
 				var up = fmod(t * 14 + k * 9 + o.x, 22)
@@ -2097,7 +2129,7 @@ func _draw_swarm(c: CanvasItem) -> void:
 			if frames > 1:
 				frame = [0, 1, 2, 1][floori(t * 22 + k) % 4] if aiming else (3 if floori(t * 24 + k) % 2 == 1 else 1)
 			var still = 0.4 if name == "drone-big" else 1.0
-			var sc = clampf(Game.FM_THICK / 0.65, 0.5, 1.5) * 0.8   # (smaller with the band: 0.8 of its picture at 65 %)
+			var sc = clampf(Game.FM_THICK / 0.65, 0.5, 1.5) * 0.8 * SIZE   # (smaller with the band: 0.8 of its picture at 65 %)
 			c.draw_set_transform_matrix(Transform2D(0, Vector2(cx + jx * still, cy + jy * still)).scaled_local(Vector2(sc, sc)))
 			sheet(c, im, frames, frame, -fw / 2, -im.get_height() / 2.0, Color(1, 1, 1, alpha))
 			c.draw_set_transform_matrix(Transform2D.IDENTITY)

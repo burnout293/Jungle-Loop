@@ -86,6 +86,7 @@ func _start() -> void:
 		var D: float = opts["start"] * Game.PPM
 		var g := Game.SPEED_GAIN
 		r.t = (-r.base + sqrt(r.base * r.base + 2 * g * D)) / g
+		r.pace_t = r.t                         # (0.49: the speed's own clock)
 		r.cam = D
 		r.dist = opts["start"]
 		r.next_x = D + 1500

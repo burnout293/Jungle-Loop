@@ -30,7 +30,7 @@ const NAMES := ["temple", "temple-rubble", "vorace-legs", "vorace-head", "vorace
 	"spikebot", "spider-low", "spider-mid", "bat", "thornball", "beartrap", "vulture", "arrow", "missile", "idol", "drone", "wasp", "drone-big",
 	"hero-body", "hero-ball", "hero-rotor", "hero-fist", "hero-shoe", "mount-gorilla", "mount-gorilla-hang", "mount-rhino", "mount-dragonfly",
 	"mosquito", "fly", "spiky", "coin", "gem", "gem-y", "gem-r", "gem-b", "heart", "monkey", "coin-icon",
-	"guard-spear", "guard-club", "pick-feather", "pick-urn", "pick-shield", "pick-knife"]
+	"guard-spear", "guard-club", "pick-feather", "pick-urn", "pick-shield", "pick-knife", "isle-forest-1", "isle-forest-2"]
 
 # Frames of each danger's sheet.
 const HAZ_FRAMES := {"spiky": 1, "thornball": 1, "beartrap": 2, "spikebot": 1, "fly": 4, "vulture": 2, "arrow": 1, "missile": 1, "spider-low": 2, "spider-mid": 2,
@@ -50,7 +50,7 @@ static var hills := {}
 # What stands behind the path, per scenery (0.43, PixelLab, tools/prep_hills.py): the forest's mossy rocks
 # and arched roots, the ruins' broken walls of square stones, the dungeon's walls with a wooden door or iron
 # bars, the city's buildings and containers. A little darker than what can be touched.
-const HILL_SETS := [["hill-forest-1", "hill-forest-2"], ["hill-ruins-1", "hill-ruins-2"], ["hill-city-1", "hill-city-2"], []]   # (the dungeon: none since 0.44)
+const HILL_SETS := [["hill-forest-1", "hill-forest-2", "hill-forest-3"], ["hill-ruins-1", "hill-ruins-2"], ["hill-city-1", "hill-city-2"], []]   # (the dungeon: none since 0.44)
 static var hill_sets: Array = []
 static var hill_order: Array = []
 static var ready := false

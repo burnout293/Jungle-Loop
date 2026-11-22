@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.48.0** (21/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.49.0** (22/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,40 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.49.0
+
+Sa liste du 22/11 :
+- **Histoire pour débuter** : **2 cœurs** ; **aucune amélioration** ni consommable ni couteau : l'Histoire donne
+  son propre équipement, les **pouvoirs des morceaux de la relique** gagnés (`Game.story_kit`). La vitesse **ne
+  monte plus pendant les dialogues** (horloge à part `run.pace_t`, arrêtée tant qu'ils parlent, seul ; à deux,
+  inchangé) et s'arrête à **26 m/s**. **Un dialogue par essai** (`reglages/dialogues.txt` : « départ 2 »,
+  « 1000 3 »…, puis à tour de rôle à partir du 2e ; « départ jade » une fois le jade gagné ; à deux, toujours le
+  1er) : ils l'ont rattrapé, ramené sur la broche, et il recommence. Plus de boucle du temps : ce sont les
+  **pygmées** qui le ramènent au temple (intro, messages de chute).
+- **La relique en 5 morceaux** : le **cœur** (volé par Pépito, aucun pouvoir) et 4 morceaux dans le ventre des
+  gardiens, chacun avec un pouvoir (`Game.RELIC_POWERS`) : **jade** (Vorace, double saut, dans le jeu), ambre
+  (ruines, Esquive), lune (cité, Sablier), braise (donjon, Vol) : boss à faire. Vorace vaincue en Histoire :
+  le jade est gardé (`save.relic`), son pouvoir sert aussitôt (`Game.grant`). Vorace repousse (c'est une fleur)
+  tant que le gardien suivant n'existe pas. Image de la relique complète : `propositions/0.49/` (4 essais).
+- **Ordre des dangers** : araignées dès 150 m, nuées dès 300 m, volants (Fonceurs, missiles, vagues) dès 400 m
+  (`FROM_DARTS`), nids dès 900 m (`FROM_NESTS`). Mesuré : 150 / 321 / 403 / ~950 m (`tests/story_049.gd`).
+- **Tout 15 % plus grand** : le héros, les dangers, les pièces et ce qui se ramasse (`Game.SIZE` : dessin
+  `Render.big`, et leurs boîtes). Le décor, les montures et les boss gardent leur taille.
+- **Vitesse plafonnée** à **30 m/s** en Run illimitée, la difficulté vient de l'**agencement** (`Game.pressure`,
+  de 300 à 3300 m, 60 % en Histoire) : écarts plus courts (jamais moins qu'un atterrissage), plus de files
+  d'araignées, de nids et de vagues, files jusqu'à 4. Mesuré (Run illimitée, 8 graines) : 0,81 danger/s à
+  2 km (0,74 sans), 0,82 à 4 km (0,71), 1,01 à 7 km (0,83). Un volant de plus dans les grands écarts créait un
+  passage impossible à deux : laissé à 0 (`volants dans les grands ecarts en plus`). Réglages :
+  `reglages/equilibrage.txt` (`[course]`, `[vies]`, `[araignees]`, `[volants]`, `[nuees]`, `[agencement]`).
+- **Décor forêt (PixelLab)** : un **monticule** (`hill-forest-3.png`) et **2 plateformes** (`isle-forest-1/2`,
+  107 et 133 pixels à marcher, `ISLE_W` 240 / 300) taillées dans le même monticule, qui est toujours posé
+  derrière elles (`Hill.isles`) : elles semblent sortir de la colline.
+- **Maquettes** (toile https://claude.ai/artifact/WrgYidBBFJyPb4DYx81pcH) : accueil B avec un seul JOUER (B1 à
+  B5), groupe à partir d'Amis A (A1 à A4), relique, décor, boutons en bois moussu (`propositions/0.49/`).
+- Vérifié : bancs t045/t046/t047/t047b, équité à pied et au Vol, seul et à deux (200-1700 m et 2600-6100 m :
+  0 passage impossible), Vorace équitable, même route et même allure à deux, `tests/story_049.gd` (69 vérifications),
+  `tests/race_logic.gd`, serveur.
 
 ## 0.48.0
 

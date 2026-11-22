@@ -2,11 +2,17 @@
 # Une réplique par ligne : « où | qui | ce qui est dit » (« qui » peut manquer : « LES GARDES » s'affiche).
 # « départ » = dans le temple, avant que l'entrée n'explose (la caméra reste figée) ; sinon la distance en
 # mètres où ils parlent. Seul, chaque réplique attend un toucher ; à deux, elle reste le temps de la lire.
-# Pendant un dialogue en route, la route se vide et la distance s'arrête, puis tout repart.
-# Les gardes font demi-tour à la première réplique qui contient « DEMI-TOUR ».
+# Pendant un dialogue en route, la route se vide, la distance s'arrête et la vitesse ne monte plus, puis tout repart.
+# Les gardes font demi-tour à la première réplique qui contient « DEMI-TOUR » (en mettre une dans chaque « 1000 »).
 # Le nom « Pépito » s'affiche en vert, les autres en bleu.
+#
+# 0.49 : un dialogue par essai. Après « départ » ou « 1000 », un numéro = l'essai (« départ 3 » : le 3e essai) ;
+# sans numéro = le 1er. Au-delà du dernier numéro, les essais reprennent ceux écrits à partir du 2e, à tour de rôle.
+# Un morceau de la relique en plus (« départ jade 2 ») : ce dialogue ne sert qu'une fois ce morceau gagné, et les
+# essais se recomptent depuis ce morceau. Les morceaux : jade (Vorace), ambre, lune, braise.
+# À deux, c'est toujours le 1er dialogue (le même sur les deux téléphones).
 
-# Dans le temple : Pépito a la relique, les gardes ont fait s'écrouler l'entrée... sur eux aussi.
+# --- 1er essai : la première rencontre. Pépito a le cœur de la relique, les gardes ont fait s'écrouler l'entrée... sur eux aussi.
 départ | Chef Massue | Halte, voleur ! Rends-nous la relique sacrée !
 départ | Pépito      | Quelle relique ?
 départ | Pointu      | Celle qui brille dans ton sac à dos.
@@ -15,9 +21,72 @@ départ | Pointu      | Euh, chef... du coup, on est enfermés avec lui.
 départ | Chef Massue | ... C'était le plan.
 départ | Pointu      | Pourquoi il allume un bâton rouge ?
 
-# En route : Vorace, la fleur-reine carnivore, n'est plus très loin.
 1000   | Pointu      | Chef... pourquoi il y a des os sous toutes les fleurs, par ici ?
 1000   | Chef Massue | Ces pétales géants... VORACE !! DEMI-TOUR, les chefs d'abord !
 1000   | Pointu      | Hé, le voleur ! Vorace, c'est une fleur qui mange les gens !
 1000   | Pépito      | Une fleur ? Pfff. Je vais la mettre dans un vase.
 1000   | Pointu      | Chef... il est encore plus fou que nous.
+
+# --- 2e essai : ils l'ont rattrapé et ramené sur la broche.
+départ 2 | Chef Massue | Et voilà ! Ramené au temple, ficelé comme un rôti.
+départ 2 | Pointu      | Chef... les cordes sont par terre.
+départ 2 | Pépito      | Vous faites des nœuds de pygmée. Ça se défait tout seul.
+départ 2 | Chef Massue | Rends la relique !
+départ 2 | Pépito      | Elle est mieux dans mon sac. Et merci pour la balade.
+départ 2 | Pointu      | Il rallume un bâton rouge, chef.
+
+1000 2 | Pointu      | Chef, encore les os sous les fleurs...
+1000 2 | Chef Massue | Vorace a faim. DEMI-TOUR ! On le ramassera après.
+1000 2 | Pépito      | Toujours les mêmes, ces deux-là.
+
+# --- 3e essai
+départ 3 | Pointu      | Chef, il est revenu. Enfin... on l'a revenu.
+départ 3 | Chef Massue | Cette fois, j'ai fait murer l'entrée avec DEUX rochers.
+départ 3 | Pépito      | Et vous êtes à l'intérieur. Avec moi. Encore.
+départ 3 | Chef Massue | ... Pointu, note : la prochaine fois, murer de l'extérieur.
+départ 3 | Pointu      | Il allume la mèche, chef !
+
+1000 3 | Chef Massue | Pétales géants en vue ! DEMI-TOUR !
+1000 3 | Pointu      | Bonne chance avec la fleur, voleur !
+1000 3 | Pépito      | Gardez-moi une place sur la broche, on ne sait jamais.
+
+# --- 4e essai : la relique a cinq morceaux.
+départ 4 | Chef Massue | Les anciens disent que la relique a cinq morceaux.
+départ 4 | Pointu      | Et lui, il n'a que le cœur.
+départ 4 | Pépito      | Et les quatre autres, ils sont où ?
+départ 4 | Chef Massue | Dans le ventre des gardiens de la jungle. Le premier, c'est Vorace.
+départ 4 | Pépito      | Super. Je vais la secouer un peu.
+départ 4 | Pointu      | Il rallume un bâton, chef...
+
+1000 4 | Pointu      | Chef, si Vorace le mange, on récupère la relique ?
+1000 4 | Chef Massue | On attendra qu'elle digère. DEMI-TOUR !
+1000 4 | Pépito      | Charmant.
+
+# --- 5e essai (puis les essais suivants reprennent les dialogues 2 à 5 à tour de rôle)
+départ 5 | Pointu      | Chef, on pourrait arrêter de le ramener ici ?
+départ 5 | Chef Massue | Et le laisser filer avec la relique ? Jamais !
+départ 5 | Pépito      | Moi, j'aime bien la balade sur la broche.
+départ 5 | Chef Massue | ... Allume ton bâton, qu'on en finisse.
+
+1000 5 | Chef Massue | Vorace ! DEMI-TOUR, et que ça saute !
+1000 5 | Pointu      | À tout à l'heure, voleur. Comme d'habitude.
+
+# --- Le jade de Vorace gagné : Pépito saute deux fois. Vorace est une fleur : elle repousse.
+départ jade | Pointu      | Chef ! Il a un morceau vert qui brille.
+départ jade | Chef Massue | Le jade de Vorace... Il l'a vraiment battue ?!
+départ jade | Pépito      | Et maintenant je saute deux fois. Regardez.
+départ jade | Pointu      | Mais Vorace a déjà repoussé, chef. C'est une fleur.
+départ jade | Pépito      | Je la recoupe, et je vais chercher le morceau suivant.
+départ jade | Chef Massue | Le suivant dort dans les ruines. Bonne chance...
+
+1000 jade | Pointu      | Chef, elle a repoussé encore plus grande !
+1000 jade | Chef Massue | DEMI-TOUR ! Les fleurs, c'est pas notre rayon.
+1000 jade | Pépito      | Double saut, double coupe.
+
+départ jade 2 | Chef Massue | Encore toi. Avec le jade, en plus.
+départ jade 2 | Pépito      | Et toujours le cœur de la relique. Il ne m'en manque que trois.
+départ jade 2 | Pointu      | Les ruines, c'est après la fleur. Bon courage.
+départ jade 2 | Pointu      | ... Il allume la mèche.
+
+1000 jade 2 | Chef Massue | DEMI-TOUR ! On t'attend au temple, comme toujours.
+1000 jade 2 | Pépito      | Préparez la broche, alors.

@@ -21,6 +21,8 @@ vitesse de la cite            | 12
 sprint                        | 4        # m/s de plus avec le Sprint
 nouveau decor run illimitee   | 800      # m : un décor tous les …
 nouveau decor histoire        | 2000     # m : un décor tous les …, après Vorace
+vitesse maximale run illimitee | 30      # m/s : la vitesse ne monte plus au-delà (0.49) ; c'est l'agencement qui durcit
+vitesse maximale histoire     | 26       # m/s
 
 [saut]
 gravite                       | 60       # m/s par seconde
@@ -36,6 +38,7 @@ chute apres le vol            | 1.2      # fois la gravité, jusqu'au sol
 
 [vies]
 coeurs au depart              | 1        # Vitalité en ajoute un par niveau
+coeurs en histoire            | 2        # 0.49 : l'Histoire ne prend aucune amélioration, seulement les pouvoirs de la relique
 invincible apres un coup      | 1.6      # s
 
 [objets]
@@ -79,7 +82,7 @@ dompte, rhino                 | 1.75     # m au-dessus de lui par niveau
 aimant de monture             | 4.25 / 6 # m de portée, par niveau
 
 [araignees]
-des                           | 150      # m : les premières
+des                           | 150      # m : les premières (0.49 : ordre d'apparition araignées 150, nuées 300, volants 400, nids 900)
 a hauteur de tete des         | 1500     # m
 par colonne au plus           | 2        # araignées l'une au-dessus de l'autre
 montee et descente            | 2.5      # m de chaque côté (les rouges)
@@ -88,8 +91,10 @@ ecart dans une file           | 1.15     # s entre deux araignées d'une file (�
 ecart mini dans une file      | 11       # m au moins entre deux araignées d'une file
 files, poids                  | 5        # combien de fois plus souvent qu'un motif simple une file d'araignées arrive
 nids, poids                   | 6        # pareil pour un nid : 4 ou 5 araignées à l'écran en même temps (une basse à sauter, les autres au-dessus de toi)
+nids des                      | 900      # m : les premiers nids
 
 [volants]
+des                           | 400      # m : les premiers volants (Fonceurs, missiles) et leurs vagues
 avertissement                 | 2        # s : le « ! » avant qu'il traverse ; pendant ce temps il suit ta hauteur, puis la garde
 suivi                         | 4        # m/s au plus : le « ! » rejoint ta hauteur lentement, en retard sur toi
 vitesse                       | 20       # m/s de plus que toi
@@ -100,9 +105,21 @@ campement                     | 2.6      # s à la même hauteur (Vol) avant qu'
 campement encore              | 1.6      # s, si tu y restes
 
 [nuees]
-premiere                      | 150 / 230        # m, de … à …
+premiere                      | 300 / 380        # m, de … à …
 suivantes                     | 170 / 300        # m après la précédente
 epaisseur                     | 65       # % de la hauteur d'un couloir pour les bestioles et leur bande rouge (couloirs inchangés)
+
+[agencement]
+# 0.49 : une fois la vitesse plafonnée, la difficulté vient de l'agencement des dangers, de plus en plus
+# entre « plus dur dès » et « au plus dur à » : écarts entre les motifs plus courts (jamais moins que ce qu'un
+# saut demande pour retomber), files d'araignées, nids et vagues plus fréquents, files jusqu'à 4 araignées.
+plus dur des                  | 300      # m
+au plus dur a                 | 3300     # m
+en histoire au plus           | 60       # % de la pression de la Run illimitée
+ecarts en moins               | 25       # % au plus dur
+enchainements en plus         | 100      # % de files, nids et vagues en plus au plus dur
+temps pour retomber en moins  | 12       # % : le temps laissé pour retomber entre deux motifs, au plus dur (vérifié par les bancs)
+volants dans les grands ecarts en plus | 0  # % de chances en plus qu'un grand écart reçoive un volant, au plus dur (à 35 : un passage impossible à deux)
 
 [vorace]
 arrivee                       | 1500     # m (à 100 m près), Histoire seulement

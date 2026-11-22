@@ -90,6 +90,7 @@ static func debug_run(run: Game.Run) -> void:
 		var D = dbg["start"] * Game.PPM
 		var g = Game.SPEED_GAIN
 		run.t = (-run.base + sqrt(run.base * run.base + 2 * g * D)) / g if g > 0 else D / run.base
+		run.pace_t = run.t                         # (0.49: the speed's own clock)
 		run.cam = D
 		run.dist = dbg["start"]
 		run.next_x = D + 1500

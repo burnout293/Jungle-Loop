@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.48.0"
+const VERSION := "0.49.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -18,13 +18,13 @@ const GOLD := Color("#ffd35c")
 const RELIC := Color("#5cf2e0")
 const LEAF := Color("#6cc22e")
 
-const DEATHS := ["La boucle se referme…", "Aïe. On rembobine.", "Retour au temple !", "Presque. Enfin… non.",
-	"La jungle : 1 — Toi : 0", "Ça piquait, hein ?", "Encore ! Encore !", "Le temps te rattrape."]
+const DEATHS := ["Ficelé comme un rôti…", "Direction : la broche.", "Retour au temple !", "Presque. Enfin… non.",
+	"La jungle : 1 — Toi : 0", "Ça piquait, hein ?", "Encore ! Encore !", "Les pygmées te ramènent."]
 const TABS := {"up": "Équipements", "power": "Pouvoirs", "mount": "Montures", "skin": "Skins"}
 # The home screen's three buttons: what each one is about, in a panel while hovered or held.
 const MENU_TIPS := {
 	"endless": "Essayez autant que vous souhaitez de vous échapper de cette forêt, mais il y a peu de chances que vous vous en sortiez vivant.",
-	"story": "Peut-être qu'il y a un scénario dans ce jeu… ou pas. À vous de voir.",
+	"story": "Deux vies, et seulement les pouvoirs de la relique : chaque gardien vaincu en rend un morceau, et un pouvoir de plus.",
 	"shop": "Parce que tout aventurier a le droit à sa panoplie de gadgets.",
 }
 const ACTS := ["tnt", "boots", "slow", "dash", "monster"]   # the HUD's buttons, right to left as shown
@@ -1789,8 +1789,8 @@ func _build_intro() -> void:
 	var h = _label("La relique", ts("xl"), GOLD)
 	h.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(h)
-	for text in ["Pépito a dérobé la relique du temple et l'a glissée dans son sac à dos. Il ne reste qu'à sortir de la jungle.",
-			"Mais la relique plie le temps : à chaque chute, tout recommence devant le temple."]:
+	for text in ["Pépito a dérobé le cœur de la relique du temple et l'a glissé dans son sac à dos. Il ne reste qu'à sortir de la jungle.",
+			"Mais les pygmées du temple veillent : à chaque chute, ils le rattrapent et le ramènent au temple, ficelé sur une broche."]:
 		var l = _label(text, ts("m"), INK, 0)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -3488,6 +3488,8 @@ func go(name: String) -> void:
 			race_send_t = 0.0
 		elif coop_last:                                  # for two: the same road (seed, scenery, tier) on both phones,
 			var mode: String = co["mode"]              # and the host's items and powers on both (not added to the guest's)
+			if mode == "story":                        # (0.49: Histoire, the host's pieces of the relic)
+				up = Game.story_kit(int(save["relic"]))
 			if coop.role == "guest":
 				up = {}
 				for k in co["up"]:
@@ -3499,6 +3501,11 @@ func go(name: String) -> void:
 			coop_send_t = 0.0
 			coop.clear_states()
 		else:
+			if save["mode"] == "story":                # 0.49: Histoire's own kit (the relic's pieces), this attempt's talks
+				up = Game.story_kit(int(save["relic"]))
+				save["storyTry"] = int(save["storyTry"]) + 1
+				Game.STORY_TRY = int(save["storyTry"])
+				Game.STORY_CHAP = int(save["relic"])
 			run = Game.new_run(up, save["mode"])
 			run.mounts = Game.MOUNT_KINDS.filter(func(k): return not k in save["mountsOff"])   # Montures: on / off
 		run.view_w = render.view_w * Game.PIXEL
@@ -3520,7 +3527,7 @@ func go(name: String) -> void:
 		state = "play"
 		show_screen("hud")
 		_hide_offer()
-		run.knives = SaveData.stock(save, "knife") if not run.coop else 0
+		run.knives = SaveData.stock(save, "knife") if not run.coop and run.mode != "story" else 0   # (0.49: none in Histoire)
 		Progress.start_run(save)
 		run_xp0 = save["xp"]                         # (the end counts the experience and moves the objectives from here)
 		run_quests0 = save["quests"].map(func(q): return {"q": q, "p": float(q["p"])})
@@ -4465,7 +4472,7 @@ func _invite(code: String, name: String) -> void:
 func _coop_go(mode: String) -> void:
 	if coop.state != "ready" or coop.role != "host":
 		return
-	var up = SaveData.loadout(save)
+	var up = SaveData.loadout(save) if mode != "story" else Game.story_kit(int(save["relic"]))   # (0.49)
 	var msg = {"t": "start", "mode": mode, "seed": randi() % 2147483647, "biome": endless_biome, "tier": Coop.tier_of(up), "up": up, "in": 0.8}
 	coop.send(msg)
 	_coop_begin(msg, 0.8)
@@ -4834,7 +4841,7 @@ func _use_knife() -> void:
 func _offer_tick(delta: float) -> void:
 	if state != "play" or run == null:
 		return
-	if not run.offered and not run.coop and run.exploded and run.out == 2 and not run.dead:
+	if not run.offered and not run.coop and run.mode != "story" and run.exploded and run.out == 2 and not run.dead:
 		run.offered = true
 		var cs = SaveData.CONSUMABLES.filter(func(c): return not c.get("stock", false) and SaveData.stock(save, c["id"]) > 0)
 		if not cs.is_empty():
@@ -5211,6 +5218,14 @@ func _step(h: float) -> void:
 			"timber": banner("Ça tombe !")
 			"bossfall": banner("Écrasée !")
 			"bossdown": banner("Vorace est vaincue !")
+			"relic":                                # 0.49: a piece of the relic won (Histoire): kept, its power now
+				if run.won >= 0:
+					if int(save["relic"]) < run.won + 1:
+						save["relic"] = run.won + 1
+						save["storyTry"] = 0
+						SaveData.store(save)
+					toast("ico-relic", "%s · nouveau pouvoir : %s" % [Game.RELIC_PIECE_NAMES[run.won], Game.RELIC_POWER_NAMES[run.won]], 0, 0)
+					_fill_hud()
 			"hurt", "rewind", "hit": stats["hurt"] = true
 			"feather":                              # 0.47: a toucan's feather, an urn
 				toast("ico-feather", "Plume de toucan", 0, 0)

@@ -23,6 +23,8 @@ const KEYS := {
 		"sprint": ["SPEED_SPRINT", "n", M],
 		"nouveau decor run illimitee": ["ZONE_ENDLESS", "n", 1.0],
 		"nouveau decor histoire": ["ZONE", "n", 1.0],
+		"vitesse maximale run illimitee": ["SPEED_CAP", "n", M],
+		"vitesse maximale histoire": ["STORY_CAP", "n", M],
 	},
 	"saut": {
 		"gravite": ["JUMP_GRAVITY", "n", M],
@@ -38,6 +40,7 @@ const KEYS := {
 	},
 	"vies": {
 		"coeurs au depart": ["HEARTS", "i", 1.0],
+		"coeurs en histoire": ["STORY_HEARTS", "i", 1.0],
 		"invincible apres un coup": ["HURT_INV", "n", 1.0],
 	},
 	"objets": {
@@ -90,8 +93,10 @@ const KEYS := {
 		"ecart mini dans une file": ["SPIDER_GAP_MIN", "n", M],
 		"files poids": ["CHAIN_SPIDERS", "i", 1.0],
 		"nids poids": ["CHAIN_NESTS", "i", 1.0],
+		"nids des": ["FROM_NESTS", "n", 1.0],
 	},
 	"volants": {
+		"des": ["FROM_DARTS", "n", 1.0],
 		"avertissement": ["DART_WARN", "n", 1.0],
 		"suivi": ["DART_TRACK", "n", M],
 		"vitesse": ["DART_SPEED", "n", M],
@@ -105,6 +110,15 @@ const KEYS := {
 		"premiere": ["FM_FIRST", "pair", 1.0],
 		"suivantes": ["FM_NEXT", "pair", 1.0],
 		"epaisseur": ["FM_THICK", "n", PC],
+	},
+	"agencement": {
+		"plus dur des": ["PRESS_FROM", "n", 1.0],
+		"au plus dur a": ["PRESS_FULL", "n", 1.0],
+		"en histoire au plus": ["PRESS_STORY", "n", PC],
+		"ecarts en moins": ["PRESS_GAP", "n", PC],
+		"enchainements en plus": ["PRESS_CHAINS", "n", PC],
+		"temps pour retomber en moins": ["PRESS_NEED", "n", PC],
+		"volants dans les grands ecarts en plus": ["PRESS_FILL", "n", PC],
 	},
 	"vorace": {
 		"arrivee": ["BOSS_AT", "n", 1.0],

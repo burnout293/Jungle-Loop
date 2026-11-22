@@ -29,12 +29,26 @@ static var STORY_GAIN := 7.2
 static var BOSS_BACK := 140.0
 static var BALL_SETTLE := 12.0
 static var HEARTS := 1              # one life: the first blow ends the run (Vitalité adds up to three)
+# 0.49: Histoire gives its own kit, whatever was bought or worn: STORY_HEARTS hearts, and the powers of the
+# relic's pieces won from the bosses (RELIC_POWERS, in the order the bosses come: Vorace's jade first). The
+# heart of the relic, the piece Pépito stole, gives none. main.gd sets STORY_TRY (the attempt, counted from
+# the last piece won) and STORY_CHAP (the pieces held) before a run alone: what the guards say depends on them.
+static var STORY_HEARTS := 2
+const RELIC_PIECES := ["jade", "ambre", "lune", "braise"]
+const RELIC_POWERS := ["doubleJump", "dash", "slow", "flight"]
+const RELIC_POWER_NAMES := ["Double saut", "Esquive", "Sablier", "Vol"]
+const RELIC_PIECE_NAMES := ["Le jade de Vorace", "L'ambre des ruines", "La lune de la cité", "La braise du donjon"]
+static var STORY_TRY := 1
+static var STORY_CHAP := 0
 static var HURT_INV := 1.6          # invincible this long after a blow
 
-const HERO_H := 80.0
-const HERO_HALF := 14.0        # hitbox, smaller than the sprite: forgiving
-const SPIKY_W := 68.0
-const SPIKY_H := 54.0
+# 0.49: the hero, the dangers, the coins and the things to pick up are SIZE bigger, drawn (render.gd) and
+# touched alike (their boxes below). The scenery, the mounts and the bosses keep their size.
+const SIZE := 1.15
+const HERO_H := 80.0 * SIZE
+const HERO_HALF := 14.0 * SIZE # hitbox, smaller than the sprite: forgiving
+const SPIKY_W := 68.0 * SIZE
+const SPIKY_H := 54.0 * SIZE
 const PLAT_W := 254.0
 
 # Raised ways: a stone slab on pillars (a cave underneath) and a hollow log (a tunnel inside).
@@ -97,8 +111,8 @@ static var JUMP_HELD := 1500.0
 # shows, it drifts lazily towards his height (late: DART_LAG, never faster than DART_TRACK units a second), and
 # keeps the height it had when it goes.
 # On foot, the flyers of a wave are DART_FOOT_GAP seconds apart at least: each one can be jumped.
-const DART_W := 64.0
-const DART_H := 40.0
+const DART_W := 64.0 * SIZE
+const DART_H := 40.0 * SIZE
 static var DART_WARN := 2.0
 static var DART_TRACK := 160.0
 const DART_LAG := 1.6
@@ -171,11 +185,29 @@ static var ESC_DRIFT := 0.3
 static var ESC_HARDER := 0.25
 const GAP_FILL := 640.0
 const DECOR_RATE := 0.12
-const HOVER_W := 60.0
-const HOVER_H := 56.0
+const HOVER_W := 60.0 * SIZE
+const HOVER_H := 56.0 * SIZE
 # Not before this many metres: the hanging dangers, low then at head height.
 static var FROM_LOW := 150.0
 static var FROM_MID := 1500.0
+# 0.49: the dangers come one kind at a time: the spiders from FROM_LOW, the swarms from FM_FIRST (300 m), the
+# flyers (fonceurs, their waves) from FROM_DARTS, the nests of spiders from FROM_NESTS.
+static var FROM_DARTS := 400.0
+static var FROM_NESTS := 900.0
+# 0.49: the speed stops growing at SPEED_CAP (Run illimitée) or STORY_CAP (Histoire); the road gets harder by
+# its layout instead, more and more from PRESS_FROM metres to PRESS_FULL (Histoire: PRESS_STORY of it at
+# most): the gaps between patterns up to PRESS_GAP shorter (never shorter than what a jump needs to land),
+# the rows of spiders, the nests and the waves up to PRESS_CHAINS more often, rows of spiders up to four.
+static var SPEED_CAP := 1200.0
+static var STORY_CAP := 1040.0
+static var PRESS_FROM := 300.0
+static var PRESS_FULL := 3300.0
+static var PRESS_STORY := 0.6
+static var PRESS_GAP := 0.25
+static var PRESS_CHAINS := 1.0
+static var PRESS_NEED := 0.12       # (the time a landing is given, this much shorter at full pressure: the benches say how far)
+static var PRESS_FILL := 0.0        # (a wide gap gets a flyer that much more often at full pressure: 0, a flyer
+                                    # more there made a spot no one gets through for two, fair_bfs_coop, seed 701)
 
 # Mounts. `half` and `tall`: the hitbox with the hero on its back; `base` and `gain`: its pace;
 # `ahead`: how fast it moves on while waiting, as a share of the hero's speed.
@@ -223,7 +255,7 @@ const LANE := {"low": 28.0, "mid": 115.0, "high": 250.0, "vine": 470.0}
 # The platforms: Vorace's flying lily pads bob (PAD_BOB units, PAD_SPEED radians a second).
 const PAD_BOB := 8.0
 const PAD_SPEED := 1.8
-const ISLE_W := [170.0, 240.0, 330.0]
+const ISLE_W := [240.0, 240.0, 300.0]       # (0.49: the forest's two drawn platforms: 107 and 133 art pixels to walk on)
 const CRUISE_H := 150.0
 const CRUISE_TIME := 4.0
 const DART_ALTS := [[46.0, 170.0], [46.0, 170.0, 290.0], [46.0, 170.0, 290.0, 400.0, 510.0]]
@@ -271,7 +303,7 @@ const CAMP_BAND := 70.0
 static var CAMP_TIME := 2.6
 static var CAMP_AGAIN := 1.6
 # The swarms: the first one between FM_FIRST metres, the next ones FM_NEXT after the last.
-static var FM_FIRST := [150.0, 230.0]
+static var FM_FIRST := [300.0, 380.0]
 static var FM_NEXT := [170.0, 300.0]
 # Dernier élan: knocked out on the last heart, he is thrown ahead (LEAP_KICK x his speed, more per
 # level) and up (more the faster he ran), slows down gently and bounces once per level.
@@ -292,8 +324,8 @@ const ZIG_PERIOD := 1.6
 const HANG_Y := 190.0
 
 # Follower monsters: FM_LANES lanes of FM_STEP each above the floor.
-const FM_W := 90.0
-const FM_H := 64.0
+const FM_W := 90.0 * SIZE
+const FM_H := 64.0 * SIZE
 const FM_RUSH := 1150.0
 const FM_LANES := 5
 const FM_STEP := 110.0
@@ -308,10 +340,10 @@ const HEART_GOLD := 25
 # Picking up: one box, COIN_HALF to each side of him, from just under his feet to COIN_TOP above his head
 # (the leaves on his head reach well above his hitbox). Rolled into a ball, as high as the ball (BALL_REACH).
 # (It used to be that box and a circle round his middle: the box now has the circle's width.)
-const COIN_HALF := 44.0
-const COIN_TOP := 30.0
+const COIN_HALF := 44.0 * SIZE
+const COIN_TOP := 30.0 * SIZE
 const COIN_UNDER := 4.0
-const BALL_REACH := 64.0
+const BALL_REACH := 64.0 * SIZE
 const BALL_UNDER := 20.0
 const BLAST_COINS := 30
 const CELL := 44.0
@@ -448,6 +480,7 @@ class Hill:
 	var h := 0.0
 	var biome := 0
 	var seed := 0
+	var isles := false             # 0.49: platforms stand in front of it (the forest: the mound they come from)
 
 class Decor:
 	var x := 0.0
@@ -631,7 +664,11 @@ class Run:
 	var debug := false             # started with something changed in the debug menu: no record
 	var seed := 0                  # the road's seed (the same seed, the same road)
 	var rng := RandomNumberGenerator.new()
-	var zone_t := 0.0              # Histoire: when the current scenery began (the speed starts again)
+	var zone_t := 0.0              # Histoire: when the current scenery began (pace_t; the speed starts again)
+	var pace_t := 0.0              # 0.49: the speed's clock: t, except while the guards talk (alone)
+	var talks: Array = []          # 0.49: what the guards say on this run (talks_for)
+	var chap := 0                  # 0.49: Histoire: the relic's pieces held at the start
+	var won := -1                  # 0.49: the piece won on this run (its index), -1: none
 	var zone_k := 1.0              # (unused)
 	var mounts: Array = ["gorilla", "rhino", "dragonfly"]   # the animals that may wait on the road (Montures: on / off)
 	var brake := 0.0               # what the brakes picked up take off his speed, for good
@@ -734,9 +771,9 @@ static func lay_speed(run: Run, x: float) -> float:
 	if not run.coop:
 		return run.road_speed
 	if run.mode != "story":                          # (run.base: Sprint included, worn by both: the host's kit)
-		return sqrt(run.base * run.base + 2.0 * SPEED_GAIN * maxf(0.0, x))
+		return minf(SPEED_CAP, sqrt(run.base * run.base + 2.0 * SPEED_GAIN * maxf(0.0, x)))
 	if x < run.coop_xb:                              # Histoire: the forest's speed, then Vorace's, then each place's
-		return sqrt(run.base * run.base + 2.0 * STORY_GAIN * maxf(0.0, x))
+		return minf(STORY_CAP, sqrt(run.base * run.base + 2.0 * STORY_GAIN * maxf(0.0, x)))
 	if x < run.coop_xf + COOP_VIEW:
 		return BOSS_SPEED
 	var m = run.coop_xg + 16 * 48                    # the first new place (never coop_zone_at: it moves on
@@ -751,7 +788,7 @@ static func lay_speed(run: Run, x: float) -> float:
 		m = nm
 		biome = NEXT_BIOME[biome]
 	var z = ZONE_SPEED.get(biome, SPEED_BASE) + run.base - SPEED_BASE
-	return sqrt(z * z + 2.0 * STORY_GAIN * (x - m))
+	return minf(STORY_CAP, sqrt(z * z + 2.0 * STORY_GAIN * (x - m)))
 
 ## Histoire for two: the mark after `m` where a new place begins (its speed starts again there).
 static func coop_next_mark(m: float) -> float:
@@ -777,7 +814,12 @@ static func road_luck(run: Run) -> int:
 static func coop_run(upgrades: Dictionary, seed_: int, tier: int, guest: bool, mode: String = "endless") -> Run:
 	var up = upgrades.duplicate()
 	up.erase("drunk")
+	var keep = [STORY_TRY, STORY_CHAP]               # (for two: the first talks, the same on both phones)
+	STORY_TRY = 1
+	STORY_CHAP = 0
 	var run = new_run(up, mode, seed_)
+	STORY_TRY = keep[0]
+	STORY_CHAP = keep[1]
 	run.coop = true
 	run.road_tier = tier
 	run.mounts = []
@@ -898,18 +940,20 @@ static func new_run(upgrades: Dictionary, mode: String = "story", seed_: int = -
 	run.up = upgrades
 	run.base = SPEED_BASE + (SPEED_SPRINT if run.lvl("sprint") > 0 else 0.0)
 	if mode == "story":                              # the guards' talks along the way: the road is empty there
-		for tk in TALKS:
+		run.talks = talks_for(STORY_TRY, STORY_CHAP)
+		run.chap = STORY_CHAP
+		for tk in run.talks:
 			if tk["at"] < 0:
 				continue
 			var x0: float = tk["at"] * PPM + PX
 			var dur = 0.0
 			for l in tk["lines"]:
 				dur += line_time(l)
-			var v = sqrt(run.base * run.base + 2.0 * STORY_GAIN * x0)   # (the forest's speed there)
+			var v = minf(STORY_CAP, sqrt(run.base * run.base + 2.0 * STORY_GAIN * x0))   # (the forest's speed there)
 			run.talk_zones.append({"at": tk["at"], "x0": x0, "x1": x0 + v * dur * 1.15 + 200, "lines": tk["lines"], "on": false, "wait": false, "done": false})
 	run.speed = SPEED_BASE
 	run.road_speed = SPEED_BASE
-	run.hearts = HEARTS + run.lvl("heart")          # Vitalité: a heart more per level
+	run.hearts = (STORY_HEARTS if mode == "story" else HEARTS) + run.lvl("heart")   # Vitalité: a heart more per level
 	run.max_hearts = run.hearts
 	run.dash.full = DASH_CD[mini(run.lvl("dash"), DASH_CD.size() - 1)]
 	run.slow.full = SLOW_CD
@@ -960,7 +1004,7 @@ static func launch(run: Run) -> void:
 	run.wait = 0.75
 	var lines: Array = []
 	if run.mode == "story":                          # Histoire: the guards outside talk first, the camera still
-		for tk in TALKS:
+		for tk in run.talks:
 			if tk["at"] < 0:
 				lines.append_array(tk["lines"])
 	if lines.is_empty():
@@ -983,6 +1027,8 @@ static var TURN_CUE := false        # a line says « DEMI-TOUR »: the guards tu
 
 ## Reads reglages/dialogues.txt: « départ | who | a line » or « 1000 | who | a line » (who may be left out),
 ## one line said per row, in order; rows with the same place make one talk. A line is kept as « who|text ».
+## 0.49: the place may be followed by the attempt (« départ 3 ») and a piece of the relic held (« départ jade 2 »):
+## TALKS = [{at, try (0: any), chap (pieces held), lines}], talks_for picks one talk per place.
 static func set_talks(text: String) -> void:
 	TALKS = []
 	TURN_CUE = false
@@ -999,12 +1045,79 @@ static func set_talks(text: String) -> void:
 		if "DEMI-TOUR" in said.to_upper():
 			TURN_CUE = true
 		said = who + "|" + said
-		var at = -1.0 if where in ["depart", "départ", "temple"] else (float(where) if where.is_valid_float() else NAN)
+		var words = where.split(" ", false)
+		if words.is_empty():
+			continue
+		var place: String = words[0]
+		var at = -1.0 if place in ["depart", "départ", "temple"] else (float(place) if place.is_valid_float() else NAN)
 		if is_nan(at):
 			continue
-		if TALKS.is_empty() or TALKS[-1]["at"] != at:
-			TALKS.append({"at": at, "lines": []})
+		var try_n = 0
+		var chap = 0
+		for wd in words.slice(1):
+			if wd.is_valid_int():
+				try_n = int(wd)
+			elif wd in RELIC_PIECES:
+				chap = RELIC_PIECES.find(wd) + 1
+		var last = TALKS[-1] if not TALKS.is_empty() else {}
+		if last.is_empty() or last["at"] != at or last["try"] != try_n or last["chap"] != chap:
+			TALKS.append({"at": at, "try": try_n, "chap": chap, "lines": []})
 		TALKS[-1]["lines"].append(said)
+
+## The talks of one attempt: for each place, the talk of this attempt (counted since the last piece won) in
+## this chapter (the pieces held; the nearest chapter below that has some). An attempt with no talk of its own
+## takes, in turn, the ones written for the second attempt on (the first is the first meeting).
+static func talks_for(try_n: int, chap: int) -> Array:
+	var c = chap
+	while c > 0 and not TALKS.any(func(tk): return tk["chap"] == c):
+		c -= 1
+	var mine = TALKS.filter(func(tk): return tk["chap"] == c)
+	var places: Array = []
+	for tk in mine:
+		if not tk["at"] in places:
+			places.append(tk["at"])
+	var out: Array = []
+	for at in places:
+		var sets = mine.filter(func(tk): return tk["at"] == at)
+		var tries: Array = []
+		for tk in sets:
+			tries.append(maxi(1, tk["try"]))
+		var want = maxi(1, try_n)
+		if not want in tries:
+			var later = tries.filter(func(k): return k >= 2)
+			if later.is_empty():
+				later = tries.duplicate()
+			later.sort()
+			want = later[(want - 2) % later.size()]
+		for tk in sets:
+			if maxi(1, tk["try"]) == want:
+				out.append({"at": at, "lines": tk["lines"]})
+				break
+	return out
+
+## Histoire's kit: the powers of the relic's pieces held (nothing bought or worn counts there).
+static func story_kit(pieces: int) -> Dictionary:
+	var up := {}
+	for i in clampi(pieces, 0, RELIC_POWERS.size()):
+		up[RELIC_POWERS[i]] = 1
+	return up
+
+## A piece of the relic won on the way: its power at once (main.gd shows its button and saves the piece).
+static func grant(run: Run, id: String) -> void:
+	run.up[id] = maxi(1, run.lvl(id))
+	if id == "dash":
+		run.dash.full = DASH_CD[1]
+	elif id == "slow":
+		run.slow.full = SLOW_CD
+
+## The speed's ceiling (0.49).
+static func speed_cap(run: Run) -> float:
+	return STORY_CAP if run.mode == "story" else SPEED_CAP
+
+## 0.49: how hard the layout is at x, 0 to 1 (from x alone: the same road on both phones for two).
+static func pressure(run: Run, x: float) -> float:
+	var k = clampf((x / PPM - PRESS_FROM) / maxf(1.0, PRESS_FULL - PRESS_FROM), 0, 1)
+	return k * (PRESS_STORY if run.mode == "story" else 1.0)
 
 ## How long a line stays on screen for two (alone, it stays until a touch): long enough to read it.
 static func line_time(text: String) -> float:
@@ -1110,6 +1223,7 @@ static func add_platform(run: Run, x: float, y: float, bob: float = PAD_BOB) -> 
 				break
 		if not behind:
 			add_hill(run, x - wrnd(120, 300), wrnd(700, 1200), GROUND - y + wrnd(60, 160))
+			run.hills[-1].isles = true
 		return add_isle(run, x, y, 1)
 	var pl = Plat.new()
 	pl.x = x
@@ -1351,6 +1465,8 @@ static func spawn_pattern(run: Run) -> void:
 	var G = GROUND
 	var tier = tier_of(run)
 	var riding = run.mount != null or run.items.size() > 0
+	var press = pressure(run, x)
+	var more = 1.0 + PRESS_CHAINS * press
 	# The first metres are a warm-up: one obstacle at a time, nothing in the air.
 	var opts: Array
 	if x < 70 * PPM:
@@ -1360,18 +1476,21 @@ static func spawn_pattern(run: Run) -> void:
 			"hills", "hills", "hills", "padchain", "padchain", "padchain", "padzig", "padzig"]
 	if x / PPM >= FROM_LOW:                          # many spiders: dangers at every height
 		opts.append_array(["hover", "hover", "hover", "hover", "hover"])
-		for i in CHAIN_SPIDERS:
+		for i in roundi(CHAIN_SPIDERS * more):
 			opts.append("spiders")
-		for i in CHAIN_NESTS:
+	if x / PPM >= FROM_NESTS:                        # 0.49: the nests later (900 m)
+		for i in roundi(CHAIN_NESTS * more):
 			opts.append("nest")
-	if x / PPM >= 150:                               # flyers come in waves too
-		for i in CHAIN_WAVES:
+	if x / PPM >= FROM_DARTS:                        # flyers come in waves too (0.49: from 400 m)
+		for i in roundi(CHAIN_WAVES * more):
 			opts.append("wave")
 	if tier < 2 and x >= 70 * PPM:                   # on foot: fewer flyers, more hedgehogs and low spiders
 		opts.erase("fly")
 		opts.append_array(["spiky", "lowhover", "lowhover"] if x / PPM >= FROM_LOW else ["spiky"])
 	if tier >= 2 and x >= 70 * PPM:                  # the Vol: dangers at every height
 		opts.append_array(["fly", "wave", "wave", "skyhover", "skyhover", "skyhover", "curtain", "curtain", "curtain", "curtain"])
+	if x / PPM < FROM_DARTS:                         # 0.49: no flyer before 400 m
+		opts = opts.filter(func(k): return k != "fly" and k != "wave")
 	var fit: Array = shapes.filter(func(s): return s.top <= REACH[tier])
 	if fit.size() > 0 and x >= 70 * PPM:
 		opts.append_array(["shape", "shape"])
@@ -1410,7 +1529,7 @@ static func spawn_pattern(run: Run) -> void:
 				coin_line(run, x, floor_at(run, x) - 40, 5)
 			extent = 220
 		"spiders":                                 # two or three spiders in a row: a still yellow one (jump it), red ones moving
-			var n = 2 + W.randi() % 2
+			var n = 2 + W.randi() % (3 if press >= 0.5 else 2)   # (0.49: up to four once the layout presses)
 			for i in n:
 				var h = LOW if i % 2 == 0 else (wpick([HEAD] + SKY_HOVERS) if tier >= 2 else HEAD)
 				add_hover(run, x + i * spider_gap(run, x), h)
@@ -1541,6 +1660,7 @@ static func spawn_pattern(run: Run) -> void:
 			var w = roundf(wrnd(700, 1500))
 			var h = roundf(wrnd(160, 520))
 			add_hill(run, x, w, h)
+			run.hills[-1].isles = true
 			var n: int = wpick([2, 3, 3]) if tier >= 1 else wpick([2, 2, 3])
 			var rise = 125.0 if tier >= 1 else 105.0     # a plain jump reaches 120
 			var ix = x + wrnd(20, 80)
@@ -1603,7 +1723,9 @@ static func spawn_pattern(run: Run) -> void:
 
 	# The gap to the next pattern is set in distance (GAP_DIST), so the road keeps its density as the
 	# speed grows; only where a jump would no longer have room to land does it widen with the speed.
-	var gap = maxf(GAP_DIST, lay_speed(run, x) * GAP_TIME + GAP_MARGIN) * wrnd(0.85, 1.3) * (1.3 if kind == "coins" else 1.0)
+	# 0.49: with the pressure, shorter gaps (never shorter than what a landing needs, `need`).
+	var need = lay_speed(run, x) * GAP_TIME * (1 - PRESS_NEED * press) + GAP_MARGIN
+	var gap = maxf(GAP_DIST * (1 - PRESS_GAP * press), need) * wrnd(0.85, 1.3 - 0.3 * press) * (1.3 if kind == "coins" else 1.0)
 	if kind == "spiders":
 		gap = maxf(gap, spider_gap(run, x))           # as much room after the row as within it
 	var clear = run.fm == null and not run.fm_due and not boss_road(run, x) and kind != "wave"
@@ -1614,7 +1736,7 @@ static func spawn_pattern(run: Run) -> void:
 	# A wide gap gets something that asks no jump: a danger at head height, or a fonceur.
 	if gap > GAP_FILL and x / PPM >= FROM_MID and clear and W.randf() < 0.5:
 		add_hover(run, x + extent + gap * 0.5, HEAD)
-	elif gap > GAP_FILL and x / PPM > 150 and clear and W.randf() < (0.35 if tier >= 2 else 0.15):
+	elif gap > GAP_FILL and x / PPM >= FROM_DARTS and clear and W.randf() < (0.35 if tier >= 2 else 0.15) + PRESS_FILL * press:
 		add_dart(run, x + extent + gap * 0.5, 170).aim = tier >= 2
 	if x / PPM > 70 and not boss_road(run, x) and W.randf() < DECOR_RATE:
 		add_decor(run, x + extent + gap * wrnd(0.3, 0.6))     # something to smash
@@ -2092,6 +2214,10 @@ static func _boss_step(run: Run, d: float) -> void:
 			loot(run, run.cam + run.sx + wrnd(100, 300), GROUND - 200)
 			run.coins[run.coins.size() - 1].gem = g
 		run.events.append("bossdown")
+		if run.mode == "story" and run.chap < 1:     # 0.49: her piece of the relic (the jade), its power at once
+			run.won = 0
+			grant(run, RELIC_POWERS[0])
+			run.events.append("relic")
 		if run.coop:
 			return                                   # (for two the road laid her gems and what follows)
 		var g0 = run.cam + run.view_w + 200
@@ -2999,12 +3125,15 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 
 	# --- scrolling: the hero first runs out of the temple, then the camera follows him ---
 	run.t += d
-	# The hero's own speed grows for ever; a mount, then the boss, impose theirs while they last.
+	if run.coop or not (run.wait > 0 or talking(run)):   # 0.49: alone, the speed stops growing while they talk
+		run.pace_t += d
+	# The hero's own speed grows up to its cap; a mount, then the boss, impose theirs while they last.
 	var own: float
-	if run.mode == "story":                          # each scenery from its own speed, gaining 0.25 m/s a second
-		own = run.base + ZONE_SPEED.get(run.biome, SPEED_BASE) - SPEED_BASE + (run.t - run.zone_t) * STORY_GAIN
+	if run.mode == "story":                          # each scenery from its own speed, gaining 0.18 m/s a second
+		own = run.base + ZONE_SPEED.get(run.biome, SPEED_BASE) - SPEED_BASE + (run.pace_t - run.zone_t) * STORY_GAIN
 	else:
-		own = run.base + run.t * SPEED_GAIN
+		own = run.base + run.pace_t * SPEED_GAIN
+	own = minf(own, speed_cap(run))
 	var raw = maxf(SPEED_BASE * 0.6, own)           # without the hourglasses picked up: what the road is laid for
 	own = maxf(SPEED_BASE * 0.6, own - run.brake)
 	var pace = own
@@ -3016,7 +3145,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		road_pace = pace
 	elif run.mount != null:
 		var R: Dictionary = MOUNTS[run.mount.kind]
-		pace = own * R["mul"] if R.has("mul") else R["base"] + R["gain"] * run.mount.t
+		pace = own * R["mul"] if R.has("mul") else minf(speed_cap(run), R["base"] + R["gain"] * run.mount.t)
 		road_pace = raw * R["mul"] if R.has("mul") else pace
 	# Slowing down is quick; speeding back up (after a mount or the boss) is gradual.
 	var ramp = MOUNTS[run.mount.kind].get("ramp", RAMP) if run.mount != null and run.boss == null else RAMP
@@ -3321,7 +3450,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			var fb = floor_at(run, it.x)
 			var zk = fmod(run.t / BONUS_ZIG + it.ph, 2.0)
 			it.y = fb - BONUS_LOW - (BONUS_HIGH - BONUS_LOW) * (zk if zk < 1 else 2 - zk)
-			if it.gone or absf(px - it.x) > (52.0 if it.kind == "brake" else 40.0):
+			if it.gone or absf(px - it.x) > (52.0 if it.kind == "brake" else 40.0) * SIZE:
 				continue
 			var tall_b: float = MOUNTS[run.mount.kind]["tall"] if run.mount != null else HERO_H
 			if it.y < p.y - tall_b - 30 or it.y > p.y + 10:
@@ -3549,7 +3678,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	# --- scenery change ---
 	if run.coop and run.mode == "story" and run.cam + run.sx >= run.coop_zone_at:
 		run.coop_zone_at = coop_next_mark(run.coop_zone_at)   # for two: a new place, its speed from here (the
-		run.zone_t = run.t                                    # road laid it at this mark, see lay_speed)
+		run.zone_t = run.pace_t                               # road laid it at this mark, see lay_speed)
 		run.relic = 1
 		run.glitch = maxf(run.glitch, 0.5)
 		run.events.append("biome")
@@ -3569,7 +3698,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			run.biome = NEXT_BIOME[run.biome]
 			run.biome_x = at
 		if run.mode == "story":                      # a new place: its own speed (ZONE_SPEED), gaining STORY_GAIN
-			run.zone_t = run.t
+			run.zone_t = run.pace_t
 			run.brake = 0.0                          # (the hourglasses picked up count for one place)
 		run.relic = 1
 		run.glitch = maxf(run.glitch, 0.5)           # the relic flares: it is what moves the world

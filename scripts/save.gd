@@ -107,7 +107,7 @@ static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
 		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
-		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "feathers": 0, "stock": {}, "urns": 0, "urnPity": {"r": 0, "l": 0}, "shards": 0, "skins": {"owned": [], "worn": {}}, "drums": {"day": "", "best": 0}, "online": {}, "mountsOff": [], "xpv": 2}
+		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "feathers": 0, "stock": {}, "urns": 0, "urnPity": {"r": 0, "l": 0}, "shards": 0, "skins": {"owned": [], "worn": {}}, "drums": {"day": "", "best": 0}, "online": {}, "mountsOff": [], "xpv": 2, "relic": 0, "storyTry": 0}
 
 static func _int(x) -> int:
 	if (x is int or x is float) and x > 0 and is_finite(float(x)):
@@ -125,6 +125,8 @@ static func sanitize(raw) -> Dictionary:
 	s["bestEndless"] = _int(raw.get("bestEndless"))
 	s["mode"] = "endless" if raw.get("mode") == "endless" else "story"
 	s["loops"] = _int(raw.get("loops"))
+	s["relic"] = mini(_int(raw.get("relic")), Game.RELIC_PIECES.size())   # 0.49: the relic's pieces won (Histoire)
+	s["storyTry"] = _int(raw.get("storyTry"))
 	for pair in [["musicVol", "music"], ["sfxVol", "sfx"]]:     # volumes go from 0 (off) to 10
 		var v = raw.get(pair[0])
 		if (v is int or v is float) and v >= 0 and v <= 10 and float(v) == floorf(v):
