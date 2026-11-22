@@ -1,21 +1,26 @@
 // Jungle Loop's small server, for Cloudflare Workers with a D1 database (schema.sql).
 // What it keeps: players (a pseudonym and a friend code, no e-mail), their best distances (all time and
-// this week, per mode), who is friends with whom, the rooms where two phones meet before a coop run (the
-// messages of their WebRTC handshake, a few minutes at most) and the invitations to such a room sent to a
-// friend (two minutes at most).
+// this week, per mode), who is friends with whom, the rooms where phones meet before a run together (the
+// messages of their WebRTC handshake, a few minutes at most): a coop room holds two, a race room (0.48) the
+// host and three more; and the invitations to such a room sent to a friend (two minutes at most).
 //
 // Every request is a POST of JSON to /api/<route>. A player proves who they are with the secret given at
 // creation (only its hash is kept). Nothing here is needed to play: the game works without it.
 //
 //   player        {name}                                  -> {id, code, secret}
 //   player/name   {id, secret, name}                       -> {name}
+//   player/delete {id, secret}                             -> {ok}              (0.48: everything about him goes)
 //   score         {id, secret, mode, dist}                 -> {best, week}
 //   friends/add   {id, secret, code}                       -> {code, name}
+//   friends/remove {id, secret, code}                      -> {ok}              (both stop being friends)
 //   friends       {id, secret}                             -> {me, friends: [{code, name, best, week, endless, endless_week}]}
-//   room          {id, secret, seed}                       -> {room}
-//   room/join     {id, secret, room}                       -> {seed, host}
-//   signal        {id, secret, room, data}                 -> {seq}
-//   signals       {id, secret, room, since}                -> {items: [{seq, from, data}]}
+//   room          {id, secret, seed}                       -> {room}            (for two)
+//   race          {id, secret, seed}                       -> {room}            (0.48: for four, the host and three)
+//   room/join     {id, secret, room}                       -> {seed, host, kind, slot}   (kind: coop | race)
+//   room/leave    {id, secret, room}                       -> {ok}              (a race guest leaves: his place is free)
+//   signal        {id, secret, room, data, to?}            -> {seq}             (to: a friend code; none: the host,
+//                                                                                or the other one for two)
+//   signals       {id, secret, room, since}                -> {items: [{seq, from, code, name, data}]}
 //   ice           {id, secret}                             -> {iceServers: [{urls, username, credential}]}
 //   invite        {id, secret, code, room}                 -> {name}            (to a friend, into my room)
 //   invites       {id, secret}                             -> {items: [{room, name, code}]}
@@ -28,7 +33,9 @@
 // empty list (the phones try with STUN only).
 
 const MODES = ['story', 'endless'];
-const ROOM_LIFE = 10 * 60 * 1000;          // a room lasts ten minutes
+const ROOM_LIFE = 10 * 60 * 1000;          // a room lasts ten minutes (the phones linked stay linked: it is
+                                           // only for meeting)
+const RACE_GUESTS = 3;                     // a race: the host and three more
 const INVITE_LIFE = 2 * 60 * 1000;         // an invitation waits two minutes
 const TURN_TTL = 4 * 3600;                 // seconds a relay credential lasts: longer than any run for two
 const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // no 0/O, 1/I: read aloud without mistakes
@@ -59,11 +66,39 @@ function weekOf(now) {
 
 const cleanName = (s) => String(s || '').replace(/[^\p{L}\p{N} _\-'.]/gu, '').trim().slice(0, 16) || 'Pépito';
 
+// The room `code` (still fresh) if `me` is in it: {r, role: host | guest | member}; else null.
+async function inRoom(db, code, me, now) {
+  const r = await db.prepare('SELECT code, host, guest, seed, created, kind FROM rooms WHERE code = ?').bind(code).first();
+  if (!r || r.created < now - ROOM_LIFE) return null;
+  if (r.host === me.id) return { r, role: 'host' };
+  if (r.guest === me.id) return { r, role: 'guest' };
+  const m = await db.prepare('SELECT 1 FROM members WHERE room = ? AND player = ?').bind(code, me.id).first();
+  return m ? { r, role: 'member' } : null;
+}
+
+const roomCode = (s) => String(s || '').toUpperCase().trim();
+
 async function who(db, body) {
   if (!body.id || !body.secret) return null;
   const p = await db.prepare('SELECT id, code, name, secret_hash FROM players WHERE id = ?').bind(String(body.id)).first();
   if (!p || p.secret_hash !== await hash(String(body.secret))) return null;
   return p;
+}
+
+// A new room for a run on `seed` (kind coop: two phones; race: the host and three more).
+async function openRoom(db, body, now, me, kind) {
+  await db.prepare('DELETE FROM rooms WHERE created < ?').bind(now - ROOM_LIFE).run();
+  await db.prepare('DELETE FROM signals WHERE at < ?').bind(now - ROOM_LIFE).run();
+  await db.prepare('DELETE FROM members WHERE at < ?').bind(now - ROOM_LIFE).run();
+  const seed = Math.max(0, Math.floor(Number(body.seed) || 0)) % 2147483647;
+  for (let tries = 0; tries < 8; tries++) {
+    const room = letters(4);
+    const taken = await db.prepare('SELECT 1 FROM rooms WHERE code = ?').bind(room).first();
+    if (taken) continue;
+    await db.prepare('INSERT INTO rooms (code, host, guest, seed, created, kind) VALUES (?, ?, NULL, ?, ?, ?)').bind(room, me.id, seed, now, kind).run();
+    return { room };
+  }
+  return { error: 'busy' };
 }
 
 const routes = {
@@ -85,6 +120,19 @@ const routes = {
     const name = cleanName(body.name);
     await db.prepare('UPDATE players SET name = ? WHERE id = ?').bind(name, me.id).run();
     return { name };
+  },
+
+  // 0.48: « Effacer mes données en ligne » (Réglages): the player, his records, friendships, rooms, invitations.
+  async 'player/delete'(db, body, now, me) {
+    await db.prepare('DELETE FROM friends WHERE a = ? OR b = ?').bind(me.id, me.id).run();
+    await db.prepare('DELETE FROM scores WHERE player = ?').bind(me.id).run();
+    await db.prepare('DELETE FROM invites WHERE guest = ? OR host = ?').bind(me.id, me.id).run();
+    await db.prepare('DELETE FROM members WHERE player = ?').bind(me.id).run();
+    await db.prepare('DELETE FROM signals WHERE sender = ? OR dest = ?').bind(me.id, me.id).run();
+    await db.prepare('DELETE FROM rooms WHERE host = ?').bind(me.id).run();
+    await db.prepare('UPDATE rooms SET guest = NULL WHERE guest = ?').bind(me.id).run();
+    await db.prepare('DELETE FROM players WHERE id = ?').bind(me.id).run();
+    return { ok: true };
   },
 
   async 'score'(db, body, now, me) {
@@ -111,6 +159,14 @@ const routes = {
     return { code: f.code, name: f.name };
   },
 
+  async 'friends/remove'(db, body, now, me) {
+    const f = await db.prepare('SELECT id FROM players WHERE code = ?').bind(roomCode(body.code)).first();
+    if (!f) return { ok: true };
+    await db.prepare('DELETE FROM friends WHERE (a = ? AND b = ?) OR (a = ? AND b = ?)').bind(me.id, f.id, f.id, me.id).run();
+    await db.prepare('DELETE FROM invites WHERE (guest = ? AND host = ?) OR (guest = ? AND host = ?)').bind(me.id, f.id, f.id, me.id).run();
+    return { ok: true };
+  },
+
   async 'friends'(db, body, now, me) {
     const week = weekOf(now);
     const rows = await db.prepare(
@@ -129,45 +185,68 @@ const routes = {
   },
 
   async 'room'(db, body, now, me) {
-    await db.prepare('DELETE FROM rooms WHERE created < ?').bind(now - ROOM_LIFE).run();
-    await db.prepare('DELETE FROM signals WHERE at < ?').bind(now - ROOM_LIFE).run();
-    const seed = Math.max(0, Math.floor(Number(body.seed) || 0)) % 2147483647;
-    for (let tries = 0; tries < 8; tries++) {
-      const room = letters(4);
-      const taken = await db.prepare('SELECT 1 FROM rooms WHERE code = ?').bind(room).first();
-      if (taken) continue;
-      await db.prepare('INSERT INTO rooms (code, host, guest, seed, created) VALUES (?, ?, NULL, ?, ?)').bind(room, me.id, seed, now).run();
-      return { room };
-    }
-    return { error: 'busy' };
+    return openRoom(db, body, now, me, 'coop');
+  },
+
+  async 'race'(db, body, now, me) {
+    return openRoom(db, body, now, me, 'race');
   },
 
   async 'room/join'(db, body, now, me) {
-    const room = String(body.room || '').toUpperCase().trim();
-    const r = await db.prepare('SELECT code, host, guest, seed, created FROM rooms WHERE code = ?').bind(room).first();
+    const room = roomCode(body.room);
+    const r = await db.prepare('SELECT code, host, guest, seed, created, kind FROM rooms WHERE code = ?').bind(room).first();
     if (!r || r.created < now - ROOM_LIFE) return { error: 'unknown' };
-    if (r.guest && r.guest !== me.id) return { error: 'full' };
     if (r.host === me.id) return { error: 'self' };
+    const host = await db.prepare('SELECT name FROM players WHERE id = ?').bind(r.host).first();
+    if (r.kind === 'race') {
+      const mine = await db.prepare('SELECT slot FROM members WHERE room = ? AND player = ?').bind(room, me.id).first();
+      let slot = mine ? mine.slot : 0;
+      if (!slot) {
+        const taken = (await db.prepare('SELECT slot FROM members WHERE room = ?').bind(room).all()).results.map((x) => x.slot);
+        for (let i = 1; i <= RACE_GUESTS && !slot; i++) if (!taken.includes(i)) slot = i;
+        if (!slot) return { error: 'full' };
+        await db.prepare('INSERT INTO members (room, player, slot, at) VALUES (?, ?, ?, ?)').bind(room, me.id, slot, now).run();
+      }
+      await db.prepare('DELETE FROM invites WHERE room = ? AND guest = ?').bind(room, me.id).run();
+      return { seed: r.seed, host: host ? host.name : '', kind: 'race', slot };
+    }
+    if (r.guest && r.guest !== me.id) return { error: 'full' };
     await db.prepare('UPDATE rooms SET guest = ? WHERE code = ?').bind(me.id, room).run();
     await db.prepare('DELETE FROM invites WHERE room = ?').bind(room).run();
-    const host = await db.prepare('SELECT name FROM players WHERE id = ?').bind(r.host).first();
-    return { seed: r.seed, host: host ? host.name : '' };
+    return { seed: r.seed, host: host ? host.name : '', kind: 'coop', slot: 1 };
+  },
+
+  async 'room/leave'(db, body, now, me) {
+    await db.prepare('DELETE FROM members WHERE room = ? AND player = ?').bind(roomCode(body.room), me.id).run();
+    return { ok: true };
   },
 
   async 'signal'(db, body, now, me) {
-    const r = await db.prepare('SELECT host, guest FROM rooms WHERE code = ?').bind(String(body.room || '').toUpperCase()).first();
-    if (!r || (r.host !== me.id && r.guest !== me.id)) return { error: 'unknown' };
+    const room = roomCode(body.room);
+    const at = await inRoom(db, room, me, now);
+    if (!at) return { error: 'unknown' };
+    let dest = null;                                   // for two: the other one (whoever is not the sender)
+    if (body.to) {                                     // a race: the host speaks to one of them, by his code
+      const p = await db.prepare('SELECT id FROM players WHERE code = ?').bind(roomCode(body.to)).first();
+      if (!p) return { error: 'unknown' };
+      dest = p.id;
+    } else if (at.r.kind === 'race' && at.role !== 'host') {
+      dest = at.r.host;                                // a race guest only ever speaks to the host
+    }
     const data = String(body.data || '').slice(0, 8000);
-    const res = await db.prepare('INSERT INTO signals (room, sender, data, at) VALUES (?, ?, ?, ?)').bind(String(body.room).toUpperCase(), me.id, data, now).run();
+    const res = await db.prepare('INSERT INTO signals (room, sender, data, at, dest) VALUES (?, ?, ?, ?, ?)').bind(room, me.id, data, now, dest).run();
     return { seq: res.meta.last_row_id };
   },
 
   async 'signals'(db, body, now, me) {
-    const room = String(body.room || '').toUpperCase();
-    const r = await db.prepare('SELECT host, guest FROM rooms WHERE code = ?').bind(room).first();
-    if (!r || (r.host !== me.id && r.guest !== me.id)) return { error: 'unknown' };
-    const rows = await db.prepare('SELECT seq, sender, data FROM signals WHERE room = ? AND seq > ? AND sender != ? ORDER BY seq').bind(room, Math.floor(Number(body.since) || 0), me.id).all();
-    return { items: rows.results.map((x) => ({ seq: x.seq, from: x.sender === r.host ? 'host' : 'guest', data: x.data })) };
+    const room = roomCode(body.room);
+    const at = await inRoom(db, room, me, now);
+    if (!at) return { error: 'unknown' };
+    const rows = await db.prepare(
+      'SELECT s.seq, s.sender, s.data, p.code, p.name FROM signals s JOIN players p ON p.id = s.sender ' +
+      'WHERE s.room = ? AND s.seq > ? AND s.sender != ? AND (s.dest IS NULL OR s.dest = ?) ORDER BY s.seq')
+      .bind(room, Math.floor(Number(body.since) || 0), me.id, me.id).all();
+    return { items: rows.results.map((x) => ({ seq: x.seq, from: x.sender === at.r.host ? 'host' : 'guest', code: x.code, name: x.name, data: x.data })) };
   },
 
   async 'invite'(db, body, now, me) {
@@ -177,9 +256,12 @@ const routes = {
     if (!f) return { error: 'unknown' };
     const pal = await db.prepare('SELECT 1 FROM friends WHERE a = ? AND b = ?').bind(me.id, f.id).first();
     if (!pal) return { error: 'friend' };
-    const r = await db.prepare('SELECT host, guest, created FROM rooms WHERE code = ?').bind(room).first();
+    const r = await db.prepare('SELECT host, guest, created, kind FROM rooms WHERE code = ?').bind(room).first();
     if (!r || r.host !== me.id || r.created < now - ROOM_LIFE) return { error: 'room' };
-    if (r.guest) return { error: 'full' };
+    if (r.kind === 'race') {
+      const n = await db.prepare('SELECT COUNT(*) AS n FROM members WHERE room = ?').bind(room).first();
+      if (n.n >= RACE_GUESTS) return { error: 'full' };
+    } else if (r.guest) return { error: 'full' };
     await db.prepare('INSERT OR REPLACE INTO invites (guest, host, room, at) VALUES (?, ?, ?, ?)').bind(f.id, me.id, room, now).run();
     return { name: f.name };
   },
@@ -187,9 +269,10 @@ const routes = {
   async 'invites'(db, body, now, me) {
     await db.prepare('DELETE FROM invites WHERE at < ?').bind(now - INVITE_LIFE).run();
     const rows = await db.prepare(
-      'SELECT i.room, p.name, p.code FROM invites i JOIN players p ON p.id = i.host JOIN rooms r ON r.code = i.room ' +
-      'WHERE i.guest = ? AND r.host = i.host AND r.guest IS NULL ORDER BY i.at DESC').bind(me.id).all();
-    return { items: rows.results.map((x) => ({ room: x.room, name: x.name, code: x.code })) };
+      'SELECT i.room, p.name, p.code, r.kind FROM invites i JOIN players p ON p.id = i.host JOIN rooms r ON r.code = i.room ' +
+      "WHERE i.guest = ? AND r.host = i.host AND ((r.kind = 'race' AND (SELECT COUNT(*) FROM members m WHERE m.room = r.code) < ?) " +
+      "OR (r.kind != 'race' AND r.guest IS NULL)) ORDER BY i.at DESC").bind(me.id, RACE_GUESTS).all();
+    return { items: rows.results.map((x) => ({ room: x.room, name: x.name, code: x.code, kind: x.kind })) };
   },
 
   async 'invite/no'(db, body, now, me) {
@@ -197,13 +280,16 @@ const routes = {
     const i = await db.prepare('SELECT host FROM invites WHERE guest = ? AND room = ?').bind(me.id, room).first();
     if (!i) return { ok: true };
     await db.prepare('DELETE FROM invites WHERE guest = ? AND room = ?').bind(me.id, room).run();
-    await db.prepare('INSERT INTO signals (room, sender, data, at) VALUES (?, ?, ?, ?)').bind(room, me.id, JSON.stringify({ t: 'no' }), now).run();
+    await db.prepare('INSERT INTO signals (room, sender, data, at, dest) VALUES (?, ?, ?, ?, ?)').bind(room, me.id, JSON.stringify({ t: 'no' }), now, i.host).run();
     return { ok: true };
   },
 
   async 'room/close'(db, body, now, me) {
     const room = String(body.room || '').toUpperCase().trim();
+    const r = await db.prepare('SELECT 1 FROM rooms WHERE code = ? AND host = ?').bind(room, me.id).first();
+    if (!r) return { ok: true };
     await db.prepare('DELETE FROM invites WHERE room = ? AND host = ?').bind(room, me.id).run();
+    await db.prepare('DELETE FROM members WHERE room = ?').bind(room).run();
     await db.prepare('DELETE FROM rooms WHERE code = ? AND host = ?').bind(room, me.id).run();
     return { ok: true };
   },

@@ -53,10 +53,13 @@ var _view_t := 0.0
 
 ## Whether this build can talk WebRTC: built in in browsers, a GDExtension elsewhere (not installed).
 static func supported() -> bool:
-	var p = WebRTCPeerConnection.new()
-	var ok = p.initialize({}) == OK
-	p.close()
-	return ok
+	if _supported < 0:                            # (asked once: elsewhere than a browser each try prints errors)
+		var p = WebRTCPeerConnection.new()
+		_supported = 1 if p.initialize({}) == OK else 0
+		p.close()
+	return _supported == 1
+
+static var _supported := -1
 
 func busy_state() -> bool:
 	return state in ["opening", "waiting", "joining", "linking"]

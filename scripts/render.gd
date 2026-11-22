@@ -86,6 +86,8 @@ var dirt: Array = []
 var dirt_t := 0.0
 var back: Layer
 var mate_layer: Layer                  # coop: the partner, recoloured (MATE_HUE), behind the hero
+var ghost_layers: Array = []           # the race for four (0.48): the others, pale, each turned to his colour
+var sign_font: Font = null             # the pixel typeface for the boards and the names over the ghosts
 var hero_layer: Layer
 var hero_clip: Clip
 var front: Layer
@@ -101,6 +103,20 @@ func _ready() -> void:
 	hue.shader = Shader.new()
 	hue.shader.code = MATE_SHADER
 	mate_layer.material = hue
+	for i in 3:
+		var gl = _layer(_draw_ghost.bind(i), true, hero_clip)
+		var gm = ShaderMaterial.new()
+		gm.shader = hue.shader
+		gl.material = gm
+		gl.modulate = Color(1, 1, 1, 0.62)
+		ghost_layers.append(gl)
+	if ResourceLoader.exists("res://assets/fonts/Silkscreen-Regular.ttf"):
+		sign_font = load("res://assets/fonts/Silkscreen-Regular.ttf")
+		sign_font.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+		sign_font.hinting = TextServer.HINTING_NONE
+		sign_font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+	else:
+		sign_font = ThemeDB.fallback_font
 	hero_layer = _layer(_draw_hero_layer, true, hero_clip)
 	front = _layer(_draw_front, false, self)
 	over = _layer(_draw_over, false, self)
@@ -138,6 +154,12 @@ func show_run(r: Game.Run, time: float, q_: int) -> void:
 		hero_clip.queue_redraw()
 	for l in [back, mate_layer, hero_layer, front, over]:
 		l.queue_redraw()
+	for i in ghost_layers.size():
+		var gl: Layer = ghost_layers[i]
+		gl.visible = i < r.rivals.size()
+		if gl.visible:
+			gl.material.set_shader_parameter("hue", Race.HUES[int(r.rivals[i].get("k", 1)) % Race.HUES.size()])
+			gl.queue_redraw()
 
 # ---------- small helpers ----------
 
@@ -1153,6 +1175,96 @@ func _draw_mate_layer(c: CanvasItem) -> void:
 	draw_hero(c, null, mp, x)
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
 
+## The race for four: the i-th of the others, where he was a moment ago (race.gd: smooth whatever the
+## network does). Fallen, he is not drawn (his name stays on the board of places).
+func _draw_ghost(c: CanvasItem, i: int) -> void:
+	if run == null or not Art.ready or i >= run.rivals.size():
+		return
+	var m: Dictionary = run.rivals[i]
+	if m.get("out", false):
+		return
+	var x = sx(float(m.get("x", 0.0)))
+	if x < -60 or x > view_w + 60:
+		return
+	var mp = Game.Player.new()
+	mp.y = float(m.get("y", Game.GROUND))
+	mp.vy = float(m.get("vy", 0.0))
+	mp.ground = bool(m.get("g", true))
+	mp.flying = bool(m.get("f", false))
+	mp.phase = float(m.get("ph", 0.0))
+	draw_hero(c, null, mp, x)
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+## Their names over the ghosts, in their colours; one out of sight: his name at that edge, with how far.
+func _draw_rival_names(c: CanvasItem) -> void:
+	for m in run.rivals:
+		if m.get("out", false):
+			continue
+		var col: Color = Race.COLOURS[int(m.get("k", 1)) % Race.COLOURS.size()]
+		var name: String = str(m.get("name", "?")).to_upper().left(10)
+		var x = sx(float(m.get("x", 0.0)))
+		var y = n(float(m.get("y", Game.GROUND))) - 52
+		var gap = roundi((float(m.get("x", 0.0)) - (run.cam + run.sx)) / Game.PPM)
+		if x < 4:
+			label(c, "< %s %d M" % [name, absi(gap)], 4, 60, col, false)
+		elif x > view_w - 4:
+			label(c, "%s +%d M >" % [name, gap], view_w - 4, 60, col, true)
+		else:
+			label(c, name, x, y, col, false, true)
+
+## The race's places, top right under the pause button: « 1 LÉO 1236 M », mine in gold, the fallen in grey.
+func _draw_race_board(c: CanvasItem) -> void:
+	var x1 = view_w - 6
+	var y = 34.0
+	rect(c, x1 - 96, y - 3, 96, 10 * run.board.size() + 4, Color(0.09, 0.11, 0.2, 0.72))
+	var i = 0
+	for e in run.board:
+		i += 1
+		var col: Color = Color("#8a93a8") if e["out"] else (Color("#ffd35c") if e["me"] else e["colour"])
+		label(c, "%d %s" % [i, e["name"]], x1 - 92, y, col)
+		label(c, "%d M" % int(e["dist"]), x1 - 3, y, col, true)
+		y += 10
+
+## A line of the pixel typeface, outlined in dark: at x (left, right or centre), y its top.
+func label(c: CanvasItem, text: String, x: float, y: float, col: Color, right: bool = false, centre: bool = false) -> void:
+	var w = sign_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x
+	var x0 = snap(x - w if right else (x - w / 2 if centre else x))
+	var base = snap(y) + 7
+	for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+		c.draw_string(sign_font, Vector2(x0, base) + o, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color("#1a1024"))
+	c.draw_string(sign_font, Vector2(x0, base), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, col)
+
+## 0.48: a wooden board on a post at a friend's record (his own: a stone one, in gold).
+func _draw_signs(c: CanvasItem) -> void:
+	for sg in run.signs:
+		if sg["x"] == INF:
+			continue
+		var x = sx(float(sg["x"]))
+		if x < -60 or x > view_w + 60:
+			continue
+		var own: bool = sg["own"]
+		if not sg.has("lines"):                      # (its lines and their widths, measured once)
+			sg["lines"] = ["TON RECORD", "%d M" % int(sg["d"])] if own else ["RECORD DE", str(sg["name"]).to_upper().left(10), "%d M" % int(sg["d"])]
+			sg["widths"] = sg["lines"].map(func(l): return sign_font.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x)
+		var lines: Array = sg["lines"]
+		var w = ceilf(sg["widths"].max()) + 8
+		var h = 8.0 * lines.size() + 4
+		var gy = floor_px(x)
+		var top = snap(gy - 22 - h)
+		var x0 = snap(x - w / 2)
+		var wood = Color("#9aa0b8") if own else Color("#8a5a2b")
+		var dark = Color("#2a2a3a") if own else Color("#2a160a")
+		var lite = Color("#c9cde0") if own else Color("#b07a3e")
+		rect(c, snap(x) - 2, top + h - 1, 4, gy - top - h + 2, dark)              # the post
+		rect(c, snap(x) - 1, top + h - 1, 2, gy - top - h + 1, Color("#5a3a1a") if not own else Color("#6d6f86"))
+		rect(c, x0 - 1, top - 1, w + 2, h + 2, dark)                             # the board
+		rect(c, x0, top, w, h, wood)
+		rect(c, x0, top, w, 1, lite)
+		rect(c, x0, top + h - 2, w, 1, dark.lerp(wood, 0.5))
+		for i in lines.size():
+			var col = Color("#ffd35c") if own else (Color("#fff8e6") if i == 1 else Color("#ffe9a0"))
+			c.draw_string(sign_font, Vector2(snap(x - float(sg["widths"][i]) / 2), top + 2 + 8 * i + 6), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, col)
+
 ## A soap bubble round a fallen hero (world position of its middle): it wobbles and shines.
 func bubble(c: CanvasItem, at: Vector2) -> void:
 	var cx = sx(at.x)
@@ -1424,6 +1536,8 @@ func _draw_back(c: CanvasItem) -> void:
 		if run.exploded:                             # (temple v2: its doorway is blocked in the picture itself,
 			draw_blast(c, templeX)                   # boulders held by vines: no rubble drawn over it)
 
+	if not run.signs.is_empty():
+		_draw_signs(c)
 	_draw_zones(c)
 	_draw_plats(c)
 	for co in run.coins:
@@ -1995,6 +2109,10 @@ func _draw_swarm(c: CanvasItem) -> void:
 func _draw_over(c: CanvasItem) -> void:
 	if run == null:
 		return
+	if not run.rivals.is_empty():
+		_draw_rival_names(c)
+	if not run.board.is_empty():
+		_draw_race_board(c)
 	if run.boom > 0:
 		rect(c, 0, 0, view_w, VH, Color(1, 244 / 255.0, 214 / 255.0, run.boom * 0.8))
 	if run.flash > 0 and not show_dead:                 # (not in the photo of the fall)

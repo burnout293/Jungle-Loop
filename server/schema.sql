@@ -26,14 +26,16 @@ CREATE TABLE IF NOT EXISTS rooms (
   host TEXT NOT NULL,
   guest TEXT,
   seed INTEGER NOT NULL,             -- the road both phones will run
-  created INTEGER NOT NULL
+  created INTEGER NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'coop'  -- coop (two phones) | race (0.48: the host and three more, see members)
 );
 CREATE TABLE IF NOT EXISTS signals (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
   room TEXT NOT NULL,
   sender TEXT NOT NULL,
   data TEXT NOT NULL,                -- a WebRTC offer, answer or ICE candidate
-  at INTEGER NOT NULL
+  at INTEGER NOT NULL,
+  dest TEXT                          -- whom it is for (a race); NULL: the other one of the two
 );
 CREATE INDEX IF NOT EXISTS signals_room ON signals (room, seq);
 CREATE TABLE IF NOT EXISTS invites (
@@ -42,4 +44,11 @@ CREATE TABLE IF NOT EXISTS invites (
   room TEXT NOT NULL,
   at INTEGER NOT NULL,               -- it waits two minutes
   PRIMARY KEY (guest, host)
+);
+CREATE TABLE IF NOT EXISTS members (
+  room TEXT NOT NULL,                -- a race room's guests (0.48)
+  player TEXT NOT NULL,
+  slot INTEGER NOT NULL,             -- 1 to 3 (the host is 0)
+  at INTEGER NOT NULL,
+  PRIMARY KEY (room, player)
 );

@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.47.0** (21/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.48.0** (21/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,56 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.48.0
+
+Sa liste du 21/11 (faite sans lui, il était absent : ses choix restent à faire, voir plus bas) :
+- **Amis refait** (organisation A des maquettes) : la liste à gauche (un toucher ouvre la fiche), à droite ma
+  fiche (code, **code QR**, **Partager** le lien, ajouter un ami, pseudo) ou celle de l'ami choisi (records,
+  **Inviter à deux**, **Inviter à la course**, **Retirer** après confirmation). Onglets Amis / À deux /
+  Course à 4. Le **lien d'ami** est la page du jeu avec `?ami=PEPI-XXXX` : ouvert (ou scanné avec l'appareil
+  photo d'un téléphone), le jeu propose d'ajouter l'ami, puis retire le code de l'adresse. Le code QR est
+  dessiné par le jeu (`scripts/qr.gd`, norme ISO 18004, niveau M) et relu par un décodeur écrit à part
+  (versions 1 à 8 : 8 codes sur 8).
+- **Course à 4** (`scripts/race.gd`) : l'hôte ouvre une course (4 lettres) et invite jusqu'à 3 amis ; chaque
+  invité se relie à l'hôte (WebRTC, l'hôte fait passer ce que chacun dit aux autres). Au salon, chacun
+  **mise** des pièces (`reglages/progression.txt`, `[course a 4]` : 0 / 50 / 100 / 250 / 500 / 1000) sur
+  celui qui ira le plus loin, lui-même par défaut. Même route pour tous (`Game.coop_run`, l'équipement de
+  l'hôte), les autres en **fantômes** pâles à leur couleur, avec leur nom (au bord de l'écran quand ils sont
+  hors de vue, avec l'écart en mètres). Qui tombe est sorti ; la course est jouée quand tous sont tombés ou
+  que le dernier ne peut plus être rattrapé (il continue pour son record). La **cagnotte** va à ceux qui ont
+  misé sur le vainqueur, en proportion de leur mise ; personne : au vainqueur. Un joueur qui part : sa
+  dernière distance compte ; l'hôte qui part : chacun récupère sa mise. Écran « Course à 4 » : places,
+  mises, cagnotte, puis l'attente, puis le résultat (« Revanche », « Changer les mises »).
+- **Panneaux de record** sur la route : « Record de Léo, 2 340 m » (bois) et « Ton record » (pierre dorée) à
+  la distance de chacun, dans le mode joué ; plantés 70 m avant (`Game.place_signs`), 50 m minimum, 25 m
+  entre deux, 12 au plus. Les records des amis sont relus au lancement (rien n'est créé sur le serveur pour
+  qui n'y est jamais allé).
+- **Menu de debug verrouillé** (`scripts/lock.gd`) : 5 touches sur le niveau demandent un mot de passe ; le
+  jeu n'en garde que le sel et l'empreinte d'une clé PBKDF2-HMAC-SHA256 à 300 000 tours (≈ 0,5 s sur PC) :
+  un décompilateur ne le donne pas. Bon mot de passe : l'appareil garde la clé (jamais le mot de passe), plus
+  de question ; « Verrouiller cet appareil » dans le menu. 5 erreurs : 30 s d'attente. Les versions de
+  débogage (éditeur, bancs) ne sont pas verrouillées ; les versions publiées ignorent `--test` (le banc
+  donnait des améliorations) et les réglages de debug d'un appareil verrouillé. Nouveau mot de passe :
+  `python tools/debug_password.py` ; l'actuel est **hors du dépôt**, dans
+  `Projects/Archives/Jungle-Loop/mot-de-passe-debug.txt`.
+- **Fiabilité** : la sauvegarde est écrite deux fois (`.new` puis la vraie) et relue sur l'autre copie si la
+  première est coupée (avant, un arrêt pendant l'écriture effaçait toute la progression) ; `Coop.supported()`
+  n'essaie plus WebRTC à chaque affichage ; **bouton Retour d'Android** (ferme ce qui est ouvert, met la
+  course en pause, revient à l'accueil ; avant, Godot quittait le jeu en pleine course) ; **manette** (A saut,
+  B Esquive, X Sablier, Y TNT, RB RedMonster, LB ou bas Bottes, Start pause) ; « Effacer mes données en
+  ligne » (Réglages › Sauvegarde, demandé par les magasins).
+- **Magasins** : préréglages Windows, Linux et Android, modèles d'export installés, dossier `store/` (fiches,
+  questionnaires, images, scripts Steam, clé Android), politique de confidentialité sur le site
+  (`confidentialite.html`). Voir `store/README.md`.
+- **Serveur** : `friends/remove`, `race`, `room/join` (salon pour deux ou course), `room/leave`, `signal` avec
+  destinataire, `player/delete` ; tables `members`, colonnes `rooms.kind`, `signals.dest`
+  (`server/migrate-048.sql` pour la base en ligne) ; `node server/test.mjs` : 21 vérifications.
+- Essais : `tests/race_logic.gd` (la course sans réseau : 19 vérifications), `-- --bac --test --tour48
+  --shots=<dossier>` (Amis, QR, retirer, course, panneaux, fantômes, mot de passe ; `--mock` : seulement les
+  fonds des maquettes), course réelle dans 4 navigateurs (`race=host|guest`, `friends=`, `bet=`, `on=`,
+  `die=`).
+- Maquettes (accueil, amis, course, idées de boss) : https://claude.ai/artifact/WrgYidBBFJyPb4DYx81pcH .
 
 ## 0.47.0
 
@@ -470,7 +520,10 @@ Ses retours du 19/11 (1er lot ; l'écran de fin animé, les réglages et les col
 
 `export_presets.cfg` a un préréglage « Web » sans fils d'exécution (il marche sur GitHub Pages, qui ne
 peut pas envoyer les en-têtes qu'exigent les fils), qui inclut `*.json, *.txt` (meta.json, patterns.txt,
-tracks.json). Il faut les modèles d'export de Godot 4.7.2 (seuls ceux du web sont installés sur ce PC) :
+tracks.json). Depuis la 0.48, aussi « Windows » et « Linux » (Steam, `export/windows`, `export/linux`, le
+.pck dans l'exécutable) et « Android » (Play Store : AAB par Gradle, paquet `io.github.burnout293.jungleloop`,
+couché, icônes `assets/store/`) ; leurs modèles d'export sont installés (Windows, Linux, Android). L'export
+Android demande encore le JDK 17 et le SDK Android (`store/README.md`). Le web :
 
 ```
 Godot --headless --path . --export-release "Web" export/web/index.html

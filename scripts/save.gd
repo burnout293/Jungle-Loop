@@ -224,19 +224,30 @@ static func sanitize(raw) -> Dictionary:
 	Progress.fill(s)
 	return s
 
+## The save; if it was cut short (the phone stopped the game while it was being written), the copy written
+## just before it (0.48: before, a cut save came back empty, all progress gone).
 static func load_save() -> Dictionary:
-	if not FileAccess.file_exists(path()):
-		return sanitize(null)
-	return sanitize(JSON.parse_string(FileAccess.get_file_as_string(path())))
+	for p in [path(), path() + ".new"]:
+		if FileAccess.file_exists(p):
+			var raw = JSON.parse_string(FileAccess.get_file_as_string(p))
+			if raw is Dictionary:
+				return sanitize(raw)
+	return sanitize(null)
 
+## Written twice, one copy after the other: whenever the game is stopped, one of the two is whole.
 static func store(save: Dictionary) -> void:
-	var f = FileAccess.open(path(), FileAccess.WRITE)
-	if f != null:
-		f.store_string(JSON.stringify(save))
+	var text = JSON.stringify(save)
+	for p in [path() + ".new", path()]:
+		var f = FileAccess.open(p, FileAccess.WRITE)
+		if f == null:
+			return
+		f.store_string(text)
+		f.close()
 
 static func reset() -> Dictionary:
-	if FileAccess.file_exists(path()):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(path()))
+	for p in [path(), path() + ".new"]:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 	return sanitize(null)
 
 static func export_code(save: Dictionary) -> String:

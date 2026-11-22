@@ -95,6 +95,71 @@ assert.equal((await call('invites', { id: b.id, secret: b.secret })).items.lengt
 assert.equal((await call('room/join', { id: b.id, secret: b.secret, room: r4.room })).error, 'unknown');
 ok('an invitation goes once accepted, or when its host closes the room (no one else can close it)');
 
+// 0.48: a race room, the host and three more
+const d = await call('player', { name: 'Quatre' });
+const e = await call('player', { name: 'Cinq' });
+for (const p of [b, c, d, e]) await call('friends/add', { id: a.id, secret: a.secret, code: p.code });
+const race = await call('race', { id: a.id, secret: a.secret, seed: 99 });
+assert.match(race.room, /^[A-Z2-9]{4}$/);
+for (const p of [b, c]) assert.equal((await call('invite', { id: a.id, secret: a.secret, code: p.code, room: race.room })).status, 200);
+const ib = await call('invites', { id: b.id, secret: b.secret });
+assert.equal(ib.items[0].kind, 'race');
+const jb = await call('room/join', { id: b.id, secret: b.secret, room: race.room });
+assert.equal(jb.kind, 'race'); assert.equal(jb.slot, 1); assert.equal(jb.seed, 99);
+assert.equal((await call('room/join', { id: b.id, secret: b.secret, room: race.room })).slot, 1);
+assert.equal((await call('invites', { id: c.id, secret: c.secret })).items.length, 1);
+assert.equal((await call('room/join', { id: c.id, secret: c.secret, room: race.room })).slot, 2);
+assert.equal((await call('room/join', { id: d.id, secret: d.secret, room: race.room })).slot, 3);
+assert.equal((await call('room/join', { id: e.id, secret: e.secret, room: race.room })).error, 'full');
+assert.equal((await call('invite', { id: a.id, secret: a.secret, code: e.code, room: race.room })).error, 'full');
+ok('a race room: three guests join (places 1, 2, 3, the same place twice for the same one), a fourth is refused');
+
+await call('signal', { id: a.id, secret: a.secret, room: race.room, to: b.code, data: 'offer-b' });
+await call('signal', { id: a.id, secret: a.secret, room: race.room, to: c.code, data: 'offer-c' });
+await call('signal', { id: b.id, secret: b.secret, room: race.room, data: 'answer-b' });
+const sb = await call('signals', { id: b.id, secret: b.secret, room: race.room, since: 0 });
+assert.deepEqual(sb.items.map((x) => x.data), ['offer-b']); assert.equal(sb.items[0].from, 'host'); assert.equal(sb.items[0].code, a.code);
+const sc = await call('signals', { id: c.id, secret: c.secret, room: race.room, since: 0 });
+assert.deepEqual(sc.items.map((x) => x.data), ['offer-c']);
+const sa = await call('signals', { id: a.id, secret: a.secret, room: race.room, since: 0 });
+assert.deepEqual(sa.items.map((x) => x.data), ['answer-b']); assert.equal(sa.items[0].code, b.code);
+assert.equal((await call('signals', { id: e.id, secret: e.secret, room: race.room, since: 0 })).error, 'unknown');
+ok('in a race room the host speaks to each guest apart, each guest to the host only; outsiders read nothing');
+
+await call('room/leave', { id: d.id, secret: d.secret, room: race.room });
+assert.equal((await call('room/join', { id: e.id, secret: e.secret, room: race.room })).slot, 3);
+await call('room/close', { id: a.id, secret: a.secret, room: race.room });
+assert.equal((await call('room/join', { id: d.id, secret: d.secret, room: race.room })).error, 'unknown');
+ok('a guest who leaves frees his place; the host closing the room ends it for all');
+
+const r5 = await call('race', { id: a.id, secret: a.secret, seed: 5 });
+await call('invite', { id: a.id, secret: a.secret, code: d.code, room: r5.room });
+await call('room/join', { id: b.id, secret: b.secret, room: r5.room });
+await call('invite/no', { id: d.id, secret: d.secret, room: r5.room });
+assert.equal((await call('signals', { id: b.id, secret: b.secret, room: r5.room, since: 0 })).items.length, 0);
+const sno = await call('signals', { id: a.id, secret: a.secret, room: r5.room, since: 0 });
+assert.equal(JSON.parse(sno.items[0].data).t, 'no'); assert.equal(sno.items[0].code, d.code);
+ok('« Pas maintenant » in a race room: only the host is told, with who said it');
+
+assert.equal((await call('friends/remove', { id: b.id, secret: b.secret, code: a.code })).ok, true);
+assert.equal((await call('friends', { id: a.id, secret: a.secret })).friends.some((f) => f.code === b.code), false);
+assert.equal((await call('friends', { id: b.id, secret: b.secret })).friends.length, 0);
+const r6 = await call('room', { id: a.id, secret: a.secret, seed: 6 });
+assert.equal((await call('invite', { id: a.id, secret: a.secret, code: b.code, room: r6.room })).error, 'friend');
+assert.equal((await call('friends/remove', { id: b.id, secret: b.secret, code: 'PEPI-ZZZZ' })).ok, true);
+ok('a friend taken off: gone from both lists, and no more invitations between them');
+
+const gone = await call('player', { name: 'Partant' });
+await call('friends/add', { id: gone.id, secret: gone.secret, code: a.code });
+await call('score', { id: gone.id, secret: gone.secret, mode: 'endless', dist: 999 });
+assert.equal((await call('friends', { id: a.id, secret: a.secret })).friends.some((f) => f.code === gone.code), true);
+assert.equal((await call('player/delete', { id: gone.id, secret: 'nope' })).status, 403);
+assert.equal((await call('player/delete', { id: gone.id, secret: gone.secret })).ok, true);
+assert.equal((await call('friends', { id: a.id, secret: a.secret })).friends.some((f) => f.code === gone.code), false);
+assert.equal((await call('friends', { id: gone.id, secret: gone.secret })).status, 403);
+assert.equal((await call('friends/add', { id: a.id, secret: a.secret, code: gone.code })).error, 'unknown');
+ok('« Effacer mes données en ligne »: the player, his records and friendships go; only with his secret');
+
 const off = await call('ice', { id: a.id, secret: a.secret });
 assert.equal(off.status, 200); assert.deepEqual(off.iceServers, []); assert.equal(off.turn, 'off');
 assert.equal((await call('ice', { id: a.id, secret: 'nope' })).status, 403);

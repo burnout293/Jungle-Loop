@@ -27,7 +27,7 @@ static func setup() -> void:
 	BLANK = {"info": false, "hitbox": false, "god": false, "start": 0.0, "biome": 0, "mount": "", "fm": false, "edits": []}
 	BLANK.merge(ORIGIN)
 	dbg = BLANK.duplicate(true)
-	if FileAccess.file_exists(PATH):
+	if FileAccess.file_exists(PATH) and Lock.unlocked():   # (a locked device keeps no debug settings, even edited by hand)
 		var kept = JSON.parse_string(FileAccess.get_file_as_string(PATH))
 		if kept is Dictionary:
 			if kept.get("changed") is Array:
@@ -236,6 +236,11 @@ static func panel(main) -> Control:
 		main.open_debug()
 		say.text = "Débogage arrêté : tous les champs sont revenus à l'origine."
 	head.add_child(_button("Stopper le débogage", on_stop))
+	if not OS.is_debug_build():                      # (the lock, lock.gd: this device asks for the password again)
+		var on_lock = func() -> void:
+			Lock.forget()
+			main.close_debug()
+		head.add_child(_button("Verrouiller cet appareil", on_lock))
 	var title = _label("Debug", 26, Color("#ffd35c"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

@@ -1,0 +1,19 @@
+"AppBuild"
+{
+	// Jungle Loop : l'envoi d'une version sur Steam (SteamPipe). Remplace les numéros par ceux que Steamworks
+	// donne (AppID du jeu, DepotID Windows et Linux), puis, depuis ce dossier :
+	//   steamcmd +login <ton compte> +run_app_build "<chemin>\store\steam\app_build.vdf" +quit
+	// Les versions à envoyer sont celles de export/windows et export/linux (Godot : préréglages « Windows »
+	// et « Linux »). « SetLive » vide : la version arrive sans être publiée ; tu la publies dans Steamworks.
+	"AppID" "0000000"
+	"Desc" "Jungle Loop 0.48.0"
+	"ContentRoot" "..\..\export\"
+	"BuildOutput" "..\..\export\steam-sortie\"
+	"SetLive" ""
+	"Preview" "0"
+	"Depots"
+	{
+		"0000001" "depot_windows.vdf"
+		"0000002" "depot_linux.vdf"
+	}
+}

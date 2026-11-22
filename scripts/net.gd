@@ -10,6 +10,7 @@ extends Node
 ## and a secret only this device holds, kept in the save (save["online"]); it travels with the save code.
 
 static var url := ""
+static var page := "https://burnout293.github.io/Jungle-Loop/"   # the game's page, for the friend link (outside a browser)
 static var stun: Array = ["stun:stun.l.google.com:19302"]
 static var turn := {}                    # {"urls", "username", "credential"} when a relay is set
 static var relay_only := false          # --relay / ?relay: through the relay or not at all (to try it)
@@ -32,6 +33,9 @@ static func load_config(text: String) -> void:
 		match [section, k]:
 			["serveur", "adresse"]:
 				url = v.trim_suffix("/")
+			["serveur", "page du jeu"]:
+				if v.begins_with("https://"):
+					page = v if v.ends_with("/") else v + "/"
 			["coop", "stun"]:
 				stun = Array(v.split("/")).map(func(s): return s.strip_edges()).filter(func(s): return s.begins_with("stun:"))
 			["coop", "turn"]:
@@ -127,6 +131,16 @@ func rename(save: Dictionary, name: String) -> Dictionary:
 		SaveData.store(save)
 	return r
 
+## 0.48: everything about this player goes from the server (Réglages › Sauvegarde); the save forgets him.
+func delete_me(save: Dictionary) -> Dictionary:
+	if not save.get("online", {}).has("id"):
+		return {"ok": true}
+	var r = await _call(save, "player/delete", {})
+	if r.get("ok", false):
+		save.erase("online")
+		SaveData.store(save)
+	return r
+
 ## A run's distance, for the friends' board (the best of all time and of the week are worked out there).
 func send_score(save: Dictionary, mode: String, dist: int) -> Dictionary:
 	return await _call(save, "score", {"mode": mode, "dist": dist})
@@ -137,19 +151,36 @@ func add_friend(save: Dictionary, code: String) -> Dictionary:
 func friends(save: Dictionary) -> Dictionary:
 	return await _call(save, "friends", {})
 
+## 0.48: both stop being friends (and their invitations to each other go).
+func remove_friend(save: Dictionary, code: String) -> Dictionary:
+	return await _call(save, "friends/remove", {"code": code})
+
 # ---------- the coop's meeting (the connection itself: coop.gd) ----------
 
 ## The host opens a room with the run's seed: four letters to give the other player.
 func open_room(save: Dictionary, seed_: int) -> Dictionary:
 	return await _call(save, "room", {"seed": seed_})
 
-## The guest joins with the four letters and gets the seed: both phones will run the same road.
+## 0.48: the host opens a race room (him and three more): four letters too.
+func open_race(save: Dictionary, seed_: int) -> Dictionary:
+	return await _call(save, "race", {"seed": seed_})
+
+## The guest joins with the four letters and gets the seed: both phones will run the same road. For a race
+## room, his place too: {seed, host, kind: coop | race, slot}.
 func join_room(save: Dictionary, room: String) -> Dictionary:
 	return await _call(save, "room/join", {"room": room})
 
-## The two halves of the WebRTC handshake (offer, answer, ICE candidates) pass through the room.
-func send_signal(save: Dictionary, room: String, data: String) -> Dictionary:
-	return await _call(save, "signal", {"room": room, "data": data})
+## A race guest leaves the room: his place is free again.
+func leave_room(save: Dictionary, room: String) -> Dictionary:
+	return await _call(save, "room/leave", {"room": room})
+
+## The two halves of the WebRTC handshake (offer, answer, ICE candidates) pass through the room. `to`: in a
+## race room, the host speaks to one guest (his friend code); a guest always speaks to the host.
+func send_signal(save: Dictionary, room: String, data: String, to: String = "") -> Dictionary:
+	var body = {"room": room, "data": data}
+	if to != "":
+		body["to"] = to
+	return await _call(save, "signal", body)
 
 func read_signals(save: Dictionary, room: String, since: int) -> Dictionary:
 	return await _call(save, "signals", {"room": room, "since": since})

@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour47": false, "showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -40,6 +40,13 @@ func _ready() -> void:
 			"hitbox": opts["hitbox"] = true
 			"tour": opts["tour"] = true
 			"tour47": opts["tour47"] = true        # 0.47's new things in pictures: urns, skins, the offer, the escape
+			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
+			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"race": opts["race"] = kv[1]           # 0.48, the race for four: host | guest (in a browser, with ?net=)
+			"friends": opts["friends"] = kv[1]     # race=host: the friend codes to add and invite, separated by commas
+			"bet": opts["bet"] = int(kv[1])        # race: what this one bets
+			"on": opts["on"] = int(kv[1])          # ... on which place (-1: on himself)
+			"me": opts["me"] = kv[1]               # race: an identity made beforehand, id:secret:code
 			"prof": opts["prof"] = true
 			"quality": opts["quality"] = kv[1]
 			"showcase": opts["showcase"] = true
@@ -127,6 +134,12 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour47"]:
 		await _tour47()
+		return
+	if opts["tour48"]:
+		await _tour48()
+		return
+	if opts["race"] != "":                           # four browsers, one race: see _race_bench
+		_race_bench(delta)
 		return
 	if opts["coop"] != "":                           # two browsers, one run: see _coop_bench
 		if opts["slow"] > 0:
@@ -298,6 +311,252 @@ func _tour47() -> void:
 			"drumsgo": main._drums_start()
 			"autodrum": opts["autodrum"] = true
 			"quit": get_tree().quit()
+
+## --tour48: 0.48 in pictures. With --mock, only the pictures the mock-ups are drawn on (the home screen
+## and a run without any of the interface over them).
+var steps48: Array = []
+
+func _tour48() -> void:
+	if steps48.is_empty():
+		steps48 = [
+			[0.5, "setup", ""], [1.0, "shot", "48-m01-menu"],
+			[1.1, "bare", "on"], [1.4, "shot", "48-m02-menu-bare"], [1.5, "bare", "off"],
+			[1.6, "go", "friends"], [2.5, "shot", "48-m03-friends"],
+			[2.6, "go", "menu"], [2.7, "play", ""], [7.5, "bare", "on"], [7.8, "shot", "48-m04-run-bare"],
+			[7.9, "bare", "off"],
+		]
+		if opts["mock"]:
+			steps48.append([8.0, "quit", ""])
+		else:
+			steps48.append_array(_steps48())
+	_fake_ghosts()
+	while tour_i < steps48.size() and t >= steps48[tour_i][0]:
+		var st = steps48[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				var s: Dictionary = main.save
+				s["seenIntro"] = true
+				s["mode"] = "endless"
+				s["best"] = 2000
+				main.endless_biome = 0                     # the forest, the game's own look
+				main.still.biome = 0
+				main.still.prev_biome = 0
+				main.refresh_menu()
+			"bare": main.ui.visible = arg != "on"
+			"go": main.go(arg)
+			"play":
+				main.save["mode"] = "endless"
+				main.go("play")
+				main.run.god = true
+			"quit": get_tree().quit()
+			_: await _step48(st[1], arg)
+
+## The steps of the full 0.48 tour (after the mock-up pictures).
+func _steps48() -> Array:
+	return [
+		[8.2, "fakefriends", ""], [8.3, "go", "friends"], [9.2, "shot", "48-01-amis-liste"],
+		[9.3, "sel", "PEPI-K7QM"], [9.6, "shot", "48-02-amis-fiche"],
+		[9.7, "qr", ""], [10.2, "shot", "48-03-qr"], [10.3, "unlayer", ""],
+		[10.4, "remove", ""], [10.8, "shot", "48-04-retirer"], [10.9, "unmodal", ""],
+		[11.0, "fakerace", "lobby"], [11.1, "go", "race"], [12.0, "shot", "48-05-course-salon"],
+		[12.1, "fakerace", "live"], [12.4, "shot", "48-06-course-attente"],
+		[12.5, "fakerace", "result"], [12.8, "shot", "48-07-course-resultat"],
+		[12.9, "fakerace", "off"], [13.0, "go", "menu"],
+		[13.2, "signs", ""], [13.3, "play", ""], [17.0, "shot", "48-08-panneau-ami"], [19.4, "shot", "48-09-panneau-record"],
+		[19.5, "ghosts", "on"], [20.5, "shot", "48-10-fantomes"], [21.5, "shot", "48-11-fantomes-bis"], [21.6, "ghosts", "off"],
+		[21.7, "pause", ""], [21.8, "go", "menu"], [22.6, "lock", ""], [23.0, "shot", "48-12-mot-de-passe"], [23.1, "unmodal", ""],
+		[23.3, "quit", ""],
+	]
+
+var ghost_fake := false
+
+func _step48(what: String, arg: String) -> void:
+	match what:
+		"fakefriends":                            # a list as the server would give it
+			main.save["online"] = {"id": "x", "secret": "x", "code": "PEPI-6ZAW", "name": "Pépito"}
+			main.board = [
+				{"code": "PEPI-6ZAW", "name": "Pépito", "me": true, "best": 1500, "week": 900, "endless": 2100, "endless_week": 1200},
+				{"code": "PEPI-K7QM", "name": "Léo", "best": 1200, "week": 1100, "endless": 2340, "endless_week": 1980},
+				{"code": "PEPI-INES", "name": "Inès", "best": 800, "week": 0, "endless": 1875, "endless_week": 700},
+				{"code": "PEPI-PAPA", "name": "Papa", "best": 400, "week": 400, "endless": 1210, "endless_week": 0},
+				{"code": "PEPI-SAMS", "name": "Sam", "best": 0, "week": 0, "endless": 0, "endless_week": 0},
+			]
+			main.board_cache = main.board
+		"sel":
+			main.fr_sel = arg
+			main.refresh_friends()
+		"qr": main._show_qr()
+		"unlayer":
+			for ch in main.get_children():
+				if ch is CanvasLayer and ch.layer == 40:
+					ch.queue_free()
+		"remove": main._remove_friend("PEPI-K7QM", "Léo")
+		"unmodal":
+			if main.modal != null:
+				main.modal.queue_free()
+				main.modal = null
+		"fakerace":
+			var rc: Race = main.race
+			match arg:
+				"lobby":
+					rc.role = "host"
+					rc.state = "lobby"
+					rc.room = "KQ7M"
+					rc.me = 0
+					rc.seats = {0: {"name": "Pépito", "code": "PEPI-6ZAW", "on": 0, "bet": 100}, 1: {"name": "Léo", "code": "PEPI-K7QM", "on": 1, "bet": 250}, 2: {"name": "Inès", "code": "PEPI-INES", "on": 1, "bet": 50}}
+					rc.invited = {"PEPI-PAPA": "Papa"}
+					main.race_seen = true
+				"live":
+					rc.running = true
+					rc.invited = {}
+					rc.seats[0]["done"] = true
+					rc.seats[0]["dist"] = 1204
+					rc.seats[1]["dist"] = 960            # (still running, behind: the race goes on)
+					rc.seats[2]["done"] = true
+					rc.seats[2]["dist"] = 640
+				"result":
+					rc.running = false
+					var view = rc.seats.duplicate(true)
+					view[1]["dist"] = 2412
+					var st = Race.settle(view)
+					rc.result = {"pot": st["pot"], "win": st["win"], "pay": st["pay"], "dists": {0: 1204, 1: 2412, 2: 640}, "paid": 100, "got": int(st["pay"][0])}
+					main.race_seen = false
+				"off":
+					rc.running = false
+					rc.result = {}
+					rc.seats = {}
+					rc.role = ""
+					rc.room = ""
+					rc.state = "idle"
+			main.refresh_race()
+		"signs":
+			main.save["bestEndless"] = 120
+			main.board_cache = [{"code": "PEPI-K7QM", "name": "Léo", "endless": 40, "best": 0}, {"code": "PEPI-INES", "name": "Inès", "endless": 52, "best": 0}]
+		"ghosts": ghost_fake = arg == "on"
+		"pause": main.pause()
+		"lock": main._debug_password()
+
+## The fake ghosts of the tour: three others beside him, one far ahead (his name at the edge).
+func _fake_ghosts() -> void:
+	var r = main.run
+	if r == null:
+		return
+	if not ghost_fake:
+		r.rivals = []
+		r.board = []
+		return
+	var x = r.cam + r.sx
+	r.board = [
+		{"name": "PAPA", "dist": floori(r.dist) + 75, "colour": Race.COLOURS[3], "out": false, "me": false},
+		{"name": "LÉO", "dist": floori(r.dist) + 4, "colour": Race.COLOURS[1], "out": false, "me": false},
+		{"name": "TOI", "dist": floori(r.dist), "colour": Race.COLOURS[0], "out": false, "me": true},
+		{"name": "INÈS", "dist": floori(r.dist) - 3, "colour": Race.COLOURS[2], "out": false, "me": false},
+	]
+	r.rivals = [
+		{"k": 1, "name": "Léo", "x": x + 150, "y": Game.GROUND - absf(sin(t * 2.2)) * 90, "g": false, "ph": r.p.phase, "out": false},
+		{"k": 2, "name": "Inès", "x": x - 110, "y": Game.GROUND, "g": true, "ph": r.p.phase + 0.5, "out": false},
+		{"k": 3, "name": "Papa", "x": x + 3000, "y": Game.GROUND, "g": true, "ph": 0.0, "out": false},
+	]
+
+# ---------- the race for four, in four browsers (race_test48.mjs) ----------
+
+var race_step := 0
+var race_t := 0.0
+var race_said := {}
+var race_codes: Array = []
+
+func _race_bench(delta: float) -> void:
+	var rc: Race = main.race
+	var host = opts["race"] == "host"
+	if race_step == 0 and t > 0.5 and main.state == "menu":
+		race_step = 1                                 # (this runs every frame: not again while it waits)
+		var s: Dictionary = main.save
+		s["seenIntro"] = true
+		s["coins"] = 1000
+		s["loops"] = 5                                # (no first-run hints)
+		s["quality"] = "eco"                          # (four browsers on one computer: 30 images a second)
+		main.fit()
+		if host:
+			s["upgrades"] = {"doubleJump": 1, "heart": 1}
+			s["equipped"] = ["doubleJump", "heart"]
+			s["powersOff"] = []
+		if opts["me"] != "":                          # (made beforehand: no request now)
+			var part = opts["me"].uri_decode().split(":")
+			s["online"] = {"id": part[0], "secret": part[1], "code": part[2], "name": "Pépito"}
+		var me = await main.net.identity(s)
+		print("RACE CODE ", me.get("code", "?"))
+		if host:
+			race_codes = Array(opts["friends"].split(",", false))
+			for code in race_codes:
+				main.w["fr-add"].text = code
+				await main._add_friend()
+			await main._load_friends()
+			print("RACE FRIENDS ", main.board.size() - 1)
+			race_step = 2
+		else:
+			race_step = 10                            # then: the invitation (main polls every few seconds)
+	if race_step == 2:
+		race_step = 21
+		for code in race_codes:
+			var f = main._friend(code)
+			await main._race_invite(code, str(f.get("name", "?")))
+		print("RACE INVITED ", race_codes.size(), " room ", rc.room)
+		race_step = 3
+		race_t = t
+	if race_step == 10 and main.invite_box != null:
+		print("RACE INVITED-ME")
+		race_step = 11
+		race_t = t
+	if race_step == 11 and t - race_t > 1.0:
+		_press(_find_button(main.invite_box, "Rejoindre"))
+		race_step = 3
+		race_t = t
+	if rc.state == "failed" and not race_said.has("fail"):
+		race_said["fail"] = true
+		print("RACE FAILED ", rc.info)
+	var everyone = rc.count() == 1 + race_codes.size() or (t - race_t > 90.0 and rc.count() >= 2)   # (one may not make it)
+	if race_step == 3 and rc.state == "lobby" and rc.seats.has(rc.me) and (not host or (everyone and rc.links.values().all(func(l): return l.open))):
+		race_step = 4
+		race_t = t
+		rc.bet(rc.me if opts["on"] < 0 else opts["on"], opts["bet"])
+		print("RACE LOBBY %s seat=%d count=%d" % [opts["race"], rc.me, rc.count()])
+	if race_step == 4 and host and t - race_t > 3.0:
+		race_step = 5
+		print("RACE POT before start: ", rc.pot(), " seats=", rc._public_seats())
+		_press(main.w["rc-go"])
+	if main.state == "play" and main.run != null and main.run.race:
+		var r: Game.Run = main.run
+		if not race_said.has("run"):
+			race_said["run"] = true
+			print("RACE RUN %s coins=%d paid=%d" % [opts["race"], int(main.save["coins"]), rc.paid])
+		r.god = r.t < opts["die"] if opts["die"] > 0 else true
+		if r.t > 4.0 and not race_said.has("ghosts"):
+			race_said["ghosts"] = true
+			var seen = r.rivals.map(func(v): return "%s %+d m" % [v["name"], roundi((float(v["x"]) - (r.cam + r.sx)) / Game.PPM)])
+			print("RACE GHOSTS %s %s" % [opts["race"], seen])
+		next_press -= delta
+		if next_press <= 0:
+			next_press = randf_range(0.5, 1.2)
+			main.press()
+		if opts["die"] > 0 and r.t > opts["die"] and not r.dead and not race_said.has("hit"):
+			race_said["hit"] = true                   # (once: hit again while thrown, he would be thrown again)
+			r.god = false
+			r.hearts = 1
+			r.rewind_left = 0
+			r.p.inv = 0
+			Game.hit(r, null)
+	if main.state == "race" and race_said.has("run"):
+		if not race_said.has("over"):
+			race_said["over"] = true
+			print("RACE OVER %s dist=%d" % [opts["race"], int(rc.my_seat().get("dist", 0))])
+	if not rc.result.is_empty() and not race_said.has("result"):
+		race_said["result"] = true
+		print("RACE RESULT %s win=%s pot=%d paid=%d got=%d coins=%d dists=%s" % [opts["race"], rc.result["win"], rc.result["pot"], rc.result["paid"], rc.result["got"], int(main.save["coins"]), rc.result["dists"]])
 
 ## --tour: every screen in turn, with pictures taken while they slide (the menus' check).
 func _tour() -> void:
@@ -591,14 +850,15 @@ func _coop_bench(delta: float) -> void:
 				main.w["co-code"].text = opts["room"]
 				main._coop_join()
 			coop_step = 3
-	if coop_step == 2:                               # the friend in the list: « Inviter »
-		var b = _find_button(main.w["fr-board"], "Inviter")
-		if b != null:
+	if coop_step == 2:                               # the friend in the list: his card, « Inviter à deux »
+		if main.board.size() > 1:
+			main.fr_sel = str(main.board[1].get("code", ""))
+			main.refresh_friends()
 			print("COOP INVITE-LIST")
 			coop_step = 21
 			coop_t = t
 	if coop_step == 21 and t - coop_t > 1.0:
-		_press(_find_button(main.w["fr-board"], "Inviter"))
+		_press(main.w["fr-inv2"])
 		coop_step = 3
 	if coop_step == 10 and main.invite_box != null:
 		print("COOP INVITED")

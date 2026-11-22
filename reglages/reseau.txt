@@ -8,6 +8,7 @@
 
 [serveur]
 adresse | https://jungle-loop.burnout293.workers.dev   # par exemple https://jungle-loop.ton-compte.workers.dev
+page du jeu | https://burnout293.github.io/Jungle-Loop/   # le lien d'ami (et son code QR) mène ici : ?ami=PEPI-XXXX
 
 [coop]
 # Les serveurs STUN aident deux téléphones à se trouver sur Internet (gratuits, publics), séparés par /.

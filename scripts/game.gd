@@ -663,6 +663,11 @@ class Run:
 	var acts: Array = []               # for two: the actives he started this step (dash, slow, monster), told to the partner
 	var act_in: Array = []             # for two: those the partner started, to start here next step (remote_act)
 	var bubble := false                # fallen: he floats after the partner until rescued
+	# The race for four (0.48, race.gd): the road as for two (coop is true), but whoever falls is out.
+	var race := false
+	var rivals: Array = []             # the others where they are drawn: [{k, name, x, y, ph, g, f, out}] (render.gd)
+	var signs: Array = []              # boards along the road at friends' records: [{d (metres), name, own, x}]
+	var board: Array = []              # the race's places, as main.gd last had them (Race.board)
 	var saying := ""                   # Histoire: a line of the guards being said (main.gd shows it)
 	var say_age := 0.0                 # ... since when (typed out SAY_RATE letters a second)
 	var held := 0.0                    # ... how far he ran while they talked: not counted in the distance
@@ -1006,6 +1011,9 @@ static func line_time(text: String) -> float:
 	return clampf(1.3 + 0.045 * text.substr(text.find("|") + 1).length(), 2.2, 4.8)
 
 const SAY_RATE := 40.0
+const SIGN_AHEAD := 70.0         # metres ahead where a record's board is planted (0.48)
+const SIGN_GAP := 25.0           # two boards never closer than this (metres)
+const MAX_SIGNS := 12
 
 ## Whether the lines wait for a touch: alone, yes; for two (the same road on both phones) or in a test, each
 ## line has its time.
@@ -2284,7 +2292,7 @@ static func hit(run: Run, o: Obs) -> void:
 			run.next_fm = run.dist + rnd(170, 300)
 		run.events.append("rewind")
 		return
-	if run.coop:                                     # two players: he floats after the other, who can bring him back
+	if run.coop and not run.race:                    # two players: he floats after the other, who can bring him back
 		to_bubble(run)
 		return
 	_fatal(run)
@@ -2801,6 +2809,34 @@ static func _ease_speed(v: float, pace: float, ramp: float, dt: float) -> float:
 	if pace > v:
 		return minf(pace, v + ramp * dt)
 	return v + (pace - v) * minf(1, dt * 3)
+
+## 0.48: the boards at friends' records (and his own) are planted on the road once they are near, where he
+## will be at that distance (the distance can stand still a while in Histoire: placed early it would drift).
+static func place_signs(run: Run) -> void:
+	for sg in run.signs:
+		if sg["x"] == INF and float(sg["d"]) > run.dist and float(sg["d"]) - run.dist < SIGN_AHEAD:
+			sg["x"] = run.cam + run.sx + (float(sg["d"]) - run.dist) * PPM
+
+## The signs for a run: `board` the friends' list (net.gd: friends), `mode` story or endless, `mine` his best.
+## Only records ahead of the start, the nearest first, MAX_SIGNS at most, two boards never closer than
+## SIGN_GAP metres (the better one stays).
+static func signs_for(board: Array, mode: String, mine: int) -> Array:
+	var out = []
+	for e in board:
+		var d = int(e.get("best" if mode == "story" else "endless", 0))
+		if d >= 50 and not e.get("me", false):
+			out.append({"d": d, "name": str(e.get("name", "?")), "own": false, "x": INF})
+	if mine >= 50:
+		out.append({"d": mine, "name": "", "own": true, "x": INF})
+	out.sort_custom(func(a, b): return a["d"] < b["d"])
+	var kept = []
+	for sg in out:
+		if not kept.is_empty() and sg["d"] - kept[-1]["d"] < SIGN_GAP:
+			if sg["own"]:                            # (his own record wins over a friend's next to it)
+				kept[-1] = sg
+			continue
+		kept.append(sg)
+	return kept.slice(0, MAX_SIGNS)
 
 static func update(run: Run, dt: float, input: Controls) -> void:
 	W = run.rng                                      # this run's road dice (the shop's preview has its own)
@@ -3450,7 +3486,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		if run.coop and run.mate != null and run.mate.get("b", false):
 			_rescue_check(run, px, box, d, move)        # the partner's bubble: jump into it to bring him back
 		# sinking into a hole on his last heart, with nothing to save him: that is the fatal moment
-		if p.y > GROUND + 24 and not p.ground and run.hearts == 1 and not run.god and run.rewind_left == 0 and run.mount == null and not run.coop:
+		if p.y > GROUND + 24 and not p.ground and run.hearts == 1 and not run.god and run.rewind_left == 0 and run.mount == null and (not run.coop or run.race):
 			for hp in run.pits:
 				if px > hp.x0 - 60 and px < hp.x1 + 60:
 					_fatal(run)
@@ -3487,6 +3523,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	while run.terrain.size() > 2 and run.terrain[1].x < run.cam - 300:
 		run.terrain.pop_front()
 
+	place_signs(run)
 	# --- spawning ---
 	var edge = run.cam + run.view_w + 200
 	while run.next_x < edge and not road_held(run):

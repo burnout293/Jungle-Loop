@@ -1,0 +1,12 @@
+"DepotBuild"
+{
+	// Le dépôt Windows : tout le dossier export/windows (le .exe avec son .pck intégré).
+	"DepotID" "0000001"
+	"FileMapping"
+	{
+		"LocalPath" "windows\*"
+		"DepotPath" "."
+		"Recursive" "1"
+	}
+	"FileExclusion" "*.pdb"
+}

@@ -1,0 +1,11 @@
+"DepotBuild"
+{
+	// Le dépôt Linux (et Steam Deck) : tout le dossier export/linux.
+	"DepotID" "0000002"
+	"FileMapping"
+	{
+		"LocalPath" "linux\*"
+		"DepotPath" "."
+		"Recursive" "1"
+	}
+}

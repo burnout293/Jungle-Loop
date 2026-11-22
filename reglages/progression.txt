@@ -119,3 +119,8 @@ tempo   | 96 / 132    # battements par minute, au début / à la fin
 75 | couteau | 1
 90 | urne    | 1
 90 | eclats  | 30
+
+[course a 4]
+# La course à 4 (0.48) : ce que chacun peut miser avant le départ (en pièces), séparé par /.
+# La cagnotte va à ceux qui ont misé sur le plus loin (en proportion de leur mise), sinon à lui.
+mises | 0 / 50 / 100 / 250 / 500 / 1000
