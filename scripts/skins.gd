@@ -13,8 +13,9 @@ const TARGETS := {
 	"rhino": {"name": "Rhino", "tex": ["mount-rhino"]},
 	"dragonfly": {"name": "Libellule", "tex": ["mount-dragonfly"]},
 	"pygmies": {"name": "Pygmées", "tex": ["guard-spear", "guard-club"]},
+	"buttons": {"name": "Boutons", "tex": []},      # 0.50: the interface's buttons (main.gd _wood_ui), no texture of Art
 }
-const ORDER := ["pepito", "gorilla", "rhino", "dragonfly", "pygmies"]
+const ORDER := ["pepito", "gorilla", "rhino", "dragonfly", "pygmies", "buttons"]
 const RARITIES := {"standard": {"name": "Standard", "colour": "#c9d6c3"}, "rare": {"name": "Rare", "colour": "#5cb8ff"}, "legendary": {"name": "Légendaire", "colour": "#ffd35c"}}
 
 # rule: h = the hue range (degrees), s_min = how colourful a pixel must be, to = the new hue (absent: kept),
@@ -37,6 +38,9 @@ const CATALOG := [
 	{"id": "pygmies-autumn", "target": "pygmies", "rarity": "standard", "name": "Feuilles d'automne", "rules": [{"h": [95, 180], "s_min": 0.15, "to": 32, "s": 1.6, "v": 1.45}]},
 	{"id": "pygmies-night", "target": "pygmies", "rarity": "standard", "name": "Nuit", "rules": [{"h": [95, 180], "s_min": 0.15, "to": 270, "s": 1.5, "v": 1.2}]},
 	{"id": "pygmies-fire", "target": "pygmies", "rarity": "standard", "name": "Feu", "rules": [{"h": [95, 180], "s_min": 0.15, "to": 4, "s": 1.7, "v": 1.45}]},
+	# 0.50: the stone buttons the game had until 0.49, to win now (urns, shards); no colour rule: main.gd
+	# swaps the kit's pictures (assets/img/ui-v2 instead of ui-v2/wood)
+	{"id": "buttons-stone", "target": "buttons", "rarity": "standard", "name": "Pierre du temple", "rules": []},
 ]
 
 static var originals := {}     # texture name -> its original {img, tex, hi} (taken from Art the first time)

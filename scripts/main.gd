@@ -87,6 +87,7 @@ var fps_param := false                 # "?fps" in the address (web): the frame 
 var perf := {"n": 0, "game": 0, "draw": 0, "text": ""}   # what a frame costs, averaged: the FPS corner shows it
 var endless_biome := 0                 # where the next Run illimitée (Jouer) starts: the home screen shows it
 var held: Button = null                # a home screen button held down (a long press shows its panel)
+var fly_side := ""                     # 0.50: the next screen shown comes from this side (its button's)
 var held_t := 0.0
 var tip_held := false                  # its panel came from a long press: that press launches nothing
 var coop: Coop                         # two phones in one run (coop.gd)
@@ -413,14 +414,16 @@ func _flat(bg: Color, border: Color = LINE, bw: float = 1.5) -> StyleBoxFlat:
 # identical columns; fixed panels are their box's exact size; the panels that follow their text repeat
 # identical rows. Each picture is enlarged to the frame's art pixel (U), as the web version shows it.
 const KIT_CAP := {30: 27, 38: 33, 50: 43, 58: 43}                  # buttons: the width of their ends
+const WOOD_CAP := {30: 30, 38: 34, 50: 40, 58: 40}                 # 0.50: the wood ones (tools/make_wood_ui.py)
 const KIT_FRAME := [16, 15, 21, 13]                          # panels: the stone frame left, right, top, bottom
 const KIT_BAR := {8: [12, 13, 2, 6, 8, 9], 12: [15, 17, 4, 8, 12, 10]}   # ends l/r, trough rows, fill insets l/r
 
 func _kit(name: String) -> Texture2D:
-	var key = "kit:" + name
+	var dir = "wood/" if _wood_ui() and (name.begins_with("btn-") or name.begins_with("sq-")) else ""
+	var key = "kit:" + dir + name
 	if icons.has(key):
 		return icons[key]
-	var path = "res://assets/img/ui-v2/" + name + ".png"
+	var path = "res://assets/img/ui-v2/" + dir + name + ".png"
 	var tex: Texture2D = null
 	if ResourceLoader.exists(path):
 		var im = (load(path) as Texture2D).get_image()
@@ -428,6 +431,14 @@ func _kit(name: String) -> Texture2D:
 		tex = ImageTexture.create_from_image(im)
 	icons[key] = tex
 	return tex
+
+## 0.50: the buttons are of mossy wood (assets/img/ui-v2/wood); the stone ones are the skin « Pierre du
+## temple » (Skins, target "buttons"), worn or not: the whole interface is built again when it changes.
+func _wood_ui() -> bool:
+	return str(save["skins"]["worn"].get("buttons", "")) != "buttons-stone"
+
+func _cap(h: int) -> int:
+	return WOOD_CAP[h] if _wood_ui() else KIT_CAP[h]
 
 ## A box of the kit: `slice` [left, right, top, bottom] art pixels kept whole, `pad` the room inside.
 func _kit_box(name: String, slice: Array, pad: Array, mod: Color = Color.WHITE) -> StyleBoxTexture:
@@ -512,9 +523,9 @@ func _styles() -> void:
 	for spec in [["", 38, ""], ["big", 50, ""], ["small", 30, ""], ["gold", 38, ""], ["small gold", 30, ""],
 			["play", 58, "-gold"], ["go", 50, "-green"], ["stop", 38, "-red"], ["dark", 50, ""]]:
 		var h: int = spec[1]
-		var cap: int = KIT_CAP[h]
+		var cap: int = _cap(h)
 		var chosen: bool = (spec[0] as String).contains("gold")
-		var pad = [cap * 0.8, cap * 0.8, 0, 0]
+		var pad = [cap * 0.8, cap * 0.8, 2 if _wood_ui() else 0, 0]   # (the wood's moss on top: the text a bit lower)
 		var slice = [cap, cap, h / 2.0, h / 2.0]
 		var c: String = spec[2]
 		var shade = Color(0.72, 0.72, 0.8) if spec[0] == "dark" else Color.WHITE
@@ -1055,104 +1066,33 @@ class Cooldown extends Control:
 		draw_colored_polygon(pts, Color(10 / 255.0, 6 / 255.0, 24 / 255.0, 0.78))
 
 func _build_menu() -> void:
+	# 0.50, home B3: on the left Réglages, Amis, Trésor and Tambours, on the right Améliorations, Skins and
+	# Défis, each with its name under it; JOUER at the bottom in the middle, whose list of modes unrolls
+	# upwards (Histoire, Sans fin, and Affrontement when a group is there). What a button opens comes from
+	# its side of the screen (go_from, _slide).
 	var s = _screen("menu", false)
-	var gear = Button.new()
-	gear.focus_mode = Control.FOCUS_NONE
-	_kit_square(gear, "gear", 36)
-	_place(gear, M, M, 36, 36)
-	var on_gear = func() -> void:
-		Audio.sfx("click")
-		go("settings")
-	gear.pressed.connect(on_gear)
-	var newer = PanelContainer.new()                 # a newer version online: a gold dot on the gear (Réglages →
-	var dot = _flat(GOLD, LINE, 1.0)                 # Mettre à jour)
-	dot.set_corner_radius_all(roundi(a(8)))
-	dot.set_content_margin_all(0)
-	newer.add_theme_stylebox_override("panel", dot)
-	newer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bang = _label("!", ts("m"), LINE, 0)
-	bang.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bang.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	newer.add_child(bang)
-	_place(newer, M + 25, M - 5, 16, 16)
-	newer.visible = _update_ready()
-	w["menu-upd"] = newer
-	var pals = Button.new()                          # Amis: only once a server is set (reglages/reseau.txt)
-	pals.focus_mode = Control.FOCUS_NONE
-	_kit_square(pals, "blank", 36)
-	pals.icon = icon("ico-friends")
-	pals.expand_icon = true
-	pals.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pals.add_theme_constant_override("icon_max_width", roundi(a(26)))
-	_place(pals, M + 42, M, 36, 36)
-	var on_pals = func() -> void:
-		Audio.sfx("click")
-		go("friends")
-	pals.pressed.connect(on_pals)
-	pals.visible = Net.enabled()
+	var left = _vbox(3)
+	left.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_place(left, M - 6, M, 48, 210)
+	var gear = _home_square("gear", "", 0, "RÉGLAGES", func() -> void: go_from("settings", "left"))
+	left.add_child(gear)
+	w["menu-upd"] = _home_dot(gear.get_meta("button"), "!", 25)    # a newer version online (Réglages → Mettre à jour)
+	w["menu-upd"].visible = _update_ready()
+	var pals = _home_square("blank", "ico-friends", 26, "AMIS", func() -> void: go_from("friends", "left"))
+	pals.visible = Net.enabled()                     # only once a server is set (reglages/reseau.txt)
+	left.add_child(pals)
 	w["menu-friends"] = pals
-	s.add_child(pals)
-	var urnb = Button.new()                          # 0.47: the Trésor (urns, the bag); a gold count when urns wait
-	urnb.focus_mode = Control.FOCUS_NONE
-	_kit_square(urnb, "blank", 36)
-	urnb.icon = icon("ico-urn")
-	urnb.expand_icon = true
-	urnb.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	urnb.add_theme_constant_override("icon_max_width", roundi(a(20)))
-	var ux = M + (84 if Net.enabled() else 42)      # (after Amis when it is there)
-	_place(urnb, ux, M, 36, 36)
-	var on_urns = func() -> void:
-		Audio.sfx("click")
-		_treasure()
-	urnb.pressed.connect(on_urns)
-	s.add_child(urnb)
-	w["menu-urnb"] = urnb
-	var badge = PanelContainer.new()
-	var bdot = _flat(GOLD, LINE, 1.0)
-	bdot.set_corner_radius_all(roundi(a(8)))
-	bdot.content_margin_left = a(3)
-	bdot.content_margin_right = a(3)
-	bdot.content_margin_top = 0
-	bdot.content_margin_bottom = 0
-	badge.add_theme_stylebox_override("panel", bdot)
-	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var bl = _label("0", ts("s"), LINE, 0)
-	bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	badge.add_child(bl)
-	_place(badge, ux + 23, M - 5, 18, 16)
-	badge.visible = false
-	s.add_child(badge)
-	w["menu-urns"] = badge
-	w["menu-urns-n"] = bl
-	var drumb = Button.new()                         # 0.47: the pygmies' drums
-	drumb.focus_mode = Control.FOCUS_NONE
-	_kit_square(drumb, "blank", 36)
-	drumb.icon = icon("ico-drum")
-	drumb.expand_icon = true
-	drumb.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	drumb.add_theme_constant_override("icon_max_width", roundi(a(24)))
-	var on_drums = func() -> void:
-		Audio.sfx("click")
-		go("drums")
-	drumb.pressed.connect(on_drums)
-	_place(drumb, ux + 42, M, 36, 36)
-	s.add_child(drumb)
-	w["menu-drumb"] = drumb
-	var ddot = PanelContainer.new()
-	var dsb = _flat(GOLD, LINE, 1.0)
-	dsb.set_corner_radius_all(roundi(a(8)))
-	dsb.set_content_margin_all(0)
-	ddot.add_theme_stylebox_override("panel", dsb)
-	ddot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var dbang = _label("!", ts("m"), LINE, 0)
-	dbang.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	dbang.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	ddot.add_child(dbang)
-	_place(ddot, ux + 42 + 25, M - 5, 16, 16)
-	s.add_child(ddot)
-	w["menu-drums"] = ddot
-	s.add_child(gear)
-	s.add_child(newer)
+	var urnb = _home_square("blank", "ico-urn", 20, "TRÉSOR", _treasure)   # 0.47: the urns, the bag
+	left.add_child(urnb)
+	w["menu-urnb"] = urnb.get_meta("button")
+	w["menu-urns"] = _home_dot(urnb.get_meta("button"), "0", 23)          # a gold count when urns wait
+	w["menu-urns-n"] = w["menu-urns"].get_child(0)
+	w["menu-urns"].visible = false
+	var drumb = _home_square("blank", "ico-drum", 24, "TAMBOURS", func() -> void: go_from("drums", "left"))
+	left.add_child(drumb)
+	w["menu-drumb"] = drumb.get_meta("button")
+	w["menu-drums"] = _home_dot(drumb.get_meta("button"), "!", 25)        # 0.47: today's free game
+	s.add_child(left)
 	# the stone plaque of the title, its letters hopping one after the other
 	var plaque = TextureRect.new()
 	plaque.texture = icon("ui-title")
@@ -1178,7 +1118,7 @@ func _build_menu() -> void:
 	s.add_child(letters)
 	var status = _vbox(4)
 	status.alignment = BoxContainer.ALIGNMENT_BEGIN
-	_place(status, 569 - M - 200, M, 200, 60)
+	_place(status, 569 - M - 200, M, 200, 54)
 	w["menu-level"] = _level_box(false)
 	w["menu-level"].mouse_filter = Control.MOUSE_FILTER_STOP
 	w["menu-level"].gui_input.connect(_on_level_input)
@@ -1188,34 +1128,21 @@ func _build_menu() -> void:
 	w["menu-coins"].size_flags_horizontal = Control.SIZE_SHRINK_END
 	status.add_child(w["menu-coins"])
 	s.add_child(status)
-	var buttons = _vbox(M)
-	_place(buttons, M, 98, 236, 170)
-	for spec in [["Jouer", "play", "endless"], ["Histoire", "dark", "story"], ["Améliorations", "", ""]]:
-		var mode: String = spec[2]
-		var on_menu = func() -> void:
-			if tip_held:
-				tip_held = false                             # (it was held to read its panel)
-				return
-			if mode != "" and coop.state == "ready":    # linked for two: the host starts it for both
-				if coop.role == "host":
-					_coop_go(mode)
-				else:
-					_coop_say("C'est %s qui lance." % _mate_name())
-				return
-			if mode != "":
-				save["mode"] = mode                  # Histoire or Run illimitée: « Rejouer » keeps it
-				SaveData.store(save)
-				go("play")
-			else:
-				tab = "up"
-				go("shop")
-		var b = _button(spec[0], spec[1], on_menu)
-		b.size_flags_horizontal = Control.SIZE_FILL
-		_menu_tip_on(b, mode if mode != "" else "shop")
-		buttons.add_child(b)
-		if mode != "":
-			w["menu-go-" + mode] = b
-	s.add_child(buttons)
+	var right = _vbox(3)
+	right.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_place(right, 569 - M - 84 + 4, 66, 84, 170)
+	var on_up = func() -> void:
+		tab = "up"
+		go_from("shop", "right")
+	right.add_child(_home_square("blank", "coin-icon", 16, "AMÉLIORATIONS", on_up, true))
+	var on_skins = func() -> void:
+		tab = "skin"
+		go_from("shop", "right")
+	right.add_child(_home_square("blank", "ico-star", 22, "SKINS", on_skins, true))
+	var quests_sq = _home_square("blank", "ico-target", 22, "DÉFIS", func() -> void: _home_quests(not w["menu-quests-box"].visible), true)
+	right.add_child(quests_sq)
+	w["menu-quests-btn"] = quests_sq.get_meta("button")
+	s.add_child(right)
 	var band = _box()                                # for two: with whom, and leaving
 	var band_row = _hbox(4)
 	w["menu-coop-text"] = _plain(_label("", ts("s"), GOLD, 0), "s")
@@ -1229,11 +1156,60 @@ func _build_menu() -> void:
 	band_row.add_child(quit_two)
 	band.add_child(band_row)
 	band.mouse_filter = Control.MOUSE_FILTER_PASS
-	_place(band, M, 68, 236, 26)
+	_place(band, 569 / 2.0 - 118, 76, 236, 26)
 	band.visible = false
 	w["menu-coop"] = band
 	s.add_child(band)
-	w["menu-tip"] = PanelContainer.new()            # what a button is about: hovered, or held down
+	# Défis: the objectives, in a panel that comes in from the right edge
+	var qbox = PanelContainer.new()
+	qbox.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	qbox.mouse_filter = Control.MOUSE_FILTER_STOP
+	qbox.set_meta("still", true)
+	qbox.z_index = 5
+	var qcol = _vbox(4)
+	var qtitle = _label("DÉFIS", ts("m"), GOLD, 1.5)
+	qtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	qcol.add_child(qtitle)
+	w["menu-quests"] = _vbox(4)
+	w["menu-quests"].custom_minimum_size.x = a(250)
+	qcol.add_child(w["menu-quests"])
+	qbox.add_child(qcol)
+	_place(qbox, 569 - M - 84 - 302, 66, 300, 60)
+	qbox.set_meta("home_rest", qbox.position)
+	qbox.visible = false
+	w["menu-quests-box"] = qbox
+	s.add_child(qbox)
+	# JOUER and its list of modes, which unrolls from behind it (top to bottom: Histoire, Sans fin, Affrontement)
+	var modes = Control.new()
+	modes.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	modes.set_meta("still", true)
+	modes.size = Vector2(W, H)
+	modes.z_index = 3
+	for spec in [["story", "ico-relic", "HISTOIRE"], ["endless", "ico-leap", "SANS FIN"], ["race", "ico-friends", "AFFRONTEMENT"]]:
+		var mode: String = spec[0]
+		var on_mode = func() -> void:
+			if tip_held:
+				tip_held = false                             # (it was held to read its panel)
+				return
+			_pick_mode(mode)
+		var sub = _note("", DIM)
+		var b = _row(icon(spec[1]), spec[2], sub, false, 0, on_mode)
+		b.mouse_filter = Control.MOUSE_FILTER_STOP
+		b.visible = false
+		b.set_meta("mode", mode)
+		b.set_meta("sub", sub)
+		if mode != "race":
+			_menu_tip_on(b, mode)
+		modes.add_child(b)
+		w["menu-go-" + mode] = b
+	s.add_child(modes)
+	w["menu-modes"] = modes
+	var play = _button("Jouer", "play", func() -> void: _home_modes(not w["menu-modes"].get_meta("open", false)))
+	play.custom_minimum_size = Vector2(a(168), a(58))
+	_place(play, 569 / 2.0 - 84, 320 - M - 58, 168, 58)
+	w["menu-play"] = play
+	s.add_child(play)
+	w["menu-tip"] = PanelContainer.new()            # what a mode is about: hovered, or held down
 	w["menu-tip"].add_theme_stylebox_override("panel", _kit_tall("menu-info"))
 	w["menu-tip"].mouse_filter = Control.MOUSE_FILTER_IGNORE
 	w["menu-tip"].visible = false
@@ -1245,31 +1221,198 @@ func _build_menu() -> void:
 	tip_l.custom_minimum_size.x = a(260)
 	w["menu-tip"].add_child(tip_l)
 	w["menu-tip-text"] = tip_l
-	_place(w["menu-tip"], M + 236 + 6, 98, 300, 60)
+	_place(w["menu-tip"], 569 / 2.0 - 150, 90, 300, 60)
 	s.add_child(w["menu-tip"])
-	var quests = _vbox(4)
-	_place(quests, 569 - M - 8 - 210, 80, 210, 150)       # (a margin on the right like the left's buttons)
-	quests.add_child(_label("DÉFIS", ts("s"), INK, 1.5))
-	w["menu-quests"] = _vbox(4)
-	quests.add_child(w["menu-quests"])
-	s.add_child(quests)
 	w["menu-info"] = PanelContainer.new()
 	w["menu-info"].add_theme_stylebox_override("panel", _kit_tall("menu-info"))
 	w["menu-info"].mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_place(w["menu-info"], 569 / 2.0 - 150, 320 - M - 50 - 110, 300, 110)
+	_place(w["menu-info"], 569 / 2.0 - 150, 320 - M - 58 - 6 - 110, 300, 110)
 	w["menu-info"].visible = false
 	w["menu-info"].set_meta("still", true)
 	w["menu-info"].z_index = 4
 	s.add_child(w["menu-info"])
-	w["menu-loadout"] = _hbox(M)
+	w["menu-loadout"] = _hbox(M)                     # what goes on the next run, left of JOUER
 	w["menu-loadout"].alignment = BoxContainer.ALIGNMENT_CENTER   # one or two items stay in the middle
-	_place(w["menu-loadout"], 212.5, 320 - M - 42, 150, 42)
+	_place(w["menu-loadout"], 569 / 2.0 - 84 - 8 - 140, 320 - M - 46, 140, 42)
 	s.add_child(w["menu-loadout"])
 	var version = _label("v" + VERSION + " · Godot", roundi(7 * U), DIM, 1)
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	version.modulate.a = 0.75
 	_place(version, 569 - M - 120, 320 - 5 - 9, 120, 10)
 	s.add_child(version)
+
+## A square of the home screen with its name under it: `kit` the kit's square (gear, or blank with `ico`).
+## Its button is the column's meta "button" (for the dots, the bench).
+func _home_square(kit: String, ico: String, ico_w: float, caption: String, fn: Callable, at_right: bool = false) -> VBoxContainer:
+	var col = _vbox(1)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var b = Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	_kit_square(b, kit, 36)
+	if ico != "":
+		b.icon = icon(ico)
+		b.expand_icon = true
+		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.add_theme_constant_override("icon_max_width", roundi(a(ico_w)))
+	b.size_flags_horizontal = Control.SIZE_SHRINK_END if at_right else Control.SIZE_SHRINK_CENTER
+	var on_press = func() -> void:
+		Audio.sfx("click")
+		if not (b == w.get("menu-quests-btn")):
+			_home_close()
+		fn.call()
+	b.pressed.connect(on_press)
+	col.add_child(b)
+	var l = _label(caption, roundi(7.5 * fk * U), INK, 1)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if at_right else HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(l)
+	col.set_meta("button", b)
+	return col
+
+## A gold dot over a home square's corner: "!" or a count.
+func _home_dot(b: Button, text: String, x: float) -> PanelContainer:
+	var dot = PanelContainer.new()
+	var sb = _flat(GOLD, LINE, 1.0)
+	sb.set_corner_radius_all(roundi(a(8)))
+	sb.content_margin_left = a(3)
+	sb.content_margin_right = a(3)
+	sb.content_margin_top = 0
+	sb.content_margin_bottom = 0
+	dot.add_theme_stylebox_override("panel", sb)
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var l = _label(text, ts("s") if text != "!" else ts("m"), LINE, 0)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	dot.add_child(l)
+	dot.position = Vector2(a(x), -a(5))
+	dot.size = Vector2(a(16), a(16))
+	b.add_child(dot)
+	return dot
+
+## The list of modes: open, each mode rises from behind JOUER to its place, Histoire first; closed, they
+## go back behind it, the last first. Affrontement only when a race has two players or more.
+func _home_modes(open: bool) -> void:
+	var modes: Control = w["menu-modes"]
+	if open == modes.get_meta("open", false):
+		return
+	modes.set_meta("open", open)
+	if open:
+		_home_quests(false)
+		w["menu-info"].visible = false
+		_mark_slots("")
+		_mode_texts()
+	var from_y = a(320 - M - 58 + 6)                 # behind JOUER
+	for b in modes.get_children():
+		if b.has_meta("tw"):
+			(b.get_meta("tw") as Tween).kill()
+	if open:
+		var listed: Array = modes.get_children().filter(func(b): return b.get_meta("mode") != "race" or _race_ready())
+		for b in modes.get_children():
+			if not b in listed:
+				b.visible = false
+		for idx in range(listed.size()):
+			var b: Button = listed[idx]
+			var rest_y = a(320 - M - 58 - 6) - (listed.size() - idx) * a(30 + 4)
+			b.position = Vector2(a(569 / 2.0 - 118), from_y)
+			b.modulate.a = 0.0
+			b.visible = true
+			var tw = create_tween()
+			b.set_meta("tw", tw)
+			tw.tween_interval(idx * 0.07)
+			tw.tween_property(b, "position:y", rest_y, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			tw.parallel().tween_property(b, "modulate:a", 1.0, 0.18)
+	else:
+		var shown: Array = modes.get_children().filter(func(b): return b.visible)
+		for k in range(shown.size()):
+			var b: Button = shown[k]
+			var tw = create_tween()
+			b.set_meta("tw", tw)
+			tw.tween_interval((shown.size() - 1 - k) * 0.05)
+			tw.tween_property(b, "position:y", from_y, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+			tw.parallel().tween_property(b, "modulate:a", 0.0, 0.22)
+			tw.tween_callback(func() -> void: b.visible = false)
+		_menu_tip("")
+
+## The words beside each mode: where Histoire stands, the record, the group.
+func _mode_texts() -> void:
+	if not w.has("menu-modes"):
+		return
+	var subs = {
+		"story": "%d/4 MORCEAUX · %d VIES" % [int(save["relic"]), Game.STORY_HEARTS],
+		"endless": "RECORD %d M" % best_of("endless"),
+		"race": "TON GROUPE · %d/4" % race.count(),
+	}
+	for b in w["menu-modes"].get_children():
+		(b.get_meta("sub") as Label).text = subs[b.get_meta("mode")]
+
+## A race whose lobby has two players or more: Affrontement is offered.
+func _race_ready() -> bool:
+	return race != null and race.state == "lobby" and not race.running and race.count() >= 2
+
+## A mode picked in the list: for two the host starts it for both; Affrontement is the race of the group.
+func _pick_mode(mode: String) -> void:
+	_home_modes(false)
+	if mode == "race":
+		if race.role == "host":
+			_race_go()
+		else:
+			_menu_note("C'est l'hôte de la course qui la lance.")
+		return
+	if coop.state == "ready":                        # linked for two: the host starts it for both
+		if coop.role == "host":
+			_coop_go(mode)
+		else:
+			_coop_say("C'est %s qui lance." % _mate_name())
+		return
+	save["mode"] = mode                              # Histoire or Sans fin: « Rejouer » keeps it
+	SaveData.store(save)
+	go("play")
+
+## The objectives' panel, in from the right edge or back out.
+func _home_quests(open: bool) -> void:
+	if not w.has("menu-quests-box"):
+		return
+	var box: Control = w["menu-quests-box"]
+	if open:
+		_home_modes(false)
+		w["menu-info"].visible = false
+		_mark_slots("")
+	_slide(box, open, "right")
+
+## A panel of the home screen (or a window) brought in from `side`, or sent back there and hidden.
+func _slide(p: Control, open: bool, side: String) -> void:
+	if not p.has_meta("home_rest"):
+		p.set_meta("home_rest", p.position)
+	var rest: Vector2 = p.get_meta("home_rest")
+	var away = _away_of(side)
+	if not open and not p.visible:
+		return
+	if p.has_meta("tw"):
+		(p.get_meta("tw") as Tween).kill()
+	var tw = create_tween()
+	p.set_meta("tw", tw)
+	if open:
+		if not p.visible:
+			p.position = rest + away
+		p.visible = true
+		tw.tween_property(p, "position", rest, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		tw.tween_property(p, "position", rest + away, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		tw.tween_callback(func() -> void: p.visible = false)
+
+func _away_of(side: String) -> Vector2:
+	return {"left": Vector2(-a(580), 0), "right": Vector2(a(580), 0), "top": Vector2(0, -a(330)), "bottom": Vector2(0, a(330))}.get(side, Vector2(0, a(330)))
+
+## The list of modes and the objectives put away (another button pressed, the screen left).
+func _home_close() -> void:
+	if w.has("menu-modes") and is_instance_valid(w["menu-modes"]):
+		_home_modes(false)
+	if w.has("menu-quests-box") and is_instance_valid(w["menu-quests-box"]):
+		_home_quests(false)
+
+## Opens a screen whose blocks all come from `side` (the side of the button that opens it).
+func go_from(name: String, side: String) -> void:
+	fly_side = side
+	go(name)
 
 ## The panel of a home screen button: shown while the pointer is over it, or once it has been held
 ## down a moment (a finger): then letting go launches nothing.
@@ -1296,8 +1439,12 @@ func _menu_tip(text: String, b: Button = null) -> void:
 		return
 	w["menu-tip-text"].text = text
 	tip.reset_size()
-	if b != null:                                    # beside the button, its top level with the button's
-		tip.position = Vector2(a(M + 236 + 6), b.get_global_rect().position.y)
+	if b != null:                                    # above the list of modes (0.50)
+		var top = b.position.y
+		for mb in w["menu-modes"].get_children():
+			if mb.visible:
+				top = minf(top, mb.position.y)
+		tip.position = Vector2(a(569 / 2.0) - tip.size.x / 2, top - tip.size.y - a(4))
 
 ## Where the next Run illimitée starts: any of the four sceneries. The home screen shows it already,
 ## the temple standing in it.
@@ -2153,6 +2300,7 @@ func _set_rest(ch: Control, pos: Vector2) -> void:
 	var away = {"left": Vector2(-a(580), 0), "right": Vector2(a(580), 0), "top": Vector2(0, -a(330)), "bottom": Vector2(0, a(330))}[best]
 	ch.set_meta("rest", pos)
 	ch.set_meta("away", away)
+	ch.set_meta("away0", away)                      # (go_from may send them another way for a while)
 	var sc: Control = ch.get_parent()
 	if not sc.visible or sc.has_meta("closing"):
 		ch.position = pos + away
@@ -2173,11 +2321,16 @@ func show_screen(name: String) -> void:
 		sc.set_meta("tw", tw)
 		var bg = sc.get_node_or_null("bg")
 		if on:
+			var was_hidden = not sc.visible
 			sc.remove_meta("closing")
 			sc.visible = true
 			sc.mouse_behavior_recursive = Control.MOUSE_BEHAVIOR_INHERITED
 			for ch in sc.get_children():
 				if ch.has_meta("rest"):
+					if ch.has_meta("away0"):             # 0.50: from the side of the button that opened it
+						ch.set_meta("away", _away_of(fly_side) if fly_side != "" else ch.get_meta("away0"))
+						if was_hidden:
+							ch.position = ch.get_meta("rest") + ch.get_meta("away")
 					tw.tween_property(ch, "position", ch.get_meta("rest"), 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			if bg != null:
 				tw.tween_property(bg, "modulate:a", 1.0, 0.35)
@@ -2195,6 +2348,7 @@ func show_screen(name: String) -> void:
 					sc.remove_meta("closing")
 			tw.chain().tween_callback(hide_it)
 	demo_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if name == "shop" else SubViewport.UPDATE_DISABLED
+	fly_side = ""
 
 func refresh_menu() -> void:
 	_set_level(w["menu-level"], false)
@@ -2204,6 +2358,7 @@ func refresh_menu() -> void:
 	w["menu-urns-n"].text = str(nu) if nu < 100 else "99+"
 	_set_coins(w["menu-coins"], save["coins"])
 	_quest_cards(w["menu-quests"])
+	_mode_texts()
 	_send_kit()
 	_coop_band()
 	for ch in w["menu-loadout"].get_children():
@@ -2788,6 +2943,17 @@ func _skins_tab(list: VBoxContainer) -> void:
 				refresh_shop()
 			var row = _row(null, sk["name"], right, picked_skin == id, 0, on_skin)
 			list.add_child(row)
+		if t == "buttons":                           # 0.50: a button of the look picked (or worn)
+			var look_id = picked_skin if Skins.skin(picked_skin).get("target", "") == "buttons" else ("" if picked_skin == "buttons:" else str(worn.get("buttons", "")))
+			var pic = TextureRect.new()
+			var pic_path = "res://assets/img/ui-v2/%sbtn-normal-50.png" % ("" if look_id == "buttons-stone" else "wood/")
+			pic.texture = load(pic_path) if ResourceLoader.exists(pic_path) else null
+			pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			pic.custom_minimum_size = Vector2(a(236), a(54))
+			pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			list.add_child(pic)
 		if t == "pygmies":                           # the pygmies have no preview run: one of them, alive
 			var stage = MountStage.new()
 			stage.tex = Art.tex.get("guard-club")
@@ -2798,24 +2964,28 @@ func _skins_tab(list: VBoxContainer) -> void:
 	var sk2 = Skins.skin(picked_skin)
 	var acts: HBoxContainer = w["card-actions"]
 	if sk2.is_empty():
-		_card(Skins.TARGETS[target]["name"] + " · Original", "Porté." if not worn.has(target) else "", "Son allure de toujours.")
+		_card(Skins.TARGETS[target]["name"] + " · Original", "Porté." if not worn.has(target) else "", "Le bois moussu de la forêt." if target == "buttons" else "Son allure de toujours.")
 		if worn.has(target):
 			var on_plain = func() -> void:
 				save["skins"]["worn"].erase(target)
 				SaveData.store(save)
 				Audio.sfx("click")
+				if target == "buttons":
+					rebuild_due = true                   # the whole interface, at the next screen
 				refresh_shop()
 			acts.add_child(_button("Porter", "small on", on_plain))
 	else:
 		var rar: Dictionary = Skins.RARITIES[sk2["rarity"]]
 		var have: bool = picked_skin in owned
 		var on_now: bool = worn.get(target, "") == picked_skin
-		_card(Skins.TARGETS[target]["name"] + " · " + sk2["name"], rar["name"] + (" · Porté." if on_now else (" · Possédé." if have else " · Dans les urnes, ou contre des éclats.")), "Les mêmes images, dans d'autres couleurs.")
+		_card(Skins.TARGETS[target]["name"] + " · " + sk2["name"], rar["name"] + (" · Porté." if on_now else (" · Possédé." if have else " · Dans les urnes, ou contre des éclats.")), "Les boutons de pierre d'avant, gravés et couverts de lianes." if target == "buttons" else "Les mêmes images, dans d'autres couleurs.")
 		if have and not on_now:
 			var on_wear = func() -> void:
 				save["skins"]["worn"][target] = picked_skin
 				SaveData.store(save)
 				Audio.sfx("click")
+				if target == "buttons":
+					rebuild_due = true                   # the whole interface, at the next screen
 				refresh_shop()
 			acts.add_child(_button("Porter", "small on", on_wear))
 		elif not have:
@@ -3500,6 +3670,8 @@ func go(name: String) -> void:
 	if state == "shop" and name != "shop":
 		Skins.apply(save["skins"]["worn"])
 	_menu_tip("")
+	if name != "menu":
+		_home_close()                                # (the list of modes, the objectives)
 	_peek(false)
 	_stop_over()
 	if name == "settings" and state == "pause":
@@ -5066,15 +5238,18 @@ func _input(event: InputEvent) -> void:
 				_act(_hud_button_at(event.position).substr(4))
 				get_viewport().set_input_as_handled()
 	var down = (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION)
-	if down and state == "menu" and w.has("menu-tip") and w["menu-tip"].visible:
-		var on_button = false                          # a touch elsewhere puts the panel away
-		for b in w["menu-tip"].get_parent().get_children():
-			if b is VBoxContainer:
-				for bb in b.get_children():
-					if bb is Button and bb.get_global_rect().has_point(event.position):
-						on_button = true
-		if not on_button:
+	if down and state == "menu" and w.has("menu-modes"):
+		var on_mode = false                            # a touch elsewhere puts the panel, the list away
+		for bb in w["menu-modes"].get_children():
+			if bb.visible and bb.get_global_rect().has_point(event.position):
+				on_mode = true
+		if w["menu-tip"].visible and not on_mode:
 			_menu_tip("")
+		if w["menu-modes"].get_meta("open", false) and not on_mode and not w["menu-play"].get_global_rect().has_point(event.position):
+			_home_modes(false)
+		var qb: Control = w["menu-quests-box"]
+		if qb.visible and not qb.get_global_rect().has_point(event.position) and not w["menu-quests-btn"].get_global_rect().has_point(event.position):
+			_home_quests(false)
 	if down and state == "menu" and w.has("menu-info") and w["menu-info"].visible:
 		var on_slot = false
 		for sl in w["menu-loadout"].get_children():
@@ -5196,6 +5371,9 @@ func _go_back() -> void:
 	if modal != null:
 		modal.queue_free()
 		modal = null
+		return
+	if state == "menu" and w.has("menu-modes") and (w["menu-modes"].get_meta("open", false) or w["menu-quests-box"].visible):
+		_home_close()                                # (0.50) the list of modes or the objectives first
 		return
 	if invite_box != null:
 		invite_box.queue_free()

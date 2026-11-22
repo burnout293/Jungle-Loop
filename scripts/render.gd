@@ -12,8 +12,12 @@ const PIXEL := Game.PIXEL
 const SIZE := Game.SIZE                 # 0.49: the hero, the dangers, the coins, the things picked up: 15 % bigger
 const VH := 320.0                      # play area height, in art pixels
 const GN := 280.0                      # floor line where the path is at its starting level
-const TEMPLE_X := -64.0                # temple's left edge, at camera 0
-const DOOR_X := 35.0                   # and its doorway (temple v2: the door is x 90 to 134, y 72 to 140 of its picture)
+const TEMPLE_X := -79.0                # temple's left edge, at camera 0 (0.50: its doorway's middle at x 48, as before)
+const DOOR_X := 35.0                   # and its doorway (temple 0.50: the door is x 110 to 146, y 148 to 204 of its pictures)
+const TEMPLE_FLOOR := 222.0            # the row of the temple's pictures that stands on the floor line
+# 0.50: the temple is three pictures of the same size lying on each other (tools/split_temple.py): "temple"
+# behind the floor (the pyramid), "temple-mid" on it (the porch, the steps), "temple-front" in front of
+# Pépito (the jaguar pillars, which he runs behind).
 const PROP_CELL := Game.PROP_CELL / Game.PIXEL
 const EARTH := 24.0
 const SLICE := 4
@@ -706,8 +710,8 @@ func draw_hills(c: CanvasItem) -> void:
 		if x > view_w or x + w < 0 or hl.biome == 3:
 			continue                                 # (the dungeon has no hill since 0.44: its walls looked stuck on)
 		var pics: Array = Art.hill_sets[hl.biome] if hl.biome < Art.hill_sets.size() else []
-		if hl.isles and hl.biome == 0 and pics.size() >= 3:   # 0.49: behind the platforms, the mound they come from
-			pics = [pics[2]]
+		if hl.isles and hl.biome == 0 and pics.size() >= 3:   # 0.49: behind the platforms, the mounds they come from
+			pics = pics.slice(2)                     # (0.50: four of them, darker: tools/prep_mounds.py)
 		if pics.is_empty():                          # (the pictures missing: the old mound, drawn)
 			blit(c, Art.hill(hl.biome, w, h, hl.seed % 997), x, GN + 6 - h)
 			continue
@@ -994,18 +998,18 @@ func chain(c: CanvasItem, x: float, y: float) -> void:
 		k += 1
 
 ## What is left of the doorway once it has blown out: a ragged hole and rubble on the steps.
-## The doorway blown open: a dark hole with ragged edges where the boulders were (the temple v2's door,
-## x 90 to 134 and y 72 to 140 of its picture, which stands 3 pixels into the floor), and stones on the steps.
+## The doorway blown open: a dark hole with ragged edges where the boulders were (the 0.50 temple's door,
+## x 110 to 146 and y 148 to 204 of its pictures), and stones on the steps.
 func draw_blast(c: CanvasItem, x: float) -> void:
 	var hole = Color("#0d0a18")
-	var top = GN + 3 - 174 + 72
-	rect(c, x + 90, top, 44, 68, hole)
-	rect(c, x + 86, top + 10, 4, 48, hole)
-	rect(c, x + 134, top + 6, 5, 54, hole)
-	rect(c, x + 96, top - 6, 28, 6, hole)
-	rect(c, x + 82, top + 32, 4, 18, hole)
-	rect(c, x + 139, top + 24, 3, 24, hole)
-	for s in [[76, 14, 12, 8, "#6a6f8c"], [102, 10, 9, 7, "#8a8fa8"], [124, 15, 14, 9, "#4a4f6c"], [146, 8, 8, 6, "#6a6f8c"], [160, 12, 11, 8, "#8a8fa8"], [114, 20, 7, 5, "#7bd13c"]]:
+	var top = GN - TEMPLE_FLOOR + 150
+	rect(c, x + 112, top, 32, 54, hole)
+	rect(c, x + 109, top + 8, 3, 40, hole)
+	rect(c, x + 144, top + 6, 3, 44, hole)
+	rect(c, x + 116, top - 4, 24, 4, hole)
+	rect(c, x + 106, top + 26, 3, 16, hole)
+	rect(c, x + 147, top + 20, 2, 20, hole)
+	for s in [[100, 14, 12, 8, "#5d6a5c"], [122, 10, 9, 7, "#7d8a78"], [140, 15, 14, 9, "#45503f"], [160, 8, 8, 6, "#5d6a5c"], [176, 12, 11, 8, "#7d8a78"], [132, 20, 7, 5, "#7bd13c"]]:
 		rect(c, x + s[0] - 1, GN - s[1] - 1, s[2] + 2, s[3] + 2, INK)
 		rect(c, x + s[0], GN - s[1], s[2], s[3], Color(s[4]))
 
@@ -1531,6 +1535,11 @@ func _draw_back(c: CanvasItem) -> void:
 			var gy = y + 4
 			rect(c, gx, gy - 2, 1, 5, Color("#fff8d8"))
 			rect(c, gx - 2, gy, 5, 1, Color("#fff8d8"))
+	var temple: Texture2D = Art.tex.get("temple")
+	var templeX = snap(TEMPLE_X - cam)
+	var in_temple = temple != null and templeX > -temple.get_width()
+	if in_temple:                                    # (0.50) the pyramid, behind the floor
+		blit(c, temple, templeX, GN - TEMPLE_FLOOR)
 	var cut = clampf(edge, 0, view_w)               # the floor changes exactly where the new place begins
 	var changing = run.prev_biome != run.biome
 	if changing:
@@ -1541,13 +1550,12 @@ func _draw_back(c: CanvasItem) -> void:
 	Ambient.draw_life(c, cam, t, view_w, floor_px)
 	draw_dirt(c)
 
-	var temple: Texture2D = Art.tex.get("temple")
-	var templeX = snap(TEMPLE_X - cam)
-	var in_temple = temple != null and templeX > -temple.get_width()
-	if in_temple:
-		blit(c, temple, templeX, GN - temple.get_height() + 3)
-		if run.exploded:                             # (temple v2: its doorway is blocked in the picture itself,
-			draw_blast(c, templeX)                   # boulders held by vines: no rubble drawn over it)
+	if in_temple:                                    # the porch, on the floor
+		var porch: Texture2D = Art.tex.get("temple-mid")
+		if porch != null:
+			blit(c, porch, templeX, GN - TEMPLE_FLOOR)
+		if run.exploded:                             # (its doorway is blocked in the picture itself, boulders
+			draw_blast(c, templeX)                   # held by vines: no rubble drawn over it)
 
 	if not run.signs.is_empty():
 		_draw_signs(c)
@@ -1979,6 +1987,9 @@ func _draw_front(c: CanvasItem) -> void:
 		return
 	plant_mound(c)
 	var cam = run.cam / PIXEL
+	var pillars: Texture2D = Art.tex.get("temple-front")    # (0.50) the temple's jaguar pillars, in front of him
+	if pillars != null and snap(TEMPLE_X - cam) > -pillars.get_width():
+		blit(c, pillars, snap(TEMPLE_X - cam), GN - TEMPLE_FLOOR)
 	if run.p.ball != null and run.p.ball.kind == "log" and not run.dead:
 		ribs(c, run.p.ball, true)                    # he rolls inside the trunk, not in front of it
 	_draw_swarm(c)

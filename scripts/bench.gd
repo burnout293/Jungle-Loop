@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -42,6 +42,7 @@ func _ready() -> void:
 			"tour47": opts["tour47"] = true        # 0.47's new things in pictures: urns, skins, the offer, the escape
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour50": opts["tour50"] = true        # 0.50's: the home screen B3 (modes, Défis), the wood buttons, the stone skin
 			"race": opts["race"] = kv[1]           # 0.48, the race for four: host | guest (in a browser, with ?net=)
 			"friends": opts["friends"] = kv[1]     # race=host: the friend codes to add and invite, separated by commas
 			"bet": opts["bet"] = int(kv[1])        # race: what this one bets
@@ -138,6 +139,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour48"]:
 		await _tour48()
+		return
+	if opts["tour50"]:
+		await _tour50()
 		return
 	if opts["race"] != "":                           # four browsers, one race: see _race_bench
 		_race_bench(delta)
@@ -356,6 +360,75 @@ func _tour48() -> void:
 				main.run.god = true
 			"quit": get_tree().quit()
 			_: await _step48(st[1], arg)
+
+## --tour50: 0.50 in pictures: the home screen B3 closed, its modes unrolled (a race of three waiting, so
+## Affrontement shows), the objectives come from the right, the Skins tab's buttons, and the stone skin.
+var steps50: Array = []
+
+func _tour50() -> void:
+	if steps50.is_empty():
+		steps50 = [
+			[0.5, "setup", ""], [1.0, "shot", "50-01-accueil"],
+			[1.1, "modes", ""], [1.25, "shot", "50-02-modes-ouverture"], [1.8, "shot", "50-03-modes"],
+			[1.9, "fakerace", "lobby"], [2.0, "modes0", ""], [2.2, "modes", ""], [2.9, "shot", "50-04-modes-affrontement"],
+			[3.0, "fakerace", "off"], [3.1, "quests", ""], [3.25, "shot", "50-05-defis-arrivee"], [3.9, "shot", "50-06-defis"],
+			[4.0, "quests0", ""], [4.4, "skins", ""], [5.3, "shot", "50-07-skins-boutons"],
+			[5.4, "stone", ""], [5.5, "go", "menu"], [6.5, "shot", "50-08-accueil-pierre"],
+			[6.6, "wood", ""], [6.7, "go", "settings"], [7.6, "shot", "50-09-reglages"], [7.7, "go", "menu"],
+			[8.6, "shot", "50-10-accueil-temple"], [8.7, "play", ""], [9.3, "shot", "50-11-depart"], [10.6, "shot", "50-12-explosion"],
+			[11.6, "shot", "50-13-sortie"], [12.4, "shot", "50-14-pilier"], [13.2, "shot", "50-15-pilier-bis"],
+			[13.5, "quit", ""],
+		]
+	while tour_i < steps50.size() and t >= steps50[tour_i][0]:
+		var st = steps50[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				var s: Dictionary = main.save
+				s["seenIntro"] = true
+				s["mode"] = "story"
+				s["bestEndless"] = 2340
+				main.endless_biome = 0
+				main.still.biome = 0
+				main.still.prev_biome = 0
+				main.refresh_menu()
+			"modes": main._home_modes(true)
+			"modes0": main._home_modes(false)
+			"quests": main._home_quests(true)
+			"quests0": main._home_quests(false)
+			"skins":
+				main.picked_skin = "buttons-stone"
+				main.tab = "skin"
+				main.go_from("shop", "right")
+			"stone":
+				main.save["skins"]["owned"].append("buttons-stone")
+				main.save["skins"]["worn"]["buttons"] = "buttons-stone"
+				main.rebuild_due = true
+			"wood":
+				main.save["skins"]["worn"].erase("buttons")
+				main.rebuild_due = true
+			"go": main.go(arg)
+			"play":
+				main.save["mode"] = "endless"
+				main.go("play")
+				main.run.god = true
+			"quit": get_tree().quit()
+			"fakerace":
+				var rc: Race = main.race
+				if arg == "lobby":
+					rc.role = "host"
+					rc.state = "lobby"
+					rc.room = "KQ7M"
+					rc.me = 0
+					rc.seats = {0: {"name": "Pépito", "code": "PEPI-6ZAW", "on": 0, "bet": 100}, 1: {"name": "Léo", "code": "PEPI-K7QM", "on": 1, "bet": 250}, 2: {"name": "Inès", "code": "PEPI-INES", "on": 1, "bet": 50}}
+				else:
+					rc.role = ""
+					rc.state = "idle"
+					rc.seats = {}
 
 ## The steps of the full 0.48 tour (after the mock-up pictures).
 func _steps48() -> Array:

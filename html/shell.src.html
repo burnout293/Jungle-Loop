@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+<title>$GODOT_PROJECT_NAME</title>
+<!-- Jungle Loop's page (0.50): the game's canvas, and over it while the game loads a little chase drawn
+     with the game's own pictures, one of four at random: they come in from the left, run on the spot while
+     it loads, run off to the right when the home screen is ready, then the page fades onto it.
+     Source of html/shell.html: python html/make_shell.py (the pictures are put inside it). -->
+<style>
+html, body, #canvas { margin: 0; padding: 0; border: 0; }
+body { color: #fff8e6; background-color: #0a0f14; overflow: hidden; touch-action: none; }
+#canvas { display: block; }
+#canvas:focus { outline: none; }
+@font-face { font-family: 'JLSilk'; src: url({{FONT}}) format('truetype'); }
+#jl-load { position: fixed; inset: 0; z-index: 10; overflow: hidden; background: #0a0f14; transition: opacity .6s ease; }
+#jl-load.gone { opacity: 0; pointer-events: none; }
+#jl-bg { position: absolute; inset: 0; background: url({{BG}}) center bottom / cover no-repeat; image-rendering: pixelated; filter: brightness(.55) saturate(.8); }
+#jl-shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(10,15,20,.55), rgba(10,15,20,0) 40%, rgba(10,15,20,0) 70%, rgba(10,15,20,.6)); }
+#jl-ground { position: absolute; left: 0; right: 0; background: url({{GROUND}}) 0 0 repeat-x; image-rendering: pixelated; }
+#jl-title { position: absolute; left: 0; right: 0; text-align: center; font-family: 'JLSilk', monospace; color: #ffe9a0; letter-spacing: .08em; }
+#jl-note { position: absolute; left: 0; right: 0; text-align: center; font-family: 'JLSilk', monospace; color: #c9d6c3; letter-spacing: .1em; }
+#jl-group { position: absolute; left: 0; will-change: transform; }
+.jl-spr { position: absolute; bottom: 0; background-repeat: no-repeat; image-rendering: pixelated; animation: jl-run var(--d) steps(var(--n)) infinite; }
+@keyframes jl-run { from { background-position: 0 0; } to { background-position: calc(-1 * var(--n) * var(--w)) 0; } }
+.jl-flame { position: absolute; border-radius: 50%; background: #ffb13b; box-shadow: 0 0 6px 2px #ff7a2a; animation: jl-flick .12s steps(2) infinite; }
+@keyframes jl-flick { from { transform: scale(1); opacity: 1; } to { transform: scale(.6); opacity: .7; } }
+#status-notice { display: none; position: absolute; left: 2rem; right: 2rem; top: 40%; z-index: 11; background: #5b3943; border: 1px solid #9b3943; border-radius: .5rem; color: #e0e0e0; font-family: sans-serif; line-height: 1.3; padding: 1rem; text-align: center; }
+</style>
+$GODOT_HEAD_INCLUDE
+</head>
+<body>
+<canvas id="canvas">Ton navigateur ne sait pas afficher le jeu.</canvas>
+<noscript>Le jeu a besoin de JavaScript.</noscript>
+<div id="jl-load" aria-label="Chargement de Jungle Loop">
+	<div id="jl-bg"></div>
+	<div id="jl-shade"></div>
+	<div id="jl-title">JUNGLE LOOP</div>
+	<div id="jl-ground"></div>
+	<div id="jl-group"></div>
+	<div id="jl-note">CHARGEMENT</div>
+</div>
+<div id="status-notice"></div>
+<script src="$GODOT_URL"></script>
+<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+const engine = new Engine(GODOT_CONFIG);
+
+(function () {
+	// ---- the chase (sizes in the game's art pixels: the game is 320 of them high) ----
+	const SHEETS = {
+		hero: { src: '{{HERO}}', w: {{HERO_W}}, h: {{HERO_H}}, n: 8, d: .46, k: 1 / 3 },   // drawn by the game at 3 pixels per art pixel
+		spear: { src: '{{SPEAR}}', w: 64, h: 64, n: 8, d: .62, k: .8 },                // as the game shows the pygmies (0.8)
+		club: { src: '{{CLUB}}', w: 64, h: 64, n: 8, d: .62, k: .8 },
+		gorilla: { src: '{{GORILLA}}', w: 104, h: 64, n: 4, d: .42, k: 1 },
+		rhino: { src: '{{RHINO}}', w: 100, h: 61, n: 4, d: .4, k: 1 },
+		missile: { src: '{{MISSILE}}', w: 46, h: 19, n: 1, d: 1, k: 1, flip: true },
+	};
+	// left to right, all running to the right: the one chased in front
+	const SCENES = [
+		[['spear', 0], ['club', 40], ['hero', 112]],                                    // Pépito, the pygmies after him
+		[['missile', 0, 34], ['spear', 74], ['club', 112], ['hero', 182]],             // all of them, a missile after them
+		[['spear', 0], ['gorilla', 60]],                                                 // a pygmy after the gorilla
+		[['rhino', 0], ['club', 118], ['spear', 158]],                                   // the rhino after two pygmies
+	];
+	const load = document.getElementById('jl-load');
+	const group = document.getElementById('jl-group');
+	const ground = document.getElementById('jl-ground');
+	const title = document.getElementById('jl-title');
+	const note = document.getElementById('jl-note');
+	const scene = SCENES[Math.floor(Math.random() * SCENES.length)];
+	let s = 1, gw = 0, x = 0, phase = 'enter', t0 = performance.now(), from = 0, to = 0, scroll = 0, last = t0;
+	let started = false, ready = false, done = false;
+
+	function build() {
+		s = window.innerHeight / 320;
+		group.innerHTML = '';
+		gw = 0;
+		for (const [name, at, lift] of scene) {
+			const S = SHEETS[name];
+			const w = S.w * S.k * s, h = S.h * S.k * s;
+			const d = document.createElement('div');
+			d.className = 'jl-spr';
+			d.style.width = w + 'px';
+			d.style.height = h + 'px';
+			d.style.left = at * s + 'px';
+			d.style.bottom = (lift || 0) * s + 'px';
+			d.style.backgroundImage = 'url(' + S.src + ')';
+			d.style.backgroundSize = (w * S.n) + 'px ' + h + 'px';
+			d.style.setProperty('--n', S.n);
+			d.style.setProperty('--w', w + 'px');
+			d.style.setProperty('--d', S.d + 's');
+			if (S.n === 1) d.style.animation = 'none';
+			if (S.flip) d.style.transform = 'scaleX(-1)';
+			group.appendChild(d);
+			if (name === 'missile') {                       // its flame, behind it (on the left once turned)
+				for (let i = 0; i < 3; i++) {
+					const f = document.createElement('div');
+					f.className = 'jl-flame';
+					const r = (5 - i * 1.4) * s;
+					f.style.width = f.style.height = r + 'px';
+					f.style.left = (at * s - r * (0.6 + i * 1.1)) + 'px';
+					f.style.bottom = ((lift || 0) + 9.5) * s - r / 2 + 'px';
+					f.style.animationDelay = (i * .04) + 's';
+					group.appendChild(f);
+				}
+			}
+			gw = Math.max(gw, at * s + w);
+		}
+		const floor = 282 * s;                              // the game's floor line (render.gd GN 280)
+		group.style.top = '0px';
+		group.style.height = floor + 'px';
+		group.style.width = gw + 'px';
+		ground.style.top = (floor - 8 * s) + 'px';
+		ground.style.height = (60 * s) + 'px';
+		ground.style.backgroundSize = (480 * s) + 'px ' + (60 * s) + 'px';
+		title.style.top = (34 * s) + 'px';
+		title.style.fontSize = (26 * s) + 'px';
+		title.style.textShadow = [[0, 2], [2, 0], [-2, 0], [0, -2], [0, 4]].map(([a, b]) => (a * s / 2) + 'px ' + (b * s / 2) + 'px 0 #1a1024').join(',');
+		note.style.top = (300 * s) + 'px';
+		note.style.fontSize = (8 * s) + 'px';
+		if (phase === 'enter') { from = -gw - 10 * s; to = (window.innerWidth - gw) / 2; }
+		else if (phase === 'wait') { x = (window.innerWidth - gw) / 2; }
+	}
+
+	function ease(k, out) { return out ? 1 - Math.pow(1 - k, 3) : k * k * k; }
+
+	function frame(now) {
+		if (done) return;
+		const dt = Math.min(.05, (now - last) / 1000);
+		last = now;
+		const k = (now - t0) / 1000;
+		if (phase === 'enter') {                            // in from the left edge to the middle
+			x = from + (to - from) * ease(Math.min(1, k / 1.3), true);
+			if (k >= 1.3) { phase = 'wait'; t0 = now; }
+		} else if (phase === 'wait') {                      // on the spot, the floor running under them
+			scroll += 230 * s * dt;
+			if (ready && k > .25) { phase = 'exit'; t0 = now; from = x; to = window.innerWidth + 20 * s; }
+		} else if (phase === 'exit') {                      // off to the right edge, then the home screen
+			x = from + (to - from) * ease(Math.min(1, k / .95), false);
+			if (k >= .95) { phase = 'fade'; load.classList.add('gone'); setTimeout(() => { done = true; load.remove(); }, 650); }
+		}
+		group.style.transform = 'translateX(' + x + 'px)';
+		ground.style.backgroundPositionX = (-scroll) + 'px';
+		requestAnimationFrame(frame);
+	}
+
+	build();
+	window.addEventListener('resize', build);
+	requestAnimationFrame(frame);
+
+	// the game says when its home screen is up (main.gd: window.jlReady); after the engine has started,
+	// eight seconds at most
+	window.jlReady = function () { ready = true; note.textContent = ''; };
+	function onStarted() {
+		started = true;
+		note.textContent = 'PRESQUE PRÊT…';
+		setTimeout(() => { ready = true; }, 8000);
+	}
+
+	// ---- Godot ----
+	const notice = document.getElementById('status-notice');
+	function fail(err) {
+		console.error(err);
+		notice.textContent = err instanceof Error ? err.message : (typeof err === 'string' ? err : 'Une erreur inconnue est survenue.');
+		notice.style.display = 'block';
+	}
+	const missing = Engine.getMissingFeatures({ threads: GODOT_THREADS_ENABLED });
+	if (missing.length !== 0) {
+		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
+			let reg;
+			try { reg = navigator.serviceWorker.getRegistration(); } catch (err) { reg = Promise.reject(new Error('Service worker registration failed.')); }
+			Promise.race([
+				reg.then((r) => { if (r != null) return Promise.reject(new Error('Service worker already exists.')); return r; }).then(() => engine.installServiceWorker()),
+				new Promise((resolve) => { setTimeout(() => resolve(), 2000); }),
+			]).then(() => { window.location.reload(); }).catch((err) => { console.error('Error while registering service worker:', err); });
+		} else {
+			fail('Ce navigateur ne peut pas lancer le jeu. Il manque :\n' + missing.join('\n'));
+		}
+	} else {
+		engine.startGame({
+			'onProgress': function (current, total) {
+				if (!started && current > 0 && total > 0) note.textContent = 'CHARGEMENT ' + Math.min(99, Math.floor(current * 100 / total)) + ' %';
+			},
+		}).then(onStarted, fail);
+	}
+}());
+</script>
+</body>
+</html>
