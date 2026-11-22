@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.49.0"
+const VERSION := "0.49.1"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -118,6 +118,8 @@ var update_busy := false
 var update_online := ""                # the version online (version.txt beside the game), once looked at
 var update_text := ""                  # what Réglages says about it
 var update_sure := false               # « à jour » said: pressing again reloads anyway
+var update_notes := ""                 # 0.49.1: what the new version brings (nouveautes.txt beside the game)
+var update_offered := false            # 0.49.1: the update offered once this session (a window at the start)
 const INVITE_SCREENS := ["menu", "shop", "friends", "over", "tally", "settings"]
 var friends_tab := "friends"
 var board: Array = []                  # the friends' board, as the server sent it
@@ -2372,7 +2374,7 @@ func _after_load() -> void:
 	refresh_settings()
 
 ## A question in the game's own look (the web version's confirm()): a pane, « Non » and « Oui ».
-func _confirm(text: String, fn: Callable) -> void:
+func _confirm(text: String, fn: Callable, yes_text: String = "Oui", no_text: String = "Non") -> void:
 	if modal != null:
 		modal.queue_free()
 	var layer = CanvasLayer.new()
@@ -2405,8 +2407,8 @@ func _confirm(text: String, fn: Callable) -> void:
 	var yes = func() -> void:
 		close.call()
 		fn.call()
-	row.add_child(_button("Non", "small plain", close))
-	row.add_child(_button("Oui", "small gold", yes))
+	row.add_child(_button(no_text, "small plain", close))
+	row.add_child(_button(yes_text, "small gold", yes))
 	col.add_child(row)
 	p.add_child(col)
 	root.add_child(p)
@@ -2534,6 +2536,8 @@ func _look_update(asked: bool) -> void:
 	if not asked:
 		if _update_ready():
 			_upd_say("La version %s est en ligne : appuie sur Mettre à jour." % online)
+			update_notes = await _fetch_text(here + "nouveautes.txt?t=%d" % int(Time.get_unix_time_from_system() * 1000))
+			_offer_update()
 		return
 	if _newer(online, VERSION):
 		_upd_say("Version %s trouvée : mise à jour…" % online)
@@ -2542,6 +2546,43 @@ func _look_update(asked: bool) -> void:
 	else:
 		_upd_say("Le jeu est à jour (v%s). Appuie encore pour le recharger quand même." % VERSION)
 		update_sure = true
+
+## 0.49.1: a text file beside the game ("" when missing or unreadable), at most 4 lines of 200 letters.
+func _fetch_text(url: String) -> String:
+	var req = HTTPRequest.new()
+	req.timeout = 6.0
+	add_child(req)
+	var out = ""
+	if req.request(url) == OK:
+		var res = await req.request_completed
+		if res[0] == HTTPRequest.RESULT_SUCCESS and res[1] == 200:
+			var lines: Array = []
+			for l in (res[3] as PackedByteArray).get_string_from_utf8().split("\n"):
+				var t = l.strip_edges()
+				if t != "" and not t.begins_with("#"):
+					lines.append(t.left(200))
+			out = "\n".join(lines.slice(0, 4))
+	req.queue_free()
+	return out
+
+## 0.49.1: at the start, a newer version online is offered in a window, once a session, on the home screen
+## (later if it is not there yet: go("menu") asks again). « Mettre à jour »: the game reloads fresh (the save
+## stays); « Plus tard »: the gear keeps its « ! » and Réglages its button.
+func _offer_update() -> void:
+	if update_offered or testing or not _update_ready():
+		return
+	if state != "menu" or modal != null:
+		return
+	update_offered = true
+	var text = "Nouvelle version %s disponible !" % update_online
+	if update_notes != "":
+		text += "\n\n" + update_notes
+	text += "\n\nLe jeu se recharge, ta partie est gardée."
+	_confirm(text, _update_now, "Mettre à jour", "Plus tard")
+
+func _update_now() -> void:
+	_upd_say("Rechargement…")
+	_reload_fresh()
 
 ## The game again, fresh: the service worker and its cache go, the game's files are fetched anew (past
 ## the browser's own cache too), then the page reloads. The engine (index.wasm, 40 Mo) is kept: it only
@@ -3542,6 +3583,8 @@ func go(name: String) -> void:
 		refresh_menu()
 		if not levels_due.is_empty():                # a run left from the pause: its levels, now
 			show_levels.call_deferred()
+		elif _update_ready() and not update_offered:  # 0.49.1: a newer version found while it was elsewhere
+			get_tree().create_timer(0.4).timeout.connect(_offer_update)
 	if name == "shop":
 		refresh_shop()
 	if name == "friends":

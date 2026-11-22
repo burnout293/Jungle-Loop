@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.49.0** (22/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.49.1** (22/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,15 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.49.1
+
+- **Fenêtre « Nouvelle version disponible »** au démarrage (navigateur) : quand `version.txt` en ligne est plus
+  récent, l'accueil propose « Mettre à jour » (le jeu se recharge sans ses fichiers gardés, la partie reste) ou
+  « Plus tard » (le « ! » de l'engrenage et le bouton de Réglages restent) ; une fois par session, et à l'arrivée
+  à l'accueil si la réponse arrive pendant une course. Elle affiche aussi `nouveautes.txt` (copié à côté du jeu
+  par `tools/publish_web.py` depuis `reglages/nouveautes.txt` : 4 lignes au plus, à réécrire à chaque version).
+  Essayé dans le navigateur avec une fausse version 9.9.9 à côté du jeu.
 
 ## 0.49.0
 
