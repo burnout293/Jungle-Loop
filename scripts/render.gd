@@ -1573,7 +1573,7 @@ func _draw_back(c: CanvasItem) -> void:
 	if not run.dead or show_dead:
 		var p = run.p
 		var hx = n(run.sx)
-		var floor_y = n(p.plat.y) if p.plat != null else floor_px(hx)
+		var floor_y = n(Game.top_at(p.plat, run.cam + run.sx)) if p.plat != null else floor_px(hx)
 		var M = run.mount
 		var aloft: bool = M != null and (p.hang or Game.MOUNTS[M.kind].get("fly", false))
 		if (not in_temple or hx > DOOR_X + 8) and (run.caught == null or run.caught.t < Game.CATCH_LEAP):
@@ -1671,6 +1671,25 @@ func _draw_zones(c: CanvasItem) -> void:
 # 0.49: the forest's two platforms: the middle of what is walked on, and how far its top stands above it (art pixels).
 const ISLE_PICS := {"isle-forest-1": {"mid": 54.5, "top": 13}, "isle-forest-2": {"mid": 75.5, "top": 14}}
 
+var sloped := {}                       # 0.50: a sloped platform's picture, made once: "pic@fall@w" -> {tex, up}
+
+## The picture of a platform sloping by `fall` art pixels over the `w` it is walked on: each column moved down
+## (or up) by its share of it, whole pixels, as a pixel-art ramp is drawn. `up`: where its top row now stands.
+func _sloped(pic: String, fall: int, w: float) -> Dictionary:
+	var key = "%s@%d@%d" % [pic, fall, roundi(w)]
+	if sloped.has(key):
+		return sloped[key]
+	var src: Image = Art.img[pic]
+	var IM: Dictionary = ISLE_PICS[pic]
+	var left = float(IM["mid"]) - w / 2
+	var up = mini(0, fall)
+	var im = Image.create(src.get_width(), src.get_height() + absi(fall), false, Image.FORMAT_RGBA8)
+	for cx in src.get_width():
+		var dy = roundi(fall * clampf((cx + 0.5 - left) / w, 0.0, 1.0))
+		im.blit_rect(src, Rect2i(cx, 0, 1, src.get_height()), Vector2i(cx, dy - up))
+	sloped[key] = {"tex": Art.make(im), "up": up}
+	return sloped[key]
+
 func _draw_plats(c: CanvasItem) -> void:
 	for pl in run.plats:
 		var x = sx(pl.x)
@@ -1712,7 +1731,12 @@ func _draw_plats(c: CanvasItem) -> void:
 			var pic: String = ("isle-forest-2" if pl.size == 2 else "isle-forest-1") if Game.biome_at(run, pl.x) == 0 else ""
 			if pic != "" and Art.tex.has(pic):     # 0.49: the forest's own, cut from its mound (PixelLab)
 				var IM: Dictionary = ISLE_PICS[pic]
-				blit(c, Art.tex[pic], snap(x + w / 2 - IM["mid"]), y - IM["top"])
+				var fall = roundi(pl.slope / PIXEL)
+				if fall == 0 or not Art.img.has(pic):
+					blit(c, Art.tex[pic], snap(x + w / 2 - IM["mid"]), y - IM["top"])
+				else:                                # 0.50: sloped, its columns moved up or down (_sloped)
+					var sl: Dictionary = _sloped(pic, fall, w)
+					blit(c, sl["tex"], snap(x + w / 2 - IM["mid"]), y - IM["top"] + sl["up"])
 			elif S["isles"].size() > 0:
 				blit(c, S["isles"][pl.size], x, y - S["gtop"])
 		elif kind == "walk" and Art.tex.has("walkway"):  # the dungeon: planks hanging from two chains

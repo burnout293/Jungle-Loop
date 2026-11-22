@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.49.1"
+const VERSION := "0.50.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -232,6 +232,7 @@ func _load() -> void:
 		_menu_note.call_deferred(adopted_note)
 	print("Jungle Loop %s : prêt en %d ms (dont images %d ms)" % [VERSION, Time.get_ticks_msec() - t0, t_art])
 	go("menu")
+	_js("window.jlReady && window.jlReady()")    # 0.50: the page's loading chase runs off (html/shell.src.html)
 	_refresh_board()
 	_check_friend_link.call_deferred()
 

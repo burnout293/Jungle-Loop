@@ -111,6 +111,11 @@ const KEYS := {
 		"suivantes": ["FM_NEXT", "pair", 1.0],
 		"epaisseur": ["FM_THICK", "n", PC],
 	},
+	"plateformes": {
+		"plates": ["ISLE_FLAT", "n", PC],
+		"pente en montee": ["ISLE_UP", "pair", M],
+		"pente en descente": ["ISLE_DOWN", "pair", M],
+	},
 	"agencement": {
 		"plus dur des": ["PRESS_FROM", "n", 1.0],
 		"au plus dur a": ["PRESS_FULL", "n", 1.0],

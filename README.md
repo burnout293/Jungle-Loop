@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.49.1** (22/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.50.0** (22/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -103,6 +103,38 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.50.0
+
+- **Accueil B3** : à gauche Réglages, Amis, Trésor, Tambours ; à droite Améliorations, Skins, Défis, chacun son nom
+  dessous ; en bas au milieu **JOUER**, qui déroule ses modes depuis le bas, dans l'ordre Histoire, Sans fin,
+  **Affrontement** (seulement quand une course a au moins deux joueurs ; l'hôte la lance d'ici). Défis arrive par
+  le bord droit ; chaque écran ou panneau arrive du côté de son bouton (`go_from`, `_slide`). Un toucher ailleurs,
+  ou Retour, range la liste et les défis.
+- **Boutons en bois** (les dessins PixelLab du 22/11, `assets/src/ui-bois`) : `tools/make_wood_ui.py` en tire tout
+  le jeu de boutons (hauteurs 30, 38, 50, 58, carrés 28, 36, 42, quatre états, vert, rouge, or) dans
+  `assets/img/ui-v2/wood/`, rangées entières ajoutées ou ôtées au milieu, jamais étirées. Les boutons de pierre
+  deviennent le skin **« Pierre du temple »** (cible « Boutons » de l'onglet Skins : urnes ou éclats) ; le porter
+  ou l'ôter reconstruit l'interface à l'écran suivant.
+- **Temple en 3 couches** (PixelLab, sommet complété par retouche, `tools/split_temple.py`) : derrière le sol (la
+  pyramide et son sanctuaire), sur le sol (le porche, sa porte bloquée de rochers, les marches), devant Pépito
+  (deux piliers-jaguars : il passe derrière celui de droite). Sa porte reste au même endroit du monde.
+- **Monticules** : celui de la 0.49 assombri et trois nouveaux (pierres gravées, souche creuse, tronc couché),
+  tous ramenés à la même clarté (`tools/prep_mounds.py`), en alternance derrière les plateformes.
+- **Plateformes en pente** (fixe) dans les passages en hauteur de la forêt : la moitié reste plate, les autres
+  montent de 0,7 ou 1,1 m, seule la dernière d'un passage peut descendre ; ses pièces et sa gemme suivent la
+  pente ; dessinée colonne par colonne (`render._sloped`). Réglages : `[plateformes]` d'`equilibrage.txt`.
+  `tests/slopes_050.gd` (21 vérifications).
+- **Écran de chargement** (navigateur) : `html/shell.src.html`, avec ses images intégrées par `html/make_shell.py`
+  dans `html/shell.html` (le gabarit de l'export web). Une des quatre poursuites au hasard (pygmées après Pépito,
+  un missile après tout le monde, un pygmée après le gorille, le rhino après deux pygmées) : ils arrivent par la
+  gauche, courent sur place pendant le chargement, repartent à droite quand l'accueil est prêt
+  (`window.jlReady`), puis fondu. Pépito est dessiné par le jeu lui-même (`tools/make_loading_sprites.gd`).
+  Pour l'essayer : `?chase=1` à `4` choisit la poursuite, `?lent=5` les laisse courir 5 s au moins.
+- **Relique jaguar** (proposition B3) : sans son treillis ni ses lianes, coupée en cinq (`tools/cut_relic.py`,
+  `assets/img/relic/`) : cœur, couronne (jade), tête gauche (ambre), mâchoire (lune), tête droite (braise). Pas
+  encore montrée dans le jeu.
+- Bancs : t047 (la Corne de brousse) ne compte plus le gorille, qui perche à 400 et demande un double saut.
 
 ## 0.49.1
 

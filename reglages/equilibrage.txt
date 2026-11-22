@@ -109,6 +109,14 @@ premiere                      | 300 / 380        # m, de … à …
 suivantes                     | 170 / 300        # m après la précédente
 epaisseur                     | 65       # % de la hauteur d'un couloir pour les bestioles et leur bande rouge (couloirs inchangés)
 
+[plateformes]
+# 0.50 : dans la forêt, les plateformes des passages en hauteur peuvent être en pente (fixe, elles ne bougent pas).
+# Seule la dernière d'un passage peut descendre : si une plateforme du milieu descendait, la suivante serait trop
+# haute pour un saut.
+plates                        | 50          # % des plateformes de la forêt qui restent plates
+pente en montee               | 0.7 / 1.1   # m : de combien leur bord droit est plus haut (l'une ou l'autre valeur)
+pente en descente             | 0.7 / 1.1   # m : de combien plus bas (la dernière d'un passage seulement)
+
 [agencement]
 # 0.49 : une fois la vitesse plafonnée, la difficulté vient de l'agencement des dangers, de plus en plus
 # entre « plus dur dès » et « au plus dur à » : écarts entre les motifs plus courts (jamais moins que ce qu'un

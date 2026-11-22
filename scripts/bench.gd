@@ -354,6 +354,15 @@ func _tour48() -> void:
 				main.refresh_menu()
 			"bare": main.ui.visible = arg != "on"
 			"go": main.go(arg)
+			"slopes":                                 # three forest platforms ahead: rising, flat, falling
+				var r: Game.Run = main.run
+				var x0 = r.cam + 1000
+				Game.add_hill(r, x0 - 100, 1300, 320)
+				r.hills[-1].isles = true
+				r.hills[-1].biome = 0
+				Game.add_isle(r, x0, Game.GROUND - 130, 1).slope = -45
+				Game.add_isle(r, x0 + 340, Game.GROUND - 250, 2).slope = 0
+				Game.add_isle(r, x0 + 760, Game.GROUND - 170, 1).slope = 45
 			"play":
 				main.save["mode"] = "endless"
 				main.go("play")
@@ -377,7 +386,8 @@ func _tour50() -> void:
 			[6.6, "wood", ""], [6.7, "go", "settings"], [7.6, "shot", "50-09-reglages"], [7.7, "go", "menu"],
 			[8.6, "shot", "50-10-accueil-temple"], [8.7, "play", ""], [9.3, "shot", "50-11-depart"], [10.6, "shot", "50-12-explosion"],
 			[11.6, "shot", "50-13-sortie"], [12.4, "shot", "50-14-pilier"], [13.2, "shot", "50-15-pilier-bis"],
-			[13.5, "quit", ""],
+			[13.3, "slopes", ""], [13.5, "shot", "50-16-pentes"], [14.3, "shot", "50-17-pentes-bis"], [15.1, "shot", "50-18-pentes-ter"],
+			[15.5, "quit", ""],
 		]
 	while tour_i < steps50.size() and t >= steps50[tour_i][0]:
 		var st = steps50[tour_i]
@@ -412,6 +422,15 @@ func _tour50() -> void:
 				main.save["skins"]["worn"].erase("buttons")
 				main.rebuild_due = true
 			"go": main.go(arg)
+			"slopes":                                 # three forest platforms ahead: rising, flat, falling
+				var r: Game.Run = main.run
+				var x0 = r.cam + 1000
+				Game.add_hill(r, x0 - 100, 1300, 320)
+				r.hills[-1].isles = true
+				r.hills[-1].biome = 0
+				Game.add_isle(r, x0, Game.GROUND - 130, 1).slope = -45
+				Game.add_isle(r, x0 + 340, Game.GROUND - 250, 2).slope = 0
+				Game.add_isle(r, x0 + 760, Game.GROUND - 170, 1).slope = 45
 			"play":
 				main.save["mode"] = "endless"
 				main.go("play")

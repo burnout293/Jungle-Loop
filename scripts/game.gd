@@ -256,6 +256,12 @@ const LANE := {"low": 28.0, "mid": 115.0, "high": 250.0, "vine": 470.0}
 const PAD_BOB := 8.0
 const PAD_SPEED := 1.8
 const ISLE_W := [240.0, 240.0, 300.0]       # (0.49: the forest's two drawn platforms: 107 and 133 art pixels to walk on)
+# 0.50 (reglages/equilibrage.txt [plateformes]): the forest's platforms of the "hills" stretch may slope (fixed).
+# ISLE_FLAT of them stay flat; the others' right end stands higher by one of ISLE_UP. Only the last one of the
+# stretch may go down (ISLE_DOWN): one going down, the next would be out of reach of a jump.
+static var ISLE_FLAT := 0.5
+static var ISLE_UP := [27.0, 45.0]
+static var ISLE_DOWN := [27.0, 45.0]
 const CRUISE_H := 150.0
 const CRUISE_TIME := 4.0
 const DART_ALTS := [[46.0, 170.0], [46.0, 170.0, 290.0], [46.0, 170.0, 290.0, 400.0, 510.0]]
@@ -442,8 +448,9 @@ class Coin:
 
 class Plat:
 	var x := 0.0
-	var y := 0.0
+	var y := 0.0                   # its top at its left end
 	var w := 254.0
+	var slope := 0.0               # 0.50: how much lower its right end stands (negative: higher), fixed: top_at
 	var kind := ""
 	var t := 0.0
 	var bobbing := false
@@ -1258,6 +1265,10 @@ static func add_hill(run: Run, x: float, w: float, h: float) -> void:
 	hl.seed = floori(wrnd(0, 1e6))
 	run.hills.append(hl)
 
+## A platform's top under x (0.50: a sloped one rises or falls evenly from one end to the other).
+static func top_at(pl: Plat, x: float) -> float:
+	return pl.y + pl.slope * clampf((x - pl.x) / pl.w, 0.0, 1.0)
+
 static func add_isle(run: Run, x: float, y: float, size: int) -> Plat:
 	var pl = Plat.new()
 	pl.x = x
@@ -1664,6 +1675,7 @@ static func spawn_pattern(run: Run) -> void:
 			var n: int = wpick([2, 3, 3]) if tier >= 1 else wpick([2, 2, 3])
 			var rise = 125.0 if tier >= 1 else 105.0     # a plain jump reaches 120
 			var ix = x + wrnd(20, 80)
+			var last: Plat = null
 			for k in n:
 				var size: int = wpick([0, 1, 1, 2])
 				var lvl_k = 1 if (k == n - 1 and n > 2) else k
@@ -1671,12 +1683,22 @@ static func spawn_pattern(run: Run) -> void:
 				var pl: Plat
 				if PLAT_KIND[biome_at(run, ix)] == "isle":
 					pl = add_isle(run, ix, iy, size)
+					if biome_at(run, ix) == 0 and W.randf() >= ISLE_FLAT:   # 0.50: the forest's may slope, fixed
+						var tilts: Array = ISLE_UP.map(func(v): return -float(v))   # (up; the last one down too)
+						if k == n - 1:
+							tilts.append_array(ISLE_DOWN)
+						pl.slope = wpick(tilts)
 				else:
 					pl = add_platform(run, ix, iy)
-				coin_line(run, ix + 30, iy - 40, maxi(2, floori((pl.w - 60) / 44)))
+				for c in maxi(2, floori((pl.w - 60) / 44)):   # its coins follow its top
+					coin(run, ix + 30 + c * 44, top_at(pl, ix + 30 + c * 44) - 40)
 				ix += pl.w + wrnd(70, 150)
-			if W.randf() < 0.3 + 0.2 * road_luck(run):
-				coin(run, ix - 120, G - 130 - (n - 1) * rise - 110, gem(run))
+				last = pl
+			if W.randf() < 0.3 + 0.2 * road_luck(run):    # (0.50: 110 above the last one's top under it, slope or not)
+				var gy = G - 130 - (n - 1) * rise - 110
+				if last != null and ix - 120 > last.x and ix - 120 < last.x + last.w:
+					gy = minf(gy, top_at(last, ix - 120) - 110)
+				coin(run, ix - 120, gy, gem(run))
 			if x > 70 * PPM and W.randf() < 0.65:     # below, a hedgehog: up there is the safe way
 				add_spiky(run, x + wrnd(0.3, 0.6) * (ix - x))
 			extent = maxf(w, ix - x)
@@ -2916,7 +2938,7 @@ static func hitboxes(run: Run) -> Dictionary:
 	else:
 		box.call(px - COIN_HALF, px + COIN_HALF, p.y - tall - COIN_TOP, p.y + COIN_UNDER, "coins")
 	for pl in run.plats:
-		box.call(pl.x - HERO_HALF, pl.x + pl.w + HERO_HALF, pl.y, pl.y, "ledge")
+		box.call(pl.x - HERO_HALF, pl.x + pl.w + HERO_HALF, minf(pl.y, pl.y + pl.slope), maxf(pl.y, pl.y + pl.slope), "ledge")
 	var f = run.fm
 	if f != null and not f.ghost and not f.hit:
 		for k in FM_LANES:
@@ -3362,7 +3384,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				p.plat = null
 				p.jumps = 1
 			if p.ground and p.plat != null:
-				p.y = p.plat.y                       # a pad carries him up and down
+				p.y = top_at(p.plat, px)             # a pad carries him up and down, a slope up or down
 			if p.ground and p.plat == null:          # on a slope he follows it; where the floor gives way, he falls
 				if fl - p.y > 40:
 					p.ground = false
@@ -3406,8 +3428,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				var on = null
 				if p.vy > 0:                         # ledges only catch a falling hero
 					for pl in run.plats:
-						if before <= pl.y and p.y >= pl.y and px > pl.x - HERO_HALF and px < pl.x + pl.w + HERO_HALF:
-							land = pl.y
+						var top = top_at(pl, px)
+						if before <= top + absf(pl.slope) * 0.05 and p.y >= top and px > pl.x - HERO_HALF and px < pl.x + pl.w + HERO_HALF:
+							land = top
 							on = pl
 							break
 				if not is_nan(land):
