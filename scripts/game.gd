@@ -146,12 +146,20 @@ static var JUMP_HELD := 1500.0
 # The flyer: a "!" at the right edge shows its height DART_WARN seconds before it crosses the screen; while it
 # shows, it drifts lazily towards his height (late: DART_LAG, never faster than DART_TRACK units a second), and
 # (0.54) stops following him DART_FREEZE seconds before it goes: the height it will cross at is known by then.
+# 0.55: only those aimed at him (the Vol) follow his height; on foot each keeps the height it was laid at, never
+# the one the flyer before it had (dart_alt). An aimed one that would cross where the last one did (within
+# DART_SPREAD) is moved 1.6 DART_SPREAD up or down as it stops: never twice in a row at the same height.
 # On foot, the flyers of a wave are DART_FOOT_GAP seconds apart at least: each one can be jumped.
 const DART_W := 64.0 * SIZE
 const DART_H := 40.0 * SIZE
 static var DART_WARN := 2.0
 static var DART_TRACK := 160.0
 static var DART_FREEZE := 1.0
+const DART_SPREAD := 80.0
+const DART_FAIR := 300.0          # (0.55) on foot: what is checked round where a flyer meets him (_dart_lane)
+const DART_LOW_MAX := 100.0       # ... a flyer lower than this is jumped; up to DART_HIGH_MAX, stayed under
+const DART_HIGH_MAX := 230.0
+const JUMP_TOP := 200.0           # ... the height a jump reaches (held), over the floor
 const DART_LAG := 1.6
 const DART_FOOT_GAP := 0.85
 static var DART_SPEED := 800.0
@@ -337,13 +345,14 @@ const WAVE_JUMP := 0.8
 # screen, goes on ahead at BRAKE_PACE of his speed: it stays in sight a long time.
 static var BONUS_EVERY := [1400.0, 2400.0]   # metres between two
 # 0.47: what floats there, alone (for two: nothing, their bubble is their second chance). BONUS_SHARE: the
-# hourglass's share, then the feather's; the rest an urn, once a run at most, from URN_FROM metres.
+# hourglass's share, then what was the feather's (0.55: an hourglass too); the rest an urn, once a run at most,
+# from URN_FROM metres.
 static var BONUS_SHARE := [0.4, 0.45]
 static var URN_FROM := 600.0
-# The consumables (main.gd offers them for 3 s out of the temple, one only): the Aimant simple works as the
-# Aimant at this level; the Idole dorée adds this share to every coin picked up.
-static var CONS_MAGNET := 2
-static var IDOL_MUL := 0.5
+# 0.55, equipped (Run illimitée only): the Idole dorée adds IDOL_MUL[level] to every coin picked up; the Corne
+# de brousse: out of the temple on the rhino, for HORN_M[level] metres.
+const IDOL_MUL := [0.0, 0.25, 0.5, 0.75]
+const HORN_M := [0.0, 300.0, 500.0, 800.0]
 const BONUS_LOW := 60.0                 # (0.44: a much wider zigzag, BONUS_ZIG seconds each way)
 const BONUS_HIGH := 290.0
 const BONUS_ZIG := 0.7
@@ -465,6 +474,7 @@ class Obs:
 	var drop := false
 	var aim := false         # a flyer that takes his height when its "!" shows (the Vol)
 	var alt := 0.0           # a flyer gone across: its height over the floor, kept all the way
+	var meet := 0.0          # (0.55) on foot: where it will meet him (worked out as it stops)
 	var y0 := 0.0            # a red spider: the middle of its course, and how far it goes each way
 	var amp := 0.0
 	var puddle := false
@@ -565,6 +575,7 @@ class Gone:
 class Mount:
 	var kind := ""
 	var t := 0.0
+	var until := 0.0         # (0.55) the Corne de brousse's rhino: the distance it goes to (0: its own time)
 
 class Boss:
 	var phase := "enter"
@@ -725,23 +736,21 @@ class Run:
 	var zone_k := 1.0              # (unused)
 	var mounts: Array = ["gorilla", "rhino", "dragonfly"]   # the animals that may wait on the road (Montures: on / off)
 	var brake := 0.0               # what the brakes picked up take off his speed, for good
-	var bonuses: Array = []        # the rare floating things (Item: kind "brake", "feather" or "urn")
+	var bonuses: Array = []        # the rare floating things (Item: kind "brake" or "urn")
 	var urn_laid := false          # an urn floats once a run at most
-	var feathers := 0              # picked up this run: toucan feathers (to change an objective), urns
-	var urns := 0
+	var urns := 0                  # picked up this run
 	var lanterns := 0              # the forest's lanterns lit as he ran past (0.47: the escape's zone grows)
-	var shield := false            # the consumables taken out of the temple (main.gd): the old wooden shield,
-	var cons_magnet := false       # the Aimant simple, the Idole dorée (and what it has added so far, in
-	var idol := false              # hundredths)
+	var idol := 0.0                # the Idole dorée equipped: the share it adds (and what it has added so far)
 	var idol_acc := 0.0
-	var offered := false           # the consumables have been offered (main.gd)
-	var knives := 0                # the Couteaux suisses in stock (main.gd sets it), and the escapes made this run
+	var knives := 0                # (0.47-0.54: the Couteaux suisses in stock; none since), the escapes made this run
 	var free_knives := 0           # (0.54) the escapes the Couteau suisse equipped still gives this run
 	var escapes := 0
 	var next_bonus := 0.0          # metres
 	var camp_y := 0.0              # the height he has kept (the Vol), and for how long
 	var camp_t := 0.0
 	var last_gap := -1             # the gap of the last column of spiders
+	var last_alt := -1.0           # (0.55) the height of the last flyer laid on foot, and of the last aimed one gone
+	var last_aim := -999.0
 	var fatal := false             # the blow that ends the run has been dealt ("fatal" event: the photo)
 	var spider_xs: Array = []         # where the road laid its spiders (the columns, see add_hover)
 	# Coop (coop.gd): two phones, two heroes, one road. No mount nor hourglass then (they change a
@@ -768,6 +777,7 @@ class Run:
 	var cliff_x := -INF                # ... the cliff's edge (where the heights begin)
 	var soar := 0.0                    # ... off it: falling, whatever is pressed, until the Vol takes him
 	var escort := 0.0                  # ... Histoire: the guards on their gliders behind him (seconds left)
+	var spectating := false            # (0.55) fallen in an Affrontement: he watches the others (spectate)
 	var glide_go := false              # ... and off the cliff they have jumped (a line said « deltaplanes »)
 	var say_queue: Array = []          # ... the lines still to say
 	var talk_zones: Array = []         # ... where they talk: {at, x0, x1, lines, on, wait, done}
@@ -1026,6 +1036,7 @@ static func new_run(upgrades: Dictionary, mode: String = "story", seed_: int = -
 	run.monster.full = MONSTER_CD[mini(run.lvl("monster"), MONSTER_CD.size() - 1)]
 	run.rewind_left = 1 if run.lvl("rewind") > 0 else 0
 	run.free_knives = SWISS_FREE[mini(run.lvl("swiss"), SWISS_FREE.size() - 1)] if mode != "story" else 0
+	run.idol = IDOL_MUL[mini(run.lvl("idol"), IDOL_MUL.size() - 1)] if mode == "endless" else 0.0   # (0.55)
 	run.next_mount = wrnd(MOUNT_FIRST[0], MOUNT_FIRST[1]) / friend(run)
 	run.next_fm = wrnd(FM_FIRST[0], FM_FIRST[1])
 	run.boss_at = BOSS_AT + wrnd(-100, 100)
@@ -1403,10 +1414,8 @@ static func _wave(run: Run, x: float, tier: int) -> float:
 		var alt = 170.0
 		if tier >= 2:
 			alt = wpick(DART_ALTS[2])
-		elif i == 0 and W.randf() < 0.5:
-			alt = 46.0                               # first: a low one, then room to land
-		elif tier == 1 and W.randf() < 0.4:
-			alt = 290.0                              # passes over a short jump, under nothing: never in the way
+		else:                                        # (0.55) on foot: a low one (jump), a high one (stay down)...
+			alt = dart_alt(run, tier)                # never twice the same in a row
 		var o = add_dart(run, x + at * v, alt)
 		o.aim = tier >= 2
 		at += dt_ if tier >= 2 else maxf(dt_, DART_FOOT_GAP)   # (on foot: each one can be jumped, they follow him)
@@ -1437,7 +1446,7 @@ static func _nest(run: Run, x: float) -> float:
 		add_hover(run, at, h)
 	return (n - 1) * NEST_STEP + HOVER_W
 
-## A rare floating thing: an hourglass (a brake), a toucan's feather or, once a run, an urn, zigzagging up and
+## A rare floating thing: an hourglass (a brake) or, once a run, an urn (0.55: no feather), zigzagging up and
 ## down within reach of a jump. For two: nothing (the hourglass would change one player's speed; the bubble is
 ## their second chance).
 static func add_bonus(run: Run, x: float) -> void:
@@ -1450,7 +1459,7 @@ static func add_bonus(run: Run, x: float) -> void:
 	if roll < BONUS_SHARE[0]:
 		it.kind = "brake"
 	elif roll < BONUS_SHARE[0] + BONUS_SHARE[1] or run.urn_laid or x / PPM < URN_FROM:
-		it.kind = "feather"
+		it.kind = "brake"                            # (0.55: where a feather was; the road's dice unchanged)
 	else:
 		it.kind = "urn"
 		run.urn_laid = true
@@ -1470,7 +1479,73 @@ static func add_dart(run: Run, x: float, alt: float, own: bool = false) -> Obs:
 	o.t = 0
 	o.ph = rnd(0, 6) if own else wrnd(0, 6)      # (own: sent at him, at a moment of his: not the road's dice)
 	o.own = own
+	o.alt = alt                                  # (0.55: on foot, the height it crosses at)
 	return o
+
+## 0.55, on foot: a flyer crosses where he will be some way on (DART_FREEZE + its crossing), whatever is there.
+## Laid low (to be jumped) or high (to stay under), it must not meet what asks the other: a high one where a
+## jump is needed (something standing in his way, a hole), a low one where a jump is barred (something at the
+## height of the jump). As it stops, it takes the other height if that one fits, or goes if none does.
+static func _dart_lane(run: Run, o: Obs, px: float) -> void:
+	var v = maxf(run.speed, 1.0)
+	var cross = (run.cam + run.view_w + 60 - px) / (DART_SPEED + v)
+	var meet = px + v * (DART_FREEZE + cross)
+	o.meet = meet
+	var asks = _asks(run, run.obs, run.pits, meet - DART_FAIR, meet + DART_FAIR)
+	var jump_needed: bool = asks[0]
+	var jump_barred: bool = asks[1]
+	var low = o.alt < DART_LOW_MAX
+	if low and jump_barred:
+		if jump_needed:
+			o.gone = true                                # (neither height leaves a way: it does not come)
+		else:
+			o.alt = DART_ALTS[0][1]
+	elif not low and o.alt < DART_HIGH_MAX and jump_needed:
+		if jump_barred:
+			o.gone = true
+		else:
+			o.alt = DART_ALTS[0][0]
+
+## 0.55: what the road between x0 and x1 asks of him on foot: [a jump is needed (something standing in his
+## way, a hole), a jump is barred (something at the height of the jump)].
+static func _asks(run: Run, obs: Array, pits: Array, x0: float, x1: float) -> Array:
+	var jump_needed = false
+	var jump_barred = false
+	for q in obs:
+		if q.gone or q.kind == "dart" or q.x + q.w < x0 or q.x > x1:
+			continue
+		var f = floor_at(run, q.x + q.w / 2)
+		var top = f - (q.y - q.amp)                      # its highest point over the floor, and its lowest
+		var bottom = f - (q.y + q.h + q.amp)
+		if bottom < HERO_H - 6:
+			jump_needed = true
+		if top > HERO_H - 6 and bottom < JUMP_TOP:
+			jump_barred = true
+	for hp in pits:
+		if hp.x1 > x0 and hp.x0 < x1:
+			jump_needed = true
+	return [jump_needed, jump_barred]
+
+## 0.55: road laid after a flyer on foot stopped (its height known): if what is laid where it meets him asks
+## the other way (a jump under a high one, no jump over a low one), it does not come.
+static func _darts_vs_new(run: Run, obs0: int, pits0: int) -> void:
+	if obs0 >= run.obs.size() and pits0 >= run.pits.size():
+		return
+	var fresh = run.obs.slice(obs0)
+	var holes = run.pits.slice(pits0)
+	for o in run.obs:
+		if o.kind != "dart" or o.gone or o.aim or o.meet <= 0:
+			continue
+		var asks = _asks(run, fresh, holes, o.meet - DART_FAIR, o.meet + DART_FAIR)
+		if (o.alt < DART_LOW_MAX and asks[1]) or (o.alt >= DART_LOW_MAX and o.alt < DART_HIGH_MAX and asks[0]):
+			o.gone = true
+
+## 0.55: a flyer's height on foot (not aimed at him): one of the tier's, never the last flyer's again.
+static func dart_alt(run: Run, tier: int) -> float:
+	var alts: Array = DART_ALTS[mini(tier, 1)].filter(func(h): return absf(h - run.last_alt) > 1)
+	var a: float = wpick(alts)
+	run.last_alt = a
+	return a
 
 static func coin_line(run: Run, x: float, y: float, n: int) -> void:
 	for i in n:
@@ -1524,6 +1599,28 @@ static func scatter(run: Run, start: int) -> void:
 # ---------- spawning ----------
 # One pattern at run.next_x, then a gap sized on the current speed so it stays fair. What can appear
 # depends on what the player owns: nothing asks for a skill not bought yet.
+
+## 0.55, the Affrontement: fallen, he watches another runner. The camera follows `x` (where that one is,
+## world), the road goes on being laid ahead of it (the same seed: the same road as theirs), the hanging
+## dangers move; nothing touches anybody.
+static func spectate(run: Run, dt: float, x: float) -> void:
+	W = run.rng
+	run.t += dt
+	var want = x - run.home
+	run.cam = want if absf(want - run.cam) > 1500 else lerpf(run.cam, want, minf(1.0, dt * 5.0))
+	for o in run.obs:
+		if o.kind == "hover" and o.amp > 0:
+			o.y = o.y0 - sin(run.t * TAU / SPIDER_PERIOD + o.ph) * o.amp
+	run.obs = run.obs.filter(func(o): return not o.gone and o.x + o.w > run.cam - 120)
+	run.plats = run.plats.filter(func(pl): return pl.x + pl.w > run.cam - 120)
+	run.coins = run.coins.filter(func(c): return c.x > run.cam - 200)
+	while run.terrain.size() > 2 and run.terrain[1].x < run.cam - 300:
+		run.terrain.pop_front()
+	var edge = run.cam + run.view_w + 200
+	var n = 0
+	while run.next_x < edge and n < 80:
+		spawn_pattern(run)
+		n += 1
 
 ## (0.54) The forest ends at a cliff over the heights' mist: the floor climbs to it, runs flat to its edge
 ## and drops; the heights begin at its edge. A few coins along its top, nothing else.
@@ -1745,7 +1842,7 @@ static func spawn_pattern(run: Run) -> void:
 			add_spiky(run, x + d)
 			extent = d + SPIKY_W
 		"fly":
-			add_dart(run, x, wpick(DART_ALTS[tier])).aim = tier >= 2
+			add_dart(run, x, wpick(DART_ALTS[tier]) if tier >= 2 else dart_alt(run, tier)).aim = tier >= 2
 			extent = 120
 		"skycoins":                                  # (0.53) the heights: coins in the air (0.54: a gentle wave)
 			var h0: float = wpick([170.0, 250.0, 330.0])
@@ -1967,7 +2064,7 @@ static func spawn_pattern(run: Run) -> void:
 	if gap > GAP_FILL and x / PPM >= FROM_MID and clear and W.randf() < 0.5:
 		add_hover(run, x + extent + gap * 0.5, HEAD)
 	elif gap > GAP_FILL and x / PPM >= FROM_DARTS and clear and W.randf() < (0.35 if tier >= 2 else 0.15) + PRESS_FILL * press:
-		add_dart(run, x + extent + gap * 0.5, 170).aim = tier >= 2
+		add_dart(run, x + extent + gap * 0.5, 170.0 if tier >= 2 else dart_alt(run, tier)).aim = tier >= 2
 	if x / PPM > 70 and not boss_road(run, x) and W.randf() < DECOR_RATE and not sky:
 		add_decor(run, x + extent + gap * wrnd(0.3, 0.6))     # something to smash
 	if x / PPM > 40 and kind != "hills" and W.randf() < 0.22 and not sky:
@@ -2444,6 +2541,8 @@ static func _boss_step(run: Run, d: float) -> void:
 			loot(run, run.cam + run.sx + wrnd(100, 300), GROUND - 200)
 			run.coins[run.coins.size() - 1].gem = g
 		run.events.append("bossdown")
+		run.urns += 1                                # (0.55) an urn for her (the urns are won, never bought)
+		run.events.append("urn")
 		if run.mode == "story" and run.chap < 1:     # 0.49: her piece of the relic (0.53: the crown, the Vol), at once
 			run.won = 0
 			if run.coop or not run.sky_ok:           # (0.54) alone, its Vol comes as he falls off the cliff
@@ -2620,13 +2719,6 @@ static func hit(run: Run, o: Obs) -> void:
 		o.gone = true
 	if run.mount != null:
 		dismount(run)
-		return
-	if run.shield:                                   # the old wooden shield takes the blow, and breaks
-		run.shield = false
-		run.p.inv = HURT_INV
-		run.shake = 0.45
-		burst(run, run.cam + run.sx - 14, run.p.y - 40, Color("#a8763e"), 18, 320)
-		run.events.append("shield")
 		return
 	if not run.god:                                  # the debug menu's invincibility
 		run.hearts -= 1
@@ -2982,28 +3074,24 @@ static func _release(run: Run) -> void:
 		part(run, x + rnd(-40, 40), p.y - rnd(0, 40), rnd(-260, 260), rnd(-320, -60), rnd(0.4, 0.8), colour_of(["#e0c98e", "#8a5a2b", "#fff3a8"]), rnd(4, 9), 700)
 	run.events.append("free")
 
-## Coins picked up: with the Idole dorée, IDOL_MUL more (its fractions kept until they make a coin).
+## Coins picked up: with the Idole dorée, IDOL_MUL[level] more (its fractions kept until they make a coin).
 static func add_gold(run: Run, v: int) -> void:
 	var extra = 0
-	if run.idol:
-		run.idol_acc += v * IDOL_MUL
+	if run.idol > 0:
+		run.idol_acc += v * run.idol
 		extra = floori(run.idol_acc)
 		run.idol_acc -= extra
 	run.gold += v + extra
 
-## The Corne de brousse: an animal answers, and waits for him just ahead (one he lets on the road, any if none).
+## 0.55, the Corne de brousse equipped (Run illimitée, alone): out of the temple on the rhino's back, for
+## HORN_M[level] metres (then it goes, as when its time is up).
 static func call_mount(run: Run) -> void:
-	var kinds: Array = run.mounts if not run.mounts.is_empty() else MOUNT_KINDS
-	var it = Item.new()
-	it.kind = pick(kinds)
-	var px = run.cam + run.sx
-	it.x = px + 520
-	it.ph = rnd(0, ZIG_PERIOD * 2)
-	it.y = floor_at(run, it.x) - ZIG_LOW
-	run.items.append(it)
-	for o in run.obs:                                # nothing in the way to it
-		if o.x + o.w > px + 60 and o.x < it.x + 260:
-			o.gone = true
+	var mt = Mount.new()
+	mt.kind = "rhino"
+	mt.until = run.dist + HORN_M[mini(run.lvl("horn"), HORN_M.size() - 1)]
+	run.mount = mt
+	run.p.inv = maxf(run.p.inv, 0.5)
+	burst(run, run.cam + run.sx, run.p.y - 60, Color("#ffd35c"), 16, 260)
 	run.events.append("horn")
 
 static func die(run: Run) -> void:
@@ -3312,6 +3400,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.boom = 1
 		if run.lvl("flight") > 0:
 			run.p.cruise = CRUISE_TIME               # with the Vol, he flies out of the doorway
+		if run.lvl("horn") > 0 and run.mode == "endless" and not run.coop and run.mount == null:
+			call_mount(run)                          # (0.55) the Corne de brousse: out on the rhino
 		for i in 46:                                 # the doorway bursts outward in blocks of stone and moss
 			part(run, rnd(60, 130), GROUND - rnd(40, 220), rnd(80, 900), rnd(-760, -40), rnd(0.8, 1.7), colour_of(["#8a8fa8", "#6a6f8c", "#4a4f6c", "#7bd13c", "#cfd3e6"]), rnd(8, 22), 1500)
 		for i in BLAST_COINS:                        # the temple's gold flies out: real coins, which bounce and wait
@@ -3777,10 +3867,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			if it.y < p.y - tall_b - 30 or it.y > p.y + 10:
 				continue
 			it.gone = true
-			if it.kind == "feather":
-				run.feathers += 1
-				burst(run, it.x, it.y, Color("#ffb03c"), 16, 260)
-			elif it.kind == "urn":
+			if it.kind == "urn":
 				run.urns += 1
 				burst(run, it.x, it.y, Color("#ffd35c"), 22, 300)
 			else:
@@ -3793,7 +3880,10 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		if run.mount != null:
 			run.mount.t += dt
 			var time: float = MOUNTS[run.mount.kind].get("time", 0.0)
-			if time > 0 and run.mount.t >= time:
+			if run.mount.until > 0:                  # (0.55) the Corne's rhino: as far as it said
+				if run.dist >= run.mount.until:
+					dismount(run, true)
+			elif time > 0 and run.mount.t >= time:
 				dismount(run, true)
 		for it in run.items:
 			var tame = run.lvl(it.kind + "Tamed")           # Dompté (each animal its own): it waits for him, and reaches out
@@ -3856,15 +3946,32 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 					run.events.append("warn")
 				if o.state == "warn":
 					o.x = run.cam + run.view_w + 60
+					var was_t = o.t
 					o.t += d
-					# its "!" follows his height while it shows, then (0.54) stays still its last DART_FREEZE seconds
-					if o.t < DART_WARN - DART_FREEZE:
-						var alt = clampf(floor_at(run, px) - (p.y - tall / 2), DART_ALTS[0][0], DART_TOP)
+					var still = DART_WARN - DART_FREEZE
+					if not o.aim:                    # (0.55) on foot: the height it was laid at, over his floor
+						if was_t < still and o.t >= still and run.mount == null and not o.own:
+							_dart_lane(run, o, px)   # (as it stops: a height that leaves him a way through)
+						o.y = floor_at(run, px) - o.alt - DART_H / 2
+					elif o.t < still:                # its "!" follows his height, then (0.54) stays still its last
+						var alt = clampf(floor_at(run, px) - (p.y - tall / 2), DART_ALTS[0][0], DART_TOP)   # seconds
 						var want = floor_at(run, px) - alt - DART_H / 2   # (lazily: it lags behind him, slowly)
 						o.y = move_toward(o.y, want, minf(DART_TRACK * d, absf(want - o.y) * (1.0 - exp(-DART_LAG * d))))
+					elif was_t < still and not o.own:   # (0.55) as it stops: never where the last one crossed
+						var fl_ = floor_at(run, px)
+						var a = fl_ - (o.y + DART_H / 2)
+						if absf(a - run.last_aim) < DART_SPREAD:   # (the nearer to him of the two, off the last one's)
+							var up = run.last_aim + DART_SPREAD * 1.6
+							var down = run.last_aim - DART_SPREAD * 1.6
+							var up_ok = up <= DART_TOP
+							var down_ok = down >= DART_ALTS[0][0]
+							a = up if up_ok and (not down_ok or absf(up - a) <= absf(down - a)) else down
+							o.y = fl_ - clampf(a, DART_ALTS[0][0], DART_TOP) - DART_H / 2
 					if o.t >= DART_WARN:
 						o.state = "go"
 						o.alt = floor_at(run, px) - (o.y + DART_H / 2)   # (over the floor: a dip on the way changes nothing)
+						if o.aim and not o.own:
+							run.last_aim = o.alt
 						run.events.append("dart")
 				if o.state == "go":
 					o.x -= DART_SPEED * d
@@ -3977,8 +4084,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	place_signs(run)
 	# --- spawning ---
 	var edge = run.cam + run.view_w + 200
+	var obs0 = run.obs.size()
+	var pits0 = run.pits.size()
 	while run.next_x < edge and not road_held(run):
 		spawn_pattern(run)
+	_darts_vs_new(run, obs0, pits0)                  # (0.55) a flyer stopped where the new road asks otherwise
 
 	for z in run.talk_zones:                         # Histoire: the guards start talking here
 		if run.coop:
@@ -4069,8 +4179,6 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 
 	# --- coins and gems ---
 	var reach: float = MAGNET[run.lvl("magnet")]
-	if run.cons_magnet:                              # the Aimant simple (a consumable)
-		reach = maxf(reach, MAGNET[mini(CONS_MAGNET, MAGNET.size() - 1)])
 	var mm = run.lvl(run.mount.kind + "Magnet") if run.mount != null else 0   # the mount's own Aimant
 	if mm > 0:
 		reach = maxf(reach, MOUNT_MAGNET[mini(mm, MOUNT_MAGNET.size() - 1)])

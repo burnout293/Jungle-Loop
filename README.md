@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.54.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.55.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,42 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.55.0
+
+- **Une seule monnaie** (`reglages/decisions-economie.md`, partie 1 validée) : plus d'éclats, de plumes de toucan,
+  de Tambours ni de consommables en stock (Bouclier, Aimant simple, Couteau suisse en stock). Une sauvegarde
+  d'avant reçoit des pièces à la place (`STOCK_COINS` 200 par objet, `FEATHER_COINS` 25, `SHARD_COINS` 40 ; une
+  fois : ces champs ne sont plus gardés). **Équipements** à trois niveaux, en Run illimitée : Corne de brousse
+  (`horn` : sortie du temple sur le rhino, 300 / 500 / 800 m, `HORN_M`, `Mount.until`), Idole dorée (`idol` : +25 /
+  50 / 75 % de pièces, `IDOL_MUL`), Couteau suisse (0.54). **Skins en pièces** selon leur rareté (commun 2500,
+  rare 10 000, légendaire 50 000 ; doublon d'urne 400 / 1500 / 5000 pièces : `Treasure.cfg`, `[urnes]`). Urnes :
+  pièces ou skins ; une de plus pour Vorace battue. Les plumes deviennent **un défi changé gratuit par jour**
+  (`Progress.reroll_free`, `rerollDay`). Sur la route, la plume devient un sablier (le dé de la route inchangé).
+- **Missiles** : à pied, ils gardent la hauteur où ils sont posés (au ras du sol : sauter ; plus haut : rester
+  au sol) et jamais deux fois de suite la même (`dart_alt`) ; seuls ceux du Vol suivent ta hauteur, et un missile
+  qui passerait où le précédent est passé est décalé (`DART_SPREAD`). À pied, en se figeant, un missile regarde ce
+  qui l'attend là où il te croisera (`_dart_lane`, `_asks`) : si sa hauteur y rendait le passage impossible (haut
+  alors qu'il faut sauter, bas alors qu'on ne peut pas sauter), il prend l'autre, ou ne vient pas ; la route posée
+  ensuite dans cette zone est vérifiée aussi (`_darts_vs_new`). fair_bfs et fair_bfs_coop : 0 passage impossible.
+- **Affrontement** (`race.gd`) : accès Jouer → Affrontement (un groupe se crée s'il n'y en a pas) ; « Prêt ! »
+  pour chacun, « Lancer » pour l'hôte quand tous le sont (`all_ready`, `set_ready`) ; mise libre de 0 à 99 999 999
+  (champ + 100 / 500 / 1000 / 5000) ; qui a misé sur le plus loin reçoit le double de sa mise, rien d'autre
+  (`settle`) ; l'écran montre les places (le skin de chacun), tes pièces, l'équipement de la course (celui de
+  l'hôte), l'historique des courses du groupe (mises et distances, `history`). En course : l'équipement en haut
+  à gauche, les mises de chacun en haut à droite (`board`), plus de pause ; tombé, tu **regardes** les autres
+  (`Game.spectate`, la route continue d'être posée devant celui que tu suis ; une touche : un autre) jusqu'au
+  résultat.
+- **Liens qui tombent** (rotation, autre appli) : « déconnecté » n'est plus la fin avant 6 s (`DOWN_GRACE`, aussi à
+  deux) ; la place d'un invité attend 90 s (`AWAY_KEEP`), il se reconnecte seul par la salle (`_relink`, toutes les
+  12 s, 80 s au plus) et retrouve sa place, sa mise ; l'hôte rouvre la salle avant que le serveur l'oublie et le
+  dit à tous. Après une rotation, chaque écran est reconstruit **avec ses infos** (Affrontement, Amis compris), les
+  fenêtres ouvertes sont fermées, l'image du jeu est recalculée aussitôt (`fit`).
+- **Accueil** : le groupe (le skin et le nom de chacun) à droite de JOUER ; plus de bouton Tambours. **Amis →
+  Groupe** : seulement le groupe (ses places, inviter des amis, son code, le quitter) ; jouer à deux se lance depuis
+  la fiche d'un ami.
+- Tests : `tests/eco_055.gd` (24 vérifications), `tests/race_logic.gd` (29 : Prêt, double, historique,
+  reconnexion). Banc `--tour55` (avec une rotation). Le banc `--tour47` est retiré.
 
 ## 0.54.0
 

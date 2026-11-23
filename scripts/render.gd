@@ -1137,7 +1137,7 @@ func stride(th: float) -> Dictionary:
 	return {"x": -1 - 8 * cos(th), "y": -4.5 - 6 * up, "r": 0.5 * sin(2 * th) if up > 0 else 0.0}
 
 func _draw_hero_layer(c: CanvasItem) -> void:
-	if run == null or not Art.ready or (run.dead and not show_dead and not planted()):
+	if run == null or not Art.ready or (run.dead and not show_dead and not planted()) or run.spectating:
 		return
 	if run.caught != null:                           # Histoire: caught by the guards
 		draw_capture(c)
@@ -1150,14 +1150,6 @@ func _draw_hero_layer(c: CanvasItem) -> void:
 		return
 	draw_hero(c, seat)
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
-	if run.shield and run.leap == null and run.mount == null:              # the old wooden shield on his back (0.47)
-		var sh: Texture2D = Art.tex.get("pick-shield")
-		if sh != null:
-			var hx = sx(run.cam + run.sx)
-			var hy = n(run.p.y)
-			big(c, hx, hy)
-			c.draw_texture(sh, Vector2(snap(hx - 17), snap(hy - 30)))
-			unbig(c)
 
 # The partner is Pépito too, his colours turned round the wheel: green leaves go orange, the teal scarf gold.
 const MATE_SHADER := """
@@ -1243,17 +1235,15 @@ func _draw_rival_names(c: CanvasItem) -> void:
 		else:
 			label(c, name, x, y, col, false, true)
 
-## The race's places, top right under the pause button: « 1 LÉO 1236 M », mine in gold, the fallen in grey.
+## 0.55, the Affrontement: everyone's bet, top right: « LÉO 500 SUR TOI », mine in gold, the fallen in grey.
 func _draw_race_board(c: CanvasItem) -> void:
 	var x1 = view_w - 6
-	var y = 34.0
-	rect(c, x1 - 96, y - 3, 96, 10 * run.board.size() + 4, Color(0.09, 0.11, 0.2, 0.72))
-	var i = 0
+	var y = 22.0
+	rect(c, x1 - 150, y - 3, 150, 10 * run.board.size() + 4, Color(0.09, 0.11, 0.2, 0.72))
 	for e in run.board:
-		i += 1
 		var col: Color = Color("#8a93a8") if e["out"] else (Color("#ffd35c") if e["me"] else e["colour"])
-		label(c, "%d %s" % [i, e["name"]], x1 - 92, y, col)
-		label(c, "%d M" % int(e["dist"]), x1 - 3, y, col, true)
+		label(c, str(e["name"]), x1 - 146, y, col)
+		label(c, str(e.get("bet", "")), x1 - 3, y, col, true)
 		y += 10
 
 ## A line of the pixel typeface, outlined in dark: at x (left, right or centre), y its top.

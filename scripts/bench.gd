@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -39,9 +39,9 @@ func _ready() -> void:
 			"still": opts["still"] = true
 			"hitbox": opts["hitbox"] = true
 			"tour": opts["tour"] = true
-			"tour47": opts["tour47"] = true        # 0.47's new things in pictures: urns, skins, the offer, the escape
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour55": opts["tour55"] = true        # 0.55's: the group on the home screen, the Affrontement, watching, skins in coins
 			"tour54": opts["tour54"] = true        # 0.54's: a hollow under a mound, the cliff (Histoire), the leap, the gliders, the heights
 			"tour53": opts["tour53"] = true        # 0.53's: the misty heights (flying only), seen from the forest's edge
 			"tour52": opts["tour52"] = true        # 0.52's: Réglages without Son, the temple seen from the side and its camera, the heights
@@ -124,7 +124,7 @@ func _start() -> void:
 		o.biome = r.biome
 		Game.add_bonus(r, px + 330)
 		Game.add_bonus(r, px + 420)
-		r.bonuses[0].kind = "feather"
+		r.bonuses[0].kind = "brake"
 		r.bonuses[1].kind = "urn"
 		Game.add_hover(r, px + 760, Game.HEAD)
 		Game.add_hover(r, px + 900, Game.LOW)
@@ -138,9 +138,6 @@ func _process(delta: float) -> void:
 	if opts["tour"]:
 		await _tour()
 		return
-	if opts["tour47"]:
-		await _tour47()
-		return
 	if opts["tour48"]:
 		await _tour48()
 		return
@@ -152,6 +149,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour55"]:
+		await _tour55()
 		return
 	if opts["tour54"]:
 		await _tour54()
@@ -242,96 +242,6 @@ func _shoot(delta: float) -> void:
 		var im := get_viewport().get_texture().get_image()
 		im.save_png(opts["shots"].path_join("shot-%03d.png" % shot_n))
 		shot_n += 1
-
-## --tour47: the 0.47 things, in pictures: the Trésor and its urns, the Skins tab, the feathers on the
-## objectives, the consumables offered out of the temple, the shield, the capture far away and the escape.
-func _tour47() -> void:
-	var steps = [
-		[0.5, "setup", ""], [1.0, "shot", "47-01-menu-urns"],
-		[1.1, "treasure", ""], [1.8, "shot", "47-02-treasure"],
-		[1.9, "urn", ""], [2.9, "shot", "47-03-urn-open"],
-		[3.0, "urnleg", ""], [4.0, "shot", "47-04-urn-legendary"],
-		[4.1, "untreasure", ""], [4.2, "go", "shop"], [4.3, "tab", "skin"], [5.3, "shot", "47-05-skins"],
-		[5.4, "skin", "pepito-autumn"], [6.6, "shot", "47-06-skin-pepito"],
-		[6.7, "skin", "gorilla-yeti"], [7.9, "shot", "47-07-skin-gorilla"],
-		[8.0, "skin", "pygmies-fire"], [8.05, "scrolldown", ""], [8.9, "shot", "47-08-skin-pygmies"],
-		[9.0, "go", "menu"], [9.8, "shot", "47-09-menu-feathers"],
-		[9.9, "play", ""], [12.6, "shot", "47-10-offer"], [12.7, "take", "shield"], [13.4, "shot", "47-11-shield"],
-		[13.5, "fall", ""], [14.1, "shot", "47-12-they-come"], [15.0, "shot", "47-13-cloud"],
-		[18.4, "shot", "47-14-knife-offer"], [18.6, "knife", ""], [19.0, "shot", "47-15-escape"],
-		[19.1, "autoesc", ""], [22.5, "shot", "47-16-free"],
-		[22.6, "pause", ""], [22.7, "go", "menu"], [23.6, "shot", "47-17-menu-drums"],
-		[23.7, "go", "drums"], [24.6, "shot", "47-18-drums-intro"], [24.7, "drumsgo", ""], [25.0, "autodrum", ""],
-		[30.0, "shot", "47-19-drums-play"], [36.0, "shot", "47-20-drums-faster"], [60.0, "shot", "47-21-drums-end"],
-		[60.1, "quit", ""],
-	]
-	if opts.get("autodrum", false) and main.drums != null:   # a fair drummer: most beats, some a little late, a few missed
-		for nn in main.drums.notes:
-			if nn["hit"] == "" and not nn.has("tried") and main.drums.t >= nn["t"] + nn.get("late", 0.0):
-				nn["tried"] = true
-				if randf() < 0.85:
-					main.drums_hit(nn["lane"])
-			if nn["hit"] == "" and not nn.has("late"):
-				nn["late"] = randf_range(-0.02, 0.1)
-	if opts.get("autoesc", false) and main.run != null and main.run.caught != null and main.run.caught.phase == "escape":
-		var e = main.run.caught.esc
-		if absf(e.cur - e.zone) < e.w * 0.3:
-			main.press()
-	while tour_i < steps.size() and t >= steps[tour_i][0]:
-		var st = steps[tour_i]
-		tour_i += 1
-		var arg: String = st[2]
-		match st[1]:
-			"shot":
-				await RenderingServer.frame_post_draw
-				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
-			"setup":
-				var s: Dictionary = main.save
-				s["seenIntro"] = true
-				s["mode"] = "endless"
-				s["urns"] = 4
-				s["feathers"] = 2
-				s["shards"] = 130
-				s["best"] = 2000
-				s["stock"] = {"shield": 2, "magnet": 1, "idol": 1, "horn": 1, "knife": 2}
-				s["skins"]["owned"] = ["pepito-autumn"]
-				main.refresh_menu()
-			"treasure": main._treasure()
-			"untreasure": main._close_treasure()
-			"urn": main._break_urn()
-			"urnleg":
-				main.save["urnPity"]["l"] = 49
-				main._break_urn()
-			"go": main.go(arg)
-			"tab":
-				main.tab = arg
-				main.refresh_shop()
-			"skin":
-				main.picked_skin = arg
-				main.refresh_shop()
-			"scrolldown":
-				var sc: ScrollContainer = main.w["shop-scroll"]
-				sc.scroll_vertical = 100000
-			"play":
-				main.save["mode"] = "endless"
-				main.go("play")
-			"take": main._take(arg)
-			"fall":
-				var r = main.run
-				r.shield = false
-				r.obs.clear()
-				r.god = false
-				r.hearts = 1
-				r.p.inv = 0
-				if r.mount != null:
-					Game.dismount(r)
-				Game.hit(r, null)
-			"knife": main._use_knife()
-			"autoesc": opts["autoesc"] = true
-			"pause": main.pause()
-			"drumsgo": main._drums_start()
-			"autodrum": opts["autodrum"] = true
-			"quit": get_tree().quit()
 
 ## --tour48: 0.48 in pictures. With --mock, only the pictures the mock-ups are drawn on (the home screen
 ## and a run without any of the interface over them).
@@ -583,6 +493,111 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour55: 0.55 in pictures: a group of three made up (looks, bets, ready or not, two races in its history),
+## the home screen with it, the Affrontement's screen, Amis → Groupe, the skins in coins, the Trésor, the day's
+## free change of an objective; then an Affrontement run (the items top left, the bets top right, no pause), a
+## fall, and the race watched (Léo made up, running ahead).
+var steps55: Array = []
+var rival55 := false
+
+func _tour55() -> void:
+	if steps55.is_empty():
+		steps55 = [
+			[0.5, "setup", ""], [0.7, "go", "menu"], [1.6, "shot", "55-01-accueil-groupe"],
+			[1.7, "modes", ""], [2.4, "shot", "55-02-jouer"], [2.5, "go", "race"], [3.3, "shot", "55-03-affrontement"],
+			[3.4, "ready", ""], [3.8, "shot", "55-04-tous-prets"],
+			[3.9, "go", "friends"], [4.0, "frtab", "group"], [4.8, "shot", "55-05-amis-groupe"],
+			[4.9, "go", "shop"], [5.0, "tab", "skin"], [5.9, "shot", "55-06-skins"],
+			[6.0, "go", "menu"], [6.1, "treasure", ""], [6.9, "shot", "55-07-tresor"], [7.0, "untreasure", ""],
+			[7.1, "quests", ""], [7.9, "shot", "55-08-defis"],
+			[8.0, "race", ""], [13.0, "shot", "55-09-course"], [14.5, "shot", "55-10-course-bis"],
+			[14.6, "die", ""], [17.5, "shot", "55-11-spectateur"], [19.5, "shot", "55-12-spectateur-bis"],
+			[19.6, "end", ""], [20.0, "go", "race"], [20.4, "rotate", "portrait"], [21.2, "shot", "55-13-debout"],
+			[21.3, "rotate", "landscape"], [22.4, "shot", "55-14-apres-rotation"], [22.6, "quit", ""],
+		]
+	if rival55 and main.run != null and main.run.race:   # Léo, ahead, running on (his states as the host passes them on)
+		var r: Game.Run = main.run
+		var rc: Race = main.race
+		if not rc.trails.has(1):
+			rc.trails[1] = Race.Trail.new()
+		var lx = 900.0 + r.t * 560.0
+		rc.trails[1].push({"at": r.t, "x": lx, "y": Game.floor_at(r, lx), "vy": 0.0, "g": true, "f": false, "ph": r.t * 9.0, "d": floori(lx / Game.PPM)}, r.t)
+		rc.seats[1]["dist"] = floori(lx / Game.PPM)
+	while tour_i < steps55.size() and t >= steps55[tour_i][0]:
+		var st = steps55[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				var sv: Dictionary = main.save
+				sv["seenIntro"] = true
+				sv["coins"] = 23450
+				sv["xp"] = 40000.0
+				sv["urns"] = 2
+				sv["upgrades"] = {"magnet": 2, "dash": 1, "horn": 2, "flight": 1}
+				sv["equipped"] = ["magnet", "dash", "horn"]
+				sv["skins"]["owned"] = ["pepito-frost"]
+				sv["skins"]["worn"] = {"pepito": "pepito-frost"}
+				Skins.apply(sv["skins"]["worn"])
+				_fake_friends51()
+				var rc: Race = main.race
+				rc.invited = {}
+				rc.seats = {0: {"name": "Pépito", "code": "PEPI-6ZAW", "skin": "pepito-frost", "on": 0, "bet": 500, "ready": true},
+					1: {"name": "Léo", "code": "PEPI-K7QM", "skin": "pepito-ember", "on": 1, "bet": 1000, "ready": false},
+					2: {"name": "Inès", "code": "PEPI-INES", "skin": "pepito-amethyst", "on": 1, "bet": 100, "ready": true}}
+				rc.kit = SaveData.loadout(sv)
+				rc.races = 2
+				rc.history = [
+					{"n": 2, "rows": [{"k": 0, "name": "Pépito", "bet": 500, "on": 0, "dist": 1840, "got": 1000, "win": true},
+						{"k": 1, "name": "Léo", "bet": 1000, "on": 1, "dist": 1210, "got": 0, "win": false},
+						{"k": 2, "name": "Inès", "bet": 100, "on": 0, "dist": 760, "got": 200, "win": false}]},
+					{"n": 1, "rows": [{"k": 0, "name": "Pépito", "bet": 0, "on": 0, "dist": 950, "got": 0, "win": false},
+						{"k": 1, "name": "Léo", "bet": 250, "on": 1, "dist": 1430, "got": 500, "win": true},
+						{"k": 2, "name": "Inès", "bet": 0, "on": 2, "dist": 400, "got": 0, "win": false}]},
+				]
+				main.refresh_menu()
+			"go": main.go(arg)
+			"modes": main._home_modes(true)
+			"ready":
+				for k in main.race.seats:
+					main.race.seats[k]["ready"] = true
+				main.refresh_race()
+			"frtab":
+				main.friends_tab = arg
+				main.refresh_friends()
+			"tab":
+				main.tab = arg
+				main.refresh_shop()
+			"treasure": main._treasure()
+			"untreasure": main._close_treasure()
+			"quests": main._home_quests(true)
+			"race":                                   # an Affrontement run, the group's three running
+				main._home_quests(false)
+				main.race.running = true
+				main.race_start = {"seed": 77, "biome": 0, "tier": 0, "up": main.race.kit, "at": 0.0}
+				main.go("play")
+				main.run.god = true
+				rival55 = true
+			"end":                                    # (the race made up ends: the screen of the group again)
+				rival55 = false
+				main.race.running = false
+				main.race.seats[0]["done"] = false
+			"rotate":                                 # the phone turned upright, then back (0.55: all shown again)
+				var wsz = get_window().size
+				get_window().size = Vector2i(mini(wsz.x, wsz.y), maxi(wsz.x, wsz.y)) if arg == "portrait" else Vector2i(1280, 720)
+			"die":
+				var r: Game.Run = main.run
+				r.god = false
+				r.hearts = 1
+				r.p.inv = 0
+				if r.mount != null:
+					Game.dismount(r)
+				Game.hit(r, null)
 			"quit": get_tree().quit()
 
 ## --tour54: 0.54 in pictures: Histoire (the temple's talk left out), a hollow laid under a mound, then Vorace

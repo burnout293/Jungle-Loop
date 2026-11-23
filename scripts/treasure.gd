@@ -3,27 +3,18 @@ extends RefCounted
 ## The temple's urns (0.47): one per level reached, sometimes one floating on the road. Broken open (main.gd,
 ## the Trésor), each is common, rare or legendary; a rare one comes at the latest every cfg.rare_pity urns,
 ## a legendary one every cfg.leg_pity. A common or rare urn gives one thing drawn from its table (by weight),
-## a legendary one everything on its table. A skin already owned gives its shards (éclats) instead, and shards
-## buy the skin one wants (the shop's Skins tab). Everything here is read over these defaults from
-## reglages/progression.txt, section [urnes] (load_config).
+## a legendary one everything on its table. 0.55 (reglages/decisions-economie.md): one money only, the coins;
+## a skin already owned gives coins instead (about 15 % of its price), and the skins are bought with coins (the
+## shop's Skins tab), at the price of their rarity. Urns are won (levels, the boss, the road), never bought.
+## Everything here is read over these defaults from reglages/progression.txt, section [urnes] (load_config).
 
-static var cfg := {"rare": 15.0, "legendary": 2.0, "rare_pity": 10, "leg_pity": 50, "skin_shards": 60, "dup_shards": 30}
-# what: coins, feather, shards, skin, or a consumable's id; n: from / to; w: its weight in the draw
+static var cfg := {"rare": 15.0, "legendary": 2.0, "rare_pity": 10, "leg_pity": 50,
+	"price": {"standard": 2500, "rare": 10000, "legendary": 50000}, "dup": {"standard": 400, "rare": 1500, "legendary": 5000}}
+# what: coins or skin; n: from / to; w: its weight in the draw
 static var table := {
-	"common": [
-		{"what": "coins", "n": [150, 400], "w": 30}, {"what": "feather", "n": [1, 1], "w": 12},
-		{"what": "shield", "n": [1, 1], "w": 12}, {"what": "magnet", "n": [1, 1], "w": 12},
-		{"what": "idol", "n": [1, 1], "w": 8}, {"what": "horn", "n": [1, 1], "w": 8},
-		{"what": "shards", "n": [10, 20], "w": 18},
-	],
-	"rare": [
-		{"what": "knife", "n": [1, 1], "w": 30}, {"what": "skin", "n": [1, 1], "w": 30},
-		{"what": "coins", "n": [1000, 2000], "w": 15}, {"what": "shards", "n": [40, 60], "w": 25},
-	],
-	"legendary": [
-		{"what": "coins", "n": [3000, 5000], "w": 1}, {"what": "knife", "n": [2, 2], "w": 1},
-		{"what": "shards", "n": [80, 80], "w": 1}, {"what": "skin", "n": [1, 1], "w": 1},
-	],
+	"common": [{"what": "coins", "n": [150, 400], "w": 70}, {"what": "skin", "n": [1, 1], "w": 30}],
+	"rare": [{"what": "skin", "n": [1, 1], "w": 50}, {"what": "coins", "n": [1000, 2000], "w": 50}],
+	"legendary": [{"what": "coins", "n": [3000, 5000], "w": 1}, {"what": "skin", "n": [1, 1], "w": 1}],
 }
 const RARITY_KEYS := {"commune": "common", "commun": "common", "rare": "rare", "legendaire": "legendary", "légendaire": "legendary"}
 const NAMES := {"common": "Commune", "rare": "Rare", "legendary": "Légendaire"}
@@ -49,8 +40,12 @@ static func load_config(text: String) -> void:
 				"legendaire", "légendaire": cfg["legendary"] = float(cols[1])
 				"rare garantie": cfg["rare_pity"] = maxi(1, int(cols[1]))
 				"legendaire garantie", "légendaire garantie": cfg["leg_pity"] = maxi(1, int(cols[1]))
-				"eclats pour un skin", "éclats pour un skin": cfg["skin_shards"] = maxi(1, int(cols[1]))
-				"eclats d'un doublon", "éclats d'un doublon": cfg["dup_shards"] = maxi(0, int(cols[1]))
+				"skin commun": cfg["price"]["standard"] = maxi(1, int(cols[1]))
+				"skin rare": cfg["price"]["rare"] = maxi(1, int(cols[1]))
+				"skin legendaire", "skin légendaire": cfg["price"]["legendary"] = maxi(1, int(cols[1]))
+				"doublon commun": cfg["dup"]["standard"] = maxi(0, int(cols[1]))
+				"doublon rare": cfg["dup"]["rare"] = maxi(0, int(cols[1]))
+				"doublon legendaire", "doublon légendaire": cfg["dup"]["legendary"] = maxi(0, int(cols[1]))
 		elif cols.size() >= 4 and RARITY_KEYS.has(key):
 			var rar: String = RARITY_KEYS[key]
 			var n = Array(cols[2].split("/")).map(func(c): return int(c.strip_edges()))
@@ -64,8 +59,7 @@ static func load_config(text: String) -> void:
 
 static func _what(word: String) -> String:
 	var w = word.to_lower()
-	return {"pieces": "coins", "pièces": "coins", "plume": "feather", "eclats": "shards", "éclats": "shards", "bouclier": "shield",
-		"aimant": "magnet", "idole": "idol", "corne": "horn", "couteau": "knife"}.get(w, w)
+	return {"pieces": "coins", "pièces": "coins"}.get(w, w)
 
 ## Breaks one urn of the save: what it gave, already in the save. {rarity, got: [{what, n, name, icon, id}]}.
 static func open(save: Dictionary) -> Dictionary:
@@ -109,30 +103,25 @@ static func grant(save: Dictionary, what: String, n: int) -> Dictionary:
 		"coins":
 			save["coins"] += n
 			return {"what": what, "n": n, "name": "%d pièces" % n, "icon": "coin-icon"}
-		"feather":
-			var paid = Progress.add_feathers(save, n)
-			return {"what": what, "n": n, "name": "Plume de toucan" if paid == 0 else "Plume de toucan (+%d pièces)" % paid, "icon": "ico-feather"}
-		"shards":
-			save["shards"] = int(save["shards"]) + n
-			return {"what": what, "n": n, "name": "%d éclats" % n, "icon": "gem-b"}
 		"skin":
-			var free = Skins.CATALOG.filter(func(s): return s["rarity"] == "standard" and not s["id"] in save["skins"]["owned"])
-			if free.is_empty():                       # every skin owned: its shards instead
-				return grant(save, "shards", int(cfg["dup_shards"]))
-			var sk: Dictionary = free[randi() % free.size()]
-			save["skins"]["owned"].append(sk["id"])
-			return {"what": what, "n": 1, "id": sk["id"], "name": "Skin : %s %s" % [Skins.TARGETS[sk["target"]]["name"], sk["name"]], "icon": "ico-star"}
-	var c = SaveData.consumable(what)
-	if c.is_empty():
-		return grant(save, "coins", 100)
-	SaveData.give(save, what, n)
-	return {"what": what, "n": n, "name": c["name"] + ("" if n == 1 else " ×%d" % n), "icon": "ico-" + c["icon"]}
+			var pick = Skins.CATALOG[randi() % Skins.CATALOG.size()]
+			if pick["id"] in save["skins"]["owned"]:  # a skin already owned: coins instead (0.55)
+				var dup = int(cfg["dup"].get(pick["rarity"], 400))
+				save["coins"] += dup
+				return {"what": "coins", "n": dup, "name": "Doublon (%s %s) : %d pièces" % [Skins.TARGETS[pick["target"]]["name"], pick["name"], dup], "icon": "coin-icon"}
+			save["skins"]["owned"].append(pick["id"])
+			return {"what": what, "n": 1, "id": pick["id"], "name": "Skin : %s %s" % [Skins.TARGETS[pick["target"]]["name"], pick["name"]], "icon": "ico-star"}
+	return grant(save, "coins", 100)
 
-## A skin bought with shards. False if not enough, or already owned.
+## A skin's price in coins (0.55: the price of its rarity).
+static func skin_price(id: String) -> int:
+	return int(cfg["price"].get(Skins.skin(id).get("rarity", "standard"), 2500))
+
+## A skin bought with coins. False if not enough, or already owned.
 static func buy_skin(save: Dictionary, id: String) -> bool:
-	var cost = int(cfg["skin_shards"])
-	if id in save["skins"]["owned"] or int(save["shards"]) < cost or Skins.skin(id).is_empty():
+	var cost = skin_price(id)
+	if id in save["skins"]["owned"] or int(save["coins"]) < cost or Skins.skin(id).is_empty():
 		return false
-	save["shards"] = int(save["shards"]) - cost
+	save["coins"] = int(save["coins"]) - cost
 	save["skins"]["owned"].append(id)
 	return true

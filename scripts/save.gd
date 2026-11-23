@@ -27,7 +27,9 @@ static var UPGRADES := [
 	{"id": "tnt", "unlock": 9, "icon": "tnt", "kind": "actif", "name": "Fana de TNT", "desc": "Faire sauter l'entrée du temple à chaque nouvelle tentative ne vous suffit plus. Vous allez répandre le chaos dans cette jungle maudite !", "costs": [3000, 6000, 12000]},
 	{"id": "slow", "unlock": 7, "icon": "slow", "kind": "actif", "name": "Sablier", "desc": "Ralentit le temps quelques secondes.", "costs": [1800, 4000]},
 	{"id": "monster", "unlock": 8, "icon": "monster", "kind": "actif", "name": "RedMonster", "desc": "Une boisson confectionnée à partir de jus d'une créature rouge surexcitée. Qui pourrait bien boire un truc pareil ?", "costs": [2500, 5000, 10000]},
-	{"id": "swiss", "unlock": 4, "icon": "knife", "kind": "passif", "name": "Couteau suisse", "desc": "Capturé par les pygmées, tu ronges tes liens et tu t'évades, une fois par course. Niveau 2 : plus facile. Niveau 3 : deux évasions.", "costs": [1500, 3500, 8000]},
+	{"id": "swiss", "unlock": 4, "icon": "knife", "kind": "passif", "name": "Couteau suisse", "desc": "Sans fin : capturé par les pygmées, tu ronges tes liens et tu t'évades, une fois par course. Niveau 2 : plus facile. Niveau 3 : deux évasions.", "costs": [1500, 3500, 8000]},
+	{"id": "horn", "unlock": 4, "icon": "horn", "kind": "passif", "name": "Corne de brousse", "desc": "Sans fin : le rhino répond à l'appel, et tu sors du temple sur son dos. Il t'emmène 300 m, puis 500 m, puis 800 m.", "costs": [1500, 4000, 9000]},
+	{"id": "idol", "unlock": 5, "icon": "idolgold", "kind": "passif", "name": "Idole dorée", "desc": "Sans fin : les pièces ramassées valent 25 % de plus, puis 50 %, puis 75 %.", "costs": [2000, 6000, 15000]},
 	{"id": "lastLeap", "unlock": 6, "icon": "leap", "kind": "passif", "name": "Dernier élan", "desc": "Au dernier cœur perdu, tu rebondis encore pour gagner quelques mètres.", "costs": [1600, 3600, 7200]},
 	{"id": "flight", "unlock": 10, "icon": "flight", "kind": "passif", "power": true, "name": "Vol", "desc": "En l'air, chaque appui te fait remonter d'un coup d'hélice. Relâche : tu retombes. Niveaux 2 et 3 : tu montes plus vite.", "costs": [4800, 7000, 10000]},
 	{"id": "sprint", "unlock": 8, "icon": "shoes", "kind": "passif", "power": true, "name": "Sprint", "desc": "Cours plus vite dès le départ, les jambes en tourbillon.", "costs": [4000]},
@@ -41,16 +43,14 @@ static var UPGRADES := [
 	{"id": "dragonflyMagnet", "unlock": 4, "icon": "magnet", "kind": "passif", "power": true, "family": "mount", "mount": "dragonfly", "name": "Aimant de la libellule", "short": "Aimant", "desc": "Sur la libellule, les pièces viennent à toi, de plus en plus loin à chaque niveau.", "costs": [1500, 3500]},
 ]
 
-# The consumables (0.47), kept in stock (save.stock: id -> how many). Out of the temple, those in stock are
-# offered for 3 s and one may be taken (main.gd); the Couteau suisse is never offered: it is used from the
-# stock when the pygmies have caught him (the escape).
-const CONSUMABLES := [
-	{"id": "shield", "icon": "shield", "name": "Bouclier", "desc": "Un vieux bouclier en bois : il encaisse le prochain coup, puis se brise."},
-	{"id": "magnet", "icon": "magnet", "name": "Aimant simple", "desc": "Attire les pièces proches pendant toute la course."},
-	{"id": "idol", "icon": "idolgold", "name": "Idole dorée", "desc": "Toutes les pièces ramassées valent 50 % de plus pendant la course."},
-	{"id": "horn", "icon": "horn", "name": "Corne de brousse", "desc": "Un animal répond à l'appel et t'attend juste à la sortie du temple."},
-	{"id": "knife", "icon": "knife", "name": "Couteau suisse", "stock": true, "desc": "Capturé par les pygmées, tu peux t'en servir pour ronger tes liens et t'évader."},
-]
+# The consumables (0.47 to 0.54, kept in stock) are gone in 0.55: the Corne de brousse, the Idole dorée and the
+# Couteau suisse are upgrades to equip, the Bouclier and the Aimant simple are no more (reglages/
+# decisions-economie.md). A save that had some in stock gets STOCK_COINS coins for each; the toucan's feathers
+# (FEATHER_COINS each) and the shards (SHARD_COINS each, the only other money) are paid in coins too.
+const CONSUMABLES := []
+const STOCK_COINS := 200
+const FEATHER_COINS := 25
+const SHARD_COINS := 40
 
 static func consumable(id: String) -> Dictionary:
 	for c in CONSUMABLES:
@@ -136,7 +136,7 @@ static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
 		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
-		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "feathers": 0, "stock": {}, "urns": 0, "urnPity": {"r": 0, "l": 0}, "shards": 0, "skins": {"owned": [], "worn": {}}, "drums": {"day": "", "best": 0}, "online": {}, "mountsOff": [], "xpv": 2, "relic": 0, "storyTry": 0}
+		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "rerollDay": "", "stock": {}, "urns": 0, "urnPity": {"r": 0, "l": 0}, "skins": {"owned": [], "worn": {}}, "online": {}, "mountsOff": [], "xpv": 2, "relic": 0, "storyTry": 0}
 
 static func _int(x) -> int:
 	if (x is int or x is float) and x > 0 and is_finite(float(x)):
@@ -199,11 +199,14 @@ static func sanitize(raw) -> Dictionary:
 	var xp = raw.get("xp")
 	s["xp"] = float(xp) if (xp is int or xp is float) and xp > 0 else 0.0
 	s["questsDone"] = _int(raw.get("questsDone"))
-	s["feathers"] = mini(_int(raw.get("feathers")), int(Progress.cfg["feather_max"]))
 	s["urns"] = _int(raw.get("urns"))
-	s["shards"] = _int(raw.get("shards"))
-	if raw.get("drums") is Dictionary:               # the drums: the day of the last reward, the best score
-		s["drums"] = {"day": str(raw["drums"].get("day", "")), "best": mini(100, _int(raw["drums"].get("best")))}
+	# 0.55: one money only. What a save of before still holds is paid in coins (once: it is not kept)
+	s["coins"] += mini(_int(raw.get("feathers")), 99) * FEATHER_COINS + _int(raw.get("shards")) * SHARD_COINS
+	if raw.get("stock") is Dictionary:
+		for id in raw["stock"]:
+			s["coins"] += mini(_int(raw["stock"][id]), 999) * STOCK_COINS
+	if raw.get("rerollDay") is String:               # the day the free change of an objective was used (0.55)
+		s["rerollDay"] = str(raw["rerollDay"]).left(10)
 	if raw.get("urnPity") is Dictionary:             # urns opened since the last rare, the last legendary
 		s["urnPity"] = {"r": _int(raw["urnPity"].get("r")), "l": _int(raw["urnPity"].get("l"))}
 	var sk = raw.get("skins")
@@ -217,11 +220,6 @@ static func sanitize(raw) -> Dictionary:
 				var id = sk["worn"][target]
 				if id is String and id in s["skins"]["owned"] and Skins.skin(id).get("target") == target:
 					s["skins"]["worn"][target] = id
-	if raw.get("stock") is Dictionary:               # the consumables in stock (0.47)
-		for c in CONSUMABLES:
-			var n = _int(raw["stock"].get(c["id"]))
-			if n > 0:
-				s["stock"][c["id"]] = n
 	if raw.get("questSteps") is Dictionary:          # how many times each kind of objective was completed
 		for k in raw["questSteps"]:
 			if Progress.KINDS.has(k) and _int(raw["questSteps"][k]) > 0:

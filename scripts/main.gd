@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.54.0"
+const VERSION := "0.55.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -125,17 +125,15 @@ var update_offered := false            # 0.49.1: the update offered once this se
 const INVITE_SCREENS := ["menu", "shop", "friends", "over", "tally", "settings"]
 var friends_tab := "list"              # Amis: list, group, scores (0.51)
 var board: Array = []                  # the friends' board, as the server sent it
-var offer_t := 0.0                     # the consumables offered out of the temple: seconds left (0.47)
 var treasure: CanvasLayer = null       # the Trésor (0.47): the urns to break, what is in the bag
 var urn_busy := false                  # an urn is being broken (its shake): one at a time
 var picked_skin := ""                  # the shop's Skins tab: the row picked ("<target>:" for an original look)
-var drums: Drums = null                # the pygmies' drums (0.47), while played
-var drums_daily := false               # ... for today's reward (else for practice)
-var drums_tick := 0                    # ... the next shaker to hear
 var race: Race                         # 0.48: the race for four (race.gd)
 var race_start := {}                   # a race about to start: {seed, biome, tier, up, at}
 var race_send_t := 0.0
 var race_seen := true                  # the last race's result has been looked at (the lobby shows again)
+var watch_k := -1                      # (0.55) fallen in a race: the place of the one I watch
+var look_cache := {}                   # (0.55) Pépito in each skin (the group's looks): skin id -> texture
 var race_note := ""                    # a word for the race screen (who left...)
 var race_count := -1                   # the second of the count before the start last shown
 var board_cache: Array = []            # the friends' list as last heard: their records on the road (signs)
@@ -147,7 +145,6 @@ const OFFER_TIME := 3.0
 func _ready() -> void:
 	Progress.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))   # prices, levels, objectives
 	Treasure.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))   # the urns (0.47)
-	Drums.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))      # the drums' rewards (0.47)
 	Tune.load_file()                              # reglages/equilibrage.txt: the game's numbers (before Debug takes its origin)
 	Game.set_talks(FileAccess.get_file_as_string("res://reglages/dialogues.txt"))   # Histoire: what the guards say
 	save = SaveData.load_save()
@@ -800,7 +797,6 @@ func _build_screens() -> void:
 	_build_tally()
 	_build_friends()
 	_build_race()
-	_build_drums()
 	var turn = _label("Tourne l'écran pour jouer en grand ↻", ts("m"), INK)   # a phone held upright
 	turn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_place(turn, 0, 74, 569, 20)
@@ -813,6 +809,12 @@ func _build_screens() -> void:
 func _rebuild() -> void:
 	rebuild_due = false
 	_stop_over()
+	for ch in get_children():                        # (0.55) the windows over the screens (a question, the list of
+		if ch is CanvasLayer and ch.layer == 40:     # friends to invite, the Trésor) were sized for the old screen
+			ch.queue_free()
+	modal = null
+	treasure = null
+	urn_busy = false
 	for k in screens:
 		screens[k].queue_free()
 	screens = {}
@@ -832,6 +834,8 @@ func _rebuild() -> void:
 		"menu": refresh_menu()
 		"shop": refresh_shop()
 		"settings": refresh_settings()
+		"race": refresh_race()                       # (0.55: the Affrontement and Amis too, after a turn)
+		"friends": refresh_friends()
 	var name = "hud" if state == "play" else state
 	if screens.has(name):
 		show_screen(name)
@@ -846,6 +850,7 @@ func _rebuild() -> void:
 
 func _on_resized() -> void:
 	_check_turn()
+	fit()                                            # (0.55) the game's picture for the new size at once
 	if save["pixelFont"]:
 		rebuild_due = true                       # soon, or at the next screen change: never in the middle of a run
 		rebuild_t = 0.3
@@ -866,6 +871,16 @@ func _fill_hud() -> void:
 	hearts.visible = run.max_hearts > 1          # a single life needs no counter
 	for k in ACTS:
 		w["btn-" + k].visible = run.lvl(k) > 0
+	w["btn-pause"].visible = not run.coop            # (0.55) for two or more, no pause: the others run on
+	var kit: HBoxContainer = w["hud-kit"]
+	for ch in kit.get_children():
+		kit.remove_child(ch)
+		ch.queue_free()
+	if run.race:                                     # (0.55) the Affrontement: what everyone runs with
+		for u in SaveData.UPGRADES:
+			if run.lvl(u["id"]) > 0:
+				kit.add_child(_icon_rect(icon("ico-" + u["icon"]), 16))
+	w["hud-watch"].visible = run.spectating
 
 func _build_hud() -> void:
 	var s = _screen("hud", false)
@@ -895,6 +910,15 @@ func _build_hud() -> void:
 	w["btn-pause"] = pause_b
 	top.add_child(pause_b)
 	s.add_child(top)
+	w["hud-kit"] = _hbox(3)                          # (0.55) the Affrontement: the items and powers on, top left
+	_place(w["hud-kit"], M, 44, 300, 18)
+	w["hud-kit"].mouse_filter = Control.MOUSE_FILTER_IGNORE
+	s.add_child(w["hud-kit"])
+	w["hud-watch"] = _label("", ts("s"), GOLD, 1)     # (0.55) fallen: who I watch
+	w["hud-watch"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_place(w["hud-watch"], 0, 60, 569, 14)
+	w["hud-watch"].visible = false
+	s.add_child(w["hud-watch"])
 	w["toasts"] = _vbox(4)
 	w["toasts"].set_meta("still", true)
 	w["toasts"].alignment = BoxContainer.ALIGNMENT_BEGIN
@@ -962,17 +986,6 @@ func _build_hud() -> void:
 		w["cd-" + k] = cool
 	_place(acts, 569 - 12 - 300, 320 - 12 - 52, 300, 52)       # room for the five (three at most are equipped)
 	s.add_child(acts)
-	var offer = _hbox(8)                             # 0.47: the consumables in stock, offered for 3 s out of the temple
-	offer.alignment = BoxContainer.ALIGNMENT_BEGIN
-	_place(offer, 12, 320 - 12 - 60, 250, 50)
-	offer.visible = false
-	s.add_child(offer)
-	w["offer"] = offer
-	var ob = _bar(10, 5, GOLD)
-	_place(ob, 12, 320 - 12 - 5, 120, 5)
-	ob.visible = false
-	s.add_child(ob)
-	w["offer-bar"] = ob
 	# 0.47: caught by the pygmies: the Couteau suisse offered, then the escape (a cursor, a zone, the ropes)
 	var esc = PanelContainer.new()
 	esc.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
@@ -1069,7 +1082,7 @@ class Cooldown extends Control:
 		draw_colored_polygon(pts, Color(10 / 255.0, 6 / 255.0, 24 / 255.0, 0.78))
 
 func _build_menu() -> void:
-	# 0.50, home B3: on the left Réglages, Amis, Trésor and Tambours, on the right Améliorations, Skins and
+	# 0.50, home B3: on the left Réglages, Amis and Trésor (0.55: no Tambours), on the right Améliorations, Skins and
 	# Défis, each with its name under it; JOUER at the bottom in the middle, whose list of modes unrolls
 	# upwards (Histoire, Sans fin, and Affrontement when a group is there). What a button opens comes from
 	# its side of the screen (go_from, _slide).
@@ -1091,10 +1104,6 @@ func _build_menu() -> void:
 	w["menu-urns"] = _home_dot(urnb.get_meta("button"), "0", 23)          # a gold count when urns wait
 	w["menu-urns-n"] = w["menu-urns"].get_child(0)
 	w["menu-urns"].visible = false
-	var drumb = _home_square("blank", "ico-drum", 24, "TAMBOURS", func() -> void: go_from("drums", "left"))
-	left.add_child(drumb)
-	w["menu-drumb"] = drumb.get_meta("button")
-	w["menu-drums"] = _home_dot(drumb.get_meta("button"), "!", 25)        # 0.47: today's free game
 	s.add_child(left)
 	# the stone plaque of the title, its letters hopping one after the other
 	var plaque = TextureRect.new()
@@ -1234,6 +1243,11 @@ func _build_menu() -> void:
 	w["menu-info"].set_meta("still", true)
 	w["menu-info"].z_index = 4
 	s.add_child(w["menu-info"])
+	w["menu-group"] = _hbox(4)                       # (0.55) the group's looks and names, right of JOUER
+	w["menu-group"].alignment = BoxContainer.ALIGNMENT_CENTER
+	w["menu-group"].mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(w["menu-group"], 569 / 2.0 + 84 + 8, 320 - M - 50, 150, 48)
+	s.add_child(w["menu-group"])
 	w["menu-loadout"] = _hbox(M)                     # what goes on the next run, left of JOUER
 	w["menu-loadout"].alignment = BoxContainer.ALIGNMENT_CENTER   # one or two items stay in the middle
 	_place(w["menu-loadout"], 569 / 2.0 - 84 - 8 - 140, 320 - M - 46, 140, 42)
@@ -1308,7 +1322,7 @@ func _home_modes(open: bool) -> void:
 		if b.has_meta("tw"):
 			(b.get_meta("tw") as Tween).kill()
 	if open:
-		var listed: Array = modes.get_children().filter(func(b): return b.get_meta("mode") != "race" or _race_ready())
+		var listed: Array = modes.get_children().filter(func(b): return b.get_meta("mode") != "race" or (Net.enabled() and Coop.supported()))
 		for b in modes.get_children():
 			if not b in listed:
 				b.visible = false
@@ -1342,10 +1356,41 @@ func _mode_texts() -> void:
 	var subs = {
 		"story": "%d/4 MORCEAUX · %d VIES" % [int(save["relic"]) + 1, Game.STORY_HEARTS],   # (0.53: the jaw, stolen, counts)
 		"endless": "RECORD %d M" % best_of("endless"),
-		"race": "TON GROUPE · %d/4" % race.count(),
+		"race": ("TON GROUPE · %d/4" % race.count()) if race.role != "" else "CRÉE TON GROUPE",
 	}
 	for b in w["menu-modes"].get_children():
 		(b.get_meta("sub") as Label).text = subs[b.get_meta("mode")]
+
+## 0.55, the home screen: the group's players (their look, their name, ready or not) right of JOUER.
+func _fill_group() -> void:
+	if not w.has("menu-group") or not is_instance_valid(w["menu-group"]):
+		return
+	var box: HBoxContainer = w["menu-group"]
+	for ch in box.get_children():
+		box.remove_child(ch)
+		ch.queue_free()
+	box.visible = race.role != "" and race.count() > 0
+	var order = race.seats.keys()
+	order.sort()
+	for k in order:
+		var seat: Dictionary = race.seats[k]
+		var col = _vbox(0)
+		col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var av = TextureRect.new()
+		av.texture = _look(str(seat.get("skin", "")))
+		av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		av.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		av.custom_minimum_size = Vector2(a(20), a(26))
+		av.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		av.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		av.modulate = Color(1, 1, 1, 0.5) if seat.get("away", false) else Color.WHITE
+		col.add_child(av)
+		var nm = _plain(_label(("Toi" if k == race.me else str(seat.get("name", "?"))).left(7), ts("s"), Race.COLOURS[k % Race.COLOURS.size()], 1), "s")
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.custom_minimum_size.x = a(34)
+		col.add_child(nm)
+		box.add_child(col)
 
 ## A race whose lobby has two players or more: Affrontement is offered.
 func _race_ready() -> bool:
@@ -1356,7 +1401,10 @@ func _pick_mode(mode: String) -> void:
 	_home_modes(false)
 	if mode == "race":                               # 0.51: the group's room first, where the bets are made
 		race_seen = true
-		go("race")
+		if race.role == "":                          # (0.55) no group yet: one is made, its screen shows
+			_race_host()
+		else:
+			go("race")
 		return
 	if coop.state == "ready":                        # linked for two: the host starts it for both
 		if coop.role == "host":
@@ -1514,7 +1562,7 @@ func _set_level(box: PanelContainer, full: bool) -> void:
 func _quest_cards(holder: VBoxContainer) -> void:
 	for ch in holder.get_children():
 		ch.queue_free()
-	var reroll = w.has("menu-quests") and holder == w["menu-quests"] and int(save["feathers"]) > 0
+	var reroll = w.has("menu-quests") and holder == w["menu-quests"] and Progress.reroll_free(save)   # (0.55: one a day)
 	for q in save["quests"]:
 		holder.add_child(_quest_card(q, float(q["p"]), reroll))
 
@@ -1523,23 +1571,23 @@ func _quest_card(q: Dictionary, p: float, reroll: bool = false) -> PanelContaine
 	var card = _box()
 	var col = _vbox(3)
 	var row = _hbox(6)
-	if reroll:                                       # 0.47: a toucan's feather, to change this objective
+	if reroll:                                       # 0.55: once a day, this objective changed for nothing
 		var fb = Button.new()
 		fb.focus_mode = Control.FOCUS_NONE
 		_style_button(fb, "square")
 		fb.custom_minimum_size = Vector2(a(26), a(26))
-		fb.icon = icon("ico-feather")
+		fb.icon = icon("ico-rewind") if icon("ico-rewind") != null else icon("ico-star")
 		fb.expand_icon = true
 		fb.add_theme_constant_override("icon_max_width", roundi(a(18)))
 		fb.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		fb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		fb.tooltip_text = "Changer ce défi (une plume)"
-		var on_feather = func() -> void:
+		fb.tooltip_text = "Changer ce défi (une fois par jour)"
+		var on_change = func() -> void:
 			if Progress.reroll(save, q):
 				SaveData.store(save)
-				Audio.sfx("feather")
+				Audio.sfx("quest")
 				refresh_menu()
-		fb.pressed.connect(on_feather)
+		fb.pressed.connect(on_change)
 		row.add_child(fb)
 	var txt = _label("%s (%d/%d)" % [Progress.quest_text(q), floori(p), q["goal"]], ts("s"), INK, 0)
 	txt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2373,11 +2421,11 @@ func refresh_menu() -> void:
 	_set_level(w["menu-level"], false)
 	var nu = int(save["urns"])
 	w["menu-urns"].visible = nu > 0
-	w["menu-drums"].visible = Drums.free_today(save)
 	w["menu-urns-n"].text = str(nu) if nu < 100 else "99+"
 	_set_coins(w["menu-coins"], save["coins"])
 	_quest_cards(w["menu-quests"])
 	_mode_texts()
+	_fill_group()
 	_send_kit()
 	_coop_band()
 	for ch in w["menu-loadout"].get_children():
@@ -3055,7 +3103,7 @@ func refresh_shop(just_bought: String = "") -> void:
 ## its skins; a skin picked is shown at once (the preview, and the game behind); owned, it is worn with
 ## « Porter »; not owned, it comes out of the urns or is bought with shards (éclats).
 func _skins_tab(list: VBoxContainer) -> void:
-	w["shop-title"].text = "SKINS · %d ÉCLATS" % int(save["shards"])
+	w["shop-title"].text = "SKINS"
 	var worn: Dictionary = save["skins"]["worn"]
 	var owned: Array = save["skins"]["owned"]
 	if picked_skin == "":
@@ -3084,7 +3132,7 @@ func _skins_tab(list: VBoxContainer) -> void:
 			elif id in owned:
 				right = _note("Possédé", DIM)
 			else:
-				right = _shards(int(Treasure.cfg["skin_shards"]), GOLD if int(save["shards"]) >= int(Treasure.cfg["skin_shards"]) else DIM)
+				right = _price(Treasure.skin_price(id), GOLD if int(save["coins"]) >= Treasure.skin_price(id) else DIM)
 			var on_skin = func() -> void:
 				picked_skin = id
 				refresh_shop()
@@ -3125,7 +3173,7 @@ func _skins_tab(list: VBoxContainer) -> void:
 		var rar: Dictionary = Skins.RARITIES[sk2["rarity"]]
 		var have: bool = picked_skin in owned
 		var on_now: bool = worn.get(target, "") == picked_skin
-		_card(Skins.TARGETS[target]["name"] + " · " + sk2["name"], rar["name"] + (" · Porté." if on_now else (" · Possédé." if have else " · Dans les urnes, ou contre des éclats.")), "Les boutons de pierre d'avant, gravés et couverts de lianes." if target == "buttons" else "Les mêmes images, dans d'autres couleurs.")
+		_card(Skins.TARGETS[target]["name"] + " · " + sk2["name"], rar["name"] + (" · Porté." if on_now else (" · Possédé." if have else " · Dans les urnes, ou contre des pièces.")), "Les boutons de pierre d'avant, gravés et couverts de lianes." if target == "buttons" else "Les mêmes images, dans d'autres couleurs.")
 		if have and not on_now:
 			var on_wear = func() -> void:
 				save["skins"]["worn"][target] = picked_skin
@@ -3136,12 +3184,9 @@ func _skins_tab(list: VBoxContainer) -> void:
 				refresh_shop()
 			acts.add_child(_button("Porter", "small on", on_wear))
 		elif not have:
-			var cost = int(Treasure.cfg["skin_shards"])
-			var b = _button("%d éclats" % cost, "small gold", func() -> void: _buy_skin(picked_skin))
-			b.icon = icon("gem-b")
-			b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			b.add_theme_constant_override("icon_max_width", roundi(a(11)))
-			b.disabled = int(save["shards"]) < cost
+			var cost = Treasure.skin_price(picked_skin)
+			var b = _coin_button(str(cost), func() -> void: _buy_skin(picked_skin))
+			b.disabled = int(save["coins"]) < cost
 			acts.add_child(b)
 	_show_demo({"pepito": "sprint", "gorilla": "m-gorilla", "rhino": "m-rhino", "dragonfly": "m-dragonfly"}.get(target, "sprint"), 1)
 
@@ -3153,15 +3198,8 @@ func _buy_skin(id: String) -> void:
 		confetti(14)
 	refresh_shop()
 
-## A price in shards: the number and a blue gem.
-func _shards(n: int, colour: Color) -> Control:
-	var h = _hbox(3)
-	h.add_child(_label(str(n), ts("s"), colour, 0))
-	h.add_child(_icon_rect(icon("gem-b"), 10))
-	return h
-
 ## The Trésor (0.47): on the left the urns, broken one by one (a shake, then what came out, in the colour of
-## its rarity); on the right the bag: the consumables in stock, the feathers, the shards.
+## its rarity); on the right the bag (0.55: the coins and the skins owned; one money only).
 func _treasure() -> void:
 	if treasure != null:
 		treasure.queue_free()
@@ -3248,11 +3286,8 @@ func _treasure_fill() -> void:
 	for ch in bag.get_children():
 		bag.remove_child(ch)
 		ch.queue_free()
-	var lines: Array = []
-	for c in SaveData.CONSUMABLES:
-		lines.append(["ico-" + c["icon"], c["name"], str(SaveData.stock(save, c["id"]))])
-	lines.append(["ico-feather", "Plumes de toucan", "%d / %d" % [int(save["feathers"]), int(Progress.cfg["feather_max"])]])
-	lines.append(["gem-b", "Éclats", str(int(save["shards"]))])
+	var lines: Array = [["coin-icon", "Pièces", str(int(save["coins"]))],
+		["ico-star", "Skins", "%d / %d" % [save["skins"]["owned"].size(), Skins.CATALOG.size()]]]
 	for ln in lines:
 		var h = _hbox(5)
 		h.add_child(_icon_rect(icon(ln[0]), 14))
@@ -3319,221 +3354,6 @@ func _urn_reveal() -> void:
 	if res["got"].any(func(g): return g["what"] == "skin"):
 		Skins.apply(save["skins"]["worn"])
 	_treasure_fill()
-
-# ---------- the pygmies' drums (0.47) ----------
-
-## The screen: two big drums at the bottom, the beats falling onto them; over it, a panel before (what it
-## is, what it gives today) and after (the score, the reward).
-func _build_drums() -> void:
-	var s = _screen("drums", true)
-	(s.get_node("bg") as ColorRect).color = Color(10 / 255.0, 8 / 255.0, 20 / 255.0, 0.82)
-	var view = DrumsView.new()
-	view.main = self
-	_place(view, 0, 0, 569, 320)
-	view.mouse_filter = Control.MOUSE_FILTER_STOP
-	s.add_child(view)
-	w["drums-view"] = view
-	var title = _label("TAMBOURS DES PYGMÉES", ts("l"), GOLD, 1.5)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_place(title, 0, 10, 569, 24)
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	s.add_child(title)
-	w["drums-score"] = _label("", ts("m"), INK, 0)
-	w["drums-score"].horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_place(w["drums-score"], 569 - 12 - 200, 12, 200, 20)
-	s.add_child(w["drums-score"])
-	var back = _button("Retour", "small plain", func() -> void: _drums_leave())
-	_place(back, M, M, 70, 26)
-	s.add_child(back)
-	var panel = PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var col = _vbox(6)
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	w["drums-text"] = _label("", ts("m"), INK, 0)
-	w["drums-text"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	w["drums-text"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	w["drums-text"].custom_minimum_size.x = a(300)
-	col.add_child(w["drums-text"])
-	w["drums-prizes"] = _vbox(2)
-	col.add_child(w["drums-prizes"])
-	var row = _hbox(10)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	w["drums-go"] = _button("Jouer", "gold", func() -> void: _drums_start())
-	w["drums-go"].custom_minimum_size = Vector2(a(130), a(34))
-	row.add_child(w["drums-go"])
-	col.add_child(row)
-	panel.add_child(col)
-	_place(panel, 569 / 2.0 - 170, 60, 340, 200)
-	s.add_child(panel)
-	w["drums-panel"] = panel
-
-## Before a song: what to do, and what today's song gives (or that it is for practice).
-func _drums_intro() -> void:
-	drums = null
-	Audio.music("")
-	w["drums-panel"].visible = true
-	w["drums-score"].text = "Record : %d %%" % int(save["drums"]["best"])
-	drums_daily = Drums.free_today(save)
-	w["drums-text"].text = "Touche à gauche pour le tambour grave, à droite pour l'aigu (ou les flèches), quand le coup tombe dans l'anneau." + ("\nAujourd'hui, ton score te rapporte :" if drums_daily else "\nLa récompense du jour est prise : entraîne-toi, ou reviens demain.")
-	_drums_prizes(-1 if drums_daily else -2)
-	w["drums-go"].text = "Jouer" if drums_daily else "S'entraîner"
-
-## The reward table (score: what), the lines reached in gold; -2: none shown.
-func _drums_prizes(score_: int) -> void:
-	var box: VBoxContainer = w["drums-prizes"]
-	for ch in box.get_children():
-		box.remove_child(ch)
-		ch.queue_free()
-	if score_ == -2:
-		return
-	var by := {}
-	for r in Drums.rewards:
-		if not by.has(r["at"]):
-			by[r["at"]] = []
-		by[r["at"]].append(r)
-	for at in by:
-		var h = _hbox(5)
-		h.alignment = BoxContainer.ALIGNMENT_CENTER
-		var reached = score_ >= int(at)
-		h.add_child(_label("%d %% :" % at, ts("s"), GOLD if reached else DIM, 0))
-		for r in by[at]:
-			var ic = {"coins": "coin-icon", "urn": "ico-urn", "knife": "ico-knife", "shards": "gem-b", "feather": "ico-feather"}.get(r["what"], "ico-star")
-			h.add_child(_label("+%d" % r["n"], ts("s"), INK if reached or score_ < 0 else DIM, 0))
-			h.add_child(_icon_rect(icon(ic), 12))
-		box.add_child(h)
-
-func _drums_start() -> void:
-	drums = Drums.new()
-	drums.make(Drums.today())
-	drums_tick = 0
-	w["drums-panel"].visible = false
-	Audio.sfx("click")
-
-## A drum hit (the view: a touch on its half, or a key).
-func drums_hit(lane: int) -> void:
-	if drums == null or drums.over():
-		return
-	Audio.sfx("drumlo" if lane == 0 else "drumhi")
-	drums.hit(lane)
-
-func _drums_step(delta: float) -> void:
-	if drums == null or state != "drums":
-		return
-	drums.step(delta)
-	while drums_tick < drums.ticks.size() and drums.t >= drums.ticks[drums_tick]:
-		drums_tick += 1
-		Audio.sfx("shaker")
-	w["drums-score"].text = "%d %%   combo %d" % [drums.score(), drums.combo]
-	w["drums-view"].queue_redraw()
-	if drums.over() and not w["drums-panel"].visible:
-		_drums_end()
-
-## The song over: the score, and today's reward (once a day).
-func _drums_end() -> void:
-	var sc = drums.score()
-	var best_before = int(save["drums"]["best"])
-	save["drums"]["best"] = maxi(best_before, sc)
-	var got: Array = []
-	if drums_daily:
-		got = Drums.pay(save, sc)
-		save["drums"]["day"] = Drums.today()
-		drums_daily = false
-	SaveData.store(save)
-	var txt = "Score : %d %%  (meilleure série : %d)" % [sc, drums.best_combo]
-	if sc > best_before:
-		txt += "\nNouveau record !"
-	if not got.is_empty():
-		txt += "\nRécompense :"
-	elif Drums.prizes(sc).is_empty() and w["drums-go"].text == "Jouer":
-		txt += "\nPas de récompense cette fois."
-	w["drums-text"].text = txt
-	var box: VBoxContainer = w["drums-prizes"]
-	for ch in box.get_children():
-		box.remove_child(ch)
-		ch.queue_free()
-	for g in got:
-		var h = _hbox(5)
-		h.alignment = BoxContainer.ALIGNMENT_CENTER
-		h.add_child(_icon_rect(icon(g["icon"]), 14))
-		h.add_child(_label(g["name"], ts("s"), GOLD, 0))
-		box.add_child(h)
-	w["drums-go"].text = "S'entraîner"
-	w["drums-panel"].visible = true
-	Audio.sfx("record" if sc >= 75 else ("quest" if sc >= 30 else "no"))
-	if not got.is_empty():
-		confetti(30)
-
-func _drums_leave() -> void:
-	drums = null
-	go("menu")
-
-## The drums' picture: two big drums at the bottom, low on the left, high on the right; the beats fall
-## from the top onto them.
-class DrumsView extends Control:
-	var main: Node
-	func _process(delta: float) -> void:
-		if main.state == "drums":
-			main._drums_step(minf(delta, 0.05))
-	func _gui_input(event: InputEvent) -> void:
-		var pos = Vector2(-1, -1)
-		if event is InputEventScreenTouch and event.pressed:
-			pos = event.position
-		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.device != InputEvent.DEVICE_ID_EMULATION:
-			pos = event.position
-		if pos.x >= 0:
-			main.drums_hit(0 if pos.x < size.x / 2 else 1)
-			accept_event()
-	func _unhandled_key_input(event: InputEvent) -> void:
-		if main.state != "drums" or not (event is InputEventKey and event.pressed and not event.echo):
-			return
-		if event.keycode in [KEY_LEFT, KEY_A, KEY_Q, KEY_F]:
-			main.drums_hit(0)
-		elif event.keycode in [KEY_RIGHT, KEY_D, KEY_J, KEY_L]:
-			main.drums_hit(1)
-	func _draw() -> void:
-		var k = size.x / 569.0                       # art pixels to screen units
-		var d: Drums = main.drums
-		var xs = [150.0 * k, 419.0 * k]              # the two drums, low on the left, high on the right
-		var ring_y = 224.0 * k                       # where the beats are hit: on the drum's skin
-		var top = 40.0 * k                           # where they come from
-		var cols = [Color("#e0a050"), Color("#6ce0d0")]
-		var fl = d.flashes if d != null else [0.0, 0.0]
-		for i in 2:                                  # each lane: a band falling to its drum
-			draw_rect(Rect2(xs[i] - 30 * k, top, 60 * k, ring_y - top), Color(1, 1, 1, 0.05))
-			draw_line(Vector2(xs[i], top), Vector2(xs[i], ring_y), Color(cols[i], 0.18), 2 * k)
-		var dt: Texture2D = main.icon("ico-drum")
-		for i in 2:                                  # the big drums, bouncing when hit, and the ring on them
-			if dt != null:
-				var s_ = 120 * k * (1.0 + 0.06 * fl[i])
-				draw_texture_rect(dt, Rect2(Vector2(xs[i] - s_ / 2, ring_y - 22 * k - 0.04 * s_ * fl[i]), Vector2(s_, s_)), false)
-			draw_circle(Vector2(xs[i], ring_y), (22 + 6 * fl[i]) * k, Color(cols[i], 0.15 + 0.5 * fl[i]))
-			draw_arc(Vector2(xs[i], ring_y), 22 * k, 0, TAU, 40, cols[i], 3 * k)
-		if d == null:
-			return
-		var travel: float = Drums.cfg["travel"]
-		var font = main.bold
-		for n in d.notes:                            # the beats falling to the drums
-			var dt_ = n["t"] - d.t
-			if dt_ > travel or dt_ < -0.3 or n["hit"] == "perfect" or n["hit"] == "good":
-				continue
-			var y = ring_y - (ring_y - top) * dt_ / travel
-			var x = xs[n["lane"]]
-			var miss = n["hit"] == "miss"
-			draw_circle(Vector2(x, y), 15 * k, Color("#1a1024"))
-			draw_circle(Vector2(x, y), 12 * k, Color(0.4, 0.4, 0.45) if miss else cols[n["lane"]])
-			draw_circle(Vector2(x - 4 * k, y - 4 * k), 4 * k, Color(1, 1, 1, 0.5))
-		for j in d.judged:                           # the words: Parfait !, Bien, Raté, over the drum
-			var a_ = clampf(1.0 - (d.t - j["t"]) / 0.6, 0, 1)
-			var col = Color("#ffd35c") if j["text"] == "Parfait !" else (Color("#6cc22e") if j["text"] == "Bien" else Color("#ff6b6b"))
-			col.a = a_
-			if font != null:
-				draw_string(font, Vector2(xs[j["lane"]] - 60 * k, ring_y - 34 * k - (1.0 - a_) * 14 * k), j["text"], HORIZONTAL_ALIGNMENT_CENTER, 120 * k, int(10 * k), col)
-		if font != null and d.combo >= 3:            # the run of beats, between the drums
-			draw_string(font, Vector2(0, 150 * k), "%d" % d.combo, HORIZONTAL_ALIGNMENT_CENTER, size.x, int(22 * k), Color(1, 0.83, 0.36, 0.9))
-			draw_string(font, Vector2(0, 166 * k), "COMBO", HORIZONTAL_ALIGNMENT_CENTER, size.x, int(8 * k), Color(1, 0.97, 0.9, 0.7))
-		if d.t < 0 and font != null:                 # the count-in
-			draw_string(font, Vector2(0, 150 * k), str(ceili(-d.t)), HORIZONTAL_ALIGNMENT_CENTER, size.x, int(30 * k), Color("#fff8e6"))
 
 ## An animal on the road or not (the Montures tab: its box, or its card's button).
 func _toggle_mount(mk: String) -> void:
@@ -3793,7 +3613,6 @@ func bank() -> void:
 	_roll_biome()                                    # the next Run illimitée, somewhere else maybe
 	save["coins"] += run.gold
 	save["loops"] += 1
-	Progress.add_feathers(save, run.feathers)       # (0.47: those over the limit paid in coins)
 	save["urns"] = int(save["urns"]) + run.urns
 	if not run.debug and Net.enabled():              # the friends' board (once the server is up)
 		net.send_score(save, run.mode, floori(run.dist))
@@ -3886,8 +3705,7 @@ func go(name: String) -> void:
 			ch.queue_free()
 		state = "play"
 		show_screen("hud")
-		_hide_offer()
-		run.knives = SaveData.stock(save, "knife") if not run.coop and run.mode != "story" else 0   # (0.49: none in Histoire)
+		run.knives = 0                               # (0.55: no knife in stock any more, the Couteau suisse is equipped)
 		Progress.start_run(save)
 		run_xp0 = save["xp"]                         # (the end counts the experience and moves the objectives from here)
 		run_quests0 = save["quests"].map(func(q): return {"q": q, "p": float(q["p"])})
@@ -3911,8 +3729,6 @@ func go(name: String) -> void:
 		_load_friends()
 	if name == "race":
 		refresh_race()
-	if name == "drums":
-		_drums_intro()
 	if name == "settings":
 		_msg("")
 		refresh_settings()
@@ -3965,7 +3781,10 @@ func _show_photo() -> void:
 
 func game_over() -> void:
 	if run.race and race.role != "":                 # (even when the race was decided while he still ran)
-		_race_over()
+		if race.running and not run.spectating and run.rivals.any(func(m): return not m.get("out", false)):
+			_race_watch()                            # (0.55) the others still run: watch them
+		elif not run.spectating:
+			_race_over()
 		return
 	if run.coop:
 		coop.send({"t": "end"})
@@ -4236,6 +4055,14 @@ func _build_friends() -> void:
 	co.add_child(w["co-leave"])
 	w["panel-duo"] = co
 	rc.add_child(co)
+	var gi = _vbox(4)                                   # (0.55) Groupe: its friends to invite, its code to give
+	gi.add_child(_label("INVITER DANS LE GROUPE", ts("s"), RELIC, 0))
+	w["gi-list"] = _vbox(3)
+	gi.add_child(w["gi-list"])
+	w["gi-code"] = _wrap("", DIM)
+	gi.add_child(w["gi-code"])
+	w["panel-ginv"] = gi
+	rc.add_child(gi)
 	var me_sc = _vbox(6)                                # Scores: mine
 	me_sc.add_child(_label("TOI", ts("s"), RELIC, 0))
 	w["sc-mine"] = _vbox(6)
@@ -4269,7 +4096,8 @@ func refresh_friends() -> void:
 		fr_sel = ""
 	w["fr-me"].visible = friends_tab == "list" and fr_sel == ""
 	w["fr-card"].visible = friends_tab == "list" and fr_sel != ""
-	w["panel-duo"].visible = friends_tab == "group"
+	w["panel-duo"].visible = false                   # (0.55) Groupe is the group only (for two: a friend's card)
+	w["panel-ginv"].visible = friends_tab == "group"
 	w["panel-myscores"].visible = friends_tab == "scores"
 	coop.save = save
 	race.save = save
@@ -4318,7 +4146,7 @@ func refresh_friends() -> void:
 		var sub = ""
 		if not seat.is_empty():
 			nm = "Toi" if i == race.me else str(seat.get("name", "?"))
-			sub = "chef du groupe" if i == 0 else ("parti" if seat.get("gone", false) else "prêt")
+			sub = "chef du groupe" if i == 0 else ("reconnexion…" if seat.get("away", false) else ("parti" if seat.get("gone", false) else "dans le groupe"))
 		elif not pending.is_empty() and race.role == "host":
 			nm = pending.pop_front()
 			sub = "invité…"
@@ -4336,9 +4164,36 @@ func refresh_friends() -> void:
 	elif rst == "failed":
 		w["gr-text"].text = race.info
 	elif r_idle:
-		w["gr-text"].text = "Crée un groupe, puis invite tes amis depuis leur fiche (Liste d'amis), ou donne-leur ses 4 lettres. Vos courses se lancent depuis l'accueil : JOUER → AFFRONTEMENT."
+		w["gr-text"].text = "Crée un groupe et invite tes amis, ou rejoins le leur avec ses 4 lettres. Vos courses : accueil → JOUER → AFFRONTEMENT."
 	else:
-		w["gr-text"].text = "Vos courses se lancent depuis l'accueil : JOUER → AFFRONTEMENT. Les mises se font là, avant le départ."
+		w["gr-text"].text = "Vos courses : accueil → JOUER → AFFRONTEMENT."
+	var gl: VBoxContainer = w["gi-list"]                # (0.55) the friends to invite into the group
+	for ch in gl.get_children():
+		gl.remove_child(ch)
+		ch.queue_free()
+	var mates = board.filter(func(e): return not e.get("me", false))
+	if mates.is_empty():
+		gl.add_child(_wrap("Ajoute d'abord des amis (Liste d'amis)." if Net.enabled() else "Le serveur n'est pas encore en ligne.", DIM))
+	for e in mates.slice(0, 8):
+		var code = str(e.get("code", ""))
+		var nm_ = str(e.get("name", "?"))
+		var in_group = race.seats.values().any(func(seat): return str(seat.get("code", "")) == code)
+		var asked = race.invited.has(code)
+		var h = _hbox(4)
+		var l = _label(nm_, ts("s"), INK, 0)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		l.clip_text = true
+		h.add_child(l)
+		if in_group:
+			h.add_child(_label("dans le groupe", ts("s"), Color("#9dff7a"), 0))
+		elif asked:
+			h.add_child(_label("invité…", ts("s"), DIM, 0))
+		elif can and Net.enabled() and not race.running and race.role in ["", "host"]:
+			var ib = _button("Inviter", "small", func() -> void: _race_invite(code, nm_))
+			ib.custom_minimum_size = Vector2(a(62), a(20))
+			h.add_child(ib)
+		gl.add_child(h)
+	w["gi-code"].text = ("Le code du groupe : %s (à donner à un ami pour qu'il le rejoigne)." % race.room) if race.role == "host" and race.room != "" else ""
 	# the list
 	var holder: VBoxContainer = w["fr-list"]
 	for ch in holder.get_children():
@@ -4590,36 +4445,43 @@ func _add_friend() -> void:
 
 # ---------- the race for four (0.48, race.gd) ----------
 
+## 0.55, the Affrontement (the races of the group): on top the four places (each one's look and name, ready
+## or not, his bet); below, my bet (any number of coins, or one ready-made) and on whom, the items and powers
+## of the races (the host's, for all) and the group's races so far (bets and distances); at the bottom « Prêt »
+## for everyone and, once all are ready, « Lancer » for the host. My coins top right.
 func _build_race() -> void:
 	var s = _screen("race", true)
 	var quit = _button("Quitter", "", _race_quit)
-	_place(quit, M, 6, 140, 38)
+	_place(quit, M, 6, 120, 34)
 	s.add_child(quit)
-	_head(s, "Course à 4")
+	_head(s, "Affrontement")
 	w["rc-room"] = _plain(_label("", ts("s"), RELIC, 0), "s")
 	w["rc-room"].horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_place(w["rc-room"], 569 - M - 150, 22, 150, 12)
+	_place(w["rc-room"], 569 - M - 160, 4, 160, 12)
 	s.add_child(w["rc-room"])
+	w["rc-coins"] = _coins_pill()
+	w["rc-coins"].size_flags_horizontal = Control.SIZE_SHRINK_END
+	var coins_row = _hbox(0)
+	coins_row.alignment = BoxContainer.ALIGNMENT_END
+	coins_row.add_child(w["rc-coins"])
+	_place(coins_row, 569 - M - 160, 18, 160, 24)
+	s.add_child(coins_row)
 	var row = _hbox(6)
-	_place(row, 14, 52, 541, 92)
+	_place(row, 14, 46, 541, 84)
 	for i in Race.SEATS:
 		var box = PanelContainer.new()
 		box.add_theme_stylebox_override("panel", styles["box"])
 		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		box.mouse_filter = Control.MOUSE_FILTER_PASS
-		var v = _vbox(2)
+		var v = _vbox(1)
 		v.alignment = BoxContainer.ALIGNMENT_CENTER
 		var av = TextureRect.new()
 		av.texture = Art.tex.get("hero-body")
 		av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		av.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		av.custom_minimum_size = Vector2(a(22), a(30))
+		av.custom_minimum_size = Vector2(a(22), a(28))
 		av.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		var hue = ShaderMaterial.new()                  # (each one in the colour his ghost will have)
-		hue.shader = Shader.new()
-		hue.shader.code = Render.MATE_SHADER
-		av.material = hue
 		v.add_child(av)
 		var nm = _plain(_label("", ts("s"), INK, 0), "m")
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -4644,9 +4506,17 @@ func _build_race() -> void:
 	s.add_child(row)
 	var bet = PanelContainer.new()                      # my bet: how much, on whom
 	bet.add_theme_stylebox_override("panel", styles["box"])
-	_place(bet, 14, 150, 360, 104)
-	var bv = _vbox(4)
+	_place(bet, 14, 134, 214, 122)
+	var bv = _vbox(3)
 	bv.add_child(_label("TA MISE", ts("s"), RELIC, 0))
+	var amt = _hbox(4)
+	w["rc-amount"] = _field("0", 8, "Ta mise, de 0 à 99 999 999 pièces :", _race_amount)
+	w["rc-amount"].custom_minimum_size = Vector2(a(96), a(22))
+	amt.add_child(w["rc-amount"])
+	var take = _button("Miser", "small", _race_amount)
+	take.custom_minimum_size = Vector2(a(60), a(22))
+	amt.add_child(take)
+	bv.add_child(amt)
 	w["rc-stakes"] = _hbox(3)
 	bv.add_child(w["rc-stakes"])
 	bv.add_child(_label("SUR", ts("s"), RELIC, 0))
@@ -4655,84 +4525,108 @@ func _build_race() -> void:
 	bet.add_child(bv)
 	s.add_child(bet)
 	w["rc-bet"] = bet
-	var potb = PanelContainer.new()                     # the pot
-	potb.add_theme_stylebox_override("panel", _flat(Color("#3a2230"), LINE))
-	_place(potb, 380, 150, 175, 104)
-	var pv = _vbox(3)
-	pv.alignment = BoxContainer.ALIGNMENT_CENTER
-	var pt = _label("CAGNOTTE", ts("s"), GOLD, 0)
-	pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pv.add_child(pt)
-	w["rc-pot"] = _label("0", ts("xl"), GOLD)
-	w["rc-pot"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pv.add_child(w["rc-pot"])
-	var rule = _label("Va à ceux qui ont misé sur le plus loin, sinon à lui.", ts("s"), INK, 0)
-	rule.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	rule.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rule.custom_minimum_size.x = a(150)
-	pv.add_child(rule)
-	potb.add_child(pv)
-	s.add_child(potb)
-	w["rc-potbox"] = potb
-	w["rc-text"] = _label("", ts("m"), INK, 0)            # live: who is still running; after: who won, my share
+	var kitp = PanelContainer.new()                     # the race's items and powers (the host's, for all)
+	kitp.add_theme_stylebox_override("panel", styles["box"])
+	_place(kitp, 234, 134, 140, 122)
+	var kv = _vbox(3)
+	kv.add_child(_label("ÉQUIPEMENT", ts("s"), RELIC, 0))
+	var grid = GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", roundi(a(4)))
+	grid.add_theme_constant_override("v_separation", roundi(a(4)))
+	kv.add_child(grid)
+	w["rc-kit"] = grid
+	w["rc-kit-note"] = _label("", ts("s"), DIM, 0)
+	w["rc-kit-note"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	w["rc-kit-note"].custom_minimum_size.x = a(120)
+	kv.add_child(w["rc-kit-note"])
+	kitp.add_child(kv)
+	s.add_child(kitp)
+	w["rc-kitbox"] = kitp
+	var hp = PanelContainer.new()                       # the group's races so far
+	hp.add_theme_stylebox_override("panel", styles["box"])
+	_place(hp, 380, 134, 175, 122)
+	var hv = _vbox(2)
+	hv.add_child(_label("HISTORIQUE", ts("s"), RELIC, 0))
+	w["rc-hist"] = _vbox(1)
+	var hsc = _fixed(w["rc-hist"])
+	hsc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	hsc.custom_minimum_size.y = a(96)
+	hv.add_child(hsc)
+	hp.add_child(hv)
+	s.add_child(hp)
+	w["rc-histbox"] = hp
+	w["rc-text"] = _label("", ts("m"), INK, 0)            # opening, linking, a race going on, what went wrong
 	w["rc-text"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	w["rc-text"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_place(w["rc-text"], 24, 158, 521, 90)
+	_place(w["rc-text"], 18, 150, 206, 90)
 	s.add_child(w["rc-text"])
-	w["rc-go"] = _button("Lancer la course", "play", _race_go)
-	w["rc-again"] = _button("Revanche", "go", _race_go)
-	w["rc-change"] = _button("Changer les mises", "", func() -> void:
-		race_seen = true
-		refresh_race())
-	w["rc-wait"] = _label("", ts("m"), DIM, 0)
+	w["rc-ready"] = _button("Prêt", "go", _race_ready_toggle)
+	w["rc-go"] = _button("Lancer", "play", _race_go)
+	_actions(s, [w["rc-ready"], w["rc-go"]], 150)
+	w["rc-wait"] = _label("", ts("s"), DIM, 0)
 	w["rc-wait"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_actions(s, [w["rc-go"], w["rc-again"], w["rc-change"]], 170)
-	_place(w["rc-wait"], 0, 320 - 8 - 34, 569, 20)
+	w["rc-wait"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_place(w["rc-wait"], 14, 258, 541, 12)
 	s.add_child(w["rc-wait"])
 
-## The race screen as things are: the lobby (seats, bets, pot), the race going on (I fell: the others'
-## distances), or its result (who won, what I get).
+## 0.55: Pépito in a skin (its id; "" the original), for the group's places and the home screen.
+func _look(skin: String) -> Texture2D:
+	if Skins.skin(skin).is_empty() or not Art.img.has("hero-body"):
+		return Art.tex.get("hero-body") if not Skins.originals.has("hero-body") else Skins.originals["hero-body"]["tex"]
+	if not look_cache.has(skin):
+		look_cache[skin] = ImageTexture.create_from_image(Skins.recolour(Art.img["hero-body"], Skins.skin(skin)["rules"]))
+	return look_cache[skin]
+
+## The race screen as things are: the lobby (places, ready, bets, items, history), a race going on, the link.
 func refresh_race() -> void:
-	if not w.has("rc-text") or not is_instance_valid(w["rc-text"]):
+	if not w.has("rc-wait") or not is_instance_valid(w["rc-wait"]):
 		return
 	var st = race.state
 	var live = race.running
-	var showing = not live and not race.result.is_empty() and not race_seen
-	var lobby = not live and not showing and st == "lobby"
-	w["rc-room"].text = ("Course %s" % race.room) if race.room != "" and race.role == "host" else ""
+	var lobby = st == "lobby" and not live
+	var host = race.role == "host"
+	if host and not live:
+		race.set_kit(SaveData.loadout(save))         # (the host's items and powers, for all: as they are now)
+	w["rc-room"].text = ("Groupe %s" % race.room) if race.room != "" and host else ""
 	var coins = int(save["coins"])
+	_set_coins(w["rc-coins"], coins)
 	var mine = race.my_seat()
 	var pending = race.invited.values()
+	var waiting: Array = []
 	for i in Race.SEATS:
 		var seat: Dictionary = race.seats.get(i, {})
 		var there = not seat.is_empty()
-		w["rc-av-%d" % i].visible = there
-		w["rc-av-%d" % i].material.set_shader_parameter("hue", 0.0 if i == race.me else Race.HUES[i])
+		var av: TextureRect = w["rc-av-%d" % i]
+		av.visible = there
+		if there:
+			av.texture = _look(str(seat.get("skin", "")))
 		var nm = str(seat.get("name", "")) + (" (toi)" if i == race.me and there else "")
 		var sub = ""
+		var ready = there and seat.get("ready", false)
 		if there:
 			var d = int(seat.get("dist", 0))
-			if live:
+			if seat.get("away", false):
+				sub = "reconnexion…"
+			elif live:
 				sub = ("tombé à %d m" % d) if seat.get("done", false) else ("%d m" % d)
-			elif showing:
-				sub = "%d m%s" % [int(race.result.get("dists", {}).get(i, d)), " · gagne" if i in race.result.get("win", []) else ""]
 			else:
 				var b = int(seat.get("bet", 0))
-				var on_name = str(race.seats.get(int(seat.get("on", i)), {}).get("name", "?"))
-				sub = ("%d sur %s" % [b, "lui" if int(seat.get("on", i)) == i else on_name]) if b > 0 else "sans mise"
-				if seat.get("gone", false):
-					sub = "parti"
-		elif not pending.is_empty() and race.role == "host":
+				var on = int(seat.get("on", i))
+				var on_name = "lui" if on == i else ("toi" if on == race.me else str(race.seats.get(on, {}).get("name", "?")))
+				sub = ("PRÊT · " if ready else "") + (("%d sur %s" % [b, on_name]) if b > 0 else "sans mise")
+				if not ready:
+					waiting.append("toi" if i == race.me else str(seat.get("name", "?")))
+		elif not pending.is_empty() and host:
 			nm = pending.pop_front()
 			sub = "invité…"
 		w["rc-nm-%d" % i].text = nm
 		_set_colour(w["rc-nm-%d" % i], Race.COLOURS[i] if there else DIM)
 		w["rc-sub-%d" % i].text = sub
-		w["rc-inv-%d" % i].visible = not there and race.role == "host" and lobby and nm == ""
+		_set_colour(w["rc-sub-%d" % i], Color("#9dff7a") if ready and not live else DIM)
+		w["rc-inv-%d" % i].visible = not there and host and lobby and nm == ""
 		w["rc-box-%d" % i].modulate = Color.WHITE if there or nm != "" else Color(1, 1, 1, 0.55)
 	w["rc-bet"].visible = lobby and race.seats.has(race.me)
-	w["rc-potbox"].visible = lobby or live
-	w["rc-pot"].text = str(race.pot())
 	if lobby:
 		for holder in [w["rc-stakes"], w["rc-on"]]:
 			for ch in holder.get_children():
@@ -4741,60 +4635,125 @@ func refresh_race() -> void:
 		var my_bet = int(mine.get("bet", 0))
 		var my_on = int(mine.get("on", race.me))
 		for n in Race.stakes:
-			if n > coins and n != 0:
-				continue
 			var nn = int(n)
-			var sb = _button(str(nn), "tab sel" if nn == my_bet else "tab", func() -> void: race.bet(int(race.my_seat().get("on", race.me)), nn))
-			sb.custom_minimum_size = Vector2(a(40), a(20))
+			var sb = _button(str(nn), "tab sel" if nn == my_bet else "tab", func() -> void:
+				race_seen = true
+				race.bet(int(race.my_seat().get("on", race.me)), mini(nn, int(save["coins"])))
+				w["rc-amount"].text = str(int(race.my_seat().get("bet", 0))))
+			sb.custom_minimum_size = Vector2(a(46), a(20))
+			sb.disabled = nn > coins
 			w["rc-stakes"].add_child(sb)
 		var order = race.seats.keys()
 		order.sort()
 		for k in order:
 			var kk = int(k)
 			var label = "Toi" if kk == race.me else str(race.seats[kk].get("name", "?")).left(8)
-			var ob = _button(label, "tab sel" if kk == my_on else "tab", func() -> void: race.bet(kk, int(race.my_seat().get("bet", 0))))
-			ob.custom_minimum_size = Vector2(a(54), a(20))
+			var ob = _button(label, "tab sel" if kk == my_on else "tab", func() -> void:
+				race_seen = true
+				race.bet(kk, int(race.my_seat().get("bet", 0))))
+			ob.custom_minimum_size = Vector2(a(46), a(20))
 			w["rc-on"].add_child(ob)
+		if not w["rc-amount"].has_focus():
+			w["rc-amount"].text = str(my_bet)
+	var grid: GridContainer = w["rc-kit"]               # the race's items and powers
+	for ch in grid.get_children():
+		grid.remove_child(ch)
+		ch.queue_free()
+	var kit: Dictionary = race.kit if not race.kit.is_empty() or not host else SaveData.loadout(save)
+	for u in SaveData.UPGRADES:
+		var lv = int(kit.get(u["id"], 0))
+		if lv <= 0:
+			continue
+		var cell = _icon_rect(icon("ico-" + u["icon"]), 18)
+		cell.tooltip_text = "%s (niv. %d)" % [u["name"], lv]
+		var lvl = _label(str(lv), ts("s"), GOLD, 0)
+		lvl.position = Vector2(a(12), a(10))
+		cell.add_child(lvl)
+		grid.add_child(cell)
+	w["rc-kit-note"].text = ("Aucun." if grid.get_child_count() == 0 else "") + (" Celui de l'hôte, pour tous." if race.role != "" else "")
+	var hist: VBoxContainer = w["rc-hist"]               # the group's races, the latest first
+	for ch in hist.get_children():
+		hist.remove_child(ch)
+		ch.queue_free()
+	if race.history.is_empty():
+		hist.add_child(_wrap("Pas encore de course.", DIM))
+	for e in race.history:
+		hist.add_child(_label("COURSE %d" % int(e["n"]), ts("s"), GOLD, 0))
+		for r_ in e["rows"]:
+			var k = int(r_["k"])
+			var who = "Toi" if k == race.me else str(r_["name"]).left(8)
+			var line = "%s %d m%s" % [who, int(r_["dist"]), " ★" if r_["win"] else ""]
+			var b = int(r_["bet"])
+			if b > 0:
+				var on = int(r_["on"])
+				var on_name = "lui" if on == k else ("toi" if on == race.me else str(race.seats.get(on, {}).get("name", "?")).left(8))
+				line += " · %d sur %s : %s" % [b, on_name, ("+%d" % (int(r_["got"]) - b)) if int(r_["got"]) > 0 else ("-%d" % b)]
+			var l = _label(line, ts("s"), Race.COLOURS[k % Race.COLOURS.size()] if k != race.me else INK, 0)
+			l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			l.custom_minimum_size.x = a(158)
+			hist.add_child(l)
 	var text = ""
 	if st == "failed":
 		text = race.info
 	elif st in ["opening", "joining", "linking"]:
-		text = {"opening": "Ouverture de la course…", "joining": "Recherche de la course…", "linking": "Connexion avec l'hôte…"}[st]
+		text = {"opening": "Ouverture du groupe…", "joining": "Recherche du groupe…", "linking": "Connexion avec l'hôte…"}[st]
+		if race.relink_t >= 0:
+			text = "La connexion a sauté : on se reconnecte…"
 	elif live:
 		if not race_start.is_empty():
 			text = "Départ dans %d…" % ceili(maxf(0.0, float(race_start["at"]) - time))
 		elif mine.get("done", false):
 			text = "Tu es tombé à %d m. En attente des autres…" % int(mine.get("dist", 0))
-	elif showing:
-		var win: Array = race.result.get("win", [])
-		var names = win.map(func(k): return "Toi" if k == race.me else str(race.seats.get(k, {}).get("name", "?")))
-		var got = int(race.result.get("got", 0))
-		var put = int(race.result.get("paid", 0))
-		if win.size() > 1:
-			text = "%s gagnent la course !" % " et ".join(names)
-		elif win == [race.me]:
-			text = "Tu gagnes la course !"
 		else:
-			text = "%s gagne la course !" % " et ".join(names)
-		if put > 0 or got > 0:
-			text += "\nTa mise : %d · tu reçois %d (%s%d)" % [put, got, "+" if got - put >= 0 else "", got - put]
+			text = "Course en cours…"
 	if race_note != "":
 		text = race_note + ("\n" + text if text != "" else "")
 	w["rc-text"].text = text
-	w["rc-text"].visible = text != "" and not lobby
-	var host = race.role == "host"
-	w["rc-go"].visible = lobby and host
-	w["rc-go"].disabled = race.count() < 2 or not race.links.values().all(func(l): return l.open)
-	w["rc-again"].visible = showing and host
-	w["rc-again"].disabled = race.count() < 2
-	w["rc-change"].visible = showing
+	w["rc-text"].visible = text != "" and not (lobby and race.seats.has(race.me))
+	var my_ready = bool(mine.get("ready", false))
+	w["rc-ready"].visible = lobby and race.seats.has(race.me)
+	w["rc-ready"].text = "Plus prêt" if my_ready else "Prêt !"
+	_style_button(w["rc-ready"], "" if my_ready else "go")
+	w["rc-go"].visible = lobby and host and race.all_ready()
 	var wait = ""
-	if lobby and not host and st == "lobby":
-		wait = "C'est %s qui lance la course." % str(race.seats.get(0, {}).get("name", "l'hôte"))
+	if not race_seen and not race.history.is_empty():   # the race just run: who won, what I get
+		var last: Dictionary = race.history[0]
+		var winners = last["rows"].filter(func(r_): return r_["win"]).map(func(r_): return "Toi" if int(r_["k"]) == race.me else str(r_["name"]))
+		if winners == ["Toi"]:
+			wait = "Course %d : tu gagnes !" % int(last["n"])
+		else:
+			wait = "Course %d : %s %s !" % [int(last["n"]), " et ".join(winners), "gagnent" if winners.size() > 1 else "gagne"]
+		for r_ in last["rows"]:
+			if int(r_["k"]) == race.me and int(r_["bet"]) > 0:
+				wait += " Ta mise : %d, tu reçois %d." % [int(r_["bet"]), int(r_["got"])]
 	elif lobby and host and race.count() < 2:
-		wait = "Invite au moins un ami (ou donne-lui les 4 lettres)."
+		wait = "Invite au moins un ami (ou donne-lui les 4 lettres du groupe)."
+	elif lobby and not waiting.is_empty():
+		wait = "Pas encore prêt : %s." % ", ".join(waiting)
+	elif lobby and not host:
+		wait = "Tout le monde est prêt : %s lance la course." % str(race.seats.get(0, {}).get("name", "l'hôte"))
+	elif lobby:
+		wait = "Tout le monde est prêt !"
 	w["rc-wait"].text = wait
 	w["rc-wait"].visible = wait != ""
+
+## « Miser »: the number written, as my bet (0 to 99 999 999, never more than my coins).
+func _race_amount() -> void:
+	var digits = ""
+	for ch in str(w["rc-amount"].text):
+		if ch >= "0" and ch <= "9":
+			digits += ch
+	var n = clampi(int(digits) if digits != "" else 0, 0, mini(Race.BET_MAX, int(save["coins"])))
+	race_seen = true
+	race.bet(int(race.my_seat().get("on", race.me)), n)
+	w["rc-amount"].text = str(n)
+	w["rc-amount"].release_focus()
+
+## « Prêt ! » / « Plus prêt » (0.55).
+func _race_ready_toggle() -> void:
+	race_seen = true
+	race.set_ready(not bool(race.my_seat().get("ready", false)))
+	Audio.sfx("click")
 
 ## « Inviter » on a free seat: the friends of my list, to pick one.
 func _race_pick() -> void:
@@ -4842,6 +4801,7 @@ func _race_host() -> void:
 	race_seen = true
 	go("race")
 	await race.host()
+	race.set_kit(SaveData.loadout(save))
 	refresh_race()
 
 func _race_join() -> void:
@@ -4874,9 +4834,9 @@ func _race_invite(code: String, name: String) -> void:
 		race_note = {"friend": "%s n'est pas dans ta liste d'amis." % name, "full": "La course est complète."}.get(r["error"], "L'invitation n'est pas partie : réessaie dans un moment.")
 	refresh_race()
 
-## « Lancer la course » / « Revanche » (the host): the same road for all in three seconds, his kit for all.
+## « Lancer » (the host, once all are ready): the same road for all in three seconds, his kit for all.
 func _race_go() -> void:
-	if race.role != "host" or race.count() < 2 or race.running:
+	if race.role != "host" or race.count() < 2 or race.running or not race.all_ready():
 		return
 	var up = SaveData.loadout(save)
 	race_note = ""
@@ -4886,18 +4846,18 @@ func _race_quit() -> void:
 	if race.running and not race.my_seat().get("done", false):
 		_confirm("Quitter la course ? Ta mise est perdue.", func() -> void:
 			race.leave()
-			go("friends"))
+			go("menu"))
 		return
-	race.leave()
-	race_note = ""
-	friends_tab = "race"
-	go("friends")
+	race_note = ""                                   # (0.55) back home; the group stays (Amis → Groupe to leave it)
+	go("menu")
 
 func _on_race_changed() -> void:
 	if state == "race":
 		refresh_race()
 	elif state == "friends":
 		refresh_friends()
+	elif state == "menu":
+		_fill_group()
 
 ## What the race says (race.gd): its start, its result, the host gone.
 func _on_race(m: Dictionary) -> void:
@@ -4921,12 +4881,51 @@ func _on_race(m: Dictionary) -> void:
 				banner(race.info)
 			refresh_race()
 
+## 0.55: fallen in a race the others still run: my distance goes to them, my coins are banked, and I watch
+## them (the camera follows one; a touch, the next one) until the result.
+func _race_watch() -> void:
+	if race.running and not race.my_seat().get("done", false):
+		race.done(floori(run.dist))
+	bank()
+	run.spectating = true
+	watch_k = -1
+	hint(0)
+	w["hud-watch"].visible = true
+	Audio.music("over")
+
+## Where the one I watch is (world x), the one ahead if he fell (or none was chosen).
+func _watch_x() -> float:
+	var alive = run.rivals.filter(func(m): return not m.get("out", false))
+	if alive.is_empty():
+		return run.cam + run.home
+	var pick = null
+	for m in alive:
+		if int(m.get("k", -1)) == watch_k:
+			pick = m
+	if pick == null:
+		alive.sort_custom(func(a_, b_): return float(a_.get("x", 0.0)) > float(b_.get("x", 0.0)))
+		pick = alive[0]
+		watch_k = int(pick.get("k", -1))
+	w["hud-watch"].text = "TU REGARDES %s · %d M — TOUCHE : UN AUTRE" % [str(pick.get("name", "?")).to_upper(), int(race.seats.get(watch_k, {}).get("dist", 0))]
+	return float(pick.get("x", 0.0))
+
+## A touch while watching: the next one still running.
+func _watch_next() -> void:
+	var alive = run.rivals.filter(func(m): return not m.get("out", false)).map(func(m): return int(m.get("k", -1)))
+	alive.sort()
+	if alive.is_empty():
+		return
+	var i = alive.find(watch_k)
+	watch_k = alive[(i + 1) % alive.size()]
+
 ## My race run is over: the coins and experience are banked as for any run, my distance goes to the
 ## others, and the race screen shows how it goes on.
 func _race_over() -> void:
-	if race.running:
+	if race.running and not race.my_seat().get("done", false):
 		race.done(floori(run.dist))
 	bank()
+	if w.has("hud-watch") and is_instance_valid(w["hud-watch"]):
+		w["hud-watch"].visible = false
 	race_seen = false
 	Audio.music("over")
 	state = "race"
@@ -5301,9 +5300,7 @@ func show_levels(after: Callable = Callable()) -> void:
 	confetti(30)
 
 ## A short notice at the top of the screen: objective done, level gained.
-## 0.47: out of the temple (the camera with him), alone, the consumables in stock are offered for OFFER_TIME
-## seconds: one may be taken (the Couteau suisse is not offered, it waits for a capture).
-## Caught: the knife's offer, then the escape, over the game (Game keeps the state).
+## Caught: the Couteau suisse's offer (0.55: equipped only), then the escape, over the game (Game keeps the state).
 func _esc_view() -> void:
 	if not w.has("esc") or not is_instance_valid(w["esc"]):
 		return
@@ -5311,7 +5308,7 @@ func _esc_view() -> void:
 	var ph: String = c.phase if c != null else ""
 	w["esc"].visible = ph == "offer" or ph == "escape"
 	if ph == "offer":
-		w["esc-label"].text = "Capturé ! Couteau suisse : %d" % (SaveData.stock(save, "knife") + run.free_knives)
+		w["esc-label"].text = "Capturé ! Couteau suisse : %d" % run.free_knives
 		w["esc-knife"].visible = true
 		w["esc-bar"].visible = false
 		set_bar(w["esc-time"], c.timer / Game.ESC_OFFER)
@@ -5328,72 +5325,8 @@ func _esc_view() -> void:
 func _use_knife() -> void:
 	if run == null or run.caught == null or run.caught.phase != "offer":
 		return
-	if (run.free_knives > 0 or SaveData.use(save, "knife")) and Game.escape_start(run):   # (0.54: the one equipped first)
+	if run.free_knives > 0 and Game.escape_start(run):   # (0.55: the one equipped only)
 		Audio.sfx("buy")
-
-func _offer_tick(delta: float) -> void:
-	if state != "play" or run == null:
-		return
-	if not run.offered and not run.coop and run.mode != "story" and run.exploded and run.out == 2 and not run.dead:
-		run.offered = true
-		var cs = SaveData.CONSUMABLES.filter(func(c): return not c.get("stock", false) and SaveData.stock(save, c["id"]) > 0)
-		if not cs.is_empty():
-			_show_offer(cs)
-	if offer_t > 0:
-		offer_t -= delta
-		set_bar(w["offer-bar"], offer_t / OFFER_TIME)
-		if offer_t <= 0:
-			_hide_offer()
-
-func _show_offer(cs: Array) -> void:
-	var box: HBoxContainer = w["offer"]
-	for ch in box.get_children():
-		box.remove_child(ch)
-		ch.queue_free()
-	for c in cs:
-		var id: String = c["id"]
-		var b = Button.new()
-		b.focus_mode = Control.FOCUS_NONE
-		_style_button(b, "square")
-		b.custom_minimum_size = Vector2(a(46), a(46))
-		b.icon = icon("ico-" + c["icon"])
-		b.expand_icon = true
-		b.add_theme_constant_override("icon_max_width", roundi(a(30)))
-		b.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		var n = _label("×%d" % SaveData.stock(save, id), ts("m"), GOLD, 0)
-		n.label_settings.outline_size = roundi(a(3))
-		n.label_settings.outline_color = LINE
-		n.position = Vector2(a(25), a(27))
-		b.add_child(n)
-		var on_take = func() -> void:
-			_take(id)
-		b.button_down.connect(on_take)
-		box.add_child(b)
-	box.visible = true
-	w["offer-bar"].visible = true
-	offer_t = OFFER_TIME
-	box.modulate.a = 0
-	create_tween().tween_property(box, "modulate:a", 1.0, 0.2)
-
-func _hide_offer() -> void:
-	offer_t = 0
-	if w.has("offer") and is_instance_valid(w["offer"]):
-		w["offer"].visible = false
-		w["offer-bar"].visible = false
-
-## A consumable taken from the stock, at once on the run.
-func _take(id: String) -> void:
-	if offer_t <= 0 or run == null or not SaveData.use(save, id):
-		return
-	match id:
-		"shield": run.shield = true
-		"magnet": run.cons_magnet = true
-		"idol": run.idol = true
-		"horn": Game.call_mount(run)
-	var c = SaveData.consumable(id)
-	Audio.sfx("buy")
-	toast("ico-" + c["icon"], c["name"], 0, 0)
-	_hide_offer()
 
 func toast(ico: String, text: String, coins: int, xp: int) -> void:
 	var box = _box()
@@ -5487,6 +5420,9 @@ func hud() -> void:
 # ---------- input ----------
 
 func press() -> void:
+	if state == "play" and run != null and run.spectating:
+		_watch_next()                                # (0.55) watching: the next one
+		return
 	if state == "play" and run != null and run.caught != null and run.caught.phase == "escape":
 		Game.escape_tap(run)                         # the escape: a touch anywhere bites the rope
 		return
@@ -5694,6 +5630,8 @@ func _notification(what: int) -> void:
 func _step(h: float) -> void:
 	var t0 = Time.get_ticks_usec()
 	Game.update(run, h, input)
+	if run.spectating:                               # (0.55) fallen in a race: the camera with the one I watch
+		Game.spectate(run, h, _watch_x())
 	perf["game"] += Time.get_ticks_usec() - t0
 	var stats = {"dist": run.dist - last_dist, "coins": 0, "gems": 0, "jumps": 0, "plats": 0, "breaks": 0, "shrooms": 0, "monkeys": 0, "mounts": 0, "dodges": 0, "missiles": 0, "hurt": false}
 	if run.mount != null:                           # the metres run on a mount, for its own objectives
@@ -5729,12 +5667,8 @@ func _step(h: float) -> void:
 					toast("ico-relic", "%s · nouveau pouvoir : %s" % [Game.RELIC_PIECE_NAMES[run.won], Game.RELIC_POWER_NAMES[run.won]], 0, 0)
 					_fill_hud()
 			"hurt", "rewind", "hit": stats["hurt"] = true
-			"feather":                              # 0.47: a toucan's feather, an urn
-				toast("ico-feather", "Plume de toucan", 0, 0)
-			"urn":
+			"urn":                                  # 0.47: an urn (on the road; 0.55: Vorace's too)
 				toast("ico-urn", "Une urne !", 0, 0)
-			"shield":
-				banner("Bouclier brisé !")
 			"free":                                 # escaped: the next fall will have its own photo
 				banner("Libre !")
 				photo_taken = false
@@ -5818,14 +5752,15 @@ func _process(delta: float) -> void:
 			if hint_timer <= 0:
 				hint(0)
 		hud()
-		_offer_tick(delta)
-		if state == "play" and run.dead:
+		if state == "play" and run.dead and not run.spectating:
 			if not photo_taken:
 				photo_taken = true
 				_take_photo()
 			dead_for += dt
 			if dead_for > 0.9:
 				game_over()
+		if state == "play" and run.spectating and (not race.running or not run.rivals.any(func(m): return not m.get("out", false))):
+			_race_over()                             # (0.55) the race is decided, or nobody runs any more
 	if not coop_start.is_empty() and time >= coop_start["at"] and state != "play":
 		go("play")                                   # the coop run: both phones start together
 	if not race_start.is_empty():

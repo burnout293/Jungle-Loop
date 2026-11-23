@@ -7,7 +7,11 @@ extends Node
 ## one he thinks will go furthest (himself by default). The host starts: everybody runs the same road (the
 ## same seed, scenery and road tier: Game.coop_run, the host's items and powers for all, on the same clock),
 ## with the others drawn as ghosts (render.gd). Whoever falls is out and watches the rest; when the last one
-## falls (or can no longer be caught), the host works out the result and the pot is shared (settle).
+## falls (or can no longer be caught), the host works out the result (settle).
+## 0.55 (« Affrontement »): each one says he is ready (the host's « Lancer » comes once all are); a bet is any
+## number of coins up to BET_MAX, and whoever bet on the furthest gets twice his bet back (nothing else is
+## shared); every race of the group is kept (history). A link that drops (the phone turned, another app for a
+## while) is not the end: the guest's place is kept AWAY_KEEP seconds and he links again through the room.
 ##
 ## Messages, JSON: on "ctl" (reliable, in order) hello, lobby, bet, start, done, result, bye, ping / pong;
 ## on "pos" (unreliable) "s", a runner's state at his run time "at" ("k": his place, added by the host).
@@ -22,9 +26,14 @@ const SEND_EVERY := 0.08                # seconds between two states sent (12 a 
 const ROOM_LIFE := 540.0                # seconds: past this the room is opened again for new guests (the
                                         # server forgets it at ten minutes; the phones linked stay linked)
 const COLOURS := [Color("#ffd35c"), Color("#7ee8ff"), Color("#e7a6ff"), Color("#9dff7a")]   # each place's colour
+const BET_MAX := 99999999               # (0.55) the most one may bet
+const AWAY_KEEP := 90.0                 # (0.55) seconds a guest's place waits for him once his link dropped
+const DOWN_GRACE := 6.0                 # ... seconds a link may say « disconnected » before it counts as lost
+const RELINK_EVERY := 12.0              # ... a guest tries again this often
+const RELINK_TIME := 80.0               # ... and gives up after this
 const HUES := [0.0, 0.42, 0.62, 0.22]   # ... and the hue the ghost is turned by (render.gd)
 
-static var stakes: Array = [0, 50, 100, 250, 500, 1000]   # reglages/progression.txt, [course a 4]
+static var stakes: Array = [100, 500, 1000, 5000]   # reglages/progression.txt, [course a 4]: the ready-made bets
 
 var net: Net
 var save: Dictionary
@@ -34,7 +43,7 @@ var room := ""
 var room_t := 0.0                       # seconds since the room was opened (host)
 var info := ""                          # what went wrong, for the screen
 var me := 0                             # my place
-var seats := {}                         # place -> {name, code, on (the place he bets on), bet, dist, done, gone, live}
+var seats := {}                         # place -> {name, code, skin, on (the place he bets on), bet, ready, away, dist, done, gone}
 var links := {}                         # host: friend code -> Link; guest: "host" -> Link
 var since := 0
 var poll_t := 0.0
@@ -49,6 +58,11 @@ var _ping_t := 0.0
 var _end_t := 0.0
 var message_time := 0.0                 # my run's time (main.gd sets it every step): the trails' clock
 var tries := 0                          # a guest's links to the host tried again (once at most)
+var kit := {}                           # (0.55) the host's items and powers, for all: shown before the start
+var history: Array = []                 # (0.55) the group's races, the latest first: [{n, rows: [{k, name, bet, on, dist, got, win}]}]
+var relink_t := -1.0                    # (0.55) a guest linking again since (-1: not)
+var relink_next := 0.0
+var races := 0                          # races run in this group
 
 class Link:
 	var peer                            # WebRTCPeerConnection (tests/race_logic.gd puts a stand-in there)
@@ -58,6 +72,7 @@ class Link:
 	var seat := -1
 	var t := 0.0                        # seconds spent linking
 	var open := false
+	var down := 0.0                     # (0.55) seconds it has said « disconnected »
 
 ## A runner's states as they come (some late, some out of order, some lost), drawn a little in the past
 ## so that he moves smoothly: the same way as the partner for two (coop.gd).
@@ -104,7 +119,7 @@ static func load_config(text: String) -> void:
 			continue
 		var cols = line.split("|")
 		if section == "course a 4" and cols.size() >= 2 and Tune.key(cols[0]) == "mises":
-			var got = Array(cols[1].split("/")).map(func(c): return maxi(0, int(c.strip_edges())))
+			var got = Array(cols[1].split("/")).map(func(c): return clampi(int(c.strip_edges()), 0, BET_MAX)).filter(func(n): return n > 0)
 			if not got.is_empty():
 				stakes = got
 
@@ -119,6 +134,34 @@ func count() -> int:
 
 func my_seat() -> Dictionary:
 	return seats.get(me, {})
+
+## 0.55: everyone there says he is ready (and linked): the host may start.
+func all_ready() -> bool:
+	if seats.size() < 2:
+		return false
+	for k in seats:
+		if seats[k].get("away", false) or not seats[k].get("ready", false):
+			return false
+	return links.values().all(func(l): return l.open)
+
+## 0.55: I am ready (or no longer).
+func set_ready(on: bool) -> void:
+	if not seats.has(me) or running:
+		return
+	seats[me]["ready"] = on
+	if role == "host":
+		_broadcast_lobby()
+	else:
+		send({"t": "ready", "on": on})
+	changed.emit()
+
+## 0.55: the host's items and powers, for all (shown on everyone's screen before the start).
+func set_kit(k: Dictionary) -> void:
+	if role != "host" or kit == k:
+		return
+	kit = k.duplicate()
+	_broadcast_lobby()
+	changed.emit()
 
 ## What everyone has put in, together.
 func pot() -> int:
@@ -220,7 +263,7 @@ func bet(on: int, n: int) -> void:
 	if not seats.has(me) or running:
 		return
 	seats[me]["on"] = on
-	seats[me]["bet"] = n
+	seats[me]["bet"] = clampi(n, 0, BET_MAX)
 	if role == "host":
 		_broadcast_lobby()
 	else:
@@ -243,6 +286,10 @@ func leave() -> void:
 	seats.clear()
 	trails.clear()
 	invited.clear()
+	history.clear()
+	kit = {}
+	races = 0
+	relink_t = -1.0
 	running = false
 	paid = 0
 	since = 0
@@ -290,12 +337,19 @@ func views(my_t: float) -> Array:
 		out.append(v)
 	return out
 
-## The board of places during the race (render.gd draws it): [{name, dist, colour, out, me}], the furthest first.
+## 0.55: during the race, everyone's bet (render.gd draws it top right): [{name, bet, colour, out, me}], in
+## the order of the places. « bet »: « 500 SUR LÉO », « SANS MISE ».
 func board() -> Array:
 	var out = []
-	for k in standings():
+	var keys = seats.keys()
+	keys.sort()
+	for k in keys:
 		var st: Dictionary = seats[k]
-		out.append({"name": "TOI" if k == me else str(st.get("name", "?")).to_upper().left(8), "dist": int(st.get("dist", 0)), "colour": COLOURS[k % COLOURS.size()], "out": bool(st.get("done", false)) or bool(st.get("gone", false)), "me": k == me})
+		var b = int(st.get("bet", 0))
+		var on = int(st.get("on", k))
+		var on_name = "LUI" if on == k else ("TOI" if on == me else str(seats.get(on, {}).get("name", "?")).to_upper().left(8))
+		out.append({"name": "TOI" if k == me else str(st.get("name", "?")).to_upper().left(8), "bet": ("%d SUR %s" % [b, on_name]) if b > 0 else "SANS MISE",
+			"colour": COLOURS[k % COLOURS.size()], "out": bool(st.get("done", false)) or bool(st.get("gone", false)), "me": k == me})
 	return out
 
 ## The places in order: the furthest first (the distance each has reached so far, or his final one).
@@ -313,8 +367,8 @@ func reach(k: int, dist: float) -> void:
 	if seats.has(k) and not seats[k].get("done", false):
 		seats[k]["dist"] = int(dist)
 
-## How the pot is shared, from everyone's final distance: those who bet on the furthest share it in
-## proportion to what they put in; nobody did: the furthest (or those tied) take it. {pay: place -> coins}.
+## 0.55: from everyone's final distance, who won (the furthest, or those tied), and what each gets back:
+## twice his bet if he bet on one of them, nothing otherwise. {win, pay: place -> coins, pot (all the bets)}.
 static func settle(seats_: Dictionary) -> Dictionary:
 	var best = -1
 	for k in seats_:
@@ -324,26 +378,11 @@ static func settle(seats_: Dictionary) -> Dictionary:
 		if int(seats_[k].get("dist", 0)) == best:
 			win.append(k)
 	var pot_ = 0
-	for k in seats_:
-		pot_ += int(seats_[k].get("bet", 0))
-	var backers: Array = []
-	var backed = 0
-	for k in seats_:
-		var b = int(seats_[k].get("bet", 0))
-		if b > 0 and int(seats_[k].get("on", k)) in win:
-			backers.append(k)
-			backed += b
 	var pay = {}
 	for k in seats_:
-		pay[k] = 0
-	if pot_ > 0:
-		var takers = backers if not backers.is_empty() else win
-		var given = 0
-		for k in takers:
-			var share = (pot_ * int(seats_[k].get("bet", 0)) / backed) if not backers.is_empty() else pot_ / win.size()
-			pay[k] = share
-			given += share
-		pay[takers[0]] += pot_ - given                # (what rounding left: to the first of them)
+		var b = int(seats_[k].get("bet", 0))
+		pot_ += b
+		pay[k] = 2 * b if b > 0 and int(seats_[k].get("on", k)) in win else 0
 	win.sort()
 	return {"win": win, "pay": pay, "pot": pot_}
 
@@ -351,13 +390,15 @@ static func settle(seats_: Dictionary) -> Dictionary:
 
 func _seat_of_me() -> Dictionary:
 	var on: Dictionary = save.get("online", {})
-	return {"name": str(on.get("name", "Pépito")), "code": str(on.get("code", "")), "on": me, "bet": 0}
+	var worn: Dictionary = save.get("skins", {}).get("worn", {})
+	return {"name": str(on.get("name", "Pépito")), "code": str(on.get("code", "")), "skin": str(worn.get("pepito", "")), "on": me, "bet": 0, "ready": false}
 
 func _public_seats() -> Dictionary:
 	var out = {}
 	for k in seats:
 		var s: Dictionary = seats[k]
-		out[str(k)] = {"name": s.get("name", "?"), "code": s.get("code", ""), "on": int(s.get("on", k)), "bet": int(s.get("bet", 0)), "gone": s.get("gone", false), "done": s.get("done", false), "dist": int(s.get("dist", 0))}
+		out[str(k)] = {"name": s.get("name", "?"), "code": s.get("code", ""), "skin": s.get("skin", ""), "on": int(s.get("on", k)), "bet": int(s.get("bet", 0)),
+			"ready": s.get("ready", false), "away": s.get("away", false), "gone": s.get("gone", false), "done": s.get("done", false), "dist": int(s.get("dist", 0))}
 	return out
 
 func _read_seats(d: Dictionary) -> void:
@@ -365,7 +406,9 @@ func _read_seats(d: Dictionary) -> void:
 	seats = {}
 	for k in d:
 		var s: Dictionary = d[k]
-		seats[int(k)] = {"name": str(s.get("name", "?")).left(16), "code": str(s.get("code", "")), "on": int(s.get("on", int(k))), "bet": int(s.get("bet", 0)), "gone": bool(s.get("gone", false)), "done": bool(s.get("done", false)), "dist": int(s.get("dist", 0))}
+		seats[int(k)] = {"name": str(s.get("name", "?")).left(16), "code": str(s.get("code", "")), "skin": str(s.get("skin", "")).left(40), "on": int(s.get("on", int(k))),
+			"bet": clampi(int(s.get("bet", 0)), 0, BET_MAX), "ready": bool(s.get("ready", false)), "away": bool(s.get("away", false)),
+			"gone": bool(s.get("gone", false)), "done": bool(s.get("done", false)), "dist": int(s.get("dist", 0))}
 	if not seats.has(me):
 		seats[me] = mine
 
@@ -431,7 +474,7 @@ func _broadcast(msg: Dictionary, reliable: bool = true, except: String = "") -> 
 		send(msg, reliable)
 
 func _broadcast_lobby() -> void:
-	_broadcast({"t": "lobby", "seats": _public_seats(), "room": room, "running": running})
+	_broadcast({"t": "lobby", "seats": _public_seats(), "room": room, "running": running, "kit": kit, "n": races})
 
 ## The room's new messages: the handshakes (host: from each guest; guest: from the host).
 func _read() -> void:
@@ -481,7 +524,11 @@ func _process(delta: float) -> void:
 	if role == "":
 		return
 	room_t += delta
+	if role == "host" and room_t > ROOM_LIFE and not busy and state == "lobby":
+		_renew()                                     # (0.55) a fresh room before the server forgets this one
 	for k in links.keys():
+		if not links.has(k):
+			continue
 		var l: Link = links[k]
 		l.peer.poll()
 		var st = l.peer.get_connection_state()
@@ -489,11 +536,18 @@ func _process(delta: float) -> void:
 			l.t += delta
 			if l.ctl.get_ready_state() == WebRTCDataChannel.STATE_OPEN:
 				l.open = true
-				_put(l, {"t": "hello", "seat": me, "name": _seat_of_me()["name"], "code": _seat_of_me()["code"]}, true)
+				var mine = _seat_of_me()
+				_put(l, {"t": "hello", "seat": me, "name": mine["name"], "code": mine["code"], "skin": mine["skin"]}, true)
 				if role == "guest":
+					relink_t = -1.0
 					_state("lobby", "")
+					if seats.has(me):                # (0.55: linked again: my bet and my readiness, as they were)
+						send({"t": "bet", "on": int(seats[me].get("on", me)), "n": int(seats[me].get("bet", 0))})
+						send({"t": "ready", "on": bool(seats[me].get("ready", false))})
 			elif l.t > LINK_TIME or st == WebRTCPeerConnection.STATE_FAILED:
 				if role == "guest":
+					if relink_t >= 0:                # (0.55: linking again: the next try comes by itself)
+						continue
 					if tries < 1:                    # once more, from the start (the host takes a new « hi »)
 						tries += 1
 						l.peer.close()
@@ -508,15 +562,51 @@ func _process(delta: float) -> void:
 				l.peer.close()
 				links.erase(k)
 				continue
-		elif st in [WebRTCPeerConnection.STATE_FAILED, WebRTCPeerConnection.STATE_CLOSED, WebRTCPeerConnection.STATE_DISCONNECTED]:
+		elif st == WebRTCPeerConnection.STATE_DISCONNECTED:   # (0.55) often only a moment: wait a little
+			l.down += delta
+			if l.down > DOWN_GRACE:
+				_lost(k)
+				continue
+		elif st in [WebRTCPeerConnection.STATE_FAILED, WebRTCPeerConnection.STATE_CLOSED]:
 			_lost(k)
 			continue
+		else:
+			l.down = 0.0
 		for ch in [l.ctl, l.pos]:
 			while ch != null and ch.get_available_packet_count() > 0:
 				var m = JSON.parse_string(ch.get_packet().get_string_from_utf8())
 				if m is Dictionary:
 					_on_message(k, l, m)
-	if state in ["lobby", "linking"] and (role == "host" or state == "linking") and not running:
+	var away = seats.values().any(func(st_): return st_.get("away", false))
+	if role == "host" and away:                      # (0.55) places kept for those whose link dropped, a while
+		for kk in seats.keys():
+			var st_: Dictionary = seats[kk]
+			if not st_.get("away", false):
+				continue
+			st_["away_t"] = float(st_.get("away_t", 0.0)) + delta
+			if st_["away_t"] > AWAY_KEEP:
+				if running:
+					st_["away"] = false
+					st_["gone"] = true
+					st_["done"] = true
+				else:
+					seats.erase(kk)
+				_broadcast_lobby()
+				changed.emit()
+				if running:
+					_check_end()
+	if role == "guest" and relink_t >= 0:            # (0.55) the guest linking again through the room
+		relink_t += delta
+		relink_next -= delta
+		if relink_t > RELINK_TIME:
+			relink_t = -1.0
+			_fail("La connexion avec l'hôte est perdue.")
+			message.emit({"t": "gone"})
+			return
+		if relink_next <= 0 and not busy:
+			relink_next = RELINK_EVERY
+			_relink()
+	if (state in ["lobby", "linking"] and (role == "host" or state == "linking") and not running) or (role == "host" and away) or (role == "guest" and relink_t >= 0):
 		poll_t -= delta
 		if poll_t <= 0:
 			poll_t = POLL
@@ -531,40 +621,79 @@ func _process(delta: float) -> void:
 			_end_t = 0.5
 			_check_end()
 
-## A link went: on the host, that guest is out (his last distance stands if a race is on); on a guest, the
-## host left, so the race is over for everyone.
+## A link went (0.55: not the end). On the host, that guest's place waits AWAY_KEEP seconds for him (his last
+## distance stands if a race is on and he never comes back); on a guest, he links again through the room.
 func _lost(k: String) -> void:
 	var l: Link = links[k]
 	l.peer.close()
 	links.erase(k)
 	if role == "guest":
-		_fail("L'hôte est parti.")
-		message.emit({"t": "gone"})
+		if relink_t < 0:
+			relink_t = 0.0
+			relink_next = 0.0
+			tries = 1
+			_state("linking", "")
 		return
 	if seats.has(l.seat):
-		if running:
-			seats[l.seat]["gone"] = true
-			seats[l.seat]["done"] = true
-		else:
-			seats.erase(l.seat)
+		seats[l.seat]["away"] = true
+		seats[l.seat]["away_t"] = 0.0
+		seats[l.seat]["ready"] = false
 	_broadcast_lobby()
-	if running:
-		_check_end()
 	changed.emit()
+
+## (0.55) The host: a fresh room, and the guests told (lobby), so that a link that drops later can come back
+## through it.
+func _renew() -> void:
+	busy = true
+	await _reopen()
+	busy = false
+	_broadcast_lobby()
+
+## (0.55) A guest linking again: into the room again (the same place), a new link, a new « hi ».
+func _relink() -> void:
+	busy = true
+	var r = await net.join_room(save, room)
+	busy = false
+	if role != "guest" or relink_t < 0:
+		return
+	if r.has("error") and str(r["error"]) == "unknown":
+		return                                       # (the room is gone: the next try, or the end of trying)
+	if r.has("slot"):
+		me = int(r["slot"])
+	if links.has("host"):
+		links["host"].peer.close()
+	var l = _link("host")
+	if l == null:
+		return
+	links["host"] = l
+	_signal({"t": "hi", "seat": me}, "")
 
 func _on_message(k: String, l: Link, m: Dictionary) -> void:
 	var t = str(m.get("t", ""))
 	if role == "host":
 		match t:
 			"hello":
+				var code = str(m.get("code", ""))
+				var back = -1                    # (0.55) one coming back: his own place, as it was
+				for kk in seats:
+					if code != "" and str(seats[kk].get("code", "")) == code and kk != 0:
+						back = kk
+				if back > 0:
+					l.seat = back
+					seats[back]["away"] = false
+					seats[back]["away_t"] = 0.0
+					seats[back]["skin"] = str(m.get("skin", "")).left(40)
+					_broadcast_lobby()
+					changed.emit()
+					return
 				var seat = l.seat if l.seat > 0 else int(m.get("seat", -1))
-				if seat < 1 or seat >= SEATS or (seats.has(seat) and seats[seat].get("code", "") != str(m.get("code", ""))):
+				if seat < 1 or seat >= SEATS or (seats.has(seat) and seats[seat].get("code", "") != code):
 					seat = _free_seat()
 				if seat < 0 or running:
 					_put(l, {"t": "full"}, true)
 					return
 				l.seat = seat
-				seats[seat] = {"name": str(m.get("name", "Pépito")).left(16), "code": str(m.get("code", "")), "on": seat, "bet": 0}
+				seats[seat] = {"name": str(m.get("name", "Pépito")).left(16), "code": code, "skin": str(m.get("skin", "")).left(40), "on": seat, "bet": 0, "ready": false}
 				invited.erase(seats[seat]["code"])
 				_broadcast_lobby()
 				changed.emit()
@@ -572,7 +701,12 @@ func _on_message(k: String, l: Link, m: Dictionary) -> void:
 				if seats.has(l.seat) and not running:
 					var on = int(m.get("on", l.seat))
 					seats[l.seat]["on"] = on if seats.has(on) else l.seat
-					seats[l.seat]["bet"] = clampi(int(m.get("n", 0)), 0, 1000000)
+					seats[l.seat]["bet"] = clampi(int(m.get("n", 0)), 0, BET_MAX)
+					_broadcast_lobby()
+					changed.emit()
+			"ready":                             # (0.55) a guest ready, or no longer
+				if seats.has(l.seat) and not running:
+					seats[l.seat]["ready"] = bool(m.get("on", false))
 					_broadcast_lobby()
 					changed.emit()
 			"s":
@@ -596,6 +730,9 @@ func _on_message(k: String, l: Link, m: Dictionary) -> void:
 			_read_seats(m.get("seats", {}))
 			if str(m.get("room", "")) != "":
 				room = str(m["room"])
+			if m.get("kit") is Dictionary:
+				kit = m["kit"]
+			races = maxi(races, int(m.get("n", 0)))
 			changed.emit()
 		"full":
 			_fail("Cette course est déjà complète ou déjà partie.")
@@ -622,6 +759,20 @@ func _free_seat() -> int:
 		if not seats.has(i):
 			return i
 	return -1
+
+## (0.55) The race just ended, kept for the group's history (the latest first, twenty at most).
+func _remember() -> void:
+	races += 1
+	var rows: Array = []
+	var keys = seats.keys()
+	keys.sort()
+	for k in keys:
+		var st: Dictionary = seats[k]
+		rows.append({"k": k, "name": str(st.get("name", "?")), "bet": int(st.get("bet", 0)), "on": int(st.get("on", k)),
+			"dist": int(result.get("dists", {}).get(k, st.get("dist", 0))), "got": int(result.get("pay", {}).get(k, 0)), "win": k in result.get("win", [])})
+	history.push_front({"n": races, "rows": rows})
+	if history.size() > 20:
+		history.pop_back()
 
 func _on_state(m: Dictionary) -> void:
 	var k = int(m.get("k", -1))
@@ -658,7 +809,7 @@ func _check_end() -> void:
 	var on: Array = []
 	var best_done = 0
 	for k in seats:
-		if seats[k].get("done", false):
+		if seats[k].get("done", false) or (seats[k].get("away", false) and float(seats[k].get("away_t", 0.0)) > AWAY_KEEP):
 			best_done = maxi(best_done, int(seats[k].get("dist", 0)))
 		else:
 			on.append(k)
@@ -697,7 +848,9 @@ func _end(m: Dictionary) -> void:
 		if seats.has(int(k)):
 			seats[int(k)]["dist"] = int(m["dists"][k])
 	paid = 0
-	for k in seats:                               # (the bets stay as they were for a rematch)
+	_remember()
+	for k in seats:                               # (the bets stay as they were for a rematch; 0.55: ready again)
 		seats[k]["done"] = false
+		seats[k]["ready"] = false
 	message.emit({"t": "result"})
 	changed.emit()

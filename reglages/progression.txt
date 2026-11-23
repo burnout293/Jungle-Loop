@@ -10,14 +10,9 @@ metres par point  | 20      # un point d'expérience tous les 20 m courus
 points par niveau | 300 / 500 / 700 / 1000   # un par niveau (0.47 : les premiers vont vite), le dernier pour tous les suivants
 pieces par niveau | 20      # un niveau rapporte ce nombre × le niveau atteint (niveau 5 : 100 pièces), et une urne (0.47)
 
-[plumes]
-# les plumes de toucan (0.47) : ramassées en course, chacune remplace un défi par un autre
-au plus            | 3       # gardées en même temps
-une de trop vaut   | 25      # pièces, pour une plume ramassée quand tu en as déjà assez
-
 [ameliorations]
 # identifiant  | niveau requis | prix de chaque niveau, séparés par /
-# 0.46 : ses prix du 20/11 ; 0.47 : la fin de boutique bien plus chère (les urnes, les défis et les Tambours
+# 0.46 : ses prix du 20/11 ; 0.47 : la fin de boutique bien plus chère (les urnes, les défis et les Tambours (0.55 : retirés)
 # rapportent aussi : le joueur moyen finit vers la course 725, voir RAPPORT-ECONOMIE.md)
 lastLeap       | 2  | 400 / 600 / 800      # Dernier élan
 spring         | 2  | 1000 / 2000          # Ressort
@@ -39,6 +34,8 @@ sprint         | 5  | 4000                 # Sprint
 sphere         | 5  | 60000                  # Sphère
 rewind         | 12 | 160000                 # Rembobinage
 swiss          | 4  | 1500 / 3500 / 8000     # Couteau suisse (0.54) : 1 évasion par course, puis plus facile, puis 2
+horn           | 4  | 1500 / 4000 / 9000     # Corne de brousse (0.55) : départ sur le rhino, 300 / 500 / 800 m
+idol           | 5  | 2000 / 6000 / 15000    # Idole dorée (0.55) : pièces +25 / +50 / +75 %
 # les montures, chacune les siennes (onglet Montures)
 gorillaTamed     | 5 | 1800 / 3200        # Gorille dompté
 gorillaMagnet    | 5 | 1000 / 2000        # Aimant du gorille
@@ -82,46 +79,31 @@ dartsT    | 30    | 100  | 200            # Esquive … missiles en tout (~6 cou
 dartsT    | 80    | 250  | 800            #   (~17 courses)
 
 [urnes]
-# 0.47 : une urne par niveau atteint, parfois une sur la route (une par course au plus). Ouvertes dans le Trésor
-# (bouton de l'accueil). Chances en % (le reste : commune), et la garantie : au plus tard la n-ième urne sans
-# rare (ou sans légendaire) en donne une.
+# 0.47 : une urne par niveau atteint, parfois une sur la route (une par course au plus), une pour Vorace battue
+# (0.55). Ouvertes dans le Trésor (bouton de l'accueil). On les gagne, on ne les achète jamais. Chances en % (le
+# reste : commune), et la garantie : au plus tard la n-ième urne sans rare (ou sans légendaire) en donne une.
 rare                 | 15
 legendaire           | 2
 rare garantie        | 10
 legendaire garantie  | 50
-eclats pour un skin  | 60      # le prix d'un skin standard dans l'onglet Skins
-eclats d'un doublon  | 30      # un skin déjà à toi sorti d'une urne
+# 0.55 : une seule monnaie, les pièces (plus d'éclats). Le prix d'un skin selon sa rareté, et ce que rapporte un
+# skin déjà à toi sorti d'une urne (environ 15 % de son prix ; voir decisions-economie.md).
+skin commun          | 2500
+skin rare            | 10000
+skin legendaire      | 50000
+doublon commun       | 400
+doublon rare         | 1500
+doublon legendaire   | 5000
 # ce qu'elles contiennent : rareté | objet | quantité (de / à) | poids. Une commune ou une rare donne UNE ligne
-# tirée au sort (selon les poids) ; une légendaire donne TOUTES ses lignes. Objets : pieces, plume, eclats,
-# skin, shield (Bouclier), magnet (Aimant simple), idol (Idole dorée), horn (Corne de brousse), knife (Couteau suisse).
-commune    | pieces  | 150 / 400   | 30
-commune    | plume   | 1           | 12
-commune    | shield  | 1           | 12
-commune    | magnet  | 1           | 12
-commune    | idol    | 1           | 8
-commune    | horn    | 1           | 8
-commune    | eclats  | 10 / 20     | 18
-rare       | knife   | 1           | 30
-rare       | skin    | 1           | 30
-rare       | pieces  | 1000 / 2000 | 15
-rare       | eclats  | 40 / 60     | 25
+# tirée au sort (selon les poids) ; une légendaire donne TOUTES ses lignes. Objets : pieces, skin.
+commune    | pieces  | 150 / 400   | 70
+commune    | skin    | 1           | 30
+rare       | skin    | 1           | 50
+rare       | pieces  | 1000 / 2000 | 50
 legendaire | pieces  | 3000 / 5000 | 1
-legendaire | knife   | 2           | 1
-legendaire | eclats  | 80          | 1
 legendaire | skin    | 1           | 1
 
-[tambours]
-# 0.47 : les Tambours des pygmées (bouton de l'accueil), une récompense par jour, entraînement à volonté.
-duree   | 30          # secondes
-tempo   | 96 / 132    # battements par minute, au début / à la fin
-# à partir de ce score (en %) : ce qu'il donne ; toutes les lignes atteintes s'ajoutent
-30 | pieces  | 300
-55 | urne    | 1
-75 | couteau | 1
-90 | urne    | 1
-90 | eclats  | 30
-
 [course a 4]
-# La course à 4 (0.48) : ce que chacun peut miser avant le départ (en pièces), séparé par /.
-# La cagnotte va à ceux qui ont misé sur le plus loin (en proportion de leur mise), sinon à lui.
-mises | 0 / 50 / 100 / 250 / 500 / 1000
+# L'Affrontement (0.48, 0.55) : les mises toutes prêtes de l'écran (en pièces), séparées par / ; on peut aussi en
+# écrire une autre, de 0 à 99 999 999. Ceux qui ont misé sur le plus loin reçoivent le double de leur mise.
+mises | 100 / 500 / 1000 / 5000

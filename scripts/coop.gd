@@ -44,6 +44,7 @@ var relay := false                     # the server gave a relay (TURN) for this
 var _ping_t := 0.0
 var _pinged := false
 var invited := ""                       # the friend the host sent an invitation to (his name)
+var down_t := 0.0                       # (0.55) seconds the link has said « disconnected »
 var kit := {}                           # the guest's copy of the host's items and powers: {up, eq, biome}
 var buf: Array = []                     # the partner's states (pos), in the order of his run time "at"
 var late := 0.1                         # seconds: how far behind his newest state arrives (smoothed)
@@ -223,9 +224,11 @@ func _process(delta: float) -> void:
 			send({"t": "hello", "name": save.get("online", {}).get("name", "Pépito"), "tier": tier(save)})
 			_ping()
 	if state == "ready":
-		if peer.get_connection_state() in [WebRTCPeerConnection.STATE_FAILED, WebRTCPeerConnection.STATE_CLOSED, WebRTCPeerConnection.STATE_DISCONNECTED]:
-			_fail("L'autre joueur est parti.")
-			message.emit({"t": "bye"})
+		var cs = peer.get_connection_state()
+		down_t = down_t + delta if cs == WebRTCPeerConnection.STATE_DISCONNECTED else 0.0
+		if cs in [WebRTCPeerConnection.STATE_FAILED, WebRTCPeerConnection.STATE_CLOSED] or down_t > Race.DOWN_GRACE:
+			_fail("L'autre joueur est parti.")   # (0.55: « disconnected » is often only a moment, as when a phone
+			message.emit({"t": "bye"})           # turns or comes back from another app: a few seconds first)
 			return
 		_ping_t -= delta
 		if _ping_t <= 0:

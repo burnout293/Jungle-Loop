@@ -139,6 +139,7 @@ func _init() -> void:
 	step(m, inp, 60 * 4, {})
 	m.obs.clear()
 	var o = Game.add_dart(m, m.cam + m.view_w + 20, 46.0)
+	o.aim = true                                     # (0.55: only an aimed one follows his height)
 	var ys = []
 	var k = 0
 	while o.state != "go" and k < 600:

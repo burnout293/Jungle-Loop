@@ -8,7 +8,7 @@ extends RefCounted
 # level pays, each upgrade's level and prices, each objective's goal and rewards. load_config reads it
 # over these defaults; a missing or wrong line keeps the default.
 
-static var cfg := {"mpp": 20.0, "per_level": 1000.0, "steps": [1000.0], "level_coins": 20, "long_max": 1, "feather_max": 3, "feather_coins": 25}
+static var cfg := {"mpp": 20.0, "per_level": 1000.0, "steps": [1000.0], "level_coins": 20, "long_max": 1}
 static var quest_cfg := {}                   # kind -> [{"goal", "reward", "xp"}, ...]: its steps, in order
 
 static func load_config(text: String) -> void:
@@ -37,11 +37,6 @@ static func load_config(text: String) -> void:
 							cfg["steps"] = steps
 							cfg["per_level"] = steps[steps.size() - 1]
 					"pieces par niveau", "pièces par niveau": cfg["level_coins"] = int(v)
-			"plumes":
-				var v = int(cols[1])
-				match cols[0].to_lower():
-					"au plus": cfg["feather_max"] = maxi(1, v)
-					"une de trop", "une de trop vaut": cfg["feather_coins"] = maxi(0, v)
 			"ameliorations", "améliorations":
 				var u = SaveData.upgrade(cols[0])
 				if u.is_empty() or cols.size() < 3:
@@ -175,13 +170,20 @@ static func fill(save: Dictionary) -> void:
 			nq["long"] = true
 		save["quests"].append(nq)
 
-## A toucan's feather spent: this objective goes, another kind takes its place (at the same place on the
-## list). False when there is no feather.
+## 0.55: one objective a day may be changed for nothing (the toucan's feathers are gone).
+static func today() -> String:
+	return Time.get_date_string_from_system()
+
+static func reroll_free(save: Dictionary) -> bool:
+	return str(save.get("rerollDay", "")) != today()
+
+## The day's free change: this objective goes, another kind takes its place (at the same place on the list).
+## False when today's has been used.
 static func reroll(save: Dictionary, q: Dictionary) -> bool:
 	var i = save["quests"].find(q)
-	if i < 0 or int(save["feathers"]) <= 0:
+	if i < 0 or not reroll_free(save):
 		return false
-	save["feathers"] = int(save["feathers"]) - 1
+	save["rerollDay"] = today()
 	save["quests"].remove_at(i)
 	var was = save["lastQuest"]
 	save["lastQuest"] = q["k"]                       # (not the same kind again at once)
@@ -190,16 +192,6 @@ static func reroll(save: Dictionary, q: Dictionary) -> bool:
 	var nq = save["quests"].pop_back()
 	save["quests"].insert(i, nq)
 	return true
-
-## Feathers picked up in a run: kept up to cfg.feather_max, each one more paying cfg.feather_coins.
-## Returns the coins paid.
-static func add_feathers(save: Dictionary, n: int) -> int:
-	var room = maxi(0, int(cfg["feather_max"]) - int(save["feathers"]))
-	var kept = mini(room, n)
-	save["feathers"] = int(save["feathers"]) + kept
-	var paid = (n - kept) * int(cfg["feather_coins"])
-	save["coins"] += paid
-	return paid
 
 static func start_run(save: Dictionary) -> void:
 	for q in save["quests"]:
