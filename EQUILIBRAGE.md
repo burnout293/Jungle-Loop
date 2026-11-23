@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 23/11/2026, **version Godot 0.56.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 23/11/2026, **version Godot 0.57.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) n'est plus en
 ligne depuis la 0.51 (archivée) ; là où elle différait, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil ; depuis la 0.48, un mot de passe le protège dans les versions publiées) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -284,6 +284,16 @@ Défis longs (0.47) : la 5e colonne « long » dans le fichier ; jamais plus d'u
 sinon ils prenaient les trois places. **0.55** : un défi peut être changé gratuitement une fois par jour (le bouton
 sur chaque défi de l'accueil ; il disparaît une fois utilisé) ; les plumes de toucan n'existent plus.
 
+## 9 ter. Course du jour (0.57)
+
+| Valeur | Aujourd'hui | Où |
+|---|---|---|
+| La course | une par jour, la même pour tous (sa graine vient de la date), rejouable à volonté ; Jouer → Course du jour : sa fenêtre (règle, objets imposés, paliers), « Courir » | `daily.gd`, `_daily_panel` |
+| Règle du jour | une parmi : Pressé (départ et accélération ×1,3), Nuit dans la cité, Au fond du donjon (tout dans ce décor), Un seul cœur, À pied (aucune monture), Ailé (le Vol pour tous) | `Daily.RULES`, `Daily.apply` |
+| Objets imposés | deux parmi Aimant 2, Double saut, Esquive, Brise-tout, Ressort, Sablier, Bottes, Gemmes dispersées 2, Dernier élan 2 (ce qu'on porte ne compte pas) | `Daily.KIT_POOL` |
+| Paliers | 300 m : 300 pièces ; 700 m : 600 ; 1200 m : une urne ; 2000 m : 1500 pièces ; 3000 m : deux urnes. Chacun une fois par jour, gagné au passage (atteindre le 3e donne aussi le 1er et le 2e) ; un nouveau jour : tout à regagner | `[course du jour]`, `Daily.claim` |
+| Records | le meilleur du jour à part ; ne compte pas pour le record de Sans fin ni le classement des amis | `bank` |
+
 ## 9 bis. Objets, urnes, skins, évasion (0.47, 0.55)
 
 | Valeur | Aujourd'hui | Où |
@@ -325,12 +335,13 @@ sur chaque défi de l'accueil ; il disparaît une fois utilisé) ; les plumes de
 | Gains (0.55) | qui a misé sur le vainqueur (le plus loin, égalité possible) reçoit le double de sa mise ; les autres la perdent ; rien d'autre n'est partagé | `Race.settle` |
 | Écran (0.55) | les places (le skin de chacun, prêt ou non, sa mise), tes pièces, l'équipement de la course (celui de l'hôte), l'historique des courses du groupe (distances, mises, gains, pièces ; 20 au plus) | `refresh_race`, `history` |
 | Écran de fin (0.56) | après chaque course, pour tous : distance (★ le vainqueur), pièces ramassées (gardées par chacun), mise et sur qui, ce que la mise a donné (+ la mise, ou − la mise), bilan ; « Continuer » ramène au salon | `_race_recap`, `golds` |
+| Tombé (0.57) | on regarde la course ; « Résultats » montre ou cache la course en direct, puis son résultat (qui s'ouvre seul) ; « Retour au salon » pour partir ; la chute des autres se voit chez tous ; « Lancer » est là pour tous, grisé « attente de l'hôte » | `_watch_res_fill`, `_draw_ghost` |
 | La course | Run illimitée, même graine et même route pour tous, l'équipement de l'hôte pour tous, départ 3 s après « Lancer » ; chacun joue chaque instant du temps réel (comme à deux) ; pas de montures ni de capture ; qui tombe est sorti (pas de bulle) et **regarde les autres** (0.55 : la caméra suit le premier encore en course, une touche passe au suivant) jusqu'au résultat ; en course : l'équipement en haut à gauche, les mises de chacun en haut à droite, pas de pause | `_race_go`, `run.race`, `Game.spectate` |
 | Fantômes | les autres, pâles (62 %), Pépito tourné à leur couleur (hôte doré, puis bleu, violet, vert), leur nom au-dessus ; hors de vue : leur nom au bord de l'écran avec l'écart en mètres ; 12 positions par seconde, dessinées un peu dans le passé | `Race.views`, `_draw_ghost` |
 | Fin | quand tous sont tombés, ou que le dernier en course a dépassé tous les autres (il continue pour son record, un bandeau le lui dit) ; écran du résultat : distances, vainqueur, ta mise et ce que tu reçois ; « Revanche » (l'hôte) ou « Changer les mises » | `_check_end`, `refresh_race` |
-| Départs | 0.55 : un lien qui dit « déconnecté » a 6 s pour revenir ; perdu, la place de l'invité l'attend 90 s et il se reconnecte seul par la salle (toutes les 12 s, 80 s au plus), avec sa place et sa mise ; parti pour de bon : sa dernière distance compte, sa mise est perdue pour lui… sauf s'il ne reçoit jamais le résultat (l'hôte parti) : chacun récupère alors sa mise | `_lost`, `_relink`, `AWAY_KEEP`, `_fail` |
+| Départs | 0.55 : un lien qui dit « déconnecté » a 6 s pour revenir ; perdu, la place de l'invité l'attend 180 s (0.57) et il se reconnecte seul par la salle (toutes les 12 s, 180 s au plus) ; le jeu planté, le prochain démarrage propose de rejoindre le groupe (gardé 9 min sur le téléphone), avec sa place et sa mise ; parti pour de bon : sa dernière distance compte, sa mise est perdue pour lui… sauf s'il ne reçoit jamais le résultat (l'hôte parti) : chacun récupère alors sa mise | `_lost`, `_relink`, `AWAY_KEEP`, `_fail` |
 | Panneaux de record | à la distance du record de chaque ami dans le mode joué (« Record de Léo »), et du tien (« Ton record », en pierre dorée) ; plantés 70 m avant d'y arriver, pas avant 50 m, jamais à moins de 25 m l'un de l'autre (le tien l'emporte), 12 au plus ; aussi seul, hors ligne pour le tien | `Game.signs_for`, `SIGN_*` |
-| Amis | retirer un ami (fiche › Retirer, après confirmation : les deux listes, et plus d'invitation entre vous) ; ajouter par code, par lien (`?ami=PEPI-XXXX`) ou par code QR (le lien, lu par l'appareil photo d'un téléphone) ; « Effacer mes données en ligne » (Réglages › Sauvegarde) | `_remove_friend`, `qr.gd`, `player/delete` |
+| Amis | 0.57 : ajouter envoie une **demande** (Liste d'amis › Demandes : Voir, Accepter ou Refuser ; une fenêtre hors course quand elle arrive) ; Liste : le pseudo et « Voir » ; « Scanner son code QR » ouvre l'appareil photo dans le jeu (Chrome, Edge Android). Retirer un ami (fiche › Retirer, après confirmation : les deux listes, et plus d'invitation entre vous) ; ajouter par code, par lien (`?ami=PEPI-XXXX`) ou par code QR ; « Effacer mes données en ligne » (Réglages › Sauvegarde) | `_remove_friend`, `qr.gd`, `player/delete` |
 
 ## 10. Affichage et son
 
