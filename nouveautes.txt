@@ -1,7 +1,7 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Une falaise avant les pitons : Pépito saute, et s'envole.
-Les pitons : la brume ne fait plus mal, des obstacles mieux rangés.
-Nouvel équipement : le Couteau suisse (s'évader des pygmées).
-Missiles : le « ! » se fige 1 s avant le tir.
+Affrontement : Jouer → Affrontement, « Prêt », mises libres payées au double.
+Tombé ? Tu regardes les autres jusqu'au bout. Ton groupe sur l'accueil.
+Une seule monnaie : skins en pièces, Corne et Idole en équipements.
+Missiles plus variés ; un défi changé gratuit par jour.

@@ -83,7 +83,7 @@ Feuilles d'automne, Nuit, Feu.
 ## Amis et trésors
 
 - **Singes** dans les arbres, à saluer en passant.
-- **Plumes de toucan** et **urnes** (0.47, PixelLab), qui flottent comme le sablier.
+- **Urnes** (0.47, PixelLab), qui flottent comme le sablier (0.55 : plus de plumes de toucan).
 - **Pièces** (et 27 dessins de pièces dans `assets/patterns.txt`, dont certains dans le ciel, à n'attraper qu'avec le Vol), **gemmes** jaune, rouge, bleue, **cœurs**.
 
 ## Sur la route avec les amis (0.48)
@@ -140,7 +140,8 @@ temps, avec les fantômes de la course). Rien n'est dans le jeu.
 
 ## Retirés
 
-Ponton de pierre au-dessus d'un creux (0.54 : on ne pouvait pas sauter dessous), caisses à sauter (devenues décor
+Plumes de toucan, bouclier de bois sur le dos, Tambours des pygmées (0.55), ponton de pierre au-dessus d'un creux
+(0.54 : on ne pouvait pas sauter dessous), caisses à sauter (devenues décor
 à casser), mine (remplacée par le robot à pointes), geyser, ronces,
 bloc de pilier, piqué de chauve-souris, plateformes de bois, premiers nénuphars verts (remplacés par ceux
 de Vorace), voix « Danger ! », tentacules de Vorace, idole de pierre des ruines (mise de côté, remplacée par les araignées).
