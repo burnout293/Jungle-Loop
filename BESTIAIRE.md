@@ -4,20 +4,20 @@
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
-Ordre des décors : **forêt**, puis **ruines** (en Histoire après la victoire sur Vorace, en Run illimitée à
-2000 m), **donjon** à 4000 m, **cité** à 6000 m, **forêt** à 8000 m, et ainsi de suite tous les 2000 m.
+Ordre des décors : **forêt**, puis **pitons brumeux** (0.53, à la place des ruines : en Histoire après la victoire
+sur Vorace, en Run illimitée seulement avec le Vol porté), **donjon** à 4000 m, **cité** à 6000 m, **forêt** à 8000 m, et ainsi de suite tous les 2000 m.
 
 ## Dangers
 
 Chaque danger est un **rôle** : il s'évite partout de la même façon, seul son dessin change avec le décor.
 Tous ont un contour sombre et un bord éclairé (lisibilité 5) ; le décor de fond est assombri.
 
-| Rôle (comment l'éviter) | Forêt | Ruines | Donjon | Cité |
+| Rôle (comment l'éviter) | Forêt | Pitons (0.53) | Donjon | Cité |
 |---|---|---|---|---|
-| **Au sol** : sauter | hérisson violet | boule de ronces verte | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
-| **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur (avec le Vol : la tienne, et il vient si tu restes trop à la même hauteur), puis il traverse l'écran | coléoptère | vautour | flèche enflammée | missile |
-| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m (nids dès 900 m), à hauteur de tête (rester au sol) dès 1500 m ; avec le Vol aussi plus haut, et en rideaux (une colonne avec un seul passage) | araignée jaune (basse, immobile), rouge (plus haut, monte et descend de 5 m) | les mêmes araignées | chauve-souris | drone |
-| **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | guêpes | feux follets | gros drones qui tirent un laser au lieu de foncer |
+| **Au sol** : sauter | hérisson violet | aucun : pas de sol, seulement la brume (y tomber coûte un cœur) | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
+| **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur (avec le Vol : la tienne, et il vient si tu restes trop à la même hauteur), puis il traverse l'écran | coléoptère | fusée en bambou des pygmées, ou toucan qui pique | flèche enflammée | missile |
+| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m (nids dès 900 m), à hauteur de tête (rester au sol) dès 1500 m ; avec le Vol aussi plus haut, et en rideaux (une colonne avec un seul passage) | araignée jaune (basse, immobile), rouge (plus haut, monte et descend de 5 m) | pygmée en deltaplane de feuilles ; et les pitons, à survoler | chauve-souris | drone |
+| **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | frelons | feux follets | gros drones qui tirent un laser au lieu de foncer |
 
 0.49 : tous les dangers, le héros, les pièces et les objets sont dessinés 15 % plus grands. Ordre d'apparition :
 araignées 150 m, nuées 300 m, Fonceurs (missiles) 400 m, nids 900 m.
@@ -98,18 +98,22 @@ bout ouvert à droite est bouché de rochers tenus par des lianes. Trois couches
 sol, les rochers sur le sol (ils sautent au départ), le mur du couloir et son pilier devant Pépito. Au départ, la
 caméra part sur le temple entier et glisse jusqu'à la porte.
 
-## Les pitons brumeux (à venir : ils remplaceront les ruines)
+## Les pitons brumeux (0.53, à la place des ruines)
 
 Au-delà de la forêt, des pitons rocheux couverts de jungle sortent d'une mer de brume ; ponts de corde, cascades,
-huttes de guet. On n'y fait que voler (la brume, c'est la chute). Ses volants : le pygmée en deltaplane de feuilles
-(sarbacane), les frelons, le toucan qui pique, la fusée en bambou des pygmées. Images prêtes (0.52), pas encore
-dans le jeu.
+huttes de guet. On n'y fait que voler : le Vol y est toujours là (en Histoire, c'est la couronne de Vorace qui le
+donne), Pépito s'envole tout seul à leur lisière, et la brume ne porte personne : y tomber coûte un cœur, puis il
+remonte. Ses dangers : les pitons (les survoler), le pygmée en deltaplane de feuilles, les frelons, le toucan qui
+pique, la fusée en bambou des pygmées. Rien au sol, aucune plateforme.
 
 ## La relique (0.49)
 
-Cinq morceaux : le **cœur** (cyan, volé par Pépito au temple, aucun pouvoir) et quatre gemmes dans le ventre
-des gardiens de la jungle, chacune avec un pouvoir en Histoire : le **jade** (Vorace, forêt : double saut ; dans
-le jeu), l'**ambre** (ruines : Esquive), la **lune** (cité : Sablier), la **braise** (donjon : Vol). Complète : un
+**0.53** : quatre morceaux. Pépito vole la **mâchoire** au temple (aucun pouvoir) ; Vorace donne en mourant la
+**couronne** (le jade), qui confère le **Vol** (dans le jeu) ; restent la **tête d'ambre** (Esquive) et la **tête de
+braise** (Sablier), pour les gardiens à venir.
+Avant (0.49) : cinq morceaux, le **cœur** (cyan, volé par Pépito au temple, aucun pouvoir) et quatre gemmes dans le
+ventre des gardiens de la jungle : le **jade** (Vorace, forêt : double saut), l'**ambre** (ruines : Esquive), la
+**lune** (cité : Sablier), la **braise** (donjon : Vol). Complète : un
 disque-soleil doré, un masque de pierre au centre avec le cœur au front, les quatre gemmes en croix (PixelLab,
 4 essais dans `propositions/0.49/` du dépôt Godot). Vorace repousse (c'est une fleur) tant que le gardien
 suivant n'existe pas. Ce sont les pygmées, non plus la relique, qui ramènent Pépito au temple à chaque chute.

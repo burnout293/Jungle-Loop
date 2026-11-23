@@ -1,7 +1,7 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Le temple, vu de côté : la course part de lui.
-La relique redessinée, pièce par pièce.
-Réglages : les volumes dans Jeu, les images/s dans Affichage.
-L'écran de chargement ne se fige plus.
+Nouveau décor : les pitons brumeux, où l'on ne fait que voler.
+Vorace donne la couronne de la relique, et le Vol.
+Pépito vole la mâchoire de la relique au temple.
+Ses dangers : pitons, toucans, deltaplanes, frelons.
