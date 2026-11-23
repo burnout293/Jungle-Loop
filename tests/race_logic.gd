@@ -130,9 +130,10 @@ func run_race(races: Array, stops: Array, v: float = 20.0, ticks: int = 400) -> 
 			dist[i] += v
 			r.message_time = k * 0.05
 			r.reach(r.me, dist[i])
-			r.send_state({"at": k * 0.05, "x": dist[i] * 40, "y": 0, "d": floori(dist[i])})
+			r.gained(floori(dist[i] / 10))           # (0.56: a coin every 10 m, as he runs)
+			r.send_state({"at": k * 0.05, "x": dist[i] * 40, "y": 0, "d": floori(dist[i]), "c": floori(dist[i] / 10)})
 			if stops[i] > 0 and dist[i] >= stops[i]:
-				r.done(floori(dist[i]))
+				r.done(floori(dist[i]), floori(dist[i] / 10))
 		for r in races:
 			r._process(0.05)
 		if races.all(func(r): return not r.running):
@@ -173,6 +174,12 @@ func _init() -> void:
 	check(coins(races[2]) == 1000, "nobody bet on Deux: nobody gets anything (0.55), Deux keeps his 1000")
 	check(coins(races[0]) == 900 and coins(races[1]) == 950 and coins(races[3]) == 900, "the others lose their bets")
 	check(races.all(func(r): return r.history.size() == 1 and r.history[0]["rows"].size() == 4), "the race is in everyone's history")
+	var golds_ok = races.all(func(r):
+		var g = {}
+		for row in r.history[0]["rows"]:
+			g[int(row["k"])] = int(row.get("gold", -1))
+		return g.get(0) == 70 and g.get(1) == 30 and g.get(3) == 50 and g.get(2, 0) > 50)
+	check(golds_ok, "(0.56) everyone's coins picked up, the same on every phone (70, 30, 50, and the winner's)")
 	check(races.all(func(r): return not r.seats.values().any(func(st): return st.get("ready", false))), "after it, nobody is ready: each one says so again")
 	check(races.all(func(r): return int(r.result["dists"][1]) == 300 and int(r.result["dists"][3]) == 500), "everyone has the same distances")
 

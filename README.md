@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.55.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.56.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,20 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.56.0
+
+- **Lasers de la cité** : le tir ne brûle plus que 0,15 s (`LASER_LIVE`, 0,45 avant) ; avant lui, trois bips
+  (`LASER_TICKS` 0,9 / 0,6 / 0,3 s, son « lasertick ») et un anneau qui se referme sur chaque drone ; dès le
+  troisième, « SAUTE ! » en grand au-dessus de Pépito si un couloir visé le toucherait debout (`laser_jump`,
+  `Render.JUMP_CUE` 0,3 s). Un saut simple au signal, ou 0,15 s après, passe toujours (`tests/laser_056.gd`).
+- **Champignons** : frôlés, ils s'éclairent 70 % moins fort (`Render.SHROOM_GLOW`).
+- **Affrontement, écran de fin** : chacun envoie les pièces qu'il ramasse (états « c », `done(dist, gold)`,
+  `gained`), le résultat de l'hôte les donne à tous (« golds ») ; après la course, un tableau pour tous les
+  joueurs (distance, pièces ramassées, mise et sur qui, ce que la mise a donné, bilan), « Continuer » ramène au
+  salon ; l'historique garde aussi les pièces. Les pièces ramassées sont bien gardées (déjà en 0.55 : `bank`
+  à la chute) ; la sauvegarde reprise de la version web est maintenant aussi celle de la course et du jeu à deux.
+- Tests : `tests/laser_056.gd` (6), `tests/race_logic.gd` (30 : les pièces de chacun). Banc `--tour56`.
 
 ## 0.55.0
 

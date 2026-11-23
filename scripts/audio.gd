@@ -214,7 +214,9 @@ func _recipes() -> Dictionary:
 		"slowtick": [T(1900, 0.04, "square", 0.09), T(1250, 0.05, "square", 0.07, 0.07)],   # tick-tock: time running out
 		"slowend": [T(150, 0.45, "sine", 0.24, 0, 900), N(0.3, 0.14, 2600, 0.05)],          # the world rushing back
 		"dart": [T(700, 0.3, "sawtooth", 0.1, 0, 200), N(0.25, 0.25, 3000)],
-		"laser": [T(1800, 0.5, "sawtooth", 0.14, 0.2, 400)],
+		"laser": [T(1800, 0.25, "sawtooth", 0.14, 0, 400)],
+		# 0.56: the city's drones counting down to their beam (three of them, higher the last)
+		"lasertick": [T(1320, 0.06, "square", 0.09)],
 		"roll": [T(240, 0.22, "triangle", 0.16, 0, 520)],
 		"unroll": [T(520, 0.18, "triangle", 0.14, 0, 260)],
 		"heart": arp([12, 16, 19, 24], 0.22, "triangle", 0.2, 0.07),

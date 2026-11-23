@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,7 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour56": opts["tour56"] = true        # 0.56's: a mushroom brushed, the city's lasers and their cue, the race's end screen
 			"tour55": opts["tour55"] = true        # 0.55's: the group on the home screen, the Affrontement, watching, skins in coins
 			"tour54": opts["tour54"] = true        # 0.54's: a hollow under a mound, the cliff (Histoire), the leap, the gliders, the heights
 			"tour53": opts["tour53"] = true        # 0.53's: the misty heights (flying only), seen from the forest's edge
@@ -149,6 +150,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour56"]:
+		await _tour56()
 		return
 	if opts["tour55"]:
 		await _tour55()
@@ -493,6 +497,90 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour56: 0.56 in pictures: a run in the forest, a mushroom brushed (lit, 70 % less); in the city, a wave of
+## drones on the floor's lane and one higher (the ring closing, « SAUTE ! », the short beam); then the end
+## screen of an Affrontement made up (everyone's distance, coins, bet).
+var steps56: Array = []
+var laser56 := false
+
+func _tour56() -> void:
+	if steps56.is_empty():
+		steps56 = [
+			[0.5, "setup", ""], [0.8, "play", ""], [3.0, "shroom", ""], [3.25, "shot", "56-01-champignon"], [3.9, "shot", "56-02-champignon-apres"],
+			[4.0, "city", ""], [6.0, "swarm", ""], [7.3, "shot", "56-03-lasers-anneau"], [7.85, "shot", "56-04-saute"],
+			[8.05, "shot", "56-05-tir"], [8.6, "shot", "56-06-apres"],
+			[8.5, "recap", ""], [9.4, "shot", "56-07-fin-affrontement"], [9.6, "quit", ""],
+		]
+	if laser56 and main.run != null and main.run.fm != null:   # (the road flat and empty under the wave)
+		main.run.obs.clear()
+	while tour_i < steps56.size() and t >= steps56[tour_i][0]:
+		var st = steps56[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		var r: Game.Run = main.run
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				main.save["seenIntro"] = true
+				main.save["mode"] = "endless"
+				main.endless_biome = 0
+			"play":
+				main.go("play")
+				main.run.god = true
+			"shroom":                                 # the next mushroom brought into view, just brushed
+				var i0 = floori((r.cam + r.sx) / Game.PROP_CELL) + 1
+				for i in range(i0, i0 + 400):
+					var pr = Game.prop_at(i)
+					if pr != null and pr["kind"] == Game.PROP_SHROOM and Game.biome_at(r, pr["x"]) == 0 and Game.flat_at(r, pr["x"], Game.PROP_CELL * 0.6):
+						r.cam = pr["x"] - 260 * Game.PIXEL
+						r.obs.clear()
+						r.touched[i] = r.t
+						break
+			"city":                                   # the city, its road flat and empty
+				r.prev_biome = 2
+				r.biome = 2
+				r.biome_x = r.cam - 2000
+				r.obs.clear()
+				r.coins.clear()
+				r.plats.clear()
+				r.zones.clear()
+				r.pits.clear()
+				r.hills.clear()
+				r.decor.clear()
+				r.terrain = [Vector2(r.cam - 2000, Game.GROUND)]
+				r.next_x = INF
+				r.next_fm = INF
+				laser56 = true
+			"swarm":                                  # drones on the floor's lane and the fourth one
+				var f = Game.Swarm.new()
+				f.biome = 2
+				f.waves = 1
+				r.fm = f
+				Game.wave(r)
+				f.act.fill(false)
+				f.act[0] = true
+				f.act[3] = true
+			"recap":
+				laser56 = false
+				var rc: Race = main.race
+				rc.role = "host"
+				rc.state = "lobby"
+				rc.room = "KQ7M"
+				rc.me = 0
+				rc.seats = {0: {"name": "Pépito", "code": "PEPI-6ZAW", "skin": "", "on": 0, "bet": 500, "ready": false},
+					1: {"name": "Léo", "code": "PEPI-K7QM", "skin": "pepito-ember", "on": 1, "bet": 1000, "ready": false},
+					2: {"name": "Inès", "code": "PEPI-INES", "skin": "pepito-amethyst", "on": 0, "bet": 100, "ready": false}}
+				rc.races = 3
+				rc.history = [{"n": 3, "rows": [
+					{"k": 0, "name": "Pépito", "bet": 500, "on": 0, "dist": 1840, "gold": 212, "got": 1000, "win": true},
+					{"k": 1, "name": "Léo", "bet": 1000, "on": 1, "dist": 1210, "gold": 147, "got": 0, "win": false},
+					{"k": 2, "name": "Inès", "bet": 100, "on": 0, "dist": 760, "gold": 64, "got": 200, "win": false}]}]
+				main.race_seen = false
+				main.go("race")
 			"quit": get_tree().quit()
 
 ## --tour55: 0.55 in pictures: a group of three made up (looks, bets, ready or not, two races in its history),

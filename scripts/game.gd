@@ -389,9 +389,15 @@ const FM_H := 64.0 * SIZE
 const FM_RUSH := 1150.0
 const FM_LANES := 5
 const FM_STEP := 110.0
-const LASER_ON := 0.25
-const LASER_OFF := 0.7
-const LASER_END := 0.95
+# The city's drones (0.56): once there they charge LASER_ON s, then the beam burns LASER_LIVE s only (it was
+# 0.45 s) and fades by LASER_END. Before it, a beep LASER_TICKS seconds before it burns (a ring closing on each
+# drone, render.gd), and « SAUTE ! » over him from the third one when a lane aimed at crosses him standing: a
+# jump from then to 0.1 s before the beam gets him over it.
+const LASER_ON := 0.3
+const LASER_LIVE := 0.15
+const LASER_OFF := LASER_ON + LASER_LIVE
+const LASER_END := LASER_OFF + 0.15
+const LASER_TICKS := [0.9, 0.6, 0.3]
 const LASER_H := 40.0
 
 static var GEMS := {"y": 5, "r": 10, "b": 20}
@@ -3145,6 +3151,29 @@ static func wave(run: Run) -> void:
 	f.ghost = run.lvl("drunk") > 0 and randf() < DRUNK[run.lvl("drunk")]
 	run.events.append("fm")
 
+## (0.56) The city's drones: seconds before their beam burns (negative: burning or done), -9 when none.
+static func laser_in(f) -> float:
+	if f == null or f.biome != 2:
+		return -9.0
+	if f.phase == "aim":
+		return f.aim - f.t + LASER_ON
+	if f.phase == "fire":
+		return LASER_ON - f.t
+	return -9.0
+
+## (0.56) A city drone's beam would catch him standing where he is (one of the lanes aimed at crosses him on
+## his floor): render.gd shows « SAUTE ! » as it comes.
+static func laser_jump(run: Run) -> bool:
+	var f = run.fm
+	if f == null or f.biome != 2 or f.ghost:
+		return false
+	var fl = floor_at(run, run.cam + run.sx)
+	for k in mini(f.act.size(), FM_LANES):
+		var y0 = GROUND - (k + 0.5) * FM_STEP - LASER_H / 2
+		if f.act[k] and y0 + 4 < fl - 2 and y0 + LASER_H - 4 > fl - HERO_H + 6:
+			return true
+	return false
+
 static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 	var p = run.p
 	var px = run.cam + run.sx
@@ -3168,13 +3197,22 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 		run.fm = nf
 		wave(run)
 	var f: Swarm = run.fm
+	var before = laser_in(f)
 	f.t += d
+	if f.biome == 2 and not f.ghost and before > -1.0:   # (0.56) the beeps before the beam, then its burst
+		var now = laser_in(f)
+		for tk in LASER_TICKS:
+			if before > tk and now <= tk:
+				run.events.append("lasertick")
+		if before > 0 and now <= 0:
+			run.events.append("laser")
 	if f.phase == "aim":                             # they follow the hero from the right edge
 		f.sx += (run.view_w - 110 - f.sx) * minf(1, d * 5)
 		if f.t >= f.aim:
 			f.phase = "fire" if f.biome == 2 else "rush"
-			f.t = 0
-			run.events.append("laser" if f.phase == "fire" else "rush")
+			f.t = maxf(0.0, f.t - f.aim)             # (0.56: carried on, the countdown stays even)
+			if f.phase == "rush":
+				run.events.append("rush")
 		return
 	if f.phase == "fire":                            # the city's drones stay put and fire along their lanes
 		if not f.hit and not f.ghost and f.t > LASER_ON and f.t < LASER_OFF:

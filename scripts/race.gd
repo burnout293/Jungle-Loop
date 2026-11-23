@@ -43,7 +43,7 @@ var room := ""
 var room_t := 0.0                       # seconds since the room was opened (host)
 var info := ""                          # what went wrong, for the screen
 var me := 0                             # my place
-var seats := {}                         # place -> {name, code, skin, on (the place he bets on), bet, ready, away, dist, done, gone}
+var seats := {}                         # place -> {name, code, skin, on (the place he bets on), bet, ready, away, dist, gold, done, gone}
 var links := {}                         # host: friend code -> Link; guest: "host" -> Link
 var since := 0
 var poll_t := 0.0
@@ -59,7 +59,7 @@ var _end_t := 0.0
 var message_time := 0.0                 # my run's time (main.gd sets it every step): the trails' clock
 var tries := 0                          # a guest's links to the host tried again (once at most)
 var kit := {}                           # (0.55) the host's items and powers, for all: shown before the start
-var history: Array = []                 # (0.55) the group's races, the latest first: [{n, rows: [{k, name, bet, on, dist, got, win}]}]
+var history: Array = []                 # (0.55) the group's races, the latest first: [{n, rows: [{k, name, bet, on, dist, gold, got, win}]}]
 var relink_t := -1.0                    # (0.55) a guest linking again since (-1: not)
 var relink_next := 0.0
 var races := 0                          # races run in this group
@@ -309,18 +309,26 @@ func send_state(s: Dictionary) -> void:
 	else:
 		send(s, false)
 
-## I fell: my distance is final.
-func done(dist: int) -> void:
+## I fell: my distance is final (0.56: and the coins I picked up, kept, for everyone's end screen).
+func done(dist: int, gold: int = -1) -> void:
 	if not running or not seats.has(me):
 		return
 	seats[me]["done"] = true
 	seats[me]["dist"] = dist
+	if gold >= 0:
+		seats[me]["gold"] = gold
+	var c = int(seats[me].get("gold", 0))
 	if role == "host":
-		_broadcast({"t": "done", "k": me, "d": dist})
+		_broadcast({"t": "done", "k": me, "d": dist, "c": c})
 		_check_end()
 	else:
-		send({"t": "done", "d": dist})
+		send({"t": "done", "d": dist, "c": c})
 	changed.emit()
+
+## (0.56) The coins I have picked up so far in the race (main.gd, as I run).
+func gained(gold: int) -> void:
+	if seats.has(me) and not seats[me].get("done", false):
+		seats[me]["gold"] = gold
 
 ## Where each of the others is to be drawn at my run time `my_t`: [{k, name, colour, x, y, ...}].
 func views(my_t: float) -> Array:
@@ -398,7 +406,8 @@ func _public_seats() -> Dictionary:
 	for k in seats:
 		var s: Dictionary = seats[k]
 		out[str(k)] = {"name": s.get("name", "?"), "code": s.get("code", ""), "skin": s.get("skin", ""), "on": int(s.get("on", k)), "bet": int(s.get("bet", 0)),
-			"ready": s.get("ready", false), "away": s.get("away", false), "gone": s.get("gone", false), "done": s.get("done", false), "dist": int(s.get("dist", 0))}
+			"ready": s.get("ready", false), "away": s.get("away", false), "gone": s.get("gone", false), "done": s.get("done", false), "dist": int(s.get("dist", 0)),
+			"gold": int(s.get("gold", 0))}
 	return out
 
 func _read_seats(d: Dictionary) -> void:
@@ -408,7 +417,8 @@ func _read_seats(d: Dictionary) -> void:
 		var s: Dictionary = d[k]
 		seats[int(k)] = {"name": str(s.get("name", "?")).left(16), "code": str(s.get("code", "")), "skin": str(s.get("skin", "")).left(40), "on": int(s.get("on", int(k))),
 			"bet": clampi(int(s.get("bet", 0)), 0, BET_MAX), "ready": bool(s.get("ready", false)), "away": bool(s.get("away", false)),
-			"gone": bool(s.get("gone", false)), "done": bool(s.get("done", false)), "dist": int(s.get("dist", 0))}
+			"gone": bool(s.get("gone", false)), "done": bool(s.get("done", false)), "dist": int(s.get("dist", 0)),
+			"gold": maxi(0, int(s.get("gold", 0)))}
 	if not seats.has(me):
 		seats[me] = mine
 
@@ -717,7 +727,8 @@ func _on_message(k: String, l: Link, m: Dictionary) -> void:
 				if seats.has(l.seat):
 					seats[l.seat]["done"] = true
 					seats[l.seat]["dist"] = int(m.get("d", 0))
-					_broadcast({"t": "done", "k": l.seat, "d": int(m.get("d", 0))}, true, k)
+					seats[l.seat]["gold"] = maxi(0, int(m.get("c", seats[l.seat].get("gold", 0))))
+					_broadcast({"t": "done", "k": l.seat, "d": int(m.get("d", 0)), "c": int(seats[l.seat]["gold"])}, true, k)
 					_check_end()
 					changed.emit()
 			"bye":
@@ -745,6 +756,7 @@ func _on_message(k: String, l: Link, m: Dictionary) -> void:
 			if seats.has(kk):
 				seats[kk]["done"] = true
 				seats[kk]["dist"] = int(m.get("d", 0))
+				seats[kk]["gold"] = maxi(0, int(m.get("c", seats[kk].get("gold", 0))))
 				changed.emit()
 		"result":
 			_end(m)
@@ -769,7 +781,8 @@ func _remember() -> void:
 	for k in keys:
 		var st: Dictionary = seats[k]
 		rows.append({"k": k, "name": str(st.get("name", "?")), "bet": int(st.get("bet", 0)), "on": int(st.get("on", k)),
-			"dist": int(result.get("dists", {}).get(k, st.get("dist", 0))), "got": int(result.get("pay", {}).get(k, 0)), "win": k in result.get("win", [])})
+			"dist": int(result.get("dists", {}).get(k, st.get("dist", 0))), "gold": int(st.get("gold", 0)),
+			"got": int(result.get("pay", {}).get(k, 0)), "win": k in result.get("win", [])})
 	history.push_front({"n": races, "rows": rows})
 	if history.size() > 20:
 		history.pop_back()
@@ -783,12 +796,14 @@ func _on_state(m: Dictionary) -> void:
 	trails[k].push(m, float(message_time))
 	if not seats[k].get("done", false):
 		seats[k]["dist"] = int(m.get("d", seats[k].get("dist", 0)))
+		seats[k]["gold"] = maxi(0, int(m.get("c", seats[k].get("gold", 0))))   # (0.56: his coins so far)
 
 ## The race starts here (for the host as for the guests): the bets are paid in, the trails emptied.
 func _begin(m: Dictionary) -> void:
 	_read_seats(m.get("seats", _public_seats()))
 	for k in seats:
 		seats[k]["dist"] = 0
+		seats[k]["gold"] = 0
 		seats[k]["done"] = false
 	trails.clear()
 	result = {}
@@ -824,10 +839,11 @@ func _check_end() -> void:
 	for k in view:
 		view[k]["dist"] = dists[k]
 	var s = settle(view)
-	var msg = {"t": "result", "pot": s["pot"], "win": s["win"], "pay": {}, "dists": {}}
+	var msg = {"t": "result", "pot": s["pot"], "win": s["win"], "pay": {}, "dists": {}, "golds": {}}
 	for k in seats:
 		msg["pay"][str(k)] = s["pay"][k]
 		msg["dists"][str(k)] = dists[k]
+		msg["golds"][str(k)] = int(seats[k].get("gold", 0))
 	_broadcast(msg)
 	_end(msg)
 
@@ -847,6 +863,9 @@ func _end(m: Dictionary) -> void:
 		result["dists"][int(k)] = int(m["dists"][k])
 		if seats.has(int(k)):
 			seats[int(k)]["dist"] = int(m["dists"][k])
+	for k in m.get("golds", {}):                     # (0.56) everyone's coins picked up (mine: as I have them)
+		if seats.has(int(k)) and int(k) != me:
+			seats[int(k)]["gold"] = maxi(0, int(m["golds"][k]))
 	paid = 0
 	_remember()
 	for k in seats:                               # (the bets stay as they were for a rematch; 0.55: ready again)

@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.55.0"
+const VERSION := "0.56.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -260,6 +260,8 @@ func _adopt_web_save() -> bool:
 		if f != null:
 			f.store_string(JSON.stringify(save))
 	save = web
+	coop.save = save                                 # (0.56: the race and the two-player link see the same save)
+	race.save = save
 	SaveData.store(save)
 	adopted_note = "Ta partie a été reprise : niveau %d, %d pièces, record %d m." % [Progress.level_info(save["xp"])["level"], save["coins"], save["best"]]
 	print("Partie de la version web reprise : ", adopted_note)
@@ -4556,6 +4558,29 @@ func _build_race() -> void:
 	hp.add_child(hv)
 	s.add_child(hp)
 	w["rc-histbox"] = hp
+	var res = PanelContainer.new()                      # (0.56) the race just run: everyone's distance, coins, bet
+	res.add_theme_stylebox_override("panel", styles["box"])
+	_place(res, 14, 134, 541, 122)
+	var rv = _vbox(3)
+	var rtop = _hbox(6)
+	w["rc-res-title"] = _label("", ts("s"), GOLD, 0)
+	w["rc-res-title"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rtop.add_child(w["rc-res-title"])
+	var rok = _button("Continuer", "small", func() -> void:
+		race_seen = true
+		refresh_race())
+	rok.custom_minimum_size = Vector2(a(80), a(20))
+	rtop.add_child(rok)
+	rv.add_child(rtop)
+	var rgrid = GridContainer.new()
+	rgrid.columns = 6
+	rgrid.add_theme_constant_override("h_separation", roundi(a(10)))
+	rgrid.add_theme_constant_override("v_separation", roundi(a(3)))
+	rv.add_child(rgrid)
+	w["rc-res-grid"] = rgrid
+	res.add_child(rv)
+	s.add_child(res)
+	w["rc-res"] = res
 	w["rc-text"] = _label("", ts("m"), INK, 0)            # opening, linking, a race going on, what went wrong
 	w["rc-text"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	w["rc-text"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -4626,7 +4651,13 @@ func refresh_race() -> void:
 		_set_colour(w["rc-sub-%d" % i], Color("#9dff7a") if ready and not live else DIM)
 		w["rc-inv-%d" % i].visible = not there and host and lobby and nm == ""
 		w["rc-box-%d" % i].modulate = Color.WHITE if there or nm != "" else Color(1, 1, 1, 0.55)
-	w["rc-bet"].visible = lobby and race.seats.has(race.me)
+	var recap = lobby and not race_seen and not race.history.is_empty()   # (0.56) the end screen of the race just run
+	w["rc-res"].visible = recap
+	w["rc-kitbox"].visible = not recap
+	w["rc-histbox"].visible = not recap
+	if recap:
+		_race_recap(race.history[0])
+	w["rc-bet"].visible = lobby and race.seats.has(race.me) and not recap
 	if lobby:
 		for holder in [w["rc-stakes"], w["rc-on"]]:
 			for ch in holder.get_children():
@@ -4711,10 +4742,10 @@ func refresh_race() -> void:
 	w["rc-text"].text = text
 	w["rc-text"].visible = text != "" and not (lobby and race.seats.has(race.me))
 	var my_ready = bool(mine.get("ready", false))
-	w["rc-ready"].visible = lobby and race.seats.has(race.me)
+	w["rc-ready"].visible = lobby and race.seats.has(race.me) and not recap
 	w["rc-ready"].text = "Plus prêt" if my_ready else "Prêt !"
 	_style_button(w["rc-ready"], "" if my_ready else "go")
-	w["rc-go"].visible = lobby and host and race.all_ready()
+	w["rc-go"].visible = lobby and host and race.all_ready() and not recap
 	var wait = ""
 	if not race_seen and not race.history.is_empty():   # the race just run: who won, what I get
 		var last: Dictionary = race.history[0]
@@ -4736,6 +4767,35 @@ func refresh_race() -> void:
 		wait = "Tout le monde est prêt !"
 	w["rc-wait"].text = wait
 	w["rc-wait"].visible = wait != ""
+
+## (0.56) The end screen of a race, for everyone: distance (the winner starred), coins picked up (kept), the
+## bet and on whom, what the bet gave (twice it, or lost), and all of it together.
+func _race_recap(e: Dictionary) -> void:
+	w["rc-res-title"].text = "COURSE %d · RÉSULTAT" % int(e["n"])
+	var grid: GridContainer = w["rc-res-grid"]
+	for ch in grid.get_children():
+		grid.remove_child(ch)
+		ch.queue_free()
+	for head in ["JOUEUR", "DISTANCE", "PIÈCES", "MISE", "SUR LA MISE", "BILAN"]:
+		grid.add_child(_label(head, ts("s"), RELIC, 0))
+	var rows: Array = e["rows"].duplicate()
+	rows.sort_custom(func(p_, q_): return int(p_["dist"]) > int(q_["dist"]))
+	for r_ in rows:
+		var k = int(r_["k"])
+		var col: Color = INK if k == race.me else Race.COLOURS[k % Race.COLOURS.size()]
+		var b = int(r_["bet"])
+		var got = int(r_["got"])
+		var gold = int(r_.get("gold", 0))
+		var on = int(r_["on"])
+		var on_name = "lui" if on == k else ("toi" if on == race.me else str(race.seats.get(on, {}).get("name", "?")).left(8))
+		var won = got - b if b > 0 else 0
+		var cells = [("Toi" if k == race.me else str(r_["name"]).left(10)) + (" ★" if r_["win"] else ""), "%d m" % int(r_["dist"]),
+			"+%d" % gold, ("%d sur %s" % [b, on_name]) if b > 0 else "—", (("+%d" % won) if won > 0 else ("%d" % won)) if b > 0 else "—",
+			("+%d" % (gold + won)) if gold + won >= 0 else "%d" % (gold + won)]
+		for i in cells.size():
+			var c = cells[i]
+			var tint = col if i == 0 else (Color("#9dff7a") if (i == 4 and won > 0) or (i == 5 and gold + won > 0) else (Color("#ff7a7a") if (i == 4 and won < 0) or (i == 5 and gold + won < 0) else INK))
+			grid.add_child(_label(c, ts("s"), tint, 0))
 
 ## « Miser »: the number written, as my bet (0 to 99 999 999, never more than my coins).
 func _race_amount() -> void:
@@ -4885,8 +4945,8 @@ func _on_race(m: Dictionary) -> void:
 ## them (the camera follows one; a touch, the next one) until the result.
 func _race_watch() -> void:
 	if race.running and not race.my_seat().get("done", false):
-		race.done(floori(run.dist))
-	bank()
+		race.done(floori(run.dist), run.gold)
+	bank()                                           # (my coins picked up are mine, whatever the race gives)
 	run.spectating = true
 	watch_k = -1
 	hint(0)
@@ -4922,7 +4982,7 @@ func _watch_next() -> void:
 ## others, and the race screen shows how it goes on.
 func _race_over() -> void:
 	if race.running and not race.my_seat().get("done", false):
-		race.done(floori(run.dist))
+		race.done(floori(run.dist), run.gold)
 	bank()
 	if w.has("hud-watch") and is_instance_valid(w["hud-watch"]):
 		w["hud-watch"].visible = false
@@ -5701,7 +5761,7 @@ func _step(h: float) -> void:
 		race_send_t -= h
 		if race_send_t <= 0:
 			race_send_t = Race.SEND_EVERY
-			race.send_state({"at": run.t, "x": run.cam + run.sx, "y": run.p.y, "vy": run.p.vy, "v": run.speed, "g": run.p.ground, "f": run.p.flying, "ph": run.p.phase, "d": floori(run.dist)})
+			race.send_state({"at": run.t, "x": run.cam + run.sx, "y": run.p.y, "vy": run.p.vy, "v": run.speed, "g": run.p.ground, "f": run.p.flying, "ph": run.p.phase, "d": floori(run.dist), "c": run.gold})
 	if run.coop and coop.state == "ready" and not run.dead:   # where he is, for the partner's screen
 		coop_send_t -= h
 		if coop_send_t <= 0:
@@ -5744,6 +5804,7 @@ func _process(delta: float) -> void:
 				race.message_time = run.t
 				run.rivals = race.views(run.t)
 				race.reach(race.me, run.dist)
+				race.gained(run.gold)                    # (0.56) my coins so far, for everyone's end screen
 				run.board = race.board() if race.running else []
 		else:
 			_step(dt)

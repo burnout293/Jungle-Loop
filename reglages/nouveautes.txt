@@ -1,7 +1,7 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Affrontement : Jouer → Affrontement, « Prêt », mises libres payées au double.
-Tombé ? Tu regardes les autres jusqu'au bout. Ton groupe sur l'accueil.
-Une seule monnaie : skins en pièces, Corne et Idole en équipements.
-Missiles plus variés ; un défi changé gratuit par jour.
+Lasers de la cité : trois bips, un anneau, puis « SAUTE ! ».
+Les lasers ne durent plus qu'un instant.
+Affrontement : un écran de fin avec les pièces, mises et distances de tous.
+Les champignons s'éclairent bien moins fort.

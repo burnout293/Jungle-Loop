@@ -22,6 +22,8 @@ const TEMPLE_FLOOR := 218.0            # the row of the temple's pictures that s
 # temple and slides to the doorway while it rumbles (Game.TEMPLE_PAN).
 const PROP_CELL := Game.PROP_CELL / Game.PIXEL
 const EARTH := 24.0
+const SHROOM_GLOW := 0.3
+const JUMP_CUE := 0.3                   # (0.56) seconds before a city laser that would catch him standing: « SAUTE ! »                # (0.56) how much a brushed mushroom lights up, of what it did before
 const CLIFF_FACE := 24                  # (0.54) cliff.png: its rock face this far from its left side, its floor line
 const CLIFF_TOP_ROW := 28               # on this row (tools: assets/src/falaise)
 const SLICE := 4
@@ -789,6 +791,8 @@ func draw_props(c: CanvasItem) -> void:
 				continue
 			var lantern: bool = pr["kind"] == Game.PROP_LANTERN
 			var lit = clampf((3.0 - since) / 1.5, 0, 1)   # brushed: fully lit, fading out after 1.5 s
+			if not lantern:
+				lit *= SHROOM_GLOW                   # (0.56: the caps light up 70 % less than they did)
 			var a = maxf(0.3 + 0.2 * pow(sin(t * 5 + i), 2), lit) if lantern else lit
 			if a <= 0:
 				continue
@@ -1247,13 +1251,14 @@ func _draw_race_board(c: CanvasItem) -> void:
 		y += 10
 
 ## A line of the pixel typeface, outlined in dark: at x (left, right or centre), y its top.
-func label(c: CanvasItem, text: String, x: float, y: float, col: Color, right: bool = false, centre: bool = false) -> void:
-	var w = sign_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x
+func label(c: CanvasItem, text: String, x: float, y: float, col: Color, right: bool = false, centre: bool = false, size: int = 8) -> void:
+	var w = sign_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	var x0 = snap(x - w if right else (x - w / 2 if centre else x))
-	var base = snap(y) + 7
-	for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
-		c.draw_string(sign_font, Vector2(x0, base) + o, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color("#1a1024"))
-	c.draw_string(sign_font, Vector2(x0, base), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, col)
+	var base = snap(y) + size - 1
+	var o_ = 1 if size <= 8 else 2                   # (a bigger line: a thicker outline)
+	for o in [Vector2(-o_, 0), Vector2(o_, 0), Vector2(0, -o_), Vector2(0, o_), Vector2(-o_, -o_), Vector2(o_, o_), Vector2(-o_, o_), Vector2(o_, -o_)]:
+		c.draw_string(sign_font, Vector2(x0, base) + o, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color("#1a1024"))
+	c.draw_string(sign_font, Vector2(x0, base), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 
 ## 0.48: a wooden board on a post at a friend's record (his own: a stone one, in gold).
 func _draw_signs(c: CanvasItem) -> void:
@@ -2132,6 +2137,11 @@ func _draw_swarm(c: CanvasItem) -> void:
 	var f = run.fm
 	if f == null:
 		return
+	var soon = Game.laser_in(f)                      # (0.56) the floor's lane aimed at: when to jump, over him
+	if soon < JUMP_CUE and soon > -Game.LASER_LIVE and not run.dead and Game.laser_jump(run):
+		var hx = n(run.sx)
+		var hy = n(run.p.y) - 70
+		label(c, "SAUTE !", hx + 10, hy - 3 * pow(sin(t * 18), 2), Color("#ffd35c") if floori(t * 12) % 2 == 0 else Color("#ff5a6e"), false, true, 16)
 	var name: String = ROLE["swarm"][f.biome]
 	var H = Art.haz.get(name)
 	var cx = n(f.sx)
@@ -2160,6 +2170,11 @@ func _draw_swarm(c: CanvasItem) -> void:
 				rect(c, snap(x), snap(top + 3), 9, 2, col)
 				rect(c, snap(x), snap(top + band + 1), 9, 2, col)
 				x += 16
+		var due = Game.laser_in(f)                   # (0.56) a ring closing on the drone: the beam burns when it is shut
+		if f.biome == 2 and not f.ghost and due > 0 and due <= Game.LASER_TICKS[0]:
+			var rr = 5 + 34 * due / Game.LASER_TICKS[0]
+			c.draw_arc(Vector2(cx, cy), rr, 0, TAU, 28, Color(1, 0.35, 0.45, 0.9), 2.0)
+			c.draw_arc(Vector2(cx, cy), rr + 3, 0, TAU, 28, Color(1, 1, 1, 0.35), 1.0)
 		if f.phase == "fire" and not f.ghost:        # the laser: a flicker while it charges, then the beam
 			var h = n(Game.LASER_H)
 			var x1 = cx - 18
