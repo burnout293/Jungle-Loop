@@ -56,8 +56,7 @@ def broken(im, seed, block=16):
 plan = [
     ('forest-1', 'forest-rock.png', None),
     ('forest-2', 'forest-root.png', None),
-    ('ruins-1', 'ruins-wall-b.png', None),
-    ('ruins-2', 'ruins-wall-a.png', 'broken'),
+    # (the ruins' walls, ruins-wall-a/b.png: the ruins gave way to the misty heights in 0.53, archived)
     # (the dungeon's walls, dungeon-door.png and dungeon-bars.png: taken out of the game in 0.44)
     ('city-1', 'city-building.png', None),
     ('city-2', 'city-containers.png', 'ground'),

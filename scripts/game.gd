@@ -12,9 +12,16 @@ const CEIL := 24.0             # flight ceiling
 const PPM := 40.0              # logical units per metre
 const PIXEL := 2.25            # logical units per art pixel (720 units = 320 art pixels)
 const BIOME_COUNT := 4
-# The order of the sceneries (index in Render.BIOMES: jungle, ruins, city, dungeon): forest, ruins,
+# The order of the sceneries (index in Render.BIOMES: jungle, heights, city, dungeon): forest, heights,
 # dungeon, city, and back to the forest.
 const NEXT_BIOME := [1, 3, 0, 2]
+# 0.53: the misty heights (« Les pitons brumeux ») took the ruins' place: no floor, only mist. The Vol is
+# always on there; falling into the mist costs a heart and he is lifted back up. In Histoire they come after
+# Vorace (her crown gives the Vol); in the Run illimitée only if the Vol is worn (Run.sky_ok), never first.
+const SKY := 1
+static var MIST_FALL := 60.0         # how far under the floor line he sinks into the mist before it counts as a fall
+static var PIN_HS := [150.0, 230.0, 310.0]   # a pinnacle's top over the floor line
+const PIN_W := 56.0 * 2.25           # its rock, as wide as 56 art pixels (its picture: render.gd)
 # The scenery changes after the boss (the ruins), then while there is no other boss every ZONE metres.
 # Most of the numbers below are static vars, not consts: reglages/equilibrage.txt sets them at launch
 # (tune.gd), in metres, seconds and m/s; these are the game's own when a line is missing there.
@@ -31,13 +38,13 @@ static var BALL_SETTLE := 12.0
 static var HEARTS := 1              # one life: the first blow ends the run (Vitalité adds up to three)
 # 0.49: Histoire gives its own kit, whatever was bought or worn: STORY_HEARTS hearts, and the powers of the
 # relic's pieces won from the bosses (RELIC_POWERS, in the order the bosses come: Vorace's jade first). The
-# heart of the relic, the piece Pépito stole, gives none. main.gd sets STORY_TRY (the attempt, counted from
+# piece Pépito stole in the temple gives none (0.53: the jaw; Vorace's crown, the jade, gives the Vol). main.gd sets STORY_TRY (the attempt, counted from
 # the last piece won) and STORY_CHAP (the pieces held) before a run alone: what the guards say depends on them.
 static var STORY_HEARTS := 2
-const RELIC_PIECES := ["jade", "ambre", "lune", "braise"]
-const RELIC_POWERS := ["doubleJump", "dash", "slow", "flight"]
-const RELIC_POWER_NAMES := ["Double saut", "Esquive", "Sablier", "Vol"]
-const RELIC_PIECE_NAMES := ["Le jade de Vorace", "L'ambre des ruines", "La lune de la cité", "La braise du donjon"]
+const RELIC_PIECES := ["jade", "ambre", "braise"]           # (0.53: the jaw, "lune", is the piece stolen)
+const RELIC_POWERS := ["flight", "dash", "slow"]
+const RELIC_POWER_NAMES := ["Vol", "Esquive", "Sablier"]
+const RELIC_PIECE_NAMES := ["La couronne de Vorace", "La tête d'ambre", "La tête de braise"]
 static var STORY_TRY := 1
 static var STORY_CHAP := 0
 static var HURT_INV := 1.6          # invincible this long after a blow
@@ -735,8 +742,12 @@ class Run:
 	var strip_biome := -1          # Relique altérée: a short strip of another scenery, from strip_x0 to strip_x1
 	var strip_x0 := 0.0
 	var strip_x1 := 0.0
+	var sky := false               # 0.53: he is in the misty heights now (the Vol on, the mist under him)
+	var sky_ok := false            # ... and the heights may come on this run (Histoire, or the Vol worn: new_run)
 
 	func lvl(id: String) -> int:
+		if sky and id == "flight":               # (0.53) the heights: the Vol always on
+			return maxi(1, int(up.get(id, 0)))
 		return int(up.get(id, 0))
 
 # ---------- helpers ----------
@@ -790,13 +801,13 @@ static func lay_speed(run: Run, x: float) -> float:
 	if x < m:                                        # with the hero) / (the speed coming back after her fall)
 		var v0 = BOSS_SPEED * DEATH_PACE
 		return sqrt(v0 * v0 + 2.0 * RAMP * (x - run.coop_xf))
-	var biome = NEXT_BIOME[0]
+	var biome = next_biome(run, 0)
 	for i in 64:
 		var nm = coop_next_mark(m)
 		if x < nm:
 			break
 		m = nm
-		biome = NEXT_BIOME[biome]
+		biome = next_biome(run, biome)
 	var z = ZONE_SPEED.get(biome, SPEED_BASE) + run.base - SPEED_BASE
 	return minf(STORY_CAP, sqrt(z * z + 2.0 * STORY_GAIN * (x - m)))
 
@@ -948,6 +959,7 @@ static func new_run(upgrades: Dictionary, mode: String = "story", seed_: int = -
 	W = run.rng
 	run.mode = mode
 	run.up = upgrades
+	run.sky_ok = mode == "story" or int(upgrades.get("flight", 0)) > 0   # (0.53) the heights: Histoire, or the Vol worn
 	run.base = SPEED_BASE + (SPEED_SPRINT if run.lvl("sprint") > 0 else 0.0)
 	if mode == "story":                              # the guards' talks along the way: the road is empty there
 		run.talks = talks_for(STORY_TRY, STORY_CHAP)
@@ -1003,6 +1015,13 @@ static func relief(run: Run, x: float, pts: Array) -> void:
 static func flat_at(run: Run, x: float, w: float) -> bool:
 	return absf(floor_at(run, x) - floor_at(run, x + w)) < 1 and absf(floor_at(run, x) - floor_at(run, x + w / 2)) < 1
 
+## The scenery after `b` on this run (0.53: the heights skipped when they may not come).
+static func next_biome(run: Run, b: int) -> int:
+	var nb: int = NEXT_BIOME[b]
+	if nb == SKY and not run.sky_ok:
+		nb = NEXT_BIOME[nb]
+	return nb
+
 ## Which scenery a spot belongs to: the new one begins at run.biome_x and scrolls in.
 static func biome_at(run: Run, x: float) -> int:
 	if run.strip_biome >= 0 and x >= run.strip_x0 and x < run.strip_x1:
@@ -1011,6 +1030,7 @@ static func biome_at(run: Run, x: float) -> int:
 
 ## The hero starts shut inside the temple: a short rumble, then the doorway blows out and he runs.
 static func launch(run: Run) -> void:
+	run.sky_ok = run.mode == "story" or int(run.up.get("flight", 0)) > 0   # (0.53) the heights: Histoire, or the Vol worn
 	run.wait = 1.2
 	run.cam = -TEMPLE_PAN                            # (0.52) on the temple first; he is where he was, inside
 	run.sx += TEMPLE_PAN
@@ -1290,6 +1310,13 @@ static func add_decor(run: Run, x: float) -> void:
 	dc.biome = biome_at(run, x)
 	run.decor.append(dc)
 
+## (0.53) A rock pinnacle out of the heights' mist, its top `h` over the floor line: a wall from there down.
+static func add_pinnacle(run: Run, x: float, h: float) -> Obs:
+	var o = add_obs(run, x, floor_at(run, x) - h, PIN_W, h + 260, "pinnacle", false)
+	o.biome = SKY
+	o.ghost = false                              # (rock: never one of the tipsy creatures)
+	return o
+
 static func add_spiky(run: Run, x: float) -> void:
 	add_obs(run, x, floor_at(run, x) - SPIKY_H, SPIKY_W, SPIKY_H, "spiky", false).biome = biome_at(run, x)
 
@@ -1449,7 +1476,7 @@ static func spawn_pattern(run: Run) -> void:
 	var laid = run.coins.size()
 	if run.mount != null and not run.coop and road_held(run):
 		return
-	if run.mount != null and run.fm == null and not run.fm_due and run.boss == null:
+	if run.mount != null and run.fm == null and not run.fm_due and run.boss == null and (biome_at(run, run.next_x) != SKY or MOUNTS[run.mount.kind].get("fly", false)):
 		spawn_ride(run)
 		scatter(run, laid)
 		return
@@ -1472,7 +1499,7 @@ static func spawn_pattern(run: Run) -> void:
 		return
 	if x >= run.coop_biome_x:                        # for two: the next scenery begins at the first pattern past
 		run.prev_biome = run.biome                   # the mark, the same on both phones (alone: update(), when
-		run.biome = NEXT_BIOME[run.biome]            # he reaches the mark, just off screen)
+		run.biome = next_biome(run, run.biome)       # he reaches the mark, just off screen)
 		run.biome_x = x
 		if run.mode == "story":
 			run.coop_biome_x = coop_next_mark(run.coop_biome_x - COOP_AHEAD) + COOP_AHEAD
@@ -1480,6 +1507,9 @@ static func spawn_pattern(run: Run) -> void:
 			run.coop_biome_x = (floorf(x / (ZONE_ENDLESS * PPM)) + 1) * ZONE_ENDLESS * PPM
 	var G = GROUND
 	var tier = tier_of(run)
+	var sky = biome_at(run, x) == SKY                # (0.53) the heights: laid for the Vol, only what flies
+	if sky:
+		tier = 2
 	var riding = run.mount != null or run.items.size() > 0
 	var press = pressure(run, x)
 	var more = 1.0 + PRESS_CHAINS * press
@@ -1526,6 +1556,13 @@ static func spawn_pattern(run: Run) -> void:
 		opts = ["plat", "plat", "steps", "padchain", "coins"]
 	elif not riding and x > 70 * PPM and x / PPM >= run.next_mount and run.mounts.size() > 0:
 		opts = ["mount"]
+	if sky:                                          # (0.53) the heights: in the air only, pinnacles out of the mist
+		if x < run.calm_until or run.fm != null or run.fm_due:
+			opts = ["skycoins"]
+		else:
+			opts = ["skycoins", "fly", "wave", "wave", "skyhover", "skyhover", "curtain", "curtain", "curtain", "pinnacle", "pinnacle", "pinnacle", "pinpair", "spiders"]
+			if x / PPM >= FROM_NESTS:
+				opts.append("nest")
 	var kind: String = wpick(opts)
 	var extent = 0.0
 
@@ -1582,6 +1619,22 @@ static func spawn_pattern(run: Run) -> void:
 		"fly":
 			add_dart(run, x, wpick(DART_ALTS[tier])).aim = tier >= 2
 			extent = 120
+		"skycoins":                                  # (0.53) the heights: a line of coins in the air
+			coin_line(run, x, floor_at(run, x) - wpick([170.0, 270.0, 370.0]), 7)
+			extent = 7 * 44
+		"pinnacle":                                  # (0.53) a rock pinnacle out of the mist: over it
+			var h: float = wpick(PIN_HS)
+			add_pinnacle(run, x + 80, h)
+			coin_arc(run, x, h + 90, 6, PIN_W + 160)
+			extent = PIN_W + 240
+		"pinpair":                                   # (0.53) two pinnacles: over the first, down, over the second
+			var h1: float = wpick(PIN_HS)
+			var h2: float = wpick(PIN_HS)
+			var gap = maxf(520.0, lay_speed(run, x) * 1.1)
+			add_pinnacle(run, x + 80, h1)
+			add_pinnacle(run, x + 80 + gap, h2)
+			coin_line(run, x + 80 + PIN_W + 60, floor_at(run, x) - 130, maxi(2, floori((gap - PIN_W - 120) / 44)))
+			extent = gap + PIN_W + 240
 		"wave":                                      # a wave of flyers, more and closer together the faster he goes
 			extent = _wave(run, x, tier)
 		"swarm":                                     # two flyers, one after the other, at different heights
@@ -1765,9 +1818,9 @@ static func spawn_pattern(run: Run) -> void:
 		add_hover(run, x + extent + gap * 0.5, HEAD)
 	elif gap > GAP_FILL and x / PPM >= FROM_DARTS and clear and W.randf() < (0.35 if tier >= 2 else 0.15) + PRESS_FILL * press:
 		add_dart(run, x + extent + gap * 0.5, 170).aim = tier >= 2
-	if x / PPM > 70 and not boss_road(run, x) and W.randf() < DECOR_RATE:
+	if x / PPM > 70 and not boss_road(run, x) and W.randf() < DECOR_RATE and not sky:
 		add_decor(run, x + extent + gap * wrnd(0.3, 0.6))     # something to smash
-	if x / PPM > 40 and kind != "hills" and W.randf() < 0.22:
+	if x / PPM > 40 and kind != "hills" and W.randf() < 0.22 and not sky:
 		add_hill(run, x + extent + gap * wrnd(-0.2, 0.3), wrnd(500, 1400), wrnd(100, 480))   # scenery only
 	if kind == "coins" or W.randf() < 0.55:
 		var n = mini(8, floori((gap - 200) / 44))
@@ -2241,7 +2294,7 @@ static func _boss_step(run: Run, d: float) -> void:
 			loot(run, run.cam + run.sx + wrnd(100, 300), GROUND - 200)
 			run.coins[run.coins.size() - 1].gem = g
 		run.events.append("bossdown")
-		if run.mode == "story" and run.chap < 1:     # 0.49: her piece of the relic (the jade), its power at once
+		if run.mode == "story" and run.chap < 1:     # 0.49: her piece of the relic (0.53: the crown, the Vol), at once
 			run.won = 0
 			grant(run, RELIC_POWERS[0])
 			run.events.append("relic")
@@ -3227,6 +3280,16 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	var px = run.cam + run.sx
 	_guards(run, d, (px - px0) / d if d > 0 else 0.0)
 	var fl = floor_at(run, px)                      # the floor right under him
+	var sky_now = biome_at(run, px) == SKY and run.leap == null
+	if sky_now and not run.sky:                      # (0.53) into the heights: no floor any more, he takes off
+		if run.mount != null and not MOUNTS[run.mount.kind].get("fly", false):
+			dismount(run, true)
+		if run.mount == null:
+			p.ground = false
+			p.plat = null
+			p.cruise = maxf(p.cruise, CRUISE_TIME * 0.5)   # at cruising height on his own until the first press
+			run.events.append("takeoff")
+	run.sky = sky_now
 
 	if run.leap != null and run.leap.planted:        # --- head first in the ground, legs kicking ---
 		var kicks = floori(run.leap.pt / 0.28)
@@ -3435,7 +3498,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 						p.y = under + HERO_H
 						if p.vy < 0:
 							p.vy = 0
-				var land = fl if p.y >= fl else NAN
+				var land = fl if p.y >= fl and not run.sky else NAN   # (0.53: the heights' mist holds no one)
 				var on = null
 				if p.vy > 0:                         # ledges only catch a falling hero
 					for pl in run.plats:
@@ -3654,6 +3717,21 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				if px > hp.x0 - 60 and px < hp.x1 + 60:
 					_fatal(run)
 					break
+		# (0.53) sunk into the heights' mist: a heart goes (the last one: the fatal moment), he is lifted back up
+		if run.sky and p.y > floor_at(run, px) + MIST_FALL and run.mount == null:
+			if run.hearts == 1 and not run.god and run.rewind_left == 0 and (not run.coop or run.race):
+				_fatal(run)
+			p.y = floor_at(run, px) - CRUISE_H
+			p.vy = 0
+			p.ground = false
+			p.cruise = maxf(p.cruise, 1.2)
+			p.inv = 0
+			hit(run, null)
+			if run.god:
+				p.inv = 0.5
+			run.events.append("mist")
+			if run.dead:
+				return
 		# fallen into a hole: a heart goes, and he is put back on the far side
 		if p.y > GROUND + 150:
 			var pit = null
@@ -3724,12 +3802,13 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		if run.coop:
 			pass                                     # (for two, spawn_pattern changed it already, at a place on the road)
 		elif run.lvl("drunk") > 0:                   # Relique altérée: the next scenery only goes by, and this one comes back
-			run.strip_biome = NEXT_BIOME[run.biome]
+			var sb = next_biome(run, run.biome)
+			run.strip_biome = NEXT_BIOME[sb] if sb == SKY else sb   # (never the heights: no floor to run on)
 			run.strip_x0 = at
 			run.strip_x1 = at + RELIC_STRIP
 		else:
 			run.prev_biome = run.biome
-			run.biome = NEXT_BIOME[run.biome]
+			run.biome = next_biome(run, run.biome)
 			run.biome_x = at
 		if run.mode == "story":                      # a new place: its own speed (ZONE_SPEED), gaining STORY_GAIN
 			run.zone_t = run.pace_t

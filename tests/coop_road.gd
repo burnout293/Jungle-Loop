@@ -109,7 +109,8 @@ func _init() -> void:
 	cases["TOUT à la fois"] = {"up": rich, "dt": 1.0 / 120, "jitter": true, "view_w": 2400, "guest": true, "jumpy": true, "cosmetic": 777, "acts": acts}
 	for name in cases:
 		all_ok = compare(name, base, lay(4242, cases[name])) and all_ok
-	var sprint = lay(4242, {"up": {"sprint": 1}})       # Sprint, worn by both (the host's kit)
+	var sprint = lay(4242, {"up": {"sprint": 1, "flight": 1}})   # Sprint, worn by both (the host's kit); 0.53: the Vol
+	                                                     # too, which brings the heights onto the road (Game.sky_ok)
 	all_ok = compare("Sprint sur les deux, TOUT", sprint, lay(4242, {"up": {"sprint": 1, "flight": 3, "dash": 2}, "dt": 1.0 / 120, "jitter": true, "view_w": 2400, "guest": true, "jumpy": true, "acts": acts})) and all_ok
 	# Histoire for two: the forest, Vorace laid on the road (her pads, then her gems), the places after
 	var story = lay(4242, {"mode": "story"})

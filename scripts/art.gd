@@ -18,7 +18,7 @@ const OUTLINE := Color("#1a1024")
 const BIOMES := [
 	{"id": "jungle", "name": "Jungle mystique", "bg": "bg-far", "mid": "mid", "grounds": ["ground-0", "ground-1", "ground-2"], "prop": "prop-", "props": 9, "shade": "",
 		"platform": "platform", "pillar": "pillar", "crate": "crate", "slab": "slab", "tunnel": "log", "plat_top": 13, "slab_top": 5, "hollow": ["#3b2014", "#24120f", "#4d2d1a", "#160b0c"]},
-	{"id": "ruins", "name": "Ruines oubliées", "bg": "ruins-bg", "mid": "ruins-mid", "grounds": ["ruins-ground"], "prop": "ruins-prop-", "props": 4, "shade": "#3b2331",
+	{"id": "heights", "name": "Les pitons brumeux", "bg": "heights-bg", "mid": "heights-mid", "grounds": ["heights-mist"], "prop": "ruins-prop-", "props": 0, "shade": "#1d3b3a",   # (0.53, in the ruins' place: their platform, pillar... kept for the code, never laid there)
 		"platform": "ruins-platform", "pillar": "ruins-pillar", "crate": "ruins-crate", "slab": "ruins-slab", "tunnel": "ruins-tunnel", "plat_top": 2, "slab_top": 5, "hollow": ["#6b3a22", "#2c1611", "#8a5632", "#1c0e0b"]},
 	{"id": "city", "name": "Cité du futur", "bg": "city-bg", "mid": "city-mid", "grounds": ["city-ground"], "prop": "city-prop-", "props": 4, "shade": "#120c2c",
 		"platform": "city-platform", "pillar": "city-pillar", "crate": "city-crate", "slab": "city-slab", "tunnel": "city-tunnel", "plat_top": 2, "slab_top": 2, "hollow": ["#2c2152", "#0f0a22", "#3fd9e6", "#080514"]},
@@ -28,13 +28,14 @@ const BIOMES := [
 
 const NAMES := ["temple", "temple-mid", "temple-front", "temple-rubble", "vorace-legs", "vorace-head", "vorace-body", "vorace-log", "crate-big", "lilypad", "walkway", "hover-plat", "vine-garland", "vine-hang",
 	"spikebot", "spider-low", "spider-mid", "bat", "thornball", "beartrap", "vulture", "arrow", "missile", "idol", "drone", "wasp", "drone-big",
+	"pinnacle", "glider", "hornets", "toucan", "rocket",
 	"hero-body", "hero-ball", "hero-rotor", "hero-fist", "hero-shoe", "mount-gorilla", "mount-gorilla-hang", "mount-rhino", "mount-dragonfly",
 	"mosquito", "fly", "spiky", "coin", "gem", "gem-y", "gem-r", "gem-b", "heart", "monkey", "coin-icon",
 	"guard-spear", "guard-club", "pick-feather", "pick-urn", "pick-shield", "pick-knife", "isle-forest-1", "isle-forest-2"]
 
 # Frames of each danger's sheet.
 const HAZ_FRAMES := {"spiky": 1, "thornball": 1, "beartrap": 2, "spikebot": 1, "fly": 4, "vulture": 2, "arrow": 1, "missile": 1, "spider-low": 2, "spider-mid": 2,
-	"idol": 1, "bat": 3, "drone": 1, "mosquito": 4, "wasp": 1, "drone-big": 1}
+	"idol": 1, "bat": 3, "drone": 1, "mosquito": 4, "wasp": 1, "drone-big": 1, "glider": 1, "hornets": 1, "toucan": 1, "rocket": 1}
 
 static var img := {}          # name -> Image, as loaded (RGBA8)
 static var tex := {}          # name -> Texture2D
@@ -50,7 +51,7 @@ static var hills := {}
 # What stands behind the path, per scenery (0.43, PixelLab, tools/prep_hills.py): the forest's mossy rocks
 # and arched roots, the ruins' broken walls of square stones, the dungeon's walls with a wooden door or iron
 # bars, the city's buildings and containers. A little darker than what can be touched.
-const HILL_SETS := [["hill-forest-1", "hill-forest-2", "hill-forest-3", "hill-forest-4", "hill-forest-5", "hill-forest-6"], ["hill-ruins-1", "hill-ruins-2"], ["hill-city-1", "hill-city-2"], ["hill-dungeon-1", "hill-dungeon-2", "hill-dungeon-3", "hill-dungeon-4"]]   # (the dungeon: none from 0.44, heaps of its masonry since 0.51)
+const HILL_SETS := [["hill-forest-1", "hill-forest-2", "hill-forest-3", "hill-forest-4", "hill-forest-5", "hill-forest-6"], [], ["hill-city-1", "hill-city-2"], ["hill-dungeon-1", "hill-dungeon-2", "hill-dungeon-3", "hill-dungeon-4"]]   # (the dungeon: none from 0.44, heaps of its masonry since 0.51)
 static var hill_sets: Array = []
 static var hill_order: Array = []
 static var ready := false
@@ -534,6 +535,9 @@ static func build_scene(b: Dictionary) -> Dictionary:
 		tunnel = tinted(lowered(shortened(tunnel, roundi(Game.LOG_W / Game.PIXEL)), LOG_CUT, 49), dim)
 	var bg: Image = recede(img.get(b["bg"]), 0.6 if look >= 4 else 0.35, 0.58 if look >= 4 else 0.82)
 	var mid: Image = recede(img.get(b["mid"]), 0.55 if look >= 4 else 0.3, 0.62 if look >= 4 else 0.86)
+	if b["id"] == "heights":                     # (0.53) already pale and hazy: dimmed far less, or it turns to grey fog
+		bg = recede(img.get(b["bg"]), 0.25, 0.8)
+		mid = recede(img.get(b["mid"]), 0.25, 0.78)
 	var hollow: Array = []
 	for h in b["hollow"]:
 		hollow.append(Color(h))

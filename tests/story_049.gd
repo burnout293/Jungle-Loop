@@ -35,10 +35,10 @@ func _init() -> void:
 	var t1 = Game.talks_for(1, 0)
 	check(first(t1, -1).begins_with("Halte, voleur"), "1er essai : la première rencontre")
 	check(Game.talks_for(2, 0) != t1 and first(Game.talks_for(2, 0), -1).begins_with("Et voilà"), "2e essai : ramené sur la broche")
-	check(first(Game.talks_for(4, 0), -1).contains("cinq morceaux"), "4e essai : les cinq morceaux")
+	check(first(Game.talks_for(4, 0), -1).contains("quatre morceaux"), "4e essai : les quatre morceaux")
 	check(first(Game.talks_for(6, 0), -1) == first(Game.talks_for(2, 0), -1), "6e essai : reprend le 2e")
 	check(first(Game.talks_for(9, 0), -1) == first(Game.talks_for(5, 0), -1), "9e essai : reprend le 5e")
-	check(first(Game.talks_for(1, 1), -1).contains("morceau vert"), "jade gagné : son 1er dialogue")
+	check(first(Game.talks_for(1, 1), -1).contains("couronne verte"), "la couronne gagnée : son 1er dialogue")
 	check(first(Game.talks_for(3, 1), -1) == first(Game.talks_for(2, 1), -1), "jade, 3e essai : reprend le 2e du jade")
 	check(first(Game.talks_for(1, 3), -1) == first(Game.talks_for(1, 1), -1), "3 morceaux sans dialogue écrit : ceux du jade")
 	for n in range(1, 12):
@@ -49,8 +49,8 @@ func _init() -> void:
 
 	# --- Histoire's kit, the hearts ---
 	check(Game.story_kit(0).is_empty(), "aucun morceau : aucun pouvoir")
-	check(Game.story_kit(1) == {"doubleJump": 1}, "le jade : le double saut")
-	check(Game.story_kit(9).size() == 4, "quatre morceaux au plus")
+	check(Game.story_kit(1) == {"flight": 1}, "la couronne de Vorace : le Vol")
+	check(Game.story_kit(9).size() == 3, "trois morceaux à gagner au plus (la mâchoire est volée)")
 	var rs = Game.new_run({}, "story", 5)
 	check(rs.hearts == 2, "Histoire : deux cœurs")
 	var re = Game.new_run({}, "endless", 5)

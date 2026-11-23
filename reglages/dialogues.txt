@@ -9,10 +9,11 @@
 # 0.49 : un dialogue par essai. Après « départ » ou « 1000 », un numéro = l'essai (« départ 3 » : le 3e essai) ;
 # sans numéro = le 1er. Au-delà du dernier numéro, les essais reprennent ceux écrits à partir du 2e, à tour de rôle.
 # Un morceau de la relique en plus (« départ jade 2 ») : ce dialogue ne sert qu'une fois ce morceau gagné, et les
-# essais se recomptent depuis ce morceau. Les morceaux : jade (Vorace), ambre, lune, braise.
+# essais se recomptent depuis ce morceau. Les morceaux à gagner : jade (la couronne de Vorace, le Vol), ambre, braise.
+# (0.53 : le morceau que Pépito vole dans le temple est la mâchoire.)
 # À deux, c'est toujours le 1er dialogue (le même sur les deux téléphones).
 
-# --- 1er essai : la première rencontre. Pépito a le cœur de la relique, les gardes ont fait s'écrouler l'entrée... sur eux aussi.
+# --- 1er essai : la première rencontre. Pépito a la mâchoire de la relique, les gardes ont fait s'écrouler l'entrée... sur eux aussi.
 départ | Chef Massue | Halte, voleur ! Rends-nous la relique sacrée !
 départ | Pépito      | Quelle relique ?
 départ | Pointu      | Celle qui brille dans ton sac à dos.
@@ -50,10 +51,10 @@ départ 3 | Pointu      | Il allume la mèche, chef !
 1000 3 | Pointu      | Bonne chance avec la fleur, voleur !
 1000 3 | Pépito      | Gardez-moi une place sur la broche, on ne sait jamais.
 
-# --- 4e essai : la relique a cinq morceaux.
-départ 4 | Chef Massue | Les anciens disent que la relique a cinq morceaux.
-départ 4 | Pointu      | Et lui, il n'a que le cœur.
-départ 4 | Pépito      | Et les quatre autres, ils sont où ?
+# --- 4e essai : la relique a quatre morceaux.
+départ 4 | Chef Massue | Les anciens disent que la relique a quatre morceaux.
+départ 4 | Pointu      | Et lui, il n'a que la mâchoire.
+départ 4 | Pépito      | Et les trois autres, ils sont où ?
 départ 4 | Chef Massue | Dans le ventre des gardiens de la jungle. Le premier, c'est Vorace.
 départ 4 | Pépito      | Super. Je vais la secouer un peu.
 départ 4 | Pointu      | Il rallume un bâton, chef...
@@ -71,21 +72,21 @@ départ 5 | Chef Massue | ... Allume ton bâton, qu'on en finisse.
 1000 5 | Chef Massue | Vorace ! DEMI-TOUR, et que ça saute !
 1000 5 | Pointu      | À tout à l'heure, voleur. Comme d'habitude.
 
-# --- Le jade de Vorace gagné : Pépito saute deux fois. Vorace est une fleur : elle repousse.
-départ jade | Pointu      | Chef ! Il a un morceau vert qui brille.
-départ jade | Chef Massue | Le jade de Vorace... Il l'a vraiment battue ?!
-départ jade | Pépito      | Et maintenant je saute deux fois. Regardez.
+# --- La couronne de Vorace gagnée (le jade) : Pépito vole. Vorace est une fleur : elle repousse.
+départ jade | Pointu      | Chef ! Il a une couronne verte qui brille.
+départ jade | Chef Massue | La couronne de Vorace... Il l'a vraiment battue ?!
+départ jade | Pépito      | Et maintenant je vole. Regardez.
 départ jade | Pointu      | Mais Vorace a déjà repoussé, chef. C'est une fleur.
 départ jade | Pépito      | Je la recoupe, et je vais chercher le morceau suivant.
-départ jade | Chef Massue | Le suivant dort dans les ruines. Bonne chance...
+départ jade | Chef Massue | Le suivant dort au-dessus de la brume, dans les pitons. Bonne chance...
 
 1000 jade | Pointu      | Chef, elle a repoussé encore plus grande !
 1000 jade | Chef Massue | DEMI-TOUR ! Les fleurs, c'est pas notre rayon.
-1000 jade | Pépito      | Double saut, double coupe.
+1000 jade | Pépito      | Je la survole, et je la recoupe.
 
-départ jade 2 | Chef Massue | Encore toi. Avec le jade, en plus.
-départ jade 2 | Pépito      | Et toujours le cœur de la relique. Il ne m'en manque que trois.
-départ jade 2 | Pointu      | Les ruines, c'est après la fleur. Bon courage.
+départ jade 2 | Chef Massue | Encore toi. Avec la couronne, en plus.
+départ jade 2 | Pépito      | Et toujours la mâchoire de la relique. Il ne m'en manque que deux.
+départ jade 2 | Pointu      | Les pitons, c'est après la fleur. Ne tombe pas dans la brume.
 départ jade 2 | Pointu      | ... Il allume la mèche.
 
 1000 jade 2 | Chef Massue | DEMI-TOUR ! On t'attend au temple, comme toujours.

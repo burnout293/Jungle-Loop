@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dfqlwjg6fmfy4"
-path="res://.godot/imported/ruins-mid.png-992e3dfb0ab4755938fb0b86f4a4e7d5.ctex"
+uid="uid://d3v46jwrs8gg0"
+path="res://.godot/imported/heights-bg.png-9cb4a996db6296e0163d0d809d1740fa.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/img/ruins-mid.png"
-dest_files=["res://.godot/imported/ruins-mid.png-992e3dfb0ab4755938fb0b86f4a4e7d5.ctex"]
+source_file="res://assets/img/heights-bg.png"
+dest_files=["res://.godot/imported/heights-bg.png-9cb4a996db6296e0163d0d809d1740fa.ctex"]
 
 [params]
 

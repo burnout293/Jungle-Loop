@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bj5wfgdytsc2j"
-path="res://.godot/imported/hill-ruins-2.png-798028172e74cbdff62668c5b3af20a7.ctex"
+uid="uid://p6pnst24sevc"
+path="res://.godot/imported/hornets.png-947c01701eef19fecca1df6967004651.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/img/hill-ruins-2.png"
-dest_files=["res://.godot/imported/hill-ruins-2.png-798028172e74cbdff62668c5b3af20a7.ctex"]
+source_file="res://assets/img/hornets.png"
+dest_files=["res://.godot/imported/hornets.png-947c01701eef19fecca1df6967004651.ctex"]
 
 [params]
 

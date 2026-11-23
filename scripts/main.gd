@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.52.0"
+const VERSION := "0.53.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -1340,7 +1340,7 @@ func _mode_texts() -> void:
 	if not w.has("menu-modes"):
 		return
 	var subs = {
-		"story": "%d/4 MORCEAUX · %d VIES" % [int(save["relic"]), Game.STORY_HEARTS],
+		"story": "%d/4 MORCEAUX · %d VIES" % [int(save["relic"]) + 1, Game.STORY_HEARTS],   # (0.53: the jaw, stolen, counts)
 		"endless": "RECORD %d M" % best_of("endless"),
 		"race": "TON GROUPE · %d/4" % race.count(),
 	}
@@ -1450,7 +1450,7 @@ func _menu_tip(text: String, b: Button = null) -> void:
 ## Where the next Run illimitée starts: any of the four sceneries. The home screen shows it already,
 ## the temple standing in it.
 func _roll_biome() -> void:
-	endless_biome = randi() % Game.BIOME_COUNT
+	endless_biome = [0, 2, 3][randi() % 3]        # (0.53: never the heights first: the run starts out of the temple, on foot)
 	if still != null:
 		still.biome = endless_biome
 		still.prev_biome = endless_biome

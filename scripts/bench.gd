@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -42,6 +42,7 @@ func _ready() -> void:
 			"tour47": opts["tour47"] = true        # 0.47's new things in pictures: urns, skins, the offer, the escape
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour53": opts["tour53"] = true        # 0.53's: the misty heights (flying only), seen from the forest's edge
 			"tour52": opts["tour52"] = true        # 0.52's: Réglages without Son, the temple seen from the side and its camera, the heights
 			"tour51": opts["tour51"] = true        # 0.51's: Réglages in four categories, the three parties, Amis in three tabs
 			"tour50": opts["tour50"] = true        # 0.50's: the home screen B3 (modes, Défis), the wood buttons, the stone skin
@@ -150,6 +151,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour53"]:
+		await _tour53()
 		return
 	if opts["race"] != "":                           # four browsers, one race: see _race_bench
 		_race_bench(delta)
@@ -575,6 +579,50 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour53: 0.53 in pictures: a Run illimitée with the Vol, the heights brought just ahead: the forest's edge,
+## the take-off, pinnacles and flyers over the mist, a fall into the mist (and the lift back up).
+var steps53: Array = []
+
+func _tour53() -> void:
+	if steps53.is_empty():
+		steps53 = [
+			[0.5, "setup", ""], [0.8, "play", ""], [3.6, "sky", ""], [4.6, "shot", "53-01-lisiere"], [5.6, "shot", "53-02-envol"],
+			[6.8, "shot", "53-03-pitons"], [8.0, "shot", "53-04-pitons-bis"], [9.2, "shot", "53-05-pitons-ter"], [10.4, "shot", "53-06-volants"],
+			[11.6, "shot", "53-07-brume"], [12.8, "shot", "53-08-loin"], [13.0, "quit", ""],
+		]
+	while tour_i < steps53.size() and t >= steps53[tour_i][0]:
+		var st = steps53[tour_i]
+		tour_i += 1
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(str(st[2]) + ".png"))
+			"setup":
+				main.save["seenIntro"] = true
+				main.endless_biome = 0
+			"play":
+				main.save["mode"] = "endless"
+				main.go("play")
+				main.run.god = true
+				main.run.up["flight"] = 1
+				main.run.sky_ok = true
+			"sky":                                    # the heights from just ahead, their road laid from there
+				var r: Game.Run = main.run
+				var at = r.cam + r.view_w * 0.45
+				r.prev_biome = r.biome
+				r.biome = Game.SKY
+				r.biome_x = at
+				r.obs = r.obs.filter(func(o): return o.x < at - 200)
+				r.coins = r.coins.filter(func(c2): return c2.x < at - 200)
+				r.plats = r.plats.filter(func(pl): return pl.x + pl.w < at - 100)
+				r.zones = r.zones.filter(func(z): return z.x + z.w < at - 100)
+				r.hills = r.hills.filter(func(hl): return hl.x + hl.w < at - 100)
+				r.decor = r.decor.filter(func(dc): return dc.x < at - 200)
+				r.next_x = at + 200
+				r.calm_until = 0
+				r.easy_until = 0
 			"quit": get_tree().quit()
 
 ## The steps of the full 0.48 tour (after the mock-up pictures).

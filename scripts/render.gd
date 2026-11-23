@@ -37,12 +37,13 @@ const SMASH := [-1, 1, 3, 1]           # in each scenery, the prop that is now t
 const SWAYING := [Game.PROP_FERN, Game.PROP_FLOWER]
 const INK := Color("#1a1024")
 const RED := Color("#ff3b4e")
-# Each role of danger looks different in each scenery (jungle, ruins, city, dungeon).
+# Each role of danger looks different in each scenery (jungle, heights, city, dungeon). 0.53, the heights
+# (PixelLab): the pygmies' bamboo rockets and the diving toucans, the pygmies on leaf gliders, the hornets.
 const ROLE := {
 	"spiky": ["spiky", "thornball", "spikebot", "beartrap"],
-	"dart": ["fly", "vulture", "missile", "arrow"],
-	"hover": ["spider", "idol", "drone", "bat"],
-	"swarm": ["mosquito", "wasp", "drone-big", "wisp"],
+	"dart": ["fly", "rocket", "missile", "arrow"],
+	"hover": ["spider", "glider", "drone", "bat"],
+	"swarm": ["mosquito", "hornets", "drone-big", "wisp"],
 }
 const DIGITS := {1: "010110010010111", 2: "111001111100111", 3: "111001111001111"}
 # Dangers drawn lower than their picture's foot: the dungeon's trap trails its chain below its jaws.
@@ -739,6 +740,8 @@ func draw_props(c: CanvasItem) -> void:
 			continue                                 # nothing grows on a slope
 		var biome = Game.biome_at(run, pr["x"])
 		var set_: Array = Art.scene[biome]["props"]
+		if set_.is_empty():
+			continue                                 # (0.53: the heights, nothing stands on the mist)
 		var k: int = pr["kind"] % set_.size()
 		var im: Texture2D = set_[k]
 		if im == null or k == SMASH[biome] or (biome == 0 and k in Game.PROP_GONE):
@@ -1570,7 +1573,7 @@ func _draw_back(c: CanvasItem) -> void:
 		var floor_y = n(Game.top_at(p.plat, run.cam + run.sx)) if p.plat != null else floor_px(hx)
 		var M = run.mount
 		var aloft: bool = M != null and (p.hang or Game.MOUNTS[M.kind].get("fly", false))
-		if (not in_temple or hx > DOOR_X - run.cam / PIXEL + 8) and (run.caught == null or run.caught.t < Game.CATCH_LEAP):
+		if (not in_temple or hx > DOOR_X - run.cam / PIXEL + 8) and not run.sky and (run.caught == null or run.caught.t < Game.CATCH_LEAP):
 			var w = 26.0 if aloft else (62.0 if M != null else maxf(8, 20 - (int(floor_y - n(p.y)) >> 3)))
 			shadow(c, hx - 2 + (8 if M != null and not aloft else 0), floor_y - 1, w)
 		if run.gone != null:                         # the mount that just took a blow: it tumbles back, shrinks and fades
@@ -1934,11 +1937,18 @@ func _draw_obstacles(c: CanvasItem) -> void:
 				for k in range(1, 4):                # dripping trail
 					rect(c, snap(cx + k * 6), snap(cy - 1 + sin(t * 20 + k) * 2), 3, 3, Color(168 / 255.0, 1, 60 / 255.0, 0.5))
 			continue
+		if o.kind == "pinnacle":                     # (0.53) a rock pinnacle out of the heights' mist
+			var pin: Texture2D = Art.tex.get("pinnacle")
+			if pin != null:
+				blit(c, pin, snap(x + n(o.w) / 2 - pin.get_width() / 2.0), y - 16)
+			continue
 		if not ROLE.has(o.kind):
 			continue
 		var name: String = ROLE[o.kind][o.biome]
-		if o.kind == "hover" and o.biome <= 1:          # the ruins' hanging dangers are the forest's spiders too
+		if o.kind == "hover" and o.biome == 0:          # the forest's hanging dangers: its spiders
 			name = "spider-mid" if o.mid else "spider-low"
+		if name == "rocket" and int(o.ph * 7) % 2 == 1 and Art.haz.has("toucan"):
+			name = "toucan"                          # (0.53) a fonceur of the heights: a rocket, or a toucan diving
 		if not Art.haz.has(name):
 			continue
 		var H: Dictionary = Art.haz[name]
@@ -1967,7 +1977,7 @@ func _draw_obstacles(c: CanvasItem) -> void:
 				big(c, cx, cy)
 				for k in 3:                          # the wind it leaves behind
 					rect(c, x0 + fw - 4 + k * 6, snap(cy - 6 + k * 6), 14 + k * 4, 1, Color(1, 1, 1, 0.45))
-				if name == "missile":
+				if name == "missile" or name == "rocket":
 					rect(c, x0 + fw - 2, snap(cy - 2), 4 + roundf(randf() * 4), 4, Color("#ffd35c") if floori(t * 30) % 2 == 1 else Color("#ff7a2a"))
 				if name == "arrow":                  # the dungeon's arrows burn: taller and brighter against the dark
 					_flames(c, x0, fw, cy, o.ph)
@@ -1985,7 +1995,8 @@ func _draw_obstacles(c: CanvasItem) -> void:
 			if name == "idol":                       # the glow of its eyes and runes
 				glow(c, cx, top + im.get_height() * 0.4, 20, Color(1, 150 / 255.0, 40 / 255.0, 0.35 + 0.15 * sin(t * 4 + o.ph)))
 			var fl = floor_px(cx)
-			shadow(c, cx, fl - 1, maxf(8, 20 - (int(fl - top) >> 4)))
+			if o.biome != Game.SKY:                  # (no shadow on the heights' mist)
+				shadow(c, cx, fl - 1, maxf(8, 20 - (int(fl - top) >> 4)))
 			big(c, cx, cy)
 			sheet(c, im, frames, frame, snap(cx - fw / 2), top, mod)
 			if name == "drone":
@@ -2005,6 +2016,13 @@ func _draw_front(c: CanvasItem) -> void:
 		return
 	plant_mound(c)
 	var cam = run.cam / PIXEL
+	var mist: Texture2D = Art.tex.get("heights-mist")
+	if mist != null and (run.biome == Game.SKY or run.prev_biome == Game.SKY):   # (0.53) the heights' mist, in front:
+		var bx = run.biome_x / PIXEL - cam                                       # he sinks into it
+		var x0 = clampf(bx, 0, view_w) if run.biome == Game.SKY else 0.0
+		var x1 = view_w if run.biome == Game.SKY else clampf(bx, 0, view_w)
+		if x1 > x0:
+			strip(c, mist, cam * 1.2, GN - 6, Rect2(x0, -400, x1 - x0, 1200))
 	var pillars: Texture2D = Art.tex.get("temple-front")    # (0.50) the temple's jaguar pillars, in front of him
 	if pillars != null and snap(TEMPLE_X - cam) > -pillars.get_width():
 		blit(c, pillars, snap(TEMPLE_X - cam), GN - TEMPLE_FLOOR)

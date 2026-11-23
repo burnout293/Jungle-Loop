@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.52.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.53.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,33 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.53.0
+
+- **Les pitons brumeux** remplacent les ruines (même place, `Game.SKY` = 1 ; les images des ruines rangées dans
+  l'archive, `godot/ruines`) : des pitons couverts de jungle sortent d'une mer de brume (PixelLab : fond lointain,
+  couche du milieu, bande de brume derrière et devant Pépito, `assets/src/pitons`). **On n'y fait que voler** :
+  le Vol y est toujours là (`Run.lvl("flight")` vaut au moins 1 quand `run.sky`), à leur lisière il s'envole tout
+  seul (en croisière jusqu'au premier appui ; un animal qui ne vole pas reste derrière), la brume ne porte
+  personne : y tomber (`MIST_FALL` sous la ligne du sol) coûte un cœur (le dernier : le moment fatal) et il est
+  remonté dans les airs. La route n'y a que ce qui vole : pitons (`pinnacle`, `pinpair` : passer par-dessus ;
+  `PIN_HS`), Fonceurs (fusées en bambou des pygmées ou toucans qui piquent), suspendus (pygmées en deltaplane de
+  feuilles, en rideaux comme avec le Vol), nuées (frelons), pièces en l'air ; ni danger au sol, ni trou, ni
+  plateforme, ni décor à casser, ni colline. Leur décor moins assombri que les autres (il est déjà pâle).
+- **Quand ils viennent** (`next_biome`, `Run.sky_ok`) : en Histoire après Vorace ; en Run illimitée seulement si
+  le Vol est porté (cela changera), jamais en premier (la course part du temple, à pied).
+- **Histoire** : Pépito vole la **mâchoire** de la relique au temple ; Vorace donne en mourant la **couronne**
+  (le jade), qui confère le **Vol** (`RELIC_PIECES` jade, ambre, braise ; `RELIC_POWERS` Vol, Esquive, Sablier) ;
+  « %d/4 MORCEAUX » compte la mâchoire. Dialogues mis à jour (la mâchoire, la couronne, les pitons après la fleur).
+- **Le moteur web sans la 3D** (le jeu n'en a pas : `tools/build_web_template.ps1`, Godot 4.7.2 compilé avec
+  Emscripten 4.0.20 dans `C:\Users\Buly\godot-build`, sans 3D ni physique, navigation, XR, et sans les modules
+  inutilisés), essayé en deux versions : optimisé pour la taille, 25,6 Mo au lieu de 39,5 ; pour la vitesse, 37,3 Mo.
+  **Pas utilisé pour l'instant** : mesurés dans le navigateur (cache chaud), les deux démarrent en ~4 s là où le
+  moteur officiel met ~1,5 s (cause à trouver : sans doute les réglages de production de la compilation officielle).
+  Les modèles sont dans `export/templates` (non commités) ; le préréglage Web garde le modèle officiel.
+- Tests : `tests/sky_053.gd` (13 vérifications : l'ordre des décors, le Vol, l'envol, la brume, la route) ;
+  `tests/coop_road.gd` : le cas « Sprint sur les deux » porte aussi le Vol (il change la route : les pitons).
+  Bancs : `--tour53` (la lisière, l'envol, les pitons, les volants, la brume).
 
 ## 0.52.0
 

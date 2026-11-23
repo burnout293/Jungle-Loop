@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dru1gu7l8e2hm"
-path="res://.godot/imported/ruins-ground.png-196b5896e05f0f0b6bef4adb3c55f486.ctex"
+uid="uid://cfdin23i6aw0b"
+path="res://.godot/imported/toucan.png-87db16c3787422d7ab4be3c7f80d62e5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/img/ruins-ground.png"
-dest_files=["res://.godot/imported/ruins-ground.png-196b5896e05f0f0b6bef4adb3c55f486.ctex"]
+source_file="res://assets/img/toucan.png"
+dest_files=["res://.godot/imported/toucan.png-87db16c3787422d7ab4be3c7f80d62e5.ctex"]
 
 [params]
 
