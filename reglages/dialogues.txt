@@ -12,6 +12,9 @@
 # essais se recomptent depuis ce morceau. Les morceaux à gagner : jade (la couronne de Vorace, le Vol), ambre, braise.
 # (0.53 : le morceau que Pépito vole dans le temple est la mâchoire.)
 # À deux, c'est toujours le 1er dialogue (le même sur les deux téléphones).
+# 0.54 : « falaise » = après Vorace, quand les gardes reprennent la poursuite et que Pépito court vers la falaise ;
+# « envol » = une fois sauté, quand le Vol le prend et que les gardes le suivent en deltaplane (seul seulement) :
+# ils sautent de la falaise à la première réplique qui dit « deltaplane » (sinon à la fin du dialogue).
 
 # --- 1er essai : la première rencontre. Pépito a la mâchoire de la relique, les gardes ont fait s'écrouler l'entrée... sur eux aussi.
 départ | Chef Massue | Halte, voleur ! Rends-nous la relique sacrée !
@@ -91,3 +94,23 @@ départ jade 2 | Pointu      | ... Il allume la mèche.
 
 1000 jade 2 | Chef Massue | DEMI-TOUR ! On t'attend au temple, comme toujours.
 1000 jade 2 | Pépito      | Préparez la broche, alors.
+
+# --- 0.54 : après Vorace, la falaise au bout de la forêt, le saut dans le vide et l'envol.
+falaise | Chef Massue | Vorace est tombée ?! Et il a pris sa couronne ! Après lui !
+falaise | Pointu      | Chef, il court droit vers la falaise !
+falaise | Pépito      | Une falaise... Bon. De toute façon, je n'ai pas le choix.
+envol   | Pointu      | Chef ! Il... il vole !
+envol   | Chef Massue | La couronne ! Aux deltaplanes, vite !
+envol   | Pépito      | Des deltaplanes en feuilles ? Bon courage, les gars.
+
+falaise jade | Chef Massue | La fleur est encore par terre ! Rattrapez-le !
+falaise jade | Pointu      | Il retourne vers la falaise, chef !
+falaise jade | Pépito      | J'adore cette falaise.
+envol jade   | Pointu      | Il revole, chef !
+envol jade   | Chef Massue | Deltaplanes ! Cette fois, on le rattrape !
+
+falaise jade 2 | Pointu      | Chef, il va encore sauter...
+falaise jade 2 | Chef Massue | Sautez avec lui, cette fois !
+falaise jade 2 | Pointu      | Sans deltaplane ?!
+envol jade 2   | Chef Massue | ... Bon. Avec les deltaplanes.
+envol jade 2   | Pépito      | Le dernier arrivé dans la brume a perdu !

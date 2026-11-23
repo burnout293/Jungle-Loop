@@ -64,17 +64,21 @@ func _init() -> void:
 	var hearts = r.hearts
 	r.p.cruise = 0
 	r.p.inv = 0
+	r.soar = 0
 	r.obs.clear()
-	var lifted = false
-	for k in 600:                                    # no press: he drops into the mist
+	var touched = false
+	var lowest = -INF
+	for k in 600:                                    # no press: he drops into the mist (0.54: it bounces him)
 		r.obs.clear()
 		Game.update(r, 1.0 / 60, inp)
+		lowest = maxf(lowest, r.p.y - Game.floor_at(r, r.cam + r.sx))
 		if "mist" in r.events:
-			lifted = r.p.y < Game.floor_at(r, r.cam + r.sx)
-			break
+			touched = true
 		r.events.clear()
-	check(r.hearts == hearts - 1, "tombé dans la brume : un cœur en moins (%d → %d)" % [hearts, r.hearts])
-	check(lifted and not r.dead, "et il est remonté dans les airs")
+		if touched and k > 200:
+			break
+	check(touched and r.hearts == hearts, "touché la brume : aucun cœur perdu (%d → %d)" % [hearts, r.hearts])
+	check(not r.dead and lowest <= Game.MIST_SINK + 1, "elle le renvoie : jamais plus bas que la brume (%.0f)" % lowest)
 
 	# --- the road of the heights ---
 	var road = Game.new_run({"flight": 1}, "endless", 11)

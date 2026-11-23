@@ -15,7 +15,7 @@
 vitesse au depart             | 9        # m/s : la Run illimitée, et la forêt en Histoire
 acceleration run illimitee    | 0.125    # m/s gagnés chaque seconde
 acceleration histoire         | 0.18     # m/s gagnés chaque seconde, depuis le début du décor
-vitesse des ruines            | 10       # m/s : en Histoire, chaque décor repart de sa vitesse
+vitesse des pitons            | 10       # m/s : en Histoire, chaque décor repart de sa vitesse
 vitesse du donjon             | 11
 vitesse de la cite            | 12
 sprint                        | 4        # m/s de plus avec le Sprint
@@ -64,6 +64,8 @@ tnt, temps de vol             | 0.55     # s avant l'explosion
 redmonster, duree             | 5 / 10 / 20      # s, par niveau
 redmonster, recharge          | 30 / 35 / 45     # s avant la canette suivante, depuis la première gorgée, par niveau
 redmonster, vitesse           | 200      # % de ta vitesse pendant ce temps (la route reste posée pour ta vitesse à toi)
+couteau suisse, zone          | 1.4      # (0.54) fois plus large, la zone de l'évasion, au niveau 2 et 3
+couteau suisse, vitesse       | 75       # % (0.54) : le curseur et la zone vont moins vite, au niveau 2 et 3
 
 [objets rares]
 un tous les                   | 1400 / 2400      # m, de … à …
@@ -95,8 +97,9 @@ nids des                      | 900      # m : les premiers nids
 
 [volants]
 des                           | 400      # m : les premiers volants (Fonceurs, missiles) et leurs vagues
-avertissement                 | 2        # s : le « ! » avant qu'il traverse ; pendant ce temps il suit ta hauteur, puis la garde
+avertissement                 | 2        # s : le « ! » avant qu'il traverse ; il suit ta hauteur, puis se fige (fige)
 suivi                         | 4        # m/s au plus : le « ! » rejoint ta hauteur lentement, en retard sur toi
+fige                          | 1        # s (0.54) : sa dernière seconde avant de partir, le « ! » ne bouge plus
 vitesse                       | 20       # m/s de plus que toi
 vagues                        | 2 / 10   # volants : à 9 m/s / à 30 m/s
 ecart dans les vagues         | 0.9 / 0.3        # s : à 9 m/s / à 30 m/s
@@ -128,6 +131,15 @@ ecarts en moins               | 25       # % au plus dur
 enchainements en plus         | 100      # % de files, nids et vagues en plus au plus dur
 temps pour retomber en moins  | 12       # % : le temps laissé pour retomber entre deux motifs, au plus dur (vérifié par les bancs)
 volants dans les grands ecarts en plus | 0  # % de chances en plus qu'un grand écart reçoive un volant, au plus dur (à 35 : un passage impossible à deux)
+
+[pitons]
+# 0.54 : les pitons brumeux (à la place des ruines) et la falaise qui y mène depuis la forêt
+rebond de la brume            | 15.5     # m/s : la brume ne fait pas mal, elle le renvoie vers le haut
+ecart entre deux pitons       | 0.95     # s entre deux pitons d'une rangée (14 m au moins)
+passage sous un deltaplane    | 6.25     # m entre le sommet d'un piton et le deltaplane au-dessus
+debut tranquille              | 150      # m : au début des pitons, seulement des rangées de pitons
+chute avant l envol           | 0.5      # s : sauté de la falaise, il tombe, puis le Vol le prend
+gardes en deltaplane          | 4        # s : Histoire, les gardes le suivent en deltaplane après leurs répliques
 
 [vorace]
 arrivee                       | 1500     # m (à 100 m près), Histoire seulement

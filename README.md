@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.53.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.54.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -105,6 +105,34 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
 
+## 0.54.0
+
+- **La falaise** entre la forêt et les pitons (`lay_cliff`, `_cliff_begin`, `CLIFF_*`) : quand les pitons viennent
+  après la forêt, le sol monte (`CLIFF_H` sur `CLIFF_RISE`), court à plat jusqu'au bord, puis tombe dans la brume ;
+  les pitons commencent au bord (`run.cliff_x`). Posée au motif suivant, hors de l'écran, seul comme à deux (là,
+  au changement de décor de `spawn_pattern` : la même sur les deux téléphones). Image PixelLab : la fin du sol de
+  la forêt repeinte en paroi (inpaint sur le sol lui-même, `assets/src/falaise`, `assets/img/cliff.png`).
+- **Le saut et l'envol** : au bord il saute (`CLIFF_LEAP`), tombe `CLIFF_FALL` s quoi qu'on appuie (`run.soar`),
+  puis le Vol le prend (gerbe verte, son « soar »). En Histoire, c'est là que la couronne de Vorace donne le Vol
+  (avant, dès sa mort) ; « Le Vol ! » à l'écran.
+- **Histoire, seul : la cinématique** : après Vorace, les gardes reprennent la poursuite (ils reviennent en
+  courant), parlent (`falaise` dans `dialogues.txt`), puis la falaise est posée ; une fois sauté, ils crient
+  (`envol`) et sautent derrière lui en deltaplane de feuilles à la réplique qui dit « deltaplane » (`glide_go`),
+  le suivent `GLIDE_ESCORT` s (la caméra recule un peu pour les montrer, `GLIDE_SHIFT`), puis restent derrière.
+- **Pitons** : la brume ne fait plus mal (elle le renvoie vers le haut, `MIST_BOUNCE`, `MIST_SINK`) ; route
+  refaite en figures lisibles (`pinrow` : rangée de pitons qui montent et descendent d'un cran, pièces en arc
+  au-dessus ; `pinthread` : un deltaplane au-dessus d'un piton, passer entre ; `glidestair` : trois deltaplanes en
+  biais, dessous ou dessus selon les pièces ; rideaux, Fonceurs) ; plus rien de semé au hasard entre les figures ;
+  les `SKY_EASY` premiers mètres, des rangées de pitons seulement.
+- **Missiles** : le « ! » suit ta hauteur, puis se fige sa dernière seconde (`DART_FREEZE`, `fige`).
+- **Monticules** : posés sur le sol sous eux (le plus bas), ils descendent dans un creux au lieu de flotter.
+- **Plus de ponton en pierre** (le motif « grotte » : on ne pouvait pas sauter dessous).
+- **Couteau suisse, équipement** (`swiss`, 3 niveaux, niveau 4) : une évasion par course sans prendre au stock,
+  niveau 2 plus facile (zone ×1,4, curseur et zone à 75 %), niveau 3 deux évasions ; le couteau en stock reste
+  utilisable après. Jamais en Histoire.
+- Tests : `tests/cliff_054.gd` (33 vérifications) ; `sky_053` (la brume sans dégâts), `story_049` (quatre
+  dialogues par essai). Banc : `--tour54`.
+
 ## 0.53.0
 
 - **Les pitons brumeux** remplacent les ruines (même place, `Game.SKY` = 1 ; les images des ruines rangées dans
@@ -112,7 +140,7 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   couche du milieu, bande de brume derrière et devant Pépito, `assets/src/pitons`). **On n'y fait que voler** :
   le Vol y est toujours là (`Run.lvl("flight")` vaut au moins 1 quand `run.sky`), à leur lisière il s'envole tout
   seul (en croisière jusqu'au premier appui ; un animal qui ne vole pas reste derrière), la brume ne porte
-  personne : y tomber (`MIST_FALL` sous la ligne du sol) coûte un cœur (le dernier : le moment fatal) et il est
+  personne : y tomber (`MIST_FALL` sous la ligne du sol ; 0.54 : plus de dégâts) coûte un cœur (le dernier : le moment fatal) et il est
   remonté dans les airs. La route n'y a que ce qui vole : pitons (`pinnacle`, `pinpair` : passer par-dessus ;
   `PIN_HS`), Fonceurs (fusées en bambou des pygmées ou toucans qui piquent), suspendus (pygmées en deltaplane de
   feuilles, en rideaux comme avec le Vol), nuées (frelons), pièces en l'air ; ni danger au sol, ni trou, ni

@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.53.0"
+const VERSION := "0.54.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -5311,7 +5311,7 @@ func _esc_view() -> void:
 	var ph: String = c.phase if c != null else ""
 	w["esc"].visible = ph == "offer" or ph == "escape"
 	if ph == "offer":
-		w["esc-label"].text = "Capturé ! Couteau suisse : %d" % SaveData.stock(save, "knife")
+		w["esc-label"].text = "Capturé ! Couteau suisse : %d" % (SaveData.stock(save, "knife") + run.free_knives)
 		w["esc-knife"].visible = true
 		w["esc-bar"].visible = false
 		set_bar(w["esc-time"], c.timer / Game.ESC_OFFER)
@@ -5324,11 +5324,11 @@ func _esc_view() -> void:
 		w["esc-bar"].queue_redraw()
 		set_bar(w["esc-time"], maxf(0, e.time) / e.full)
 
-## The Couteau suisse taken from the stock: the escape begins.
+## The Couteau suisse taken from the stock (0.54: the one equipped first, it costs nothing): the escape begins.
 func _use_knife() -> void:
 	if run == null or run.caught == null or run.caught.phase != "offer":
 		return
-	if SaveData.use(save, "knife") and Game.escape_start(run):
+	if (run.free_knives > 0 or SaveData.use(save, "knife")) and Game.escape_start(run):   # (0.54: the one equipped first)
 		Audio.sfx("buy")
 
 func _offer_tick(delta: float) -> void:
@@ -5717,6 +5717,9 @@ func _step(h: float) -> void:
 			"timber": banner("Ça tombe !")
 			"bossfall": banner("Écrasée !")
 			"bossdown": banner("Vorace est vaincue !")
+			"soar":                                 # (0.54) off the cliff, the crown's Vol takes him (Histoire)
+				if run.mode == "story" and run.won == 0:
+					banner("Le Vol !")
 			"relic":                                # 0.49: a piece of the relic won (Histoire): kept, its power now
 				if run.won >= 0:
 					if int(save["relic"]) < run.won + 1:

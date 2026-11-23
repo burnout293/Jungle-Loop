@@ -193,6 +193,10 @@ func _recipes() -> Dictionary:
 		"coin": [T(1320, 0.07, "square", 0.10), T(1760, 0.12, "square", 0.10, 0.06)],
 		"bounce": [T(200, 0.25, "sine", 0.3, 0, 800)],
 		"flap": [T(520, 0.07, "triangle", 0.09, 0, 900)],
+		# 0.54: off the cliff (a whistle going down), the Vol taking him (rising), the mist bouncing him (a puff)
+		"leap": [T(900, 0.55, "triangle", 0.09, 0, 260)],
+		"soar": arp([0, 4, 7, 12, 16, 19], 0.22, "square", 0.11, 0.06),
+		"mist": [N(0.25, 0.08, 500), T(300, 0.18, "sine", 0.08, 0, 520)],
 		"mount": arp([0, 7, 12, 19], 0.2, "square", 0.14, 0.07),
 		"unmount": [T(420, 0.3, "square", 0.2, 0, 110)],
 		"bye": [T(700, 0.12, "triangle", 0.14, 0, 500), T(500, 0.16, "triangle", 0.14, 0.12, 350)],

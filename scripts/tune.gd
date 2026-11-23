@@ -18,6 +18,7 @@ const KEYS := {
 		"acceleration run illimitee": ["SPEED_GAIN", "n", M],
 		"acceleration histoire": ["STORY_GAIN", "n", M],
 		"vitesse des ruines": ["ZONE_SPEED", "zone:1", M],
+		"vitesse des pitons": ["ZONE_SPEED", "zone:1", M],   # (0.54: the heights, in the ruins' place)
 		"vitesse du donjon": ["ZONE_SPEED", "zone:3", M],
 		"vitesse de la cite": ["ZONE_SPEED", "zone:2", M],
 		"sprint": ["SPEED_SPRINT", "n", M],
@@ -44,6 +45,8 @@ const KEYS := {
 		"invincible apres un coup": ["HURT_INV", "n", 1.0],
 	},
 	"objets": {
+		"couteau suisse, zone": ["SWISS_ZONE", "n", 1.0],
+		"couteau suisse, vitesse": ["SWISS_SLOW", "n", PC],
 		"aimant": ["MAGNET", "lv", M],
 		"gemmes dispersees": ["SCATTER", "lv", PC],
 		"valeur des gemmes": ["GEMS", "gems", 1.0],
@@ -99,6 +102,7 @@ const KEYS := {
 		"des": ["FROM_DARTS", "n", 1.0],
 		"avertissement": ["DART_WARN", "n", 1.0],
 		"suivi": ["DART_TRACK", "n", M],
+		"fige": ["DART_FREEZE", "n", 1.0],
 		"vitesse": ["DART_SPEED", "n", M],
 		"vagues": ["WAVE_N", "ipair", 1.0],
 		"vagues poids": ["CHAIN_WAVES", "i", 1.0],
@@ -124,6 +128,14 @@ const KEYS := {
 		"enchainements en plus": ["PRESS_CHAINS", "n", PC],
 		"temps pour retomber en moins": ["PRESS_NEED", "n", PC],
 		"volants dans les grands ecarts en plus": ["PRESS_FILL", "n", PC],
+	},
+	"pitons": {
+		"rebond de la brume": ["MIST_BOUNCE", "n", M],
+		"ecart entre deux pitons": ["PIN_TIME", "n", 1.0],
+		"passage sous un deltaplane": ["THREAD_GAP", "n", M],
+		"debut tranquille": ["SKY_EASY", "n", 1.0],
+		"chute avant l envol": ["CLIFF_FALL", "n", 1.0],
+		"gardes en deltaplane": ["GLIDE_ESCORT", "n", 1.0],
 	},
 	"vorace": {
 		"arrivee": ["BOSS_AT", "n", 1.0],

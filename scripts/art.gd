@@ -28,7 +28,7 @@ const BIOMES := [
 
 const NAMES := ["temple", "temple-mid", "temple-front", "temple-rubble", "vorace-legs", "vorace-head", "vorace-body", "vorace-log", "crate-big", "lilypad", "walkway", "hover-plat", "vine-garland", "vine-hang",
 	"spikebot", "spider-low", "spider-mid", "bat", "thornball", "beartrap", "vulture", "arrow", "missile", "idol", "drone", "wasp", "drone-big",
-	"pinnacle", "glider", "hornets", "toucan", "rocket",
+	"pinnacle", "glider", "hornets", "toucan", "rocket", "cliff",
 	"hero-body", "hero-ball", "hero-rotor", "hero-fist", "hero-shoe", "mount-gorilla", "mount-gorilla-hang", "mount-rhino", "mount-dragonfly",
 	"mosquito", "fly", "spiky", "coin", "gem", "gem-y", "gem-r", "gem-b", "heart", "monkey", "coin-icon",
 	"guard-spear", "guard-club", "pick-feather", "pick-urn", "pick-shield", "pick-knife", "isle-forest-1", "isle-forest-2"]

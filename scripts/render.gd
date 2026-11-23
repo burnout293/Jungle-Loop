@@ -22,6 +22,8 @@ const TEMPLE_FLOOR := 218.0            # the row of the temple's pictures that s
 # temple and slides to the doorway while it rumbles (Game.TEMPLE_PAN).
 const PROP_CELL := Game.PROP_CELL / Game.PIXEL
 const EARTH := 24.0
+const CLIFF_FACE := 24                  # (0.54) cliff.png: its rock face this far from its left side, its floor line
+const CLIFF_TOP_ROW := 28               # on this row (tools: assets/src/falaise)
 const SLICE := 4
 const TILE := 16.0
 const SPREAD := 120.0
@@ -196,9 +198,14 @@ func draw_guards(c: CanvasItem) -> void:
 		return
 	for i in run.guards.size():
 		var g = run.guards[i]
-		if not g.on:
+		if not g.on or g.get("gone", false):
 			continue
 		var x = sx(g.x)
+		if g.get("glide", false):                    # (0.54) after him on their leaf gliders, off the cliff
+			var gl: Texture2D = Art.tex.get("glider")
+			if gl != null and x > -80 and x < view_w + 80:
+				blit(c, gl, snap(x - gl.get_width() / 2.0), snap(n(g.y) - gl.get_height() / 2.0 + sin(t * 3 + i) * 1.5), true)
+			continue
 		if run.out == 2 and g.v > 0:
 			x += 5 * sin(t * 1.6 + i * 2.2)          # (at his heels, never quite in step)
 		if x < -60 or x > view_w + 60:
@@ -716,17 +723,28 @@ func draw_hills(c: CanvasItem) -> void:
 		if hl.isles and hl.biome == 0 and pics.size() >= 3:   # 0.49: behind the platforms, the mounds they come from
 			pics = pics.slice(2)                     # (0.50: four of them, darker: tools/prep_mounds.py)
 		if pics.is_empty():                          # (the pictures missing: the old mound, drawn)
-			blit(c, Art.hill(hl.biome, w, h, hl.seed % 997), x, GN + 6 - h)
+			blit(c, Art.hill(hl.biome, w, h, hl.seed % 997), x, _hill_foot(hl.x, hl.w) + 1 - h)
 			continue
 		# its stretch filled with the scenery's pictures side by side (chosen from its seed), standing on the floor
+		# (0.54: on the floor under it, the lowest of it: where the floor sinks, the mound goes down with it)
 		var at = 0.0
 		var k = 0
 		while at < w - 30:
 			var im: Texture2D = pics[(hl.seed + k * 7 + k * k) % pics.size()]
 			var flip = (hl.seed >> (k % 8)) & 1 == 1 and hl.biome != 2
-			blit(c, im, x + snap(at), GN + 5 - im.get_height(), flip)
+			var foot = _hill_foot(hl.x + at * PIXEL, im.get_width() * PIXEL)
+			blit(c, im, x + snap(at), foot - im.get_height(), flip)
 			at += im.get_width() * (0.82 + 0.12 * h01(hl.seed % 997 + k, 13))
 			k += 1
+
+## Where a mound's picture stands (screen pixels): the lowest floor under its stretch, a little into it.
+func _hill_foot(x: float, w: float) -> float:
+	var low = -INF
+	var k = 0.0
+	while k <= w:
+		low = maxf(low, Game.floor_at(run, x + k))
+		k += 24.0
+	return n(minf(low, Game.GROUND + Game.HOLLOW)) + 5
 
 ## Scenery props stand on the floor behind the action. Which one stands where comes from the cell number
 ## alone, so the same stretch always looks the same within a run.
@@ -1544,6 +1562,11 @@ func _draw_back(c: CanvasItem) -> void:
 	draw_ground(c, now["ground"], cut if changing else 0.0, view_w, VH + 8)
 	if ghost.has_area():
 		draw_ground(c, Art.scene[run.strip_biome]["ground"], ghost.position.x, ghost.end.x, VH + 8)
+	var cliff: Texture2D = Art.tex.get("cliff")
+	if cliff != null and run.cliff_x > -INF:         # (0.54) the forest's end: its cliff over the heights' mist
+		var ex = snap(run.cliff_x / PIXEL - cam)     # (its rock face where the forest's floor is cut)
+		if ex - CLIFF_FACE < view_w and ex - CLIFF_FACE + cliff.get_width() > 0:
+			blit(c, cliff, ex - CLIFF_FACE, n(Game.GROUND - Game.CLIFF_H) - CLIFF_TOP_ROW)
 	Ambient.draw_life(c, cam, t, view_w, floor_px)
 	draw_dirt(c)
 

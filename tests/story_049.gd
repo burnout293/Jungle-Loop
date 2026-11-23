@@ -44,7 +44,9 @@ func _init() -> void:
 	for n in range(1, 12):
 		for c in [0, 1]:
 			var tk = Game.talks_for(n, c)
-			check(tk.size() == 2, "essai %d, %d morceau(x) : un départ et un 1000" % [n, c])
+			var places = tk.map(func(z): return z["at"])
+			check(tk.size() == 4 and -1.0 in places and -2.0 in places and -3.0 in places and places.any(func(a): return a > 0),
+				"essai %d, %d morceau(x) : un départ, un 1000, une falaise et un envol (0.54)" % [n, c])
 			check(has_turn(tk), "essai %d, %d morceau(x) : un DEMI-TOUR en route" % [n, c])
 
 	# --- Histoire's kit, the hearts ---

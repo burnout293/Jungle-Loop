@@ -38,6 +38,7 @@ flight         | 5  | 4800 / 40000 / 120000  # Vol : montée 12, 13,5 puis 15 m/
 sprint         | 5  | 4000                 # Sprint
 sphere         | 5  | 60000                  # Sphère
 rewind         | 12 | 160000                 # Rembobinage
+swiss          | 4  | 1500 / 3500 / 8000     # Couteau suisse (0.54) : 1 évasion par course, puis plus facile, puis 2
 # les montures, chacune les siennes (onglet Montures)
 gorillaTamed     | 5 | 1800 / 3200        # Gorille dompté
 gorillaMagnet    | 5 | 1000 / 2000        # Aimant du gorille

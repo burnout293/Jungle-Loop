@@ -19,8 +19,37 @@ const NEXT_BIOME := [1, 3, 0, 2]
 # always on there; falling into the mist costs a heart and he is lifted back up. In Histoire they come after
 # Vorace (her crown gives the Vol); in the Run illimitée only if the Vol is worn (Run.sky_ok), never first.
 const SKY := 1
-static var MIST_FALL := 60.0         # how far under the floor line he sinks into the mist before it counts as a fall
+static var MIST_SINK := 18.0         # (0.54) how far under the floor line he sinks into the mist before it bounces him
+static var MIST_BOUNCE := 620.0      # ... and how fast it sends him back up (no harm: the mist holds him)
 static var PIN_HS := [150.0, 230.0, 310.0]   # a pinnacle's top over the floor line
+# 0.54: the heights' figures. Pinnacles in a row PIN_TIME s apart (PIN_GAP units at least); a glider over a
+# pinnacle THREAD_GAP above its top (bobbing THREAD_AMP); gliders in a slant at STAIR_HS, GLIDE_STEP apart at
+# least; the first SKY_EASY metres of the heights only pinnacles.
+static var PIN_TIME := 0.95
+const PIN_GAP := 560.0
+static var THREAD_GAP := 250.0
+const THREAD_AMP := 22.0
+const STAIR_HS := [190.0, 300.0, 410.0]
+const GLIDE_STEP := 300.0
+static var SKY_EASY := 150.0
+# 0.54: the cliff between the forest and the heights. The forest's floor climbs CLIFF_H over CLIFF_RISE, runs
+# flat CLIFF_TOP (its edge, where the heights begin: render.gd draws the cliff there), then drops into the mist
+# CLIFF_LIP further on (the moss hanging over). Off it he leaps (CLIFF_LEAP) and falls CLIFF_FALL s before the
+# Vol takes him (the relic's power: in Histoire, his new one); CLIFF_CALM after it, nothing but coins. Histoire,
+# alone: the guards are after him again before it (« falaise » in dialogues.txt), then follow him on leaf gliders
+# (« envol ») GLIDE_ESCORT s once they are done talking, and fall behind.
+const CLIFF_H := 198.0
+const CLIFF_RISE := 560.0
+const CLIFF_TOP := 560.0
+const CLIFF_LIP := 58.0
+const CLIFF_LEAP := 330.0
+static var CLIFF_FALL := 0.5
+const CLIFF_CALM := 1700.0
+static var GLIDE_ESCORT := 4.0
+const GLIDE_SHIFT := 0.24          # (meanwhile he is this much of the screen further right, eased at GLIDE_PAN a second)
+const GLIDE_PAN := 170.0
+const CLIFF_TALK := -2.0           # (the talks' places in TALKS: -1 the temple, -2 the cliff, -3 the flight)
+const FLIGHT_TALK := -3.0
 const PIN_W := 56.0 * 2.25           # its rock, as wide as 56 art pixels (its picture: render.gd)
 # The scenery changes after the boss (the ruins), then while there is no other boss every ZONE metres.
 # Most of the numbers below are static vars, not consts: reglages/equilibrage.txt sets them at launch
@@ -116,12 +145,13 @@ static var JUMP_GRAVITY := 2400.0
 static var JUMP_HELD := 1500.0
 # The flyer: a "!" at the right edge shows its height DART_WARN seconds before it crosses the screen; while it
 # shows, it drifts lazily towards his height (late: DART_LAG, never faster than DART_TRACK units a second), and
-# keeps the height it had when it goes.
+# (0.54) stops following him DART_FREEZE seconds before it goes: the height it will cross at is known by then.
 # On foot, the flyers of a wave are DART_FOOT_GAP seconds apart at least: each one can be jumped.
 const DART_W := 64.0 * SIZE
 const DART_H := 40.0 * SIZE
 static var DART_WARN := 2.0
 static var DART_TRACK := 160.0
+static var DART_FREEZE := 1.0
 const DART_LAG := 1.6
 const DART_FOOT_GAP := 0.85
 static var DART_SPEED := 800.0
@@ -192,6 +222,12 @@ static var ESC_ZONE_MAX := 0.4
 static var ESC_CURSOR := 1.1
 static var ESC_DRIFT := 0.3
 static var ESC_HARDER := 0.25
+# 0.54: the Couteau suisse to equip (« swiss »): SWISS_FREE[level] escapes a run without taking one from the
+# stock (level 1: one, level 3: two); from level 2, every escape is easier: its zone SWISS_ZONE times wider,
+# the cursor and the zone SWISS_SLOW times as fast.
+const SWISS_FREE := [0, 1, 1, 2]
+static var SWISS_ZONE := 1.4
+static var SWISS_SLOW := 0.75
 const GAP_FILL := 640.0
 const DECOR_RATE := 0.12
 const HOVER_W := 60.0 * SIZE
@@ -700,6 +736,7 @@ class Run:
 	var idol_acc := 0.0
 	var offered := false           # the consumables have been offered (main.gd)
 	var knives := 0                # the Couteaux suisses in stock (main.gd sets it), and the escapes made this run
+	var free_knives := 0           # (0.54) the escapes the Couteau suisse equipped still gives this run
 	var escapes := 0
 	var next_bonus := 0.0          # metres
 	var camp_y := 0.0              # the height he has kept (the Vol), and for how long
@@ -727,6 +764,11 @@ class Run:
 	var held := 0.0                    # ... how far he ran while they talked: not counted in the distance
 	var blast_t := -1.0                # ... when the doorway blew out: the guards come out after him (render)
 	var guards_off := -1.0             # ... when they turned back (their first line on the way: « DEMI-TOUR !! »)
+	var cliff_due := false             # (0.54) the heights next after the forest: their cliff at the next pattern
+	var cliff_x := -INF                # ... the cliff's edge (where the heights begin)
+	var soar := 0.0                    # ... off it: falling, whatever is pressed, until the Vol takes him
+	var escort := 0.0                  # ... Histoire: the guards on their gliders behind him (seconds left)
+	var glide_go := false              # ... and off the cliff they have jumped (a line said « deltaplanes »)
 	var say_queue: Array = []          # ... the lines still to say
 	var talk_zones: Array = []         # ... where they talk: {at, x0, x1, lines, on, wait, done}
 	var intro := false                 # ... the temple's scene: the camera still while they talk, then the blast
@@ -983,6 +1025,7 @@ static func new_run(upgrades: Dictionary, mode: String = "story", seed_: int = -
 	run.tnt.full = TNT_CD[mini(run.lvl("tnt"), TNT_CD.size() - 1)]
 	run.monster.full = MONSTER_CD[mini(run.lvl("monster"), MONSTER_CD.size() - 1)]
 	run.rewind_left = 1 if run.lvl("rewind") > 0 else 0
+	run.free_knives = SWISS_FREE[mini(run.lvl("swiss"), SWISS_FREE.size() - 1)] if mode != "story" else 0
 	run.next_mount = wrnd(MOUNT_FIRST[0], MOUNT_FIRST[1]) / friend(run)
 	run.next_fm = wrnd(FM_FIRST[0], FM_FIRST[1])
 	run.boss_at = BOSS_AT + wrnd(-100, 100)
@@ -1037,7 +1080,7 @@ static func launch(run: Run) -> void:
 	var lines: Array = []
 	if run.mode == "story":                          # Histoire: the guards outside talk first, the camera still
 		for tk in run.talks:
-			if tk["at"] < 0:
+			if tk["at"] == -1.0:
 				lines.append_array(tk["lines"])
 	if lines.is_empty():
 		run.events.append("rumble")
@@ -1082,6 +1125,10 @@ static func set_talks(text: String) -> void:
 			continue
 		var place: String = words[0]
 		var at = -1.0 if place in ["depart", "départ", "temple"] else (float(place) if place.is_valid_float() else NAN)
+		if place == "falaise":                       # (0.54) before the cliff, after Vorace
+			at = CLIFF_TALK
+		elif place == "envol":                       # (0.54) off the cliff, in the air
+			at = FLIGHT_TALK
 		if is_nan(at):
 			continue
 		var try_n = 0
@@ -1429,6 +1476,12 @@ static func coin_line(run: Run, x: float, y: float, n: int) -> void:
 	for i in n:
 		coin(run, x + i * 44, y)
 
+## (0.54) The heights: an arc of coins from `base` over the floor line, rising `peak` in its middle.
+static func sky_arc(run: Run, x: float, base: float, peak: float, n: int, span: float) -> void:
+	for i in n:
+		var k = float(i) / (n - 1)
+		coin(run, x + span * k, floor_at(run, x + span * k) - base - peak * 4 * k * (1 - k))
+
 static func coin_arc(run: Run, x: float, peak: float, n: int, span: float) -> void:
 	for i in n:
 		var k = float(i) / (n - 1)
@@ -1472,8 +1525,74 @@ static func scatter(run: Run, start: int) -> void:
 # One pattern at run.next_x, then a gap sized on the current speed so it stays fair. What can appear
 # depends on what the player owns: nothing asks for a skill not bought yet.
 
+## (0.54) The forest ends at a cliff over the heights' mist: the floor climbs to it, runs flat to its edge
+## and drops; the heights begin at its edge. A few coins along its top, nothing else.
+static func lay_cliff(run: Run, x: float) -> void:
+	run.cliff_due = false
+	var edge = x + CLIFF_RISE + CLIFF_TOP
+	relief(run, x, [[0, 0], [CLIFF_RISE, CLIFF_H], [CLIFF_RISE + CLIFF_TOP + CLIFF_LIP, CLIFF_H], [CLIFF_RISE + CLIFF_TOP + CLIFF_LIP + 1, 0]])
+	coin_line(run, x + CLIFF_RISE + 60, GROUND - CLIFF_H - 40, floori((CLIFF_TOP - 120) / 44))
+	run.prev_biome = run.biome
+	run.biome = SKY
+	run.biome_x = edge
+	run.cliff_x = edge
+	run.next_x = edge + CLIFF_CALM
+	run.calm_until = maxf(run.calm_until, run.next_x + 700)   # (coins only, his first moments in the air)
+	run.block_end = edge
+
+## (0.54) The heights come next: their cliff will be laid at the next pattern. Histoire, alone: the guards are
+## after him again first (they come back running), and say so (« falaise »).
+static func _cliff_begin(run: Run) -> void:
+	run.cliff_due = true
+	if run.mode != "story" or run.coop:
+		return
+	run.guards_off = -1.0
+	if run.guards.is_empty():
+		for i in 2:
+			run.guards.append({"x": DOOR_X, "v": 0.0, "on": false})
+	for i in run.guards.size():
+		var g = run.guards[i]
+		g.on = true
+		g.glide = false
+		g.gone = false
+		g.x = run.cam - 260 - 140 * i
+		g.v = run.speed
+	var lines = _talk_lines(run, CLIFF_TALK)
+	if not lines.is_empty():
+		var px = run.cam + run.sx
+		run.talk_zones.append({"at": run.dist + 0.5, "x0": px - run.held + 20, "x1": px + 4000, "lines": lines, "on": false, "wait": false, "done": false})
+
+## (0.54) The lines of this attempt's talk at a place (CLIFF_TALK, FLIGHT_TALK), none if there is none.
+static func _talk_lines(run: Run, at: float) -> Array:
+	for tk in run.talks:
+		if tk["at"] == at:
+			return tk["lines"]
+	return []
+
+## (0.54) Off the cliff, the Vol has taken him: Histoire, alone, the guards jump after him on leaf gliders and
+## shout (« envol »); they follow him a while, then fall behind.
+static func _cliff_flight(run: Run) -> void:
+	if run.mode != "story" or run.coop or run.guards.is_empty():
+		return
+	run.escort = GLIDE_ESCORT
+	for i in run.guards.size():
+		var g = run.guards[i]
+		g.on = true
+		g.glide = true
+		g.gone = false
+		g.x = minf(g.x, run.cliff_x - 30 - 60 * i)
+		g.y = GROUND - CLIFF_H - 50
+		g.v = 0.0
+	var lines = _talk_lines(run, FLIGHT_TALK)
+	if not lines.is_empty():
+		var px = run.cam + run.sx
+		run.talk_zones.append({"at": run.dist, "x0": px - run.held, "x1": px + 4000, "lines": lines, "on": false, "wait": false, "done": false})
+
 static func spawn_pattern(run: Run) -> void:
 	var laid = run.coins.size()
+	if run.cliff_due and not run.coop and not road_held(run):
+		lay_cliff(run, run.next_x)                   # (0.54) the forest ends: its cliff, then the heights
+		return
 	if run.mount != null and not run.coop and road_held(run):
 		return
 	if run.mount != null and run.fm == null and not run.fm_due and run.boss == null and (biome_at(run, run.next_x) != SKY or MOUNTS[run.mount.kind].get("fly", false)):
@@ -1498,13 +1617,18 @@ static func spawn_pattern(run: Run) -> void:
 		run.next_x = maxf(x, run.coop_xf + COOP_VIEW + COOP_GAP)
 		return
 	if x >= run.coop_biome_x:                        # for two: the next scenery begins at the first pattern past
-		run.prev_biome = run.biome                   # the mark, the same on both phones (alone: update(), when
-		run.biome = next_biome(run, run.biome)       # he reaches the mark, just off screen)
-		run.biome_x = x
+		var cliff = run.biome == 0 and next_biome(run, run.biome) == SKY   # (0.54: the heights' cliff there)
+		if not cliff:                                # the mark, the same on both phones (alone: update(), when
+			run.prev_biome = run.biome               # he reaches the mark, just off screen)
+			run.biome = next_biome(run, run.biome)
+			run.biome_x = x
 		if run.mode == "story":
 			run.coop_biome_x = coop_next_mark(run.coop_biome_x - COOP_AHEAD) + COOP_AHEAD
 		else:
 			run.coop_biome_x = (floorf(x / (ZONE_ENDLESS * PPM)) + 1) * ZONE_ENDLESS * PPM
+		if cliff:
+			lay_cliff(run, x)
+			return
 	var G = GROUND
 	var tier = tier_of(run)
 	var sky = biome_at(run, x) == SKY                # (0.53) the heights: laid for the Vol, only what flies
@@ -1518,7 +1642,7 @@ static func spawn_pattern(run: Run) -> void:
 	if x < 70 * PPM:
 		opts = ["spiky", "spiky", "coins", "plat", "ledge", "hollow"]
 	else:
-		opts = ["spiky", "spiky", "double", "perch", "hop", "fly", "coins", "plat", "plat", "cave", "log", "gallery", "stairs", "ledge", "ledge", "hollow",
+		opts = ["spiky", "spiky", "double", "perch", "hop", "fly", "coins", "plat", "plat", "log", "gallery", "stairs", "ledge", "ledge", "hollow",
 			"hills", "hills", "hills", "padchain", "padchain", "padchain", "padzig", "padzig"]
 	if x / PPM >= FROM_LOW:                          # many spiders: dangers at every height
 		opts.append_array(["hover", "hover", "hover", "hover", "hover"])
@@ -1557,12 +1681,16 @@ static func spawn_pattern(run: Run) -> void:
 	elif not riding and x > 70 * PPM and x / PPM >= run.next_mount and run.mounts.size() > 0:
 		opts = ["mount"]
 	if sky:                                          # (0.53) the heights: in the air only, pinnacles out of the mist
+		# (0.54) laid in figures that read at a glance, the coins showing the way through: rows of pinnacles
+		# rising and falling, a gap between a pinnacle and a glider, gliders in a slant, a moving curtain, a
+		# fonceur now and then; never a danger dropped anywhere (the first SKY_EASY metres: pinnacles only)
+		var into = (x - run.biome_x) / PPM
 		if x < run.calm_until or run.fm != null or run.fm_due:
 			opts = ["skycoins"]
+		elif into < SKY_EASY:
+			opts = ["pinrow", "pinrow", "pinrow", "pinthread", "skycoins"]
 		else:
-			opts = ["skycoins", "fly", "wave", "wave", "skyhover", "skyhover", "curtain", "curtain", "curtain", "pinnacle", "pinnacle", "pinnacle", "pinpair", "spiders"]
-			if x / PPM >= FROM_NESTS:
-				opts.append("nest")
+			opts = ["pinrow", "pinrow", "pinrow", "pinthread", "pinthread", "glidestair", "glidestair", "curtain", "curtain", "fly", "wave", "skycoins"]
 	var kind: String = wpick(opts)
 	var extent = 0.0
 
@@ -1619,22 +1747,42 @@ static func spawn_pattern(run: Run) -> void:
 		"fly":
 			add_dart(run, x, wpick(DART_ALTS[tier])).aim = tier >= 2
 			extent = 120
-		"skycoins":                                  # (0.53) the heights: a line of coins in the air
-			coin_line(run, x, floor_at(run, x) - wpick([170.0, 270.0, 370.0]), 7)
-			extent = 7 * 44
-		"pinnacle":                                  # (0.53) a rock pinnacle out of the mist: over it
-			var h: float = wpick(PIN_HS)
+		"skycoins":                                  # (0.53) the heights: coins in the air (0.54: a gentle wave)
+			var h0: float = wpick([170.0, 250.0, 330.0])
+			for i in 9:
+				coin(run, x + i * 44, floor_at(run, x) - h0 - 40 * sin(i * 0.7))
+			extent = 9 * 44
+		"pinrow":                                    # (0.54) a row of pinnacles, each a step higher or lower than the last
+			var n = 3 + (1 if press >= 0.5 else 0) + W.randi() % 2
+			var step = maxf(PIN_GAP, lay_speed(run, x) * PIN_TIME)
+			var i = W.randi() % PIN_HS.size()
+			for k in n:
+				var h: float = PIN_HS[i]
+				var at = x + 80 + k * step
+				add_pinnacle(run, at, h)
+				sky_arc(run, at - 50, h + 60, 60, 5, PIN_W + 100)   # over its top
+				var dir = (1 if W.randf() < 0.5 else -1) if i > 0 and i < PIN_HS.size() - 1 else (1 if i == 0 else -1)
+				i += dir                               # (at the bottom or the top, it turns back: never twice the same)
+			extent = (n - 1) * step + PIN_W + 240
+		"pinthread":                                 # (0.54) a pinnacle, a glider over it: through the gap between
+			var h: float = PIN_HS[W.randi() % 2]
 			add_pinnacle(run, x + 80, h)
-			coin_arc(run, x, h + 90, 6, PIN_W + 160)
-			extent = PIN_W + 240
-		"pinpair":                                   # (0.53) two pinnacles: over the first, down, over the second
-			var h1: float = wpick(PIN_HS)
-			var h2: float = wpick(PIN_HS)
-			var gap = maxf(520.0, lay_speed(run, x) * 1.1)
-			add_pinnacle(run, x + 80, h1)
-			add_pinnacle(run, x + 80 + gap, h2)
-			coin_line(run, x + 80 + PIN_W + 60, floor_at(run, x) - 130, maxi(2, floori((gap - PIN_W - 120) / 44)))
-			extent = gap + PIN_W + 240
+			var gl = add_hover(run, x + 80 + PIN_W / 2 - HOVER_W / 2, h + THREAD_GAP + HOVER_H / 2)
+			if gl != null:
+				gl.amp = THREAD_AMP
+			coin_line(run, x, floor_at(run, x) - h - THREAD_GAP / 2 + 20, floori((PIN_W + 160) / 44))
+			extent = PIN_W + 300
+		"glidestair":                                # (0.54) three gliders in a slant: under the rising ones, over
+			var rising = W.randf() < 0.5               # the falling ones (the coins show which)
+			var step = maxf(GLIDE_STEP, lay_speed(run, x) * 0.42)
+			for k in 3:
+				var h: float = STAIR_HS[k if rising else 2 - k]
+				var gl = add_hover(run, x + 120 + k * step, h)
+				if gl != null:
+					gl.amp = THREAD_AMP
+				var cy = h - 130 if rising else h + 130
+				coin_line(run, x + 120 + k * step - 30, floor_at(run, x) - cy, 3)
+			extent = 2 * step + HOVER_W + 240
 		"wave":                                      # a wave of flyers, more and closer together the faster he goes
 			extent = _wave(run, x, tier)
 		"swarm":                                     # two flyers, one after the other, at different heights
@@ -1814,6 +1962,8 @@ static func spawn_pattern(run: Run) -> void:
 		run.next_bonus = x / PPM + wrnd(BONUS_EVERY[0], BONUS_EVERY[1])
 		clear = false
 	# A wide gap gets something that asks no jump: a danger at head height, or a fonceur.
+	if sky:
+		clear = false                                # (0.54) the heights: nothing dropped between their figures
 	if gap > GAP_FILL and x / PPM >= FROM_MID and clear and W.randf() < 0.5:
 		add_hover(run, x + extent + gap * 0.5, HEAD)
 	elif gap > GAP_FILL and x / PPM >= FROM_DARTS and clear and W.randf() < (0.35 if tier >= 2 else 0.15) + PRESS_FILL * press:
@@ -1822,7 +1972,7 @@ static func spawn_pattern(run: Run) -> void:
 		add_decor(run, x + extent + gap * wrnd(0.3, 0.6))     # something to smash
 	if x / PPM > 40 and kind != "hills" and W.randf() < 0.22 and not sky:
 		add_hill(run, x + extent + gap * wrnd(-0.2, 0.3), wrnd(500, 1400), wrnd(100, 480))   # scenery only
-	if kind == "coins" or W.randf() < 0.55:
+	if (kind == "coins" or W.randf() < 0.55) and not sky:
 		var n = mini(8, floori((gap - 200) / 44))
 		var cx = x + extent + 100
 		if n >= 3:
@@ -2296,7 +2446,8 @@ static func _boss_step(run: Run, d: float) -> void:
 		run.events.append("bossdown")
 		if run.mode == "story" and run.chap < 1:     # 0.49: her piece of the relic (0.53: the crown, the Vol), at once
 			run.won = 0
-			grant(run, RELIC_POWERS[0])
+			if run.coop or not run.sky_ok:           # (0.54) alone, its Vol comes as he falls off the cliff
+				grant(run, RELIC_POWERS[0])
 			run.events.append("relic")
 		if run.coop:
 			return                                   # (for two the road laid her gems and what follows)
@@ -2621,10 +2772,10 @@ static func _fatal(run: Run) -> void:
 
 ## Histoire: whether the guards are at his heels (out of the doorway, not turned back yet, no boss).
 static func guards_after(run: Run) -> bool:
-	if run.coop or run.mode != "story" or run.blast_t < 0 or run.guards_off >= 0 or run.boss != null or run.dead:
+	if run.coop or run.mode != "story" or run.blast_t < 0 or run.guards_off >= 0 or run.boss != null or run.dead or run.sky:
 		return false
 	for g in run.guards:
-		if g.on:
+		if g.on and not g.get("gone", false) and not g.get("glide", false):
 			return true
 	return false
 
@@ -2644,8 +2795,28 @@ static func _guards(run: Run, d: float, hv: float) -> void:
 			run.guards.append({"x": DOOR_X, "v": 0.0, "on": false})
 	var px = run.cam + run.sx
 	var since = run.t - run.blast_t
+	if run.escort > 0 and run.saying == "" and run.say_queue.is_empty() and not talk_hold(run):
+		run.escort -= d                              # (0.54) the gliders' time counts once they are done shouting
 	for i in run.guards.size():
 		var g = run.guards[i]
+		if g.get("gone", false):
+			continue
+		if g.get("glide", false):                    # (0.54) on their leaf gliders, behind him in the air
+			if not run.glide_go and (talk_hold(run) or run.saying != "" or not run.say_queue.is_empty()):
+				continue                             # (on the cliff's edge until a line calls for the gliders)
+			if run.escort > 0:
+				var want_x = px - 170 - 150 * i
+				var want_y = run.p.y - HERO_H / 2 + (-80.0 if i == 0 else 70.0) + 16 * sin(run.t * 2.2 + i * 1.9)
+				g.v = hv + clampf((want_x - g.x) * 1.6, -300.0, 700.0)
+				g.x += g.v * d
+				g.y += (clampf(want_y, CEIL + 60, GROUND - 60) - g.y) * minf(1.0, d * 2.0)
+			else:                                    # tired: slower and lower, out of sight, gone
+				g.v = move_toward(g.v, hv * 0.45, 500 * d)
+				g.x += g.v * d
+				g.y += 70 * d
+				if g.x < run.cam - 220:
+					g.gone = true
+			continue
 		if not g.on:
 			if since < GUARD_OUT + GUARD_NEXT * i:
 				continue
@@ -2700,7 +2871,7 @@ static func _capture(run: Run, d: float, px: float, fl: float) -> bool:
 		run.events.append("skewer")
 		for i in 16:
 			part(run, px + rnd(-60, 60), fl - rnd(0, 40), rnd(-200, 200), rnd(-200, -40), rnd(0.4, 0.7), colour_of(["#e8dcc0", "#c9b89a"]), rnd(6, 11), 500)
-		c.phase = "offer" if run.knives > 0 else "gone"   # a Couteau suisse in stock: it is offered (main.gd)
+		c.phase = "offer" if run.knives + run.free_knives > 0 else "gone"   # a Couteau suisse: offered (main.gd)
 		c.timer = ESC_OFFER
 	if t0 < CATCH_FIGHT + 0.6 and c.t >= CATCH_FIGHT + 0.6:
 		run.events.append("snap")                    # (the photo: him on the spit)
@@ -2730,10 +2901,16 @@ static func escape_start(run: Run) -> bool:
 	var c = run.caught
 	if c == null or c.phase != "offer":
 		return false
-	run.knives = maxi(0, run.knives - 1)
+	if run.free_knives > 0:                      # (0.54) the one equipped first, then the stock
+		run.free_knives -= 1
+	else:
+		run.knives = maxi(0, run.knives - 1)
 	var n = run.escapes
 	var harder = 1.0 + ESC_HARDER * n
 	var zw = clampf(ESC_ZONE + ESC_LANTERN * run.lanterns, 0.05, ESC_ZONE_MAX) * pow(0.85, n)
+	if run.lvl("swiss") >= 2:                    # (0.54) the Couteau suisse, level 2: easier
+		zw = minf(zw * SWISS_ZONE, 0.6)
+		harder *= SWISS_SLOW
 	c.phase = "escape"
 	c.esc = {"time": ESC_TIME, "full": ESC_TIME, "rope": ESC_ROPE + n, "ropes": ESC_ROPE + n, "cur": 0.0, "cv": ESC_CURSOR * harder,
 		"zone": 0.5, "zv": ESC_DRIFT * harder * (1.0 if rnd(0, 1) < 0.5 else -1.0), "w": zw}
@@ -3103,6 +3280,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				run.who = l.substr(0, cut) if cut >= 0 else ""
 				run.saying = l.substr(cut + 1)
 				run.events.append("say")
+				if run.escort > 0 and "DELTAPLANE" in run.saying.to_upper():
+					run.glide_go = true              # (0.54) « Aux deltaplanes ! »: off the cliff they jump
 				if run.exploded and run.guards_off < 0 and (not TURN_CUE or "DEMI-TOUR" in run.saying.to_upper()):
 					run.guards_off = run.t               # (on the way: the guards chasing him turn back)
 	if run.wait > 0:                                 # still inside: the temple shakes, dust falls from the lintel
@@ -3269,6 +3448,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			run.sx = sx2
 			if k >= 1:
 				run.out = 2
+		elif run.out == 2 and run.caught == null:    # (0.54) the gliders after him: the camera steps back a little,
+			var want = run.home + (GLIDE_SHIFT * run.view_w if run.escort > 0 else 0.0)   # room behind him for them
+			if absf(run.sx - want) > 0.01:
+				var sx2 = move_toward(run.sx, want, GLIDE_PAN * d)
+				back = run.sx - sx2
+				run.sx = sx2
 		run.cam += move + back
 		if talk_hold(run):
 			run.held += move + back                  # (alone, while the guards talk: the distance waits)
@@ -3287,8 +3472,15 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		if run.mount == null:
 			p.ground = false
 			p.plat = null
-			p.cruise = maxf(p.cruise, CRUISE_TIME * 0.5)   # at cruising height on his own until the first press
-			run.events.append("takeoff")
+			if absf(px - run.cliff_x) < 300:         # (0.54) off the cliff: a leap into the void, then he falls
+				p.vy = minf(p.vy, -CLIFF_LEAP)       # until the Vol takes him
+				p.cruise = 0
+				p.rotor = false
+				run.soar = CLIFF_FALL
+				run.events.append("leap")
+			else:
+				p.cruise = maxf(p.cruise, CRUISE_TIME * 0.5)   # at cruising height on his own until the first press
+				run.events.append("takeoff")
 	run.sky = sky_now
 
 	if run.leap != null and run.leap.planted:        # --- head first in the ground, legs kicking ---
@@ -3377,6 +3569,28 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			p.y = fl + (GALLERY * maxf(0, k) if z.kind == "gallery" else 0.0)
 			p.roll += run.speed * d / 26
 			p.balled += dt
+		elif run.soar > 0 and not mounted:
+			# (0.54) off the cliff: he falls, whatever is pressed, until the relic's Vol takes him
+			run.soar -= dt
+			p.ground = false
+			p.plat = null
+			p.rotor = false
+			p.flying = false
+			p.vy += JUMP_GRAVITY * d
+			p.y += p.vy * d
+			if run.soar <= 0 or p.y > GROUND - 40:     # (never down into the mist)
+				run.soar = 0
+				p.vy = -140
+				p.cruise = CRUISE_TIME * 0.6         # at cruising height on his own until the first press
+				p.jumps = 2
+				burst(run, px, p.y - HERO_H / 2, Color("#9cff7a"), 24, 320)
+				burst(run, px, p.y - HERO_H / 2, Color("#fff3a8"), 12, 200)
+				run.relic = 1
+				run.glitch = maxf(run.glitch, 0.4)
+				run.events.append("soar")
+				if run.mode == "story" and run.won == 0:
+					grant(run, RELIC_POWERS[0])      # (Histoire: the crown's Vol, his new power, comes now)
+				_cliff_flight(run)
 		elif mounted and M.get("fly", false):
 			# the dragonfly: held, it climbs; let go, it sinks. It turns round at once.
 			p.ground = false
@@ -3498,7 +3712,17 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 						p.y = under + HERO_H
 						if p.vy < 0:
 							p.vy = 0
-				var land = fl if p.y >= fl and not run.sky else NAN   # (0.53: the heights' mist holds no one)
+				var land = fl if p.y >= fl and not run.sky else NAN   # (0.53: no one stands on the heights' mist)
+				if run.sky and p.y >= fl + MIST_SINK and p.vy > 0 and not mounted:
+					p.y = fl + MIST_SINK                  # (0.54) it does him no harm: it holds him up, he bounces
+					p.vy = -MIST_BOUNCE                   # off it softly and the Vol takes him on from there
+					p.rotor = false
+					p.flew = false
+					p.diving = false
+					p.jumps = 1
+					for i in 8:
+						part(run, px + rnd(-34, 34), fl + rnd(-4, 14), rnd(-160, 160), rnd(-140, -30), rnd(0.4, 0.7), colour_of(["#e8f4f0", "#cfe3df", "#ffffff"]), rnd(8, 14), -60)
+					run.events.append("mist")
 				var on = null
 				if p.vy > 0:                         # ledges only catch a falling hero
 					for pl in run.plats:
@@ -3633,10 +3857,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				if o.state == "warn":
 					o.x = run.cam + run.view_w + 60
 					o.t += d
-					# its "!" follows his height while it shows; once it goes, its height stays as it was
-					var alt = clampf(floor_at(run, px) - (p.y - tall / 2), DART_ALTS[0][0], DART_TOP)
-					var want = floor_at(run, px) - alt - DART_H / 2   # (lazily: it lags behind him, slowly)
-					o.y = move_toward(o.y, want, minf(DART_TRACK * d, absf(want - o.y) * (1.0 - exp(-DART_LAG * d))))
+					# its "!" follows his height while it shows, then (0.54) stays still its last DART_FREEZE seconds
+					if o.t < DART_WARN - DART_FREEZE:
+						var alt = clampf(floor_at(run, px) - (p.y - tall / 2), DART_ALTS[0][0], DART_TOP)
+						var want = floor_at(run, px) - alt - DART_H / 2   # (lazily: it lags behind him, slowly)
+						o.y = move_toward(o.y, want, minf(DART_TRACK * d, absf(want - o.y) * (1.0 - exp(-DART_LAG * d))))
 					if o.t >= DART_WARN:
 						o.state = "go"
 						o.alt = floor_at(run, px) - (o.y + DART_H / 2)   # (over the floor: a dip on the way changes nothing)
@@ -3717,21 +3942,6 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				if px > hp.x0 - 60 and px < hp.x1 + 60:
 					_fatal(run)
 					break
-		# (0.53) sunk into the heights' mist: a heart goes (the last one: the fatal moment), he is lifted back up
-		if run.sky and p.y > floor_at(run, px) + MIST_FALL and run.mount == null:
-			if run.hearts == 1 and not run.god and run.rewind_left == 0 and (not run.coop or run.race):
-				_fatal(run)
-			p.y = floor_at(run, px) - CRUISE_H
-			p.vy = 0
-			p.ground = false
-			p.cruise = maxf(p.cruise, 1.2)
-			p.inv = 0
-			hit(run, null)
-			if run.god:
-				p.inv = 0.5
-			run.events.append("mist")
-			if run.dead:
-				return
 		# fallen into a hole: a heart goes, and he is put back on the far side
 		if p.y > GROUND + 150:
 			var pit = null
@@ -3806,6 +4016,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			run.strip_biome = NEXT_BIOME[sb] if sb == SKY else sb   # (never the heights: no floor to run on)
 			run.strip_x0 = at
 			run.strip_x1 = at + RELIC_STRIP
+		elif run.biome == 0 and next_biome(run, run.biome) == SKY:
+			_cliff_begin(run)                        # (0.54) from the forest to the heights: a cliff, laid ahead
 		else:
 			run.prev_biome = run.biome
 			run.biome = next_biome(run, run.biome)

@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -42,6 +42,7 @@ func _ready() -> void:
 			"tour47": opts["tour47"] = true        # 0.47's new things in pictures: urns, skins, the offer, the escape
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour54": opts["tour54"] = true        # 0.54's: a hollow under a mound, the cliff (Histoire), the leap, the gliders, the heights
 			"tour53": opts["tour53"] = true        # 0.53's: the misty heights (flying only), seen from the forest's edge
 			"tour52": opts["tour52"] = true        # 0.52's: Réglages without Son, the temple seen from the side and its camera, the heights
 			"tour51": opts["tour51"] = true        # 0.51's: Réglages in four categories, the three parties, Amis in three tabs
@@ -151,6 +152,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour54"]:
+		await _tour54()
 		return
 	if opts["tour53"]:
 		await _tour53()
@@ -579,6 +583,63 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour54: 0.54 in pictures: Histoire (the temple's talk left out), a hollow laid under a mound, then Vorace
+## taken as beaten: the guards back after him, their talk, the cliff, the leap, the Vol, the gliders, the heights'
+## figures; last, the shop with the Couteau suisse.
+var steps54: Array = []
+
+func _tour54() -> void:
+	if steps54.is_empty():
+		steps54 = [[0.5, "setup", ""], [0.8, "play", ""], [3.0, "hollow", ""], [3.9, "shot", "54-01-creux-monticule"], [4.6, "cliff", ""]]
+		var k = 2
+		var at = 5.4
+		while at < 44.0:
+			steps54.append([at, "shot", "54-%02d-falaise" % k])
+			k += 1
+			at += 1.4
+		steps54.append_array([[44.5, "shop", ""], [45.4, "shot", "54-99-boutique"], [45.6, "quit", ""]])
+	while tour_i < steps54.size() and t >= steps54[tour_i][0]:
+		var st = steps54[tour_i]
+		tour_i += 1
+		var r: Game.Run = main.run
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(str(st[2]) + ".png"))
+			"setup":
+				main.save["seenIntro"] = true
+				main.save["mode"] = "story"
+				main.save["relic"] = 0
+				main.save["storyTry"] = 0
+				Game.TALKS = Game.TALKS.filter(func(tk): return tk["at"] != -1.0)   # (no temple talk: straight out)
+			"play":
+				main.go("play")
+				main.run.god = true
+			"hollow":                                 # a hollow just ahead, a mound behind it
+				var at = r.cam + r.view_w * 0.5
+				r.terrain = r.terrain.filter(func(v): return v.x < at)
+				r.terrain.append(Vector2(at, Game.GROUND))
+				Game.relief(r, at + 40, [[0, 0], [70, -Game.HOLLOW], [770, -Game.HOLLOW], [840, 0]])
+				r.obs = r.obs.filter(func(o): return o.x < at - 200)
+				r.coins = r.coins.filter(func(c2): return c2.x < at - 200)
+				r.plats = r.plats.filter(func(pl): return pl.x + pl.w < at - 100)
+				r.zones = r.zones.filter(func(z): return z.x + z.w < at - 100)
+				r.hills = r.hills.filter(func(hl): return hl.x + hl.w < at - 100)
+				r.decor = r.decor.filter(func(dc): return dc.x < at - 200)
+				Game.add_hill(r, at - 60, 1000, 320)
+				r.next_x = at + 1100
+			"cliff":                                  # Vorace taken as beaten: the guards come back, the heights next
+				r.won = 0
+				r.guards_off = r.t
+				r.boss_at = INF
+				r.biome = 0
+				r.prev_biome = 0
+				r.next_biome_at = r.dist
+			"shop":
+				main.save["xp"] = 40000.0
+				main.go("shop")
 			"quit": get_tree().quit()
 
 ## --tour53: 0.53 in pictures: a Run illimitée with the Vol, the heights brought just ahead: the forest's edge,
