@@ -220,7 +220,7 @@ func _init() -> void:
 	tick(races, 2)
 	check(host.seats.get(1, {}).get("away", false) and not host.seats[1].get("done", false), "(0.55) the host keeps his place a while (away)")
 	check(races[1].relink_t >= 0 and races[1].state == "linking", "(0.55) A links again through the room")
-	for k in 25:                                  # 25 × 4 s: past AWAY_KEEP and RELINK_TIME, he never came back
+	for k in 50:                                  # 50 × 4 s: past AWAY_KEEP and RELINK_TIME, he never came back
 		for r in races:
 			r._process(4.0)
 	check(host.seats.get(1, {}).get("gone", false) and host.seats[1].get("done", false), "gone for good: the host marks him out")
@@ -262,7 +262,7 @@ func _init() -> void:
 	check(coins(races[1]) == 700, "the guest paid his 300 at the start")
 	peers[0][0].close()
 	peers[0][1].state = WebRTCPeerConnection.STATE_FAILED
-	for k in 25:
+	for k in 50:
 		for r in races:
 			r._process(4.0)
 	check(races[1].state == "failed" and coins(races[1]) == 1000, "the host gone for good: the guest's 300 come back")

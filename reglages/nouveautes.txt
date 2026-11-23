@@ -1,7 +1,7 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Lasers de la cité : trois bips, un anneau, puis « SAUTE ! ».
-Les lasers ne durent plus qu'un instant.
-Affrontement : un écran de fin avec les pièces, mises et distances de tous.
-Les champignons s'éclairent bien moins fort.
+Nouveau : la Course du jour, des paliers à gagner chaque jour.
+Amis : demandes à accepter, scanner de code QR dans le jeu.
+Affrontement : on voit les autres tomber, résultats à la demande.
+Le jeu a planté en groupe ? Il propose de le rejoindre.

@@ -1208,8 +1208,8 @@ func _draw_ghost(c: CanvasItem, i: int) -> void:
 	if run == null or not Art.ready or i >= run.rivals.size():
 		return
 	var m: Dictionary = run.rivals[i]
-	if m.get("out", false):
-		return
+	if m.get("out", false) and int(m.get("lp", 0)) == 0:
+		return                                       # (0.57: one who fell is seen falling, then planted)
 	var x = sx(float(m.get("x", 0.0)))
 	if x < -60 or x > view_w + 60:
 		return
@@ -1219,7 +1219,13 @@ func _draw_ghost(c: CanvasItem, i: int) -> void:
 	mp.ground = bool(m.get("g", true))
 	mp.flying = bool(m.get("f", false))
 	mp.phase = float(m.get("ph", 0.0))
-	draw_hero(c, null, mp, x)
+	mp.roll = float(m.get("ro", 0.0))
+	var lp = int(m.get("lp", 0))
+	var lf = null
+	if lp > 0:                                       # (0.57) his fall: tumbling, then head first in the ground
+		lf = Game.Leap.new()
+		lf.planted = lp == 2
+	draw_hero(c, null, mp, x, lf)
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 ## Their names over the ghosts, in their colours; one out of sight: his name at that edge, with how far.
@@ -1302,10 +1308,10 @@ func bubble(c: CanvasItem, at: Vector2) -> void:
 	rect(c, snap(cx + r * 0.35), snap(cy - r * 0.55), 2, 2, Color.WHITE)
 
 ## `seat`: where he sits when he rides, {x, y, k} with k going 0 -> 1 while he hops into the saddle.
-func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN) -> void:
+func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN, who_leap = null) -> void:
 	var p = run.p if who == null else who                 # (who: the partner, at_x where he is on screen)
 	var me = who == null
-	var leap = run.leap if me else null
+	var leap = run.leap if me else who_leap               # (0.57: another's fall, in a race)
 	var R: Dictionary = Art.meta["rig"]
 	var dashing = me and run.dash.t > 0
 	var ox = n(run.sx) if is_nan(at_x) else at_x

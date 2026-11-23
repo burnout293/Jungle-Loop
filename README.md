@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.56.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.57.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,34 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.57.0
+
+- **Course du jour** (`scripts/daily.gd`, `[course du jour]` de `reglages/progression.txt`) : une course par jour,
+  la même pour tous (sa graine vient de la date), avec la règle du jour (Pressé, Nuit dans la cité, Au fond du
+  donjon, Un seul cœur, À pied, Ailé) et deux objets imposés ; rejouable à volonté. Paliers de distance (300, 700,
+  1200, 2000, 3000 m : pièces ou urnes), chacun gagné une fois par jour, au moment où on le passe (le 3e atteint
+  donne aussi le 1er et le 2e) ; `save.daily`. Jouer → Course du jour ouvre sa fenêtre (règle, objets, paliers
+  gagnés), « Courir » ; en course, le palier suivant sous les pièces. Ne compte pas pour le record de Sans fin.
+  Les Tambours sont supprimés pour de bon (sons, image rangée dans l'archive).
+- **Amis** : demandes d'amis (serveur : table `requests`, routes `friends/requests` et `friends/answer`,
+  `server/migrate-057.sql`) ; ajouter quelqu'un lui envoie une demande (amis tout de suite s'il nous avait
+  demandé) ; Liste d'amis a deux onglets, **Liste** (le pseudo et « Voir ») et **Demandes** (« Voir », puis
+  Accepter ou Refuser ; les demandes envoyées en attente) ; une fenêtre « X veut être ton ami » hors course
+  (regardé toutes les 8 s). **Scanner son code QR** dans le jeu : l'appareil photo par-dessus la page
+  (`SCAN_JS`, le lecteur du navigateur `BarcodeDetector` : Chrome et Edge sur Android ; ailleurs il le dit).
+  Créer un groupe ou inviter depuis Amis reste sur Amis.
+- **Accueil** : l'équipement dans un petit panneau en bas à gauche, le groupe en bas à droite (seulement s'il y en
+  a un) ; la version sous JOUER.
+- **Affrontement** : « Lancer » pour tous, grisé avec « attente de l'hôte » (ou « attente des joueurs ») ; tombé,
+  « Résultats » montre ou cache la course en direct (puis son résultat, qui s'ouvre seul ; « Retour au salon »
+  pour partir) ; la chute des autres se voit chez tous (états « lp », « ro » : il vole, puis tête plantée).
+- **Téléphone lent** : pas de photo de la chute en Affrontement ; le temps à rattraper plafonné à 1,5 s (un
+  téléphone lent ne s'emballe plus) ; le groupe est gardé sur le téléphone (`user://jungle-loop-group.json`) :
+  si le jeu s'arrête, le prochain démarrage propose de le rejoindre (l'invité revient à sa place, l'hôte reprend
+  sa salle) ; les places attendent 180 s.
+- Tests : `tests/daily_057.gd` (21), `server/test.mjs` (24 : les demandes). Banc `--tour57`. Toile : six
+  propositions d'agencement (Groupe G1-G3, Affrontement V1-V3).
 
 ## 0.56.0
 

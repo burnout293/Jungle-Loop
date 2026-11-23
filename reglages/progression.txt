@@ -103,6 +103,16 @@ rare       | pieces  | 1000 / 2000 | 50
 legendaire | pieces  | 3000 / 5000 | 1
 legendaire | skin    | 1           | 1
 
+[course du jour]
+# 0.57 : une course par jour, la même route pour tous, avec la règle du jour et deux objets imposés ; on la
+# rejoue autant qu'on veut. Chaque palier atteint donne sa récompense, une seule fois par jour (atteindre le
+# 3e donne aussi le 1er et le 2e). palier | distance (m) | ce qu'il donne (pieces N, ou urne N)
+palier | 300  | pieces 300
+palier | 700  | pieces 600
+palier | 1200 | urne 1
+palier | 2000 | pieces 1500
+palier | 3000 | urne 2
+
 [course a 4]
 # L'Affrontement (0.48, 0.55) : les mises toutes prêtes de l'écran (en pièces), séparées par / ; on peut aussi en
 # écrire une autre, de 0 à 99 999 999. Ceux qui ont misé sur le plus loin reçoivent le double de leur mise.

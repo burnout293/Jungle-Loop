@@ -151,6 +151,14 @@ func add_friend(save: Dictionary, code: String) -> Dictionary:
 func friends(save: Dictionary) -> Dictionary:
 	return await _call(save, "friends", {})
 
+## 0.57: the friend requests: those made to me (incoming) and those I made (outgoing), each {code, name, at}.
+func friend_requests(save: Dictionary) -> Dictionary:
+	return await _call(save, "friends/requests", {})
+
+## 0.57: a request made to me, accepted (yes) or refused.
+func answer_friend(save: Dictionary, code: String, yes: bool) -> Dictionary:
+	return await _call(save, "friends/answer", {"code": code, "yes": yes})
+
 ## 0.48: both stop being friends (and their invitations to each other go).
 func remove_friend(save: Dictionary, code: String) -> Dictionary:
 	return await _call(save, "friends/remove", {"code": code})

@@ -27,10 +27,13 @@ const ROOM_LIFE := 540.0                # seconds: past this the room is opened 
                                         # server forgets it at ten minutes; the phones linked stay linked)
 const COLOURS := [Color("#ffd35c"), Color("#7ee8ff"), Color("#e7a6ff"), Color("#9dff7a")]   # each place's colour
 const BET_MAX := 99999999               # (0.55) the most one may bet
-const AWAY_KEEP := 90.0                 # (0.55) seconds a guest's place waits for him once his link dropped
+const AWAY_KEEP := 180.0                # (0.55) seconds a guest's place waits for him once his link dropped
+                                        # (0.57: 180: long enough for a phone to start the game again)
 const DOWN_GRACE := 6.0                 # ... seconds a link may say « disconnected » before it counts as lost
 const RELINK_EVERY := 12.0              # ... a guest tries again this often
-const RELINK_TIME := 80.0               # ... and gives up after this
+const RELINK_TIME := 180.0              # ... and gives up after this
+const KEEP_FILE := "user://jungle-loop-group%s.json"   # (0.57) the group I am in, kept: joined again after a crash
+const KEEP_LIFE := 540.0                # ... for as long as the server keeps its room (seconds)
 const HUES := [0.0, 0.42, 0.62, 0.22]   # ... and the hue the ghost is turned by (render.gd)
 
 static var stakes: Array = [100, 500, 1000, 5000]   # reglages/progression.txt, [course a 4]: the ready-made bets
@@ -286,7 +289,7 @@ func leave() -> void:
 	seats.clear()
 	trails.clear()
 	invited.clear()
-	history.clear()
+	history = []
 	kit = {}
 	races = 0
 	relink_t = -1.0
@@ -425,7 +428,54 @@ func _read_seats(d: Dictionary) -> void:
 func _state(s: String, text: String) -> void:
 	state = s
 	info = text
+	_keep()
 	changed.emit()
+
+## (0.57) The group I am in, written on the phone (its room, my role and place, its races so far): if the game
+## stops (a crash, a slow phone), the next start offers to join it again. Gone when I leave it.
+func _keep() -> void:
+	var path = keep_path()
+	if role == "" or room == "" or state in ["idle", "failed"]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+		return
+	var f = FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify({"room": room, "role": role, "me": me, "at": Time.get_unix_time_from_system(), "history": history, "races": races}))
+		f.close()
+
+## (0.57) The group kept on the phone, if it is fresh enough to be joined again: {room, role, me, ...}, else {}.
+static func keep_path() -> String:
+	return KEEP_FILE % ("-bac" if SaveData._bac() else "")   # (tries and tests: never the real one)
+
+static func kept() -> Dictionary:
+	if not FileAccess.file_exists(keep_path()):
+		return {}
+	var d = JSON.parse_string(FileAccess.get_file_as_string(keep_path()))
+	if not d is Dictionary or str(d.get("room", "")) == "" or Time.get_unix_time_from_system() - float(d.get("at", 0)) > KEEP_LIFE:
+		return {}
+	return d
+
+## (0.57) Back in a group after the game stopped: a guest joins its room again (the host kept his place);
+## the host takes his room again, and the guests, linking again through it, come back.
+func rejoin(d: Dictionary) -> void:
+	var keep_h = Array(d.get("history", []))
+	var keep_n = int(d.get("races", keep_h.size()))
+	if str(d.get("role", "")) != "host":
+		join(str(d["room"]))                         # (it leaves what was there first, then joins)
+		history = keep_h
+		races = keep_n
+		return
+	leave()
+	history = keep_h
+	races = keep_n
+	role = "host"
+	me = 0
+	room = str(d["room"])
+	room_t = ROOM_LIFE - 60.0                        # (a new room soon, the guests told)
+	ice_cache = await net.ice(save)
+	seats = {0: _seat_of_me()}
+	_state("lobby", "")
 
 func _fail(text: String) -> void:
 	for k in links:
@@ -786,6 +836,7 @@ func _remember() -> void:
 	history.push_front({"n": races, "rows": rows})
 	if history.size() > 20:
 		history.pop_back()
+	_keep()
 
 func _on_state(m: Dictionary) -> void:
 	var k = int(m.get("k", -1))

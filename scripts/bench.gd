@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,7 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour57": opts["tour57"] = true        # 0.57's: Amis (Liste, Demandes), the home's panels, the Course du jour, the guest's lobby, watching
 			"tour56": opts["tour56"] = true        # 0.56's: a mushroom brushed, the city's lasers and their cue, the race's end screen
 			"tour55": opts["tour55"] = true        # 0.55's: the group on the home screen, the Affrontement, watching, skins in coins
 			"tour54": opts["tour54"] = true        # 0.54's: a hollow under a mound, the cliff (Histoire), the leap, the gliders, the heights
@@ -150,6 +151,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour57"]:
+		await _tour57()
 		return
 	if opts["tour56"]:
 		await _tour56()
@@ -497,6 +501,107 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour57: 0.57 in pictures: Amis's list (« Voir ») and its requests (a card to accept or refuse), the window
+## of a request, the home screen's two panels (equipment, group), the Course du jour (its window, a run and its
+## next tier), the Affrontement's lobby seen by a guest (« Lancer » greyed), then a race: Léo falls (his fall seen),
+## I fall, I watch with the results shown.
+var steps57: Array = []
+var lp57 := 0
+var lx57 := 0.0
+
+func _tour57() -> void:
+	if steps57.is_empty():
+		steps57 = [
+			[0.5, "setup", ""], [0.7, "go", "friends"], [1.5, "shot", "57-01-amis-liste"],
+			[1.6, "req", ""], [2.3, "shot", "57-02-amis-demandes"],
+			[2.4, "popup", ""], [3.0, "shot", "57-03-fenetre-demande"], [3.1, "unpop", ""],
+			[3.2, "go", "menu"], [4.0, "shot", "57-04-accueil-panneaux"],
+			[4.1, "daily", ""], [4.8, "shot", "57-05-course-du-jour"], [4.9, "dailygo", ""], [9.5, "shot", "57-06-course-du-jour-en-course"],
+			[9.6, "guest", ""], [10.5, "shot", "57-07-salon-invite"],
+			[10.6, "race", ""], [14.0, "leofalls", ""], [14.35, "shot", "57-08-leo-tombe"], [14.9, "leoplant", ""], [15.5, "shot", "57-09-leo-plante"],
+			[16.0, "die", ""], [20.6, "results", ""], [21.2, "shot", "57-10-je-regarde-resultats"], [21.4, "quit", ""],
+		]
+	var rr: Game.Run = main.run
+	if lp57 >= 0 and rr != null and rr.race and main.race.trails.has(1) == false and t > 10.6:
+		main.race.trails[1] = Race.Trail.new()
+	if rr != null and rr.race and main.race.trails.has(1):   # Léo ahead (running, then falling)
+		if lp57 == 0:
+			lx57 = rr.cam + rr.sx + 260.0             # (just ahead of me, on the screen, until he falls)
+		var lx = lx57
+		var y = Game.floor_at(rr, lx)
+		main.race.trails[1].push({"at": rr.t, "x": lx, "y": y, "vy": 0.0, "g": true, "f": false, "ph": rr.t * 9.0, "d": floori(lx / Game.PPM), "c": 40,
+			"lp": lp57, "ro": rr.t * 9.0 if lp57 == 1 else 0.0}, rr.t)
+		main.race.seats[1]["dist"] = floori(lx / Game.PPM)
+		main.race.seats[2]["dist"] = floori((lx + 300) / Game.PPM)
+	while tour_i < steps57.size() and t >= steps57[tour_i][0]:
+		var st = steps57[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				var sv: Dictionary = main.save
+				sv["seenIntro"] = true
+				sv["coins"] = 23450
+				sv["xp"] = 40000.0
+				sv["upgrades"] = {"magnet": 2, "dash": 1, "horn": 2}
+				sv["equipped"] = ["magnet", "dash", "horn"]
+				_fake_friends51()
+				main.requests = {"incoming": [{"code": "PEPI-MILA", "name": "Mila", "at": 0}], "outgoing": [{"code": "PEPI-NOEX", "name": "Noé", "at": 0}]}
+				var rc: Race = main.race
+				rc.invited = {}
+				rc.seats = {0: {"name": "Pépito", "code": "PEPI-6ZAW", "skin": "", "on": 0, "bet": 500, "ready": true},
+					1: {"name": "Léo", "code": "PEPI-K7QM", "skin": "pepito-ember", "on": 1, "bet": 1000, "ready": true},
+					2: {"name": "Inès", "code": "PEPI-INES", "skin": "pepito-amethyst", "on": 1, "bet": 100, "ready": false}}
+				main.refresh_menu()
+			"go": main.go(arg)
+			"req":
+				main.friends_sub = "req"
+				main.req_sel = "PEPI-MILA"
+				main.refresh_friends()
+			"popup": main._show_request("Mila", "PEPI-MILA")
+			"unpop":
+				if main.req_box != null:
+					main.req_box.queue_free()
+					main.req_box = null
+			"daily": main._daily_panel()
+			"dailygo":
+				if main.modal != null:
+					main.modal.queue_free()
+					main.modal = null
+				main.daily_on = true
+				main.go("play")
+				main.run.god = true
+			"guest":                                  # the lobby, seen by Léo (a guest): « Lancer » greyed
+				main.daily_on = false
+				var rc: Race = main.race
+				rc.role = "guest"
+				rc.me = 1
+				main.race_seen = true
+				main.go("race")
+			"race":
+				var rc: Race = main.race
+				rc.role = "host"
+				rc.me = 0
+				rc.running = true
+				main.race_start = {"seed": 77, "biome": 0, "tier": 0, "up": {"magnet": 2}, "at": 0.0}
+				main.go("play")
+				main.run.god = true
+			"leofalls":
+				lp57 = 1
+				lx57 = main.run.cam + main.run.sx + 520.0
+			"leoplant": lp57 = 2
+			"die":
+				var r: Game.Run = main.run
+				r.god = false
+				r.hearts = 1
+				r.p.inv = 0
+				Game.hit(r, null)
+			"results": main._toggle_watch_res()
 			"quit": get_tree().quit()
 
 ## --tour56: 0.56 in pictures: a run in the forest, a mushroom brushed (lit, 70 % less); in the city, a wave of

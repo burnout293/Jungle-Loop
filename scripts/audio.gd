@@ -281,10 +281,6 @@ func _recipes() -> Dictionary:
 		"miss": [T(200, 0.18, "square", 0.14, 0, 120)],
 		"free": arp([0, 4, 7, 12, 19], 0.22, "triangle", 0.2, 0.06),
 		"held": [T(300, 0.5, "triangle", 0.18, 0, 110)],
-		# the pygmies' drums: the low one, the high one, the shaker keeping time
-		"drumlo": [T(90, 0.32, "sine", 0.7, 0, 48), N(0.05, 0.3, 280)],
-		"drumhi": [T(300, 0.14, "triangle", 0.32, 0, 190), N(0.05, 0.35, 2600)],
-		"shaker": [N(0.035, 0.07, 7000)],
 	}
 
 ## Renders a list of voices into one sound, as Web Audio played them: each voice's volume falls

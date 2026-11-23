@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.56.0"
+const VERSION := "0.57.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -133,11 +133,21 @@ var race_start := {}                   # a race about to start: {seed, biome, ti
 var race_send_t := 0.0
 var race_seen := true                  # the last race's result has been looked at (the lobby shows again)
 var watch_k := -1                      # (0.55) fallen in a race: the place of the one I watch
+var daily_on := false                  # (0.57) the Course du jour is what Jouer / Rejouer starts
+var watch_res := false                 # (0.57) ... and the results shown over the view
+var watch_done := false                # (0.57) ... the race decided while watching
 var look_cache := {}                   # (0.55) Pépito in each skin (the group's looks): skin id -> texture
 var race_note := ""                    # a word for the race screen (who left...)
 var race_count := -1                   # the second of the count before the start last shown
 var board_cache: Array = []            # the friends' list as last heard: their records on the road (signs)
 var fr_sel := ""                       # Amis: the friend chosen in the list (his code), "" for my own card
+var friends_sub := "list"              # (0.57) Liste d'amis: its two tabs, list | req (the requests)
+var requests := {"incoming": [], "outgoing": []}   # (0.57) the friend requests, as the server last said
+var req_sel := ""                      # (0.57) the request chosen (its code)
+var req_seen := {}                     # (0.57) the requests already shown in a window this session
+var req_t := 2.0                       # (0.57) seconds before the next look for a request
+var req_box: CanvasLayer = null
+var scanning := false                  # (0.57) the QR scanner is open over the game
 const OFFER_TIME := 3.0
 
 # ---------- start ----------
@@ -165,6 +175,7 @@ func _ready() -> void:
 	race.changed.connect(_on_race_changed)
 	race.message.connect(_on_race)
 	Race.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))   # the stakes (0.48)
+	Daily.load_config(FileAccess.get_file_as_string("res://reglages/progression.txt"))  # (0.57) the daily's tiers
 	_adopt_web_save()
 	Audio.set_volumes(save["musicVol"], save["sfxVol"])
 	Debug.setup()
@@ -234,6 +245,26 @@ func _load() -> void:
 	_js("window.jlReady && window.jlReady()")    # 0.50: the page's loading chase runs off (html/shell.src.html)
 	_refresh_board()
 	_check_friend_link.call_deferred()
+	_offer_rejoin.call_deferred()
+
+## (0.57) The game stopped while in a group (a crash, a slow phone): « Rejoindre ton groupe ? » at the start.
+func _offer_rejoin() -> void:
+	if not Net.enabled() or testing or not Coop.supported():
+		return
+	var d = Race.kept()
+	if d.is_empty():
+		return
+	_confirm("Le jeu s'est fermé pendant que tu étais dans un groupe (%s). Le rejoindre ?" % str(d["room"]), func() -> void:
+		race.save = save
+		race_seen = true
+		await race.rejoin(d)
+		if race.role == "host":
+			race.set_kit(SaveData.loadout(save))
+		go("race"), "Rejoindre", "Non merci")
+	if modal != null:                                # « Non merci »: the group is forgotten
+		modal.tree_exited.connect(func() -> void:
+			if race.role == "":
+				race._keep(), CONNECT_ONE_SHOT)
 
 ## The game used to be the web version, at this same address: its progress is in the browser's
 ## localStorage (jungle-loop-save-v1), in the same format as the save codes. The first time this version
@@ -883,6 +914,9 @@ func _fill_hud() -> void:
 			if run.lvl(u["id"]) > 0:
 				kit.add_child(_icon_rect(icon("ico-" + u["icon"]), 16))
 	w["hud-watch"].visible = run.spectating
+	w["hud-res-btn"].visible = run.spectating
+	w["hud-daily"].visible = run.daily
+	w["hud-res"].visible = run.spectating and watch_res
 
 func _build_hud() -> void:
 	var s = _screen("hud", false)
@@ -912,10 +946,44 @@ func _build_hud() -> void:
 	w["btn-pause"] = pause_b
 	top.add_child(pause_b)
 	s.add_child(top)
+	w["hud-daily"] = _label("", ts("s"), GOLD, 1)    # (0.57) the Course du jour: the next tier
+	_place(w["hud-daily"], M, 44, 300, 14)
+	w["hud-daily"].visible = false
+	s.add_child(w["hud-daily"])
 	w["hud-kit"] = _hbox(3)                          # (0.55) the Affrontement: the items and powers on, top left
 	_place(w["hud-kit"], M, 44, 300, 18)
 	w["hud-kit"].mouse_filter = Control.MOUSE_FILTER_IGNORE
 	s.add_child(w["hud-kit"])
+	var resb = _button("Résultats", "small", _toggle_watch_res)   # (0.57) watching: the results, shown or hidden
+	_place(resb, 569 / 2.0 - 60, 76, 120, 24)
+	resb.visible = false
+	s.add_child(resb)
+	w["hud-res-btn"] = resb
+	var wres = PanelContainer.new()
+	wres.add_theme_stylebox_override("panel", styles["box"])
+	_place(wres, 569 / 2.0 - 220, 104, 440, 140)
+	var wv = _vbox(3)
+	var wtop = _hbox(6)
+	w["hud-res-title"] = _label("", ts("s"), GOLD, 0)
+	w["hud-res-title"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wtop.add_child(w["hud-res-title"])
+	var back = _button("Retour au salon", "small", func() -> void:
+		watch_res = false
+		_race_over())
+	back.custom_minimum_size = Vector2(a(110), a(20))
+	wtop.add_child(back)
+	w["hud-res-back"] = back
+	wv.add_child(wtop)
+	var wg = GridContainer.new()
+	wg.columns = 6
+	wg.add_theme_constant_override("h_separation", roundi(a(8)))
+	wg.add_theme_constant_override("v_separation", roundi(a(2)))
+	wv.add_child(wg)
+	w["hud-res-grid"] = wg
+	wres.add_child(wv)
+	wres.visible = false
+	s.add_child(wres)
+	w["hud-res"] = wres
 	w["hud-watch"] = _label("", ts("s"), GOLD, 1)     # (0.55) fallen: who I watch
 	w["hud-watch"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_place(w["hud-watch"], 0, 60, 569, 14)
@@ -1199,7 +1267,7 @@ func _build_menu() -> void:
 	modes.set_meta("still", true)
 	modes.size = Vector2(W, H)
 	modes.z_index = 3
-	for spec in [["story", "ico-relic", "HISTOIRE"], ["endless", "ico-leap", "SANS FIN"], ["race", "ico-friends", "AFFRONTEMENT"]]:
+	for spec in [["story", "ico-relic", "HISTOIRE"], ["endless", "ico-leap", "SANS FIN"], ["daily", "ico-urn", "COURSE DU JOUR"], ["race", "ico-friends", "AFFRONTEMENT"]]:
 		var mode: String = spec[0]
 		var on_mode = func() -> void:
 			if tip_held:
@@ -1212,7 +1280,7 @@ func _build_menu() -> void:
 		b.visible = false
 		b.set_meta("mode", mode)
 		b.set_meta("sub", sub)
-		if mode != "race":
+		if mode != "race" and mode != "daily":
 			_menu_tip_on(b, mode)
 		modes.add_child(b)
 		w["menu-go-" + mode] = b
@@ -1245,19 +1313,42 @@ func _build_menu() -> void:
 	w["menu-info"].set_meta("still", true)
 	w["menu-info"].z_index = 4
 	s.add_child(w["menu-info"])
-	w["menu-group"] = _hbox(4)                       # (0.55) the group's looks and names, right of JOUER
+	# (0.57) two small panels in the bottom corners: the items equipped (left), the group (right, only when
+	# there is one)
+	var gbox = PanelContainer.new()
+	gbox.add_theme_stylebox_override("panel", styles["box"])
+	gbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var gcol = _vbox(1)
+	var gt = _label("TON GROUPE", ts("s"), RELIC, 0)
+	gt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	gcol.add_child(gt)
+	w["menu-group"] = _hbox(4)
 	w["menu-group"].alignment = BoxContainer.ALIGNMENT_CENTER
 	w["menu-group"].mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_place(w["menu-group"], 569 / 2.0 + 84 + 8, 320 - M - 50, 150, 48)
-	s.add_child(w["menu-group"])
-	w["menu-loadout"] = _hbox(M)                     # what goes on the next run, left of JOUER
+	gcol.add_child(w["menu-group"])
+	gbox.add_child(gcol)
+	_place(gbox, 569 - M - 150, 320 - M - 58, 150, 58)
+	gbox.visible = false
+	s.add_child(gbox)
+	w["menu-group-box"] = gbox
+	var lbox = PanelContainer.new()
+	lbox.add_theme_stylebox_override("panel", styles["box"])
+	lbox.mouse_filter = Control.MOUSE_FILTER_PASS
+	var lcol = _vbox(1)
+	var lt = _label("ÉQUIPEMENT", ts("s"), RELIC, 0)
+	lt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lcol.add_child(lt)
+	w["menu-loadout"] = _hbox(2)                     # what goes on the next run
 	w["menu-loadout"].alignment = BoxContainer.ALIGNMENT_CENTER   # one or two items stay in the middle
-	_place(w["menu-loadout"], 569 / 2.0 - 84 - 8 - 140, 320 - M - 46, 140, 42)
-	s.add_child(w["menu-loadout"])
+	lcol.add_child(w["menu-loadout"])
+	lbox.add_child(lcol)
+	_place(lbox, M, 320 - M - 58, 126, 58)
+	s.add_child(lbox)
+	w["menu-loadout-box"] = lbox
 	var version = _label("v" + VERSION + " · Godot", roundi(7 * U), DIM, 1)
-	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER   # (0.57: under JOUER, the corners have panels)
 	version.modulate.a = 0.75
-	_place(version, 569 - M - 120, 320 - 5 - 9, 120, 10)
+	_place(version, 569 / 2.0 - 60, 320 - 9, 120, 9)
 	s.add_child(version)
 
 ## A square of the home screen with its name under it: `kit` the kit's square (gear, or blank with `ico`).
@@ -1359,6 +1450,7 @@ func _mode_texts() -> void:
 		"story": "%d/4 MORCEAUX · %d VIES" % [int(save["relic"]) + 1, Game.STORY_HEARTS],   # (0.53: the jaw, stolen, counts)
 		"endless": "RECORD %d M" % best_of("endless"),
 		"race": ("TON GROUPE · %d/4" % race.count()) if race.role != "" else "CRÉE TON GROUPE",
+		"daily": "PALIERS %d/%d · %s" % [Daily.won(save), Daily.tiers.size(), str(Daily.of_day()["rule"]["name"]).to_upper()],
 	}
 	for b in w["menu-modes"].get_children():
 		(b.get_meta("sub") as Label).text = subs[b.get_meta("mode")]
@@ -1371,7 +1463,7 @@ func _fill_group() -> void:
 	for ch in box.get_children():
 		box.remove_child(ch)
 		ch.queue_free()
-	box.visible = race.role != "" and race.count() > 0
+	w["menu-group-box"].visible = race.role != "" and race.count() > 0   # (0.57: its panel, only with a group)
 	var order = race.seats.keys()
 	order.sort()
 	for k in order:
@@ -1408,6 +1500,10 @@ func _pick_mode(mode: String) -> void:
 		else:
 			go("race")
 		return
+	if mode == "daily":                              # (0.57) the Course du jour: its rule, items and tiers first
+		_daily_panel()
+		return
+	daily_on = false
 	if coop.state == "ready":                        # linked for two: the host starts it for both
 		if coop.role == "host":
 			_coop_go(mode)
@@ -1417,6 +1513,81 @@ func _pick_mode(mode: String) -> void:
 	save["mode"] = mode                              # Histoire or Sans fin: « Rejouer » keeps it
 	SaveData.store(save)
 	go("play")
+
+## (0.57) The Course du jour's window: the day, its rule, the items it imposes, its tiers (won today: ticked)
+## and today's best; « Courir » starts it (« Rejouer » at the end starts it again).
+func _daily_panel() -> void:
+	var d = Daily.of_day()
+	var st = Daily.state(save)
+	if modal != null:
+		modal.queue_free()
+	var layer = CanvasLayer.new()
+	layer.layer = 40
+	add_child(layer)
+	modal = layer
+	var root = Control.new()
+	root.size = Vector2(W, H)
+	root.theme = ui.theme
+	layer.add_child(root)
+	var shade = ColorRect.new()
+	shade.color = Color(8 / 255.0, 10 / 255.0, 24 / 255.0, 0.75)
+	shade.size = Vector2(W, H)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(shade)
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_panel("shop-preview-wide", 3))
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	_place(p, 569 / 2.0 - 215, 12, 430, 296)
+	var col = _vbox(5)
+	var parts = str(d["day"]).split("-")
+	var title = _label("COURSE DU JOUR · %s/%s" % [parts[2], parts[1]] if parts.size() == 3 else "COURSE DU JOUR", ts("l"), GOLD, 1.5)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+	var rule: Dictionary = d["rule"]
+	var rl = _label("RÈGLE DU JOUR : %s" % str(rule["name"]).to_upper(), ts("s"), RELIC, 0)
+	col.add_child(rl)
+	col.add_child(_wrap(str(rule["desc"]) + " La même route pour tous aujourd'hui ; rejoue-la autant que tu veux.", INK))
+	col.add_child(_label("ÉQUIPEMENT IMPOSÉ", ts("s"), RELIC, 0))
+	var kit = _hbox(8)
+	for id in d["kit"]:
+		var u = SaveData.upgrade(id)
+		if u.is_empty():
+			continue
+		var it = _hbox(3)
+		it.add_child(_icon_rect(icon("ico-" + u["icon"]), 16))
+		it.add_child(_label("%s %d" % [u["name"], int(d["kit"][id])], ts("s"), INK, 0))
+		kit.add_child(it)
+	col.add_child(kit)
+	col.add_child(_label("PALIERS (une fois par jour chacun ; le 3e donne aussi le 1er et le 2e)", ts("s"), RELIC, 0))
+	var tl = GridContainer.new()
+	tl.columns = 3
+	tl.add_theme_constant_override("h_separation", roundi(a(14)))
+	tl.add_theme_constant_override("v_separation", roundi(a(2)))
+	for i in Daily.tiers.size():
+		var got: bool = st["got"][i]
+		var colr = Color("#9dff7a") if got else INK
+		tl.add_child(_label("%d. %d m" % [i + 1, int(Daily.tiers[i]["m"])], ts("s"), colr, 0))
+		tl.add_child(_label(Daily.reward_text(i), ts("s"), GOLD if not got else DIM, 0))
+		tl.add_child(_label("gagné ✓" if got else "", ts("s"), colr, 0))
+	col.add_child(tl)
+	if int(st["best"]) > 0:
+		col.add_child(_label("TON MEILLEUR AUJOURD'HUI : %d M" % int(st["best"]), ts("s"), DIM, 0))
+	var row = _hbox(12)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var close = func() -> void:
+		layer.queue_free()
+		modal = null
+	row.add_child(_button("Fermer", "small plain", close))
+	var go_b = _button("Courir", "small gold", func() -> void:
+		close.call()
+		daily_on = true
+		go("play"))
+	go_b.custom_minimum_size.x = a(110)
+	row.add_child(go_b)
+	col.add_child(row)
+	p.add_child(col)
+	root.add_child(p)
+	Audio.sfx("click")
 
 ## The objectives' panel, in from the right edge or back out.
 func _home_quests(open: bool) -> void:
@@ -2440,11 +2611,12 @@ func refresh_menu() -> void:
 			if still != null:
 				still.biome = endless_biome
 				still.prev_biome = endless_biome
+	w["menu-loadout-box"].visible = eq.size() > 0    # (0.57: its panel, only when something is equipped)
 	for i in mini(3, eq.size()):                     # what goes on the next run: only the items equipped,
 		var id: String = eq[i]                       # their pictures alone (no frame, no empty place)
 		var slot = Button.new()
 		slot.focus_mode = Control.FOCUS_NONE
-		slot.custom_minimum_size = Vector2(a(42), a(42))
+		slot.custom_minimum_size = Vector2(a(28), a(28))
 		var bare = StyleBoxEmpty.new()
 		bare.set_content_margin_all(a(4))
 		for k in ["normal", "hover", "pressed", "disabled"]:
@@ -3616,9 +3788,11 @@ func bank() -> void:
 	save["coins"] += run.gold
 	save["loops"] += 1
 	save["urns"] = int(save["urns"]) + run.urns
-	if not run.debug and Net.enabled():              # the friends' board (once the server is up)
+	if not run.debug and Net.enabled() and not run.daily:   # the friends' board (once the server is up)
 		net.send_score(save, run.mode, floori(run.dist))
-	if run.debug:
+	if run.daily:
+		Daily.claim(save, run.dist)                  # (0.57) the day's best (its own record, not Sans fin's)
+	elif run.debug:
 		pass                                         # in debug: no record
 	elif run.mode == "endless":
 		save["bestEndless"] = maxi(save["bestEndless"], floori(run.dist))
@@ -3687,11 +3861,19 @@ func go(name: String) -> void:
 				save["storyTry"] = int(save["storyTry"]) + 1
 				Game.STORY_TRY = int(save["storyTry"])
 				Game.STORY_CHAP = int(save["relic"])
-			run = Game.new_run(up, save["mode"])
+			var day = Daily.of_day() if daily_on else {}
+			if daily_on:                             # (0.57) the Course du jour: its seed, its items, its rule
+				run = Game.new_run(day["kit"], "endless", int(day["seed"]))
+			else:
+				run = Game.new_run(up, save["mode"])
 			run.mounts = Game.MOUNT_KINDS.filter(func(k): return not k in save["mountsOff"])   # Montures: on / off
+			if daily_on:
+				run.biome = 0
+				run.prev_biome = 0
+				Daily.apply(run, day)
 		run.view_w = render.view_w * Game.PIXEL
 		run.signs = Game.signs_for(board_cache, run.mode, best_of(run.mode))   # (0.48: the records along the road)
-		if run.mode == "endless":                   # Jouer: in the scenery the home screen showed
+		if run.mode == "endless" and not run.daily:   # Jouer: in the scenery the home screen showed
 			run.biome = endless_biome
 			run.prev_biome = endless_biome
 		levels_due.clear()
@@ -3914,6 +4096,17 @@ func _build_friends() -> void:
 	var col = _vbox(5)
 	# Liste d'amis: each one a touch away from his card
 	var fl = _vbox(4)
+	var subs = _hbox(4)                                 # (0.57) Liste | Demandes
+	for spec in [["list", "Liste"], ["req", "Demandes"]]:
+		var key: String = spec[0]
+		var sb = _button(spec[1], "tab", func() -> void:
+			friends_sub = key
+			refresh_friends())
+		sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sb.custom_minimum_size.y = a(20)
+		subs.add_child(sb)
+		w["fl-" + key] = sb
+	fl.add_child(subs)
 	w["fr-count"] = _label("", ts("s"), RELIC, 0)
 	fl.add_child(w["fr-count"])
 	w["fr-list"] = _vbox(3)
@@ -3940,7 +4133,7 @@ func _build_friends() -> void:
 	w["gr-text"] = _wrap("", DIM)
 	w["gr-text"].custom_minimum_size.x = a(228)
 	gr.add_child(w["gr-text"])
-	w["ra-host"] = _button("Créer un groupe", "small", _race_host)
+	w["ra-host"] = _button("Créer un groupe", "small", func() -> void: _race_host(false))
 	w["ra-host"].size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	gr.add_child(w["ra-host"])
 	var rj = _hbox(4)
@@ -4003,6 +4196,10 @@ func _build_friends() -> void:
 	add_row.add_child(w["fr-add"])
 	add_row.add_child(_button("Ajouter", "small", _add_friend))
 	mine.add_child(add_row)
+	var scan_b = _button("Scanner son code QR", "small gold", _scan_qr)   # (0.57) the camera, in the game itself
+	scan_b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	w["fr-scan"] = scan_b
+	mine.add_child(scan_b)
 	mine.add_child(_label("TON PSEUDO", ts("s"), RELIC, 0))
 	var name_row = _hbox(4)
 	w["fr-name"] = _field("Pépito", 16, "Ton pseudo (16 lettres au plus) :", _rename)
@@ -4036,6 +4233,24 @@ func _build_friends() -> void:
 	card.add_child(low)
 	w["fr-card"] = card
 	rc.add_child(card)
+	var rq = _vbox(6)                                   # (0.57) Demandes: the one chosen, to accept or refuse
+	w["rq-name"] = _plain(_label("", ts("xl"), GOLD), "xl")
+	rq.add_child(w["rq-name"])
+	w["rq-code"] = _plain(_label("", ts("s"), RELIC, 0), "s")
+	rq.add_child(w["rq-code"])
+	w["rq-text"] = _wrap("", INK)
+	rq.add_child(w["rq-text"])
+	var rq_row = _hbox(6)
+	w["rq-yes"] = _button("Accepter", "small gold", func() -> void: _answer_request(req_sel, true))
+	w["rq-yes"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rq_row.add_child(w["rq-yes"])
+	w["rq-no"] = _button("Refuser", "small danger", func() -> void: _answer_request(req_sel, false))
+	w["rq-no"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rq_row.add_child(w["rq-no"])
+	rq.add_child(rq_row)
+	w["rq-row"] = rq_row
+	w["fr-reqcard"] = rq
+	rc.add_child(rq)
 	var co = _vbox(6)                                   # Groupe: playing for two (the same road, the bubble)
 	co.add_child(_label("À DEUX", ts("s"), RELIC, 0))
 	w["co-room"] = _plain(_label("", ts("huge"), GOLD), "huge")
@@ -4096,8 +4311,21 @@ func refresh_friends() -> void:
 	var sel = _friend(fr_sel)
 	if sel.is_empty():
 		fr_sel = ""
-	w["fr-me"].visible = friends_tab == "list" and fr_sel == ""
-	w["fr-card"].visible = friends_tab == "list" and fr_sel != ""
+	var on_req = friends_sub == "req"
+	if on_req and not requests["incoming"].any(func(e): return str(e.get("code", "")) == req_sel):
+		req_sel = ""
+	w["fr-me"].visible = friends_tab == "list" and ((not on_req and fr_sel == "") or (on_req and req_sel == ""))
+	w["fr-card"].visible = friends_tab == "list" and not on_req and fr_sel != ""
+	w["fr-reqcard"].visible = friends_tab == "list" and on_req and req_sel != ""
+	_style_button(w["fl-list"], "tab sel" if not on_req else "tab")
+	_style_button(w["fl-req"], "tab sel" if on_req else "tab")
+	var n_in = requests["incoming"].size()
+	w["fl-req"].text = ("Demandes · %d" % n_in) if n_in > 0 else "Demandes"
+	if req_sel != "":
+		var rqe: Dictionary = requests["incoming"].filter(func(e): return str(e.get("code", "")) == req_sel)[0]
+		w["rq-name"].text = str(rqe.get("name", "?"))
+		w["rq-code"].text = req_sel
+		w["rq-text"].text = "veut être ton ami. Accepté, vous verrez vos records et pourrez vous inviter."
 	w["panel-duo"].visible = false                   # (0.55) Groupe is the group only (for two: a friend's card)
 	w["panel-ginv"].visible = friends_tab == "group"
 	w["panel-myscores"].visible = friends_tab == "scores"
@@ -4196,25 +4424,37 @@ func refresh_friends() -> void:
 			h.add_child(ib)
 		gl.add_child(h)
 	w["gi-code"].text = ("Le code du groupe : %s (à donner à un ami pour qu'il le rejoigne)." % race.room) if race.role == "host" and race.room != "" else ""
-	# the list
+	# the list (0.57: each one's name and « Voir »), or the requests
 	var holder: VBoxContainer = w["fr-list"]
 	for ch in holder.get_children():
 		holder.remove_child(ch)
 		ch.queue_free()
 	var n_friends = board.filter(func(e): return not e.get("me", false)).size()
-	w["fr-count"].text = "TES AMIS · %d" % n_friends
-	if n_friends == 0:
-		holder.add_child(_wrap("Ajoute un ami avec son code, son lien ou son code QR : vos records s'afficheront ici, et sur la route." if Net.enabled() else "Le serveur n'est pas encore en ligne.", DIM))
-	for e in board:
-		if e.get("me", false):
-			continue
-		var code = str(e.get("code", ""))
-		var in_group = false
-		for seat in race.seats.values():
-			in_group = in_group or str(seat.get("code", "")) == code
-		holder.add_child(_list_row(str(e.get("name", "?")), "dans ton groupe" if in_group else code, code == fr_sel, func() -> void:
-			fr_sel = code
-			refresh_friends()))
+	if on_req:
+		w["fr-count"].text = "DEMANDES REÇUES · %d" % n_in
+		if n_in == 0:
+			holder.add_child(_wrap("Personne ne t'a demandé en ami pour l'instant." if Net.enabled() else "Le serveur n'est pas encore en ligne.", DIM))
+		for e in requests["incoming"]:
+			var code = str(e.get("code", ""))
+			holder.add_child(_friend_row(str(e.get("name", "?")), "", code == req_sel, func() -> void:
+				req_sel = code
+				refresh_friends()))
+		var outs: Array = requests["outgoing"]
+		if not outs.is_empty():
+			holder.add_child(_label("ENVOYÉES, EN ATTENTE", ts("s"), RELIC, 0))
+			for e in outs:
+				holder.add_child(_friend_row(str(e.get("name", "?")), "en attente", false, Callable()))
+	else:
+		w["fr-count"].text = "TES AMIS · %d" % n_friends
+		if n_friends == 0:
+			holder.add_child(_wrap("Ajoute un ami avec son code, son lien ou son code QR : vos records s'afficheront ici, et sur la route." if Net.enabled() else "Le serveur n'est pas encore en ligne.", DIM))
+		for e in board:
+			if e.get("me", false):
+				continue
+			var code = str(e.get("code", ""))
+			holder.add_child(_friend_row(str(e.get("name", "?")), "", code == fr_sel, func() -> void:
+				fr_sel = code
+				refresh_friends()))
 	# Scores
 	for k in ["story", "endless"]:
 		_style_button(w["sc-" + k], "tab sel" if sc_mode == k else "tab")
@@ -4250,6 +4490,22 @@ func refresh_friends() -> void:
 			["À BATTRE", to_beat if to_beat != "" else ("personne : tu es devant !" if my_place == 1 else "—"), RELIC]]:
 		mine_box.add_child(_label(pair[0], ts("s"), DIM, 0))
 		mine_box.add_child(_label(pair[1], ts("m"), pair[2], 0))
+
+## (0.57) A row of Amis's lists: the name, and « Voir » (or a word instead) on its right; the one chosen in gold.
+func _friend_row(name: String, note: String, sel: bool, on_view: Callable) -> Control:
+	var h = _hbox(6)
+	var nm = _plain(_label(name, ts("s"), GOLD if sel else INK, 0), "m")
+	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nm.clip_text = true
+	nm.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	h.add_child(nm)
+	if on_view.is_valid():
+		var v = _button("Voir", "tab sel" if sel else "tab", on_view)
+		v.custom_minimum_size = Vector2(a(56), a(20))
+		h.add_child(v)
+	else:
+		h.add_child(_label(note, ts("s"), DIM, 0))
+	return h
 
 ## A row of a list (Amis): a name, a note on its right; the one chosen in gold. `fn` empty: not a button.
 func _list_row(name: String, note: String, sel: bool, fn: Callable) -> Control:
@@ -4303,6 +4559,94 @@ func _remove_friend(code: String, name: String) -> void:
 		fr_sel = ""
 		w["fr-msg"].text = ("%s n'est plus dans tes amis." % name) if not r.has("error") else "Pas de réponse du serveur."
 		await _load_friends())
+
+## (0.57) « Scanner son code QR »: the phone's camera inside the game (a layer of the page over it, the
+## browser's own reader, BarcodeDetector), never another page; what it reads (his link, or his code) asks
+## him to be friends. Where the browser cannot read codes, it says so (the code can be typed).
+const SCAN_JS := """(function(){
+if (window.jlScan) return 'busy';
+window.jlScanResult = '';
+var ov = document.createElement('div');
+ov.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;background:#0a0f14;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;color:#fff8e6;text-align:center';
+var msg = document.createElement('div');
+msg.textContent = 'Vise le code QR de ton ami';
+msg.style.cssText = 'margin:10px 16px;font-size:18px';
+var box = document.createElement('div');
+box.style.cssText = 'position:relative;max-width:92vw;max-height:70vh';
+var v = document.createElement('video');
+v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); v.muted = true;
+v.style.cssText = 'display:block;max-width:92vw;max-height:70vh;border-radius:12px;background:#000';
+var aim = document.createElement('div');
+aim.style.cssText = 'position:absolute;left:20%;top:20%;width:60%;height:60%;border:3px solid #ffd35c;border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,0.25);pointer-events:none';
+box.appendChild(v); box.appendChild(aim);
+var b = document.createElement('button');
+b.textContent = 'Annuler';
+b.style.cssText = 'margin:14px;font-size:18px;padding:10px 28px;border-radius:10px;border:0;background:#ffd35c;color:#1a1024;font-weight:bold';
+ov.appendChild(msg); ov.appendChild(box); ov.appendChild(b);
+document.body.appendChild(ov);
+var stream = null, timer = null, done = false;
+function stop(res) {
+  if (done) return; done = true;
+  if (timer) clearInterval(timer);
+  if (stream) stream.getTracks().forEach(function(t){ t.stop(); });
+  ov.remove(); window.jlScan = null; window.jlScanResult = res;
+}
+window.jlScan = { stop: stop };
+b.onclick = function(){ stop('cancel'); };
+if (!('BarcodeDetector' in window)) {
+  msg.textContent = "Ce navigateur ne sait pas lire les codes QR. Tape plutôt le code de ton ami (PEPI-XXXX).";
+  box.style.display = 'none'; b.textContent = 'Fermer'; b.onclick = function(){ stop('unsupported'); };
+  return 'unsupported';
+}
+var det = new BarcodeDetector({formats: ['qr_code']});
+navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}, audio: false}).then(function(s){
+  stream = s; v.srcObject = s; v.play().catch(function(){});
+  timer = setInterval(function(){
+    if (v.readyState < 2) return;
+    det.detect(v).then(function(codes){ if (codes && codes.length) stop('ok:' + codes[0].rawValue); }).catch(function(){});
+  }, 250);
+}).catch(function(){
+  msg.textContent = "Pas d'accès à l'appareil photo (autorise-le pour cette page), ou tape le code de ton ami.";
+  box.style.display = 'none'; b.textContent = 'Fermer'; b.onclick = function(){ stop('denied'); };
+});
+return 'started';
+})()"""
+
+func _scan_qr() -> void:
+	if not OS.has_feature("web"):
+		w["fr-msg"].text = "Le scanner marche dans le navigateur, sur la page du jeu."
+		return
+	_js("window.jlScan && window.jlScan.stop('cancel')")
+	var r = _js(SCAN_JS)
+	scanning = true
+	if str(r) == "unsupported":
+		w["fr-msg"].text = "Ce navigateur ne sait pas lire les codes QR : tape le code de ton ami."
+
+## (0.57) What the scanner read, once it is closed (looked at every frame while it is open).
+func _scan_tick() -> void:
+	var got = str(_js("window.jlScanResult || ''"))
+	if got == "" or got == "null":
+		return
+	scanning = false
+	_js("window.jlScanResult = ''")
+	if not got.begins_with("ok:"):
+		if got == "denied" and w.has("fr-msg"):
+			w["fr-msg"].text = "Pas d'accès à l'appareil photo : autorise-le pour cette page, ou tape le code."
+		return
+	var text = got.substr(3).strip_edges()
+	var code = ""
+	var at = text.to_upper().find("PEPI-")
+	if at >= 0:
+		code = text.to_upper().substr(at, 9)
+	elif text.to_lower().find("ami=") >= 0:
+		code = "PEPI-" + text.substr(text.to_lower().find("ami=") + 4, 4).to_upper()
+	if code.length() != 9 or code == str(save.get("online", {}).get("code", "")):
+		w["fr-msg"].text = "Ce code QR n'est pas celui d'un joueur de Jungle Loop."
+		return
+	Audio.sfx("quest")
+	_confirm("Demander %s en ami ?" % code, func() -> void:
+		go("friends")
+		await _ask_friend(code))
 
 ## The friend link: the game's page with « ?ami=PEPI-XXXX »; opened (or scanned), it offers to add him.
 func _friend_link() -> String:
@@ -4392,14 +4736,9 @@ func _check_friend_link() -> void:
 		code = "PEPI-" + code
 	if code == str(save.get("online", {}).get("code", "")) or code.length() != 9:
 		return
-	_confirm("Ajouter %s à tes amis ?" % code, func() -> void:
-		var r = await net.add_friend(save, code)
+	_confirm("Demander %s en ami ?" % code, func() -> void:
 		go("friends")
-		if r.has("error"):
-			w["fr-msg"].text = {"unknown": "Aucun joueur n'a ce code.", "self": "C'est ton propre code !"}.get(r["error"], "Pas de réponse du serveur.")
-		else:
-			w["fr-msg"].text = "%s est ton ami." % r["name"]
-			await _load_friends())
+		await _ask_friend(code))
 
 ## The friends' records, for the boards along the road (quietly, at start: nothing is made on the server
 ## for a player who never went online).
@@ -4415,7 +4754,6 @@ func _load_friends() -> void:
 	if not Net.enabled():
 		refresh_friends()
 		return
-	w["fr-msg"].text = ""
 	var r = await net.friends(save)
 	if r.has("error"):
 		w["fr-msg"].text = "Pas de réponse du serveur."
@@ -4423,7 +4761,94 @@ func _load_friends() -> void:
 		return
 	board = [r["me"]] + r.get("friends", [])
 	board_cache = board
+	var q = await net.friend_requests(save)         # (0.57) and the requests
+	if not q.has("error"):
+		requests = {"incoming": q.get("incoming", []), "outgoing": q.get("outgoing", [])}
 	refresh_friends()
+
+## (0.57) « Accepter » / « Refuser » a request made to me.
+func _answer_request(code: String, yes: bool) -> void:
+	if code == "":
+		return
+	var r = await net.answer_friend(save, code, yes)
+	req_sel = ""
+	if w.has("fr-msg") and is_instance_valid(w["fr-msg"]):
+		w["fr-msg"].text = ("Pas de réponse du serveur." if r.has("error") and r["error"] != "none" else
+			(("%s est ton ami." if yes else "Demande de %s refusée.") % str(r.get("name", "ce joueur"))))
+	Audio.sfx("buy" if yes else "click")
+	await _load_friends()
+	if yes:
+		friends_sub = "list"
+		refresh_friends()
+
+## (0.57) A look for requests made to me (out of a run, every few seconds): a new one shows a window.
+func _poll_requests() -> void:
+	if invite_busy:
+		return
+	invite_busy = true
+	var q = await net.friend_requests(save)
+	invite_busy = false
+	if q.has("error"):
+		return
+	requests = {"incoming": q.get("incoming", []), "outgoing": q.get("outgoing", [])}
+	if state == "friends":
+		refresh_friends()
+	if req_box != null or invite_box != null or not state in INVITE_SCREENS:
+		return
+	for e in requests["incoming"]:
+		var code = str(e.get("code", ""))
+		if code == "" or req_seen.has(code):
+			continue
+		req_seen[code] = true
+		_show_request(str(e.get("name", "")), code)
+		return
+
+## (0.57) « Léa veut être ton ami » : Voir (Amis → Liste d'amis → Demandes, her card) or Plus tard.
+func _show_request(name: String, code: String) -> void:
+	var layer = CanvasLayer.new()
+	layer.layer = 41
+	add_child(layer)
+	req_box = layer
+	var root = Control.new()
+	root.size = Vector2(W, H)
+	root.theme = ui.theme
+	layer.add_child(root)
+	var shade = ColorRect.new()
+	shade.color = Color(8 / 255.0, 10 / 255.0, 24 / 255.0, 0.7)
+	shade.size = Vector2(W, H)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(shade)
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	var col = _vbox(8)
+	var who = _plain(_label(name if name != "" else "Un joueur", ts("l"), GOLD, 0), "l")
+	who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(who)
+	var what = _label("veut être ton ami !", ts("m"), INK, 0)
+	what.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(what)
+	var close = func() -> void:
+		layer.queue_free()
+		req_box = null
+	var row = _hbox(10)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var see = _button("Voir", "gold", func() -> void:
+		close.call()
+		friends_tab = "list"
+		friends_sub = "req"
+		req_sel = code
+		go("friends"))
+	see.custom_minimum_size = Vector2(a(110), a(30))
+	row.add_child(see)
+	var later = _button("Plus tard", "", close)
+	later.custom_minimum_size = Vector2(a(110), a(30))
+	row.add_child(later)
+	col.add_child(row)
+	p.add_child(col)
+	_place(p, 569 / 2.0 - 130, 100, 260, 110)
+	root.add_child(p)
+	Audio.sfx("quest")
 
 func _rename() -> void:
 	var name = w["fr-name"].text.strip_edges()
@@ -4437,11 +4862,18 @@ func _add_friend() -> void:
 	var code = w["fr-add"].text.strip_edges().to_upper()
 	if not code.begins_with("PEPI-"):
 		code = "PEPI-" + code
+	await _ask_friend(code)
+
+## (0.57) Asks a player to be friends (his code): a request he accepts or refuses; friends at once if he had
+## asked me. What happened is said under « Ajouter un ami ».
+func _ask_friend(code: String) -> void:
 	var r = await net.add_friend(save, code)
+	if not w.has("fr-msg") or not is_instance_valid(w["fr-msg"]):
+		return
 	if r.has("error"):
 		w["fr-msg"].text = {"unknown": "Aucun joueur n'a ce code.", "self": "C'est ton propre code !"}.get(r["error"], "Pas de réponse du serveur.")
 		return
-	w["fr-msg"].text = "%s est ton ami." % r["name"]
+	w["fr-msg"].text = ("%s est ton ami." % r["name"]) if r.get("friends", false) else ("Demande envoyée à %s : il l'acceptera de son côté." % r["name"])
 	w["fr-add"].text = ""
 	_load_friends()
 
@@ -4588,6 +5020,13 @@ func _build_race() -> void:
 	s.add_child(w["rc-text"])
 	w["rc-ready"] = _button("Prêt", "go", _race_ready_toggle)
 	w["rc-go"] = _button("Lancer", "play", _race_go)
+	w["rc-go-note"] = _label("", roundi(ts("s") * 0.8), DIM, 0)   # (0.57) greyed: whom it waits for, very small
+	w["rc-go-note"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	w["rc-go-note"].set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	w["rc-go-note"].offset_top = -a(11)
+	w["rc-go-note"].offset_bottom = -a(2)
+	w["rc-go-note"].mouse_filter = Control.MOUSE_FILTER_IGNORE
+	w["rc-go"].add_child(w["rc-go-note"])
 	_actions(s, [w["rc-ready"], w["rc-go"]], 150)
 	w["rc-wait"] = _label("", ts("s"), DIM, 0)
 	w["rc-wait"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -4745,7 +5184,9 @@ func refresh_race() -> void:
 	w["rc-ready"].visible = lobby and race.seats.has(race.me) and not recap
 	w["rc-ready"].text = "Plus prêt" if my_ready else "Prêt !"
 	_style_button(w["rc-ready"], "" if my_ready else "go")
-	w["rc-go"].visible = lobby and host and race.all_ready() and not recap
+	w["rc-go"].visible = lobby and race.seats.has(race.me) and not recap   # (0.57: for all, greyed until it can go)
+	w["rc-go"].disabled = not (host and race.all_ready())
+	w["rc-go-note"].text = "" if not w["rc-go"].disabled else ("attente de l'hôte" if not host else "attente des joueurs")
 	var wait = ""
 	if not race_seen and not race.history.is_empty():   # the race just run: who won, what I get
 		var last: Dictionary = race.history[0]
@@ -4772,13 +5213,17 @@ func refresh_race() -> void:
 ## bet and on whom, what the bet gave (twice it, or lost), and all of it together.
 func _race_recap(e: Dictionary) -> void:
 	w["rc-res-title"].text = "COURSE %d · RÉSULTAT" % int(e["n"])
-	var grid: GridContainer = w["rc-res-grid"]
+	_fill_recap(w["rc-res-grid"], e["rows"])
+
+## (0.57) The recap's table in `grid` (6 columns): rows of {k, name, bet, on, dist, gold, got (-1: not known
+## yet), win, out}; the furthest first.
+func _fill_recap(grid: GridContainer, rows_in: Array) -> void:
 	for ch in grid.get_children():
 		grid.remove_child(ch)
 		ch.queue_free()
 	for head in ["JOUEUR", "DISTANCE", "PIÈCES", "MISE", "SUR LA MISE", "BILAN"]:
 		grid.add_child(_label(head, ts("s"), RELIC, 0))
-	var rows: Array = e["rows"].duplicate()
+	var rows: Array = rows_in.duplicate()
 	rows.sort_custom(func(p_, q_): return int(p_["dist"]) > int(q_["dist"]))
 	for r_ in rows:
 		var k = int(r_["k"])
@@ -4788,10 +5233,12 @@ func _race_recap(e: Dictionary) -> void:
 		var gold = int(r_.get("gold", 0))
 		var on = int(r_["on"])
 		var on_name = "lui" if on == k else ("toi" if on == race.me else str(race.seats.get(on, {}).get("name", "?")).left(8))
-		var won = got - b if b > 0 else 0
-		var cells = [("Toi" if k == race.me else str(r_["name"]).left(10)) + (" ★" if r_["win"] else ""), "%d m" % int(r_["dist"]),
-			"+%d" % gold, ("%d sur %s" % [b, on_name]) if b > 0 else "—", (("+%d" % won) if won > 0 else ("%d" % won)) if b > 0 else "—",
-			("+%d" % (gold + won)) if gold + won >= 0 else "%d" % (gold + won)]
+		var live = got < 0                           # (0.57: the race going on: the bets not known yet)
+		var won = got - b if b > 0 and not live else 0
+		var cells = [("Toi" if k == race.me else str(r_["name"]).left(10)) + (" ★" if r_["win"] else "") + (" (tombé)" if live and r_.get("out", false) else ""),
+			"%d m" % int(r_["dist"]), "+%d" % gold, ("%d sur %s" % [b, on_name]) if b > 0 else "—",
+			"…" if live and b > 0 else ((("+%d" % won) if won > 0 else ("%d" % won)) if b > 0 else "—"),
+			"…" if live else (("+%d" % (gold + won)) if gold + won >= 0 else "%d" % (gold + won))]
 		for i in cells.size():
 			var c = cells[i]
 			var tint = col if i == 0 else (Color("#9dff7a") if (i == 4 and won > 0) or (i == 5 and gold + won > 0) else (Color("#ff7a7a") if (i == 4 and won < 0) or (i == 5 and gold + won < 0) else INK))
@@ -4855,14 +5302,17 @@ func _coop_toast(text: String) -> void:
 	race_note = text
 	refresh_race()
 
-func _race_host() -> void:
+func _race_host(show: bool = true) -> void:
 	race.save = save
 	race_note = ""
 	race_seen = true
-	go("race")
+	if show:                                         # (0.57: from Amis → Groupe, it stays there)
+		go("race")
 	await race.host()
 	race.set_kit(SaveData.loadout(save))
 	refresh_race()
+	if state == "friends":
+		refresh_friends()
 
 func _race_join() -> void:
 	var code = w["ra-code"].text.strip_edges().to_upper()
@@ -4880,15 +5330,21 @@ func _race_invite(code: String, name: String) -> void:
 	if code == "":
 		return
 	race.save = save
+	var stay = state == "friends"                    # (0.57: from Amis, the group's screen stays)
 	if race.role == "":
 		race_note = ""
 		race_seen = true
-		go("race")
+		if not stay:
+			go("race")
 		await race.host()
+		race.set_kit(SaveData.loadout(save))
 	if race.role != "host" or race.state != "lobby":
 		refresh_race()
+		if stay:
+			refresh_friends()
 		return
-	go("race")
+	if not stay:
+		go("race")
 	var r = await race.invite(code, name)
 	if r.has("error"):
 		race_note = {"friend": "%s n'est pas dans ta liste d'amis." % name, "full": "La course est complète."}.get(r["error"], "L'invitation n'est pas partie : réessaie dans un moment.")
@@ -4949,8 +5405,11 @@ func _race_watch() -> void:
 	bank()                                           # (my coins picked up are mine, whatever the race gives)
 	run.spectating = true
 	watch_k = -1
+	watch_res = false
+	watch_done = false
 	hint(0)
 	w["hud-watch"].visible = true
+	w["hud-res-btn"].visible = true
 	Audio.music("over")
 
 ## Where the one I watch is (world x), the one ahead if he fell (or none was chosen).
@@ -4969,6 +5428,31 @@ func _watch_x() -> float:
 	w["hud-watch"].text = "TU REGARDES %s · %d M — TOUCHE : UN AUTRE" % [str(pick.get("name", "?")).to_upper(), int(race.seats.get(watch_k, {}).get("dist", 0))]
 	return float(pick.get("x", 0.0))
 
+## (0.57) « Résultats » while watching: the race as it stands (or its result), over the view, or put away.
+func _toggle_watch_res() -> void:
+	watch_res = not watch_res
+	_watch_res_fill()
+	Audio.sfx("click")
+
+func _watch_res_fill() -> void:
+	if not w.has("hud-res") or not is_instance_valid(w["hud-res"]):
+		return
+	w["hud-res"].visible = run != null and run.spectating and watch_res
+	w["hud-res-btn"].text = "Masquer" if watch_res else "Résultats"
+	if not watch_res:
+		return
+	var done = not race.running and not race.history.is_empty()
+	w["hud-res-title"].text = ("COURSE %d · RÉSULTAT" % int(race.history[0]["n"])) if done else "LA COURSE EN DIRECT"
+	var rows: Array = []
+	if done:
+		rows = race.history[0]["rows"].duplicate()
+	else:
+		for k in race.seats:
+			var st: Dictionary = race.seats[k]
+			rows.append({"k": k, "name": str(st.get("name", "?")), "bet": int(st.get("bet", 0)), "on": int(st.get("on", k)),
+				"dist": int(st.get("dist", 0)), "gold": int(st.get("gold", 0)), "got": -1, "win": false, "out": st.get("done", false) or st.get("gone", false)})
+	_fill_recap(w["hud-res-grid"], rows)
+
 ## A touch while watching: the next one still running.
 func _watch_next() -> void:
 	var alive = run.rivals.filter(func(m): return not m.get("out", false)).map(func(m): return int(m.get("k", -1)))
@@ -4986,6 +5470,10 @@ func _race_over() -> void:
 	bank()
 	if w.has("hud-watch") and is_instance_valid(w["hud-watch"]):
 		w["hud-watch"].visible = false
+		w["hud-res-btn"].visible = false
+		w["hud-res"].visible = false
+	if race.running and run != null and run.spectating:
+		race_seen = true                             # (0.57: left while it goes on: the lobby, no recap yet)
 	race_seen = false
 	Audio.music("over")
 	state = "race"
@@ -5435,6 +5923,10 @@ func hint(step: int) -> void:
 		hint_timer = 3.5
 
 func hud() -> void:
+	if run != null and run.daily and w.has("hud-daily"):   # (0.57) the next tier of the day, or all won
+		var st = Daily.state(save)
+		var nxt = st["got"].find(false)
+		w["hud-daily"].text = ("PALIER %d · %d M · %s" % [nxt + 1, int(Daily.tiers[nxt]["m"]), Daily.reward_text(nxt).to_upper()]) if nxt >= 0 else "TOUS LES PALIERS DU JOUR SONT GAGNÉS"
 	_esc_view()
 	if w.has("say") and is_instance_valid(w["say"]):  # the guards' line, typed out 40 letters a second
 		var on = run.saying != ""
@@ -5690,6 +6182,11 @@ func _notification(what: int) -> void:
 func _step(h: float) -> void:
 	var t0 = Time.get_ticks_usec()
 	Game.update(run, h, input)
+	if run.daily and not run.dead:                   # (0.57) a tier of the day passed: its reward, at once
+		for i in Daily.claim(save, run.dist):
+			toast("ico-urn" if Daily.tiers[i]["what"] == "urn" else "coin-icon", "Palier %d : %s" % [i + 1, Daily.reward_text(i)], 0, 0)
+			Audio.sfx("quest")
+			SaveData.store(save)
 	if run.spectating:                               # (0.55) fallen in a race: the camera with the one I watch
 		Game.spectate(run, h, _watch_x())
 	perf["game"] += Time.get_ticks_usec() - t0
@@ -5761,7 +6258,8 @@ func _step(h: float) -> void:
 		race_send_t -= h
 		if race_send_t <= 0:
 			race_send_t = Race.SEND_EVERY
-			race.send_state({"at": run.t, "x": run.cam + run.sx, "y": run.p.y, "vy": run.p.vy, "v": run.speed, "g": run.p.ground, "f": run.p.flying, "ph": run.p.phase, "d": floori(run.dist), "c": run.gold})
+			race.send_state({"at": run.t, "x": run.cam + run.sx, "y": run.p.y, "vy": run.p.vy, "v": run.speed, "g": run.p.ground, "f": run.p.flying, "ph": run.p.phase, "d": floori(run.dist), "c": run.gold,
+				"lp": (2 if run.leap.planted else 1) if run.leap != null else 0, "ro": run.p.roll})   # (0.57: his fall, for the others)
 	if run.coop and coop.state == "ready" and not run.dead:   # where he is, for the partner's screen
 		coop_send_t -= h
 		if coop_send_t <= 0:
@@ -5794,7 +6292,7 @@ func _process(delta: float) -> void:
 	if state == "play" or state == "over" or state == "tally":
 		run.view_w = render.view_w * Game.PIXEL
 		if run.coop and state == "play":             # for two: real time, every bit of it, in steps of 34 ms at most
-			coop_owed = minf(coop_owed + delta, 60.0)   # (alone, a slow frame slows the game down; for two that
+			coop_owed = minf(coop_owed + delta, 1.5)   # (0.57: 1.5 s owed at most: a slow phone does not spiral)   # (alone, a slow frame slows the game down; for two that
 			for h in Coop.split(coop_owed):              # would leave him behind the other for good)
 				coop_owed -= h
 				_step(h)
@@ -5816,12 +6314,17 @@ func _process(delta: float) -> void:
 		if state == "play" and run.dead and not run.spectating:
 			if not photo_taken:
 				photo_taken = true
-				_take_photo()
+				if not run.race:                     # (0.57: not in a race: no end screen for it, and reading the
+					_take_photo()                    # picture back is heavy on a slow phone)
 			dead_for += dt
 			if dead_for > 0.9:
 				game_over()
-		if state == "play" and run.spectating and (not race.running or not run.rivals.any(func(m): return not m.get("out", false))):
-			_race_over()                             # (0.55) the race is decided, or nobody runs any more
+		if state == "play" and run.spectating and not race.running and not watch_done:
+			watch_done = true                        # (0.57) decided: its results over the view, which stays
+			watch_res = true                         # (« Retour au salon » to leave)
+			_watch_res_fill()
+		elif state == "play" and run.spectating and watch_res and floori(time * 4) != floori((time - delta) * 4):
+			_watch_res_fill()                        # (live: a few times a second)
 	if not coop_start.is_empty() and time >= coop_start["at"] and state != "play":
 		go("play")                                   # the coop run: both phones start together
 	if not race_start.is_empty():
@@ -5840,7 +6343,14 @@ func _process(delta: float) -> void:
 		if invite_t <= 0:
 			invite_t = INVITE_POLL
 			_poll_invites()
+	if Net.enabled() and save.get("online", {}).has("id") and state in INVITE_SCREENS and req_box == null:
+		req_t -= delta                               # (0.57) the friend requests, out of a run
+		if req_t <= 0:
+			req_t = 8.0
+			_poll_requests()
 	_taps_done()
+	if scanning:
+		_scan_tick()
 	if held != null and is_instance_valid(held) and state == "menu" and not tip_held and time - held_t > 0.45:
 		tip_held = true                             # held long enough: its panel, and no launch on release
 		_menu_tip(held.get_meta("tip", ""), held)

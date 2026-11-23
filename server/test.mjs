@@ -34,8 +34,18 @@ ok('the best distance is kept, per mode');
 assert.equal((await call('friends/add', { id: a.id, secret: a.secret, code: 'PEPI-ZZZZ' })).error, 'unknown');
 assert.equal((await call('friends/add', { id: a.id, secret: a.secret, code: a.code })).error, 'self');
 const added = await call('friends/add', { id: a.id, secret: a.secret, code: b.code.toLowerCase() });
-assert.equal(added.name, 'Buly');
-ok('a friend is added by code (any case), not oneself nor an unknown code');
+assert.equal(added.name, 'Buly'); assert.equal(added.pending, true);
+ok('a friend is asked by code (any case), not oneself nor an unknown code');
+
+assert.equal((await call('friends', { id: a.id, secret: a.secret })).friends.length, 0);
+const reqB = await call('friends/requests', { id: b.id, secret: b.secret });
+assert.equal(reqB.incoming.length, 1); assert.equal(reqB.incoming[0].code, a.code);
+assert.equal((await call('friends/requests', { id: a.id, secret: a.secret })).outgoing[0].code, b.code);
+ok('0.57: not friends yet: the other one sees the request, the asker sees it waiting');
+
+assert.equal((await call('friends/answer', { id: b.id, secret: b.secret, code: a.code, yes: true })).ok, true);
+assert.equal((await call('friends/requests', { id: b.id, secret: b.secret })).incoming.length, 0);
+ok('0.57: accepted: friends both ways, the request gone');
 
 const fa = await call('friends', { id: a.id, secret: a.secret });
 assert.equal(fa.me.best, 1200); assert.equal(fa.me.endless, 3000);
@@ -98,7 +108,10 @@ ok('an invitation goes once accepted, or when its host closes the room (no one e
 // 0.48: a race room, the host and three more
 const d = await call('player', { name: 'Quatre' });
 const e = await call('player', { name: 'Cinq' });
-for (const p of [b, c, d, e]) await call('friends/add', { id: a.id, secret: a.secret, code: p.code });
+for (const p of [b, c, d, e]) {
+  await call('friends/add', { id: a.id, secret: a.secret, code: p.code });
+  await call('friends/answer', { id: p.id, secret: p.secret, code: a.code, yes: true });
+}
 const race = await call('race', { id: a.id, secret: a.secret, seed: 99 });
 assert.match(race.room, /^[A-Z2-9]{4}$/);
 for (const p of [b, c]) assert.equal((await call('invite', { id: a.id, secret: a.secret, code: p.code, room: race.room })).status, 200);
@@ -151,6 +164,7 @@ ok('a friend taken off: gone from both lists, and no more invitations between th
 
 const gone = await call('player', { name: 'Partant' });
 await call('friends/add', { id: gone.id, secret: gone.secret, code: a.code });
+await call('friends/answer', { id: a.id, secret: a.secret, code: gone.code, yes: true });
 await call('score', { id: gone.id, secret: gone.secret, mode: 'endless', dist: 999 });
 assert.equal((await call('friends', { id: a.id, secret: a.secret })).friends.some((f) => f.code === gone.code), true);
 assert.equal((await call('player/delete', { id: gone.id, secret: 'nope' })).status, 403);
@@ -191,5 +205,19 @@ assert.equal(weekOf(Date.UTC(2026, 10, 18, 15)), '2026-11-16');
 assert.equal(weekOf(Date.UTC(2026, 10, 22, 23)), '2026-11-16');
 assert.equal(weekOf(Date.UTC(2026, 10, 23, 0)), '2026-11-23');
 ok('weeks start on Monday');
+
+// 0.57: a request refused goes; asking back someone who asked: friends at once; a friend asked again: nothing new
+const q1 = await call('player', { name: 'Rémi' });
+const q2 = await call('player', { name: 'Zoé' });
+await call('friends/add', { id: q1.id, secret: q1.secret, code: q2.code });
+assert.equal((await call('friends/answer', { id: q2.id, secret: q2.secret, code: q1.code, yes: false })).ok, true);
+assert.equal((await call('friends', { id: q2.id, secret: q2.secret })).friends.length, 0);
+assert.equal((await call('friends/requests', { id: q1.id, secret: q1.secret })).outgoing.length, 0);
+assert.equal((await call('friends/answer', { id: q2.id, secret: q2.secret, code: q1.code, yes: true })).error, 'none');
+await call('friends/add', { id: q1.id, secret: q1.secret, code: q2.code });
+assert.equal((await call('friends/add', { id: q2.id, secret: q2.secret, code: q1.code })).friends, true);
+assert.equal((await call('friends', { id: q1.id, secret: q1.secret })).friends.length, 1);
+assert.equal((await call('friends/add', { id: q1.id, secret: q1.secret, code: q2.code })).friends, true);
+ok('0.57: refused, it goes (and cannot be accepted after); asked back: friends at once; already friends: nothing new');
 
 console.log(`\n${n} checks passed`);

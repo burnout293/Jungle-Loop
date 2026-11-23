@@ -784,6 +784,8 @@ class Run:
 	var soar := 0.0                    # ... off it: falling, whatever is pressed, until the Vol takes him
 	var escort := 0.0                  # ... Histoire: the guards on their gliders behind him (seconds left)
 	var spectating := false            # (0.55) fallen in an Affrontement: he watches the others (spectate)
+	var daily := false                 # (0.57) the Course du jour (daily.gd): its rule, its tiers
+	var gain_mul := 1.0                # (0.57) ... how much faster the speed grows (its rule « Pressé »)
 	var glide_go := false              # ... and off the cliff they have jumped (a line said « deltaplanes »)
 	var say_queue: Array = []          # ... the lines still to say
 	var talk_zones: Array = []         # ... where they talk: {at, x0, x1, lines, on, wait, done}
@@ -3525,7 +3527,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	if run.mode == "story":                          # each scenery from its own speed, gaining 0.18 m/s a second
 		own = run.base + ZONE_SPEED.get(run.biome, SPEED_BASE) - SPEED_BASE + (run.pace_t - run.zone_t) * STORY_GAIN
 	else:
-		own = run.base + run.pace_t * SPEED_GAIN
+		own = run.base + run.pace_t * SPEED_GAIN * run.gain_mul
 	own = minf(own, speed_cap(run))
 	var raw = maxf(SPEED_BASE * 0.6, own)           # without the hourglasses picked up: what the road is laid for
 	own = maxf(SPEED_BASE * 0.6, own - run.brake)

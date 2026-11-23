@@ -78,7 +78,7 @@ def stats_of(d, coins, owned, rng):
     }
 
 
-def simulate(scale=1.0, runs=800, seed=1, ups=None, quests=None, extra_items=None, verbose=False, slots=3, cap_long=1, lvl_cap=10**9, urn_coins=182, steps=(300, 500, 700, 1000), drums_every=10, drums_coins=450):
+def simulate(scale=1.0, runs=800, seed=1, ups=None, quests=None, extra_items=None, verbose=False, slots=3, cap_long=1, lvl_cap=10**9, urn_coins=182, steps=(300, 500, 700, 1000), drums_every=0, drums_coins=450):   # (0.57: no drums any more)
     rng = random.Random(seed)
     if ups is None:
         ups, quests = read_prog()

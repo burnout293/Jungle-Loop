@@ -11,7 +11,10 @@
 //   player/name   {id, secret, name}                       -> {name}
 //   player/delete {id, secret}                             -> {ok}              (0.48: everything about him goes)
 //   score         {id, secret, mode, dist}                 -> {best, week}
-//   friends/add   {id, secret, code}                       -> {code, name}
+//   friends/add   {id, secret, code}                       -> {code, name, pending | friends}   (0.57: a request;
+//                                                                                friends at once if he had asked me)
+//   friends/requests {id, secret}                          -> {incoming: [{code, name, at}], outgoing: [...]}  (0.57)
+//   friends/answer {id, secret, code, yes}                 -> {ok, code, name}  (0.57: a request accepted or refused)
 //   friends/remove {id, secret, code}                      -> {ok}              (both stop being friends)
 //   friends       {id, secret}                             -> {me, friends: [{code, name, best, week, endless, endless_week}]}
 //   room          {id, secret, seed}                       -> {room}            (for two)
@@ -101,6 +104,14 @@ async function openRoom(db, body, now, me, kind) {
   return { error: 'busy' };
 }
 
+// 0.57: two players become friends (both ways), and the requests between them go.
+async function befriend(db, x, y, now) {
+  for (const [a, b] of [[x, y], [y, x]]) {
+    await db.prepare('INSERT OR IGNORE INTO friends (a, b, since) VALUES (?, ?, ?)').bind(a, b, now).run();
+  }
+  await db.prepare('DELETE FROM requests WHERE (asker = ? AND target = ?) OR (asker = ? AND target = ?)').bind(x, y, y, x).run();
+}
+
 const routes = {
   async 'player'(db, body, now) {
     const id = crypto.randomUUID();
@@ -125,6 +136,7 @@ const routes = {
   // 0.48: « Effacer mes données en ligne » (Réglages): the player, his records, friendships, rooms, invitations.
   async 'player/delete'(db, body, now, me) {
     await db.prepare('DELETE FROM friends WHERE a = ? OR b = ?').bind(me.id, me.id).run();
+    await db.prepare('DELETE FROM requests WHERE asker = ? OR target = ?').bind(me.id, me.id).run();
     await db.prepare('DELETE FROM scores WHERE player = ?').bind(me.id).run();
     await db.prepare('DELETE FROM invites WHERE guest = ? OR host = ?').bind(me.id, me.id).run();
     await db.prepare('DELETE FROM members WHERE player = ?').bind(me.id).run();
@@ -148,21 +160,45 @@ const routes = {
     return { best, week: weekBest };
   },
 
+  // 0.57: adding someone asks him first (a request he accepts or refuses); if he had asked me already, we
+  // are friends at once.
   async 'friends/add'(db, body, now, me) {
     const code = String(body.code || '').toUpperCase().trim();
     const f = await db.prepare('SELECT id, code, name FROM players WHERE code = ?').bind(code).first();
     if (!f) return { error: 'unknown' };
     if (f.id === me.id) return { error: 'self' };
-    for (const [a, b] of [[me.id, f.id], [f.id, me.id]]) {
-      await db.prepare('INSERT OR IGNORE INTO friends (a, b, since) VALUES (?, ?, ?)').bind(a, b, now).run();
+    const pal = await db.prepare('SELECT 1 FROM friends WHERE a = ? AND b = ?').bind(me.id, f.id).first();
+    if (pal) return { code: f.code, name: f.name, friends: true };
+    const asked = await db.prepare('SELECT 1 FROM requests WHERE asker = ? AND target = ?').bind(f.id, me.id).first();
+    if (asked) {
+      await befriend(db, me.id, f.id, now);
+      return { code: f.code, name: f.name, friends: true };
     }
-    return { code: f.code, name: f.name };
+    await db.prepare('INSERT OR REPLACE INTO requests (asker, target, at) VALUES (?, ?, ?)').bind(me.id, f.id, now).run();
+    return { code: f.code, name: f.name, pending: true };
+  },
+
+  async 'friends/requests'(db, body, now, me) {
+    const inc = await db.prepare('SELECT p.code, p.name, r.at FROM requests r JOIN players p ON p.id = r.asker WHERE r.target = ? ORDER BY r.at DESC').bind(me.id).all();
+    const out = await db.prepare('SELECT p.code, p.name, r.at FROM requests r JOIN players p ON p.id = r.target WHERE r.asker = ? ORDER BY r.at DESC').bind(me.id).all();
+    return { incoming: inc.results, outgoing: out.results };
+  },
+
+  async 'friends/answer'(db, body, now, me) {
+    const f = await db.prepare('SELECT id, code, name FROM players WHERE code = ?').bind(roomCode(body.code)).first();
+    if (!f) return { error: 'unknown' };
+    const asked = await db.prepare('SELECT 1 FROM requests WHERE asker = ? AND target = ?').bind(f.id, me.id).first();
+    if (!asked) return { error: 'none' };
+    if (body.yes === true) await befriend(db, me.id, f.id, now);
+    else await db.prepare('DELETE FROM requests WHERE asker = ? AND target = ?').bind(f.id, me.id).run();
+    return { ok: true, code: f.code, name: f.name };
   },
 
   async 'friends/remove'(db, body, now, me) {
     const f = await db.prepare('SELECT id FROM players WHERE code = ?').bind(roomCode(body.code)).first();
     if (!f) return { ok: true };
     await db.prepare('DELETE FROM friends WHERE (a = ? AND b = ?) OR (a = ? AND b = ?)').bind(me.id, f.id, f.id, me.id).run();
+    await db.prepare('DELETE FROM requests WHERE (asker = ? AND target = ?) OR (asker = ? AND target = ?)').bind(me.id, f.id, f.id, me.id).run();
     await db.prepare('DELETE FROM invites WHERE (guest = ? AND host = ?) OR (guest = ? AND host = ?)').bind(me.id, f.id, f.id, me.id).run();
     return { ok: true };
   },

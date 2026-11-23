@@ -136,7 +136,7 @@ static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
 		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
-		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "rerollDay": "", "stock": {}, "urns": 0, "urnPity": {"r": 0, "l": 0}, "skins": {"owned": [], "worn": {}}, "online": {}, "mountsOff": [], "xpv": 2, "relic": 0, "storyTry": 0}
+		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "rerollDay": "", "daily": {}, "stock": {}, "urns": 0, "urnPity": {"r": 0, "l": 0}, "skins": {"owned": [], "worn": {}}, "online": {}, "mountsOff": [], "xpv": 2, "relic": 0, "storyTry": 0}
 
 static func _int(x) -> int:
 	if (x is int or x is float) and x > 0 and is_finite(float(x)):
@@ -207,6 +207,9 @@ static func sanitize(raw) -> Dictionary:
 			s["coins"] += mini(_int(raw["stock"][id]), 999) * STOCK_COINS
 	if raw.get("rerollDay") is String:               # the day the free change of an objective was used (0.55)
 		s["rerollDay"] = str(raw["rerollDay"]).left(10)
+	var dl = raw.get("daily")                        # (0.57) the Course du jour: its day, the tiers won, the best
+	if dl is Dictionary and dl.get("day") is String and dl.get("got") is Array:
+		s["daily"] = {"day": str(dl["day"]).left(10), "got": Array(dl["got"]).slice(0, 12).map(func(x): return x == true), "best": _int(dl.get("best"))}
 	if raw.get("urnPity") is Dictionary:             # urns opened since the last rare, the last legendary
 		s["urnPity"] = {"r": _int(raw["urnPity"].get("r")), "l": _int(raw["urnPity"].get("l"))}
 	var sk = raw.get("skins")

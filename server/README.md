@@ -3,7 +3,7 @@
 Un petit serveur Cloudflare Workers avec une base D1. Il garde :
 - les joueurs : un pseudo et un code ami (PEPI-XXXX), sans e-mail ;
 - leurs meilleures distances, de tous les temps et de la semaine, par mode ;
-- qui est ami avec qui ;
+- qui est ami avec qui, et les demandes d'amis en attente (0.57 : ajouter quelqu'un lui demande d'abord) ;
 - les salons où deux téléphones se retrouvent avant une course en coop (les messages de leur poignée de
   main WebRTC, dix minutes au plus). Ensuite les deux téléphones se parlent directement : la partie ne
   passe pas par le serveur ;

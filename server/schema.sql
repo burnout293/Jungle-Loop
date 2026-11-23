@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS friends (
   since INTEGER NOT NULL,
   PRIMARY KEY (a, b)
 );
+CREATE TABLE IF NOT EXISTS requests (
+  asker TEXT NOT NULL,               -- 0.57: who asked to be friends
+  target TEXT NOT NULL,              -- ... with whom (he accepts or refuses)
+  at INTEGER NOT NULL,
+  PRIMARY KEY (asker, target)
+);
 CREATE TABLE IF NOT EXISTS rooms (
   code TEXT PRIMARY KEY,             -- four letters, said aloud or typed
   host TEXT NOT NULL,
