@@ -59,7 +59,8 @@ Inoffensif ; il se casse avec Brise-tout, l'Esquive, les Bottes de métal, la TN
 | **Colline** (décor un peu assombri, jamais un obstacle ; 0.43) | rochers moussus, racines en arche ; 0.49 : monticule de pierres gravées et de racines (PixelLab), toujours derrière les plateformes ; 0.50 : assombri, et trois autres (pierres gravées, souche creuse, tronc couché) | murs de pierres carrées effondrés | aucune de 0.44 à 0.50 ; 0.51 : quatre éboulis (colonne couchée, cage rouillée, gargouille tombée, lustre écrasé sur des tonneaux) | immeubles éclairés, conteneurs rouillés |
 | **Lianes** | pendent du haut de l'écran ici et là | idem | chaînes à crochet ou anneau | câbles à prise lumineuse, câbles tendus en arc |
 
-Derrière le sol de la forêt (0.44) : fougères, fleurs, champignons et lanterne (ils s'allument quand il les frôle),
+Derrière le sol de la forêt (0.44) : fougères, fleurs, champignons et lanterne (ils s'allument quand il les frôle ;
+0.56 : les champignons 70 % moins fort),
 tête de pierre, bannière, bloc de lianes ; plus de grand arbre ni de panneau.
 
 Les blocs de sol flottants ne viennent qu'avec une colline derrière eux. Avec le Gorille, une liane

@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 23/11/2026, **version Godot 0.55.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 23/11/2026, **version Godot 0.56.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) n'est plus en
 ligne depuis la 0.51 (archivée) ; là où elle différait, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil ; depuis la 0.48, un mot de passe le protège dans les versions publiées) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -181,7 +181,7 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 
 ## 7. Nuées (monstres suiveurs)
 
-Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils visent puis foncent. Dans la cité, de gros drones visent puis tirent un laser le long de leur couloir (de 0,25 à 0,7 s après la visée), sans foncer. La bande rouge d'alerte apparaît en fondu depuis la gauche, passe sous eux et s'efface juste derrière.
+Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils visent puis foncent. Dans la cité, de gros drones visent puis tirent un laser le long de leur couloir, sans foncer ; 0.56 : trois bips (0,9, 0,6 et 0,3 s avant le tir) et un anneau qui se referme sur chaque drone, puis « SAUTE ! » au-dessus de toi dès le troisième si un couloir visé te toucherait debout ; le tir ne brûle que 0,15 s (de 0,3 à 0,45 s après la visée). La bande rouge d'alerte apparaît en fondu depuis la gauche, passe sous eux et s'efface juste derrière.
 
 | Valeur | Aujourd'hui | Où |
 |---|---|---|
@@ -195,7 +195,7 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 | Niveau 0 / 1 / 2 / 3 | 1 couloir pris / 2 / tous sauf 2 voisins / tous sauf 1 | `wave` |
 | Couloir toujours libre | parmi les 2 du bas à pied, 3 avec Double saut, 5 avec Vol | `wave` |
 | Relique altérée | 6 % / 10 % / 15 % des créatures et des nuées sont inoffensives (et le décor ne change plus, § 1) | `DRUNK` |
-| Laser des drones | 1 m d'épaisseur, allumé de 0,25 à 0,7 s | `LASER` |
+| Laser des drones | 1 m d'épaisseur, allumé de 0,3 à 0,45 s après la visée (0.56 ; 0,25 à 0,7 avant) ; un saut simple au « SAUTE ! », ou 0,15 s après, passe | `LASER_*`, `laser_jump` |
 
 ## 8. Boutique
 
@@ -323,7 +323,8 @@ sur chaque défi de l'accueil ; il disparaît une fois utilisé) ; les plumes de
 | Mises | 0.55 : chacun écrit combien (de 0 à 99 999 999 pièces, pas plus que ce qu'il a) ou prend 100 / 500 / 1000 / 5000, et sur qui (lui-même par défaut) ; payées au départ | `[course a 4]`, `Race.bet`, `BET_MAX` |
 | Prêt (0.55) | chacun dit « Prêt ! » ; « Lancer » n'apparaît chez l'hôte que quand tous le sont ; après chaque course, chacun le redit | `all_ready`, `set_ready` |
 | Gains (0.55) | qui a misé sur le vainqueur (le plus loin, égalité possible) reçoit le double de sa mise ; les autres la perdent ; rien d'autre n'est partagé | `Race.settle` |
-| Écran (0.55) | les places (le skin de chacun, prêt ou non, sa mise), tes pièces, l'équipement de la course (celui de l'hôte), l'historique des courses du groupe (distances, mises, gains ; 20 au plus) | `refresh_race`, `history` |
+| Écran (0.55) | les places (le skin de chacun, prêt ou non, sa mise), tes pièces, l'équipement de la course (celui de l'hôte), l'historique des courses du groupe (distances, mises, gains, pièces ; 20 au plus) | `refresh_race`, `history` |
+| Écran de fin (0.56) | après chaque course, pour tous : distance (★ le vainqueur), pièces ramassées (gardées par chacun), mise et sur qui, ce que la mise a donné (+ la mise, ou − la mise), bilan ; « Continuer » ramène au salon | `_race_recap`, `golds` |
 | La course | Run illimitée, même graine et même route pour tous, l'équipement de l'hôte pour tous, départ 3 s après « Lancer » ; chacun joue chaque instant du temps réel (comme à deux) ; pas de montures ni de capture ; qui tombe est sorti (pas de bulle) et **regarde les autres** (0.55 : la caméra suit le premier encore en course, une touche passe au suivant) jusqu'au résultat ; en course : l'équipement en haut à gauche, les mises de chacun en haut à droite, pas de pause | `_race_go`, `run.race`, `Game.spectate` |
 | Fantômes | les autres, pâles (62 %), Pépito tourné à leur couleur (hôte doré, puis bleu, violet, vert), leur nom au-dessus ; hors de vue : leur nom au bord de l'écran avec l'écart en mètres ; 12 positions par seconde, dessinées un peu dans le passé | `Race.views`, `_draw_ghost` |
 | Fin | quand tous sont tombés, ou que le dernier en course a dépassé tous les autres (il continue pour son record, un bandeau le lui dit) ; écran du résultat : distances, vainqueur, ta mise et ce que tu reçois ; « Revanche » (l'hôte) ou « Changer les mises » | `_check_end`, `refresh_race` |

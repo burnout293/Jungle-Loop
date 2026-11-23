@@ -6,7 +6,7 @@ Modes : Histoire (avec les boss), Sans fin, Affrontement (course à plusieurs).
 Cette branche `main` est **ce qui est en ligne** sur GitHub Pages : https://burnout293.github.io/Jungle-Loop/
 (sur téléphone, il se joue en paysage et peut s'installer sur l'écran d'accueil). Le jeu est fait avec Godot :
 son code est dans la branche `godot`, sur le PC dans le dossier `Projects/Jungle-Loop`, dont ce dépôt est le
-sous-dossier `site/` (0.55.0). On n'y écrit pas à la main : `python tools/publish_web.py` (du dossier du jeu)
+sous-dossier `site/` (0.56.0). On n'y écrit pas à la main : `python tools/publish_web.py` (du dossier du jeu)
 y copie l'export web (`index.html`, `index.js`, `index.wasm`, `index.pck`… avec son cache hors ligne,
 `index.service.worker.js`), `version.txt` et `nouveautes.txt`.
 
