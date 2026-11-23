@@ -90,11 +90,20 @@ Feuilles d'automne, Nuit, Feu.
   le tien en pierre grise, écrit en or.
 - **Fantômes** de la course à 4 : les autres Pépito, pâles, chacun à sa couleur, avec son nom.
 
-## Le temple (0.50)
+## Le temple (0.50, de profil depuis la 0.52)
 
-Une pyramide de pierre verte moussue, son sanctuaire au sommet coiffé d'un cristal turquoise ; devant, un porche
-gravé de cristaux dont la porte est bloquée de rochers tenus par des lianes ; aux deux coins, des piliers à tête de
-jaguar. Trois couches (PixelLab) : la pyramide derrière le sol, le porche sur le sol, les piliers devant Pépito.
+Une pyramide de pierre verte moussue vue de côté, son escalier qui monte en diagonale sur son flanc droit, son
+sanctuaire au sommet coiffé d'un cristal turquoise ; à son pied, un couloir vu de côté, frise de cristaux, dont le
+bout ouvert à droite est bouché de rochers tenus par des lianes. Trois couches (PixelLab) : la pyramide derrière le
+sol, les rochers sur le sol (ils sautent au départ), le mur du couloir et son pilier devant Pépito. Au départ, la
+caméra part sur le temple entier et glisse jusqu'à la porte.
+
+## Les pitons brumeux (à venir : ils remplaceront les ruines)
+
+Au-delà de la forêt, des pitons rocheux couverts de jungle sortent d'une mer de brume ; ponts de corde, cascades,
+huttes de guet. On n'y fait que voler (la brume, c'est la chute). Ses volants : le pygmée en deltaplane de feuilles
+(sarbacane), les frelons, le toucan qui pique, la fusée en bambou des pygmées. Images prêtes (0.52), pas encore
+dans le jeu.
 
 ## La relique (0.49)
 
@@ -105,6 +114,7 @@ disque-soleil doré, un masque de pierre au centre avec le cœur au front, les q
 4 essais dans `propositions/0.49/` du dépôt Godot). Vorace repousse (c'est une fleur) tant que le gardien
 suivant n'existe pas. Ce sont les pygmées, non plus la relique, qui ramènent Pépito au temple à chaque chute.
 
+**0.52 : redessinée par lui, pièce par pièce** (les mêmes quatre pièces, sa couronne, ses têtes, sa mâchoire).
 **0.50 : un masque de jaguar** (proposition B3, sans son treillis doré ni ses lianes). **0.51 : quatre pièces**,
 chacune une dalle avec son épaisseur : la **couronne** de feuilles (jade, Vorace) où est serti le **cœur** (cyan),
 la **tête gauche** (ambre), la **tête droite** (braise, rouge), coupées droit au milieu, et la **mâchoire** (lune),
