@@ -75,7 +75,9 @@ l'atteindre ; à leur « DEMI-TOUR » (1000 m, Vorace n'est plus loin) ils s'enf
 mais si Pépito se plante (dernier cœur) avant leur demi-tour, ils lui sautent dessus : un nuage de bagarre,
 puis il est ramené vers le temple, attaché sous une broche posée sur leurs têtes (0.45). Depuis la 0.47, ils
 reviennent le chercher où qu'il tombe (seul, hors boss), même après leur demi-tour et en Run illimitée ; avec
-un couteau suisse il peut s'évader (couper les cordes au bon moment), et ils s'enfuient. Leurs skins (0.47) :
+un couteau suisse il peut s'évader (couper les cordes au bon moment), et ils s'enfuient (0.54 : le Couteau suisse
+s'équipe aussi, une ou deux évasions par course). Depuis la 0.54, après Vorace, ils reprennent la poursuite
+jusqu'à la falaise des pitons, puis l'y suivent en deltaplane. Leurs skins (0.47) :
 Feuilles d'automne, Nuit, Feu.
 
 ## Amis et trésors
@@ -102,9 +104,13 @@ caméra part sur le temple entier et glisse jusqu'à la porte.
 
 Au-delà de la forêt, des pitons rocheux couverts de jungle sortent d'une mer de brume ; ponts de corde, cascades,
 huttes de guet. On n'y fait que voler : le Vol y est toujours là (en Histoire, c'est la couronne de Vorace qui le
-donne), Pépito s'envole tout seul à leur lisière, et la brume ne porte personne : y tomber coûte un cœur, puis il
-remonte. Ses dangers : les pitons (les survoler), le pygmée en deltaplane de feuilles, les frelons, le toucan qui
-pique, la fusée en bambou des pygmées. Rien au sol, aucune plateforme.
+donne). **0.54** : on y arrive par une **falaise** au bout de la forêt (la fin du sol de la forêt repeinte en paroi
+rocheuse, mousse et racines qui pendent, PixelLab) : Pépito saute dans le vide, tombe, puis le Vol le prend ; en
+Histoire, les deux gardes le poursuivent jusqu'au bord, puis sautent derrière lui en deltaplane de feuilles et le
+suivent un moment. La brume ne fait plus mal : elle le renvoie vers le haut. Ses dangers, rangés en figures (rangées
+de pitons qui montent et descendent, un deltaplane au-dessus d'un piton, trois deltaplanes en biais, rideaux) :
+les pitons (les survoler), le pygmée en deltaplane de feuilles, les frelons, le toucan qui pique, la fusée en
+bambou des pygmées. Rien au sol, aucune plateforme.
 
 ## La relique (0.49)
 
@@ -134,7 +140,8 @@ temps, avec les fantômes de la course). Rien n'est dans le jeu.
 
 ## Retirés
 
-Caisses à sauter (devenues décor à casser), mine (remplacée par le robot à pointes), geyser, ronces,
+Ponton de pierre au-dessus d'un creux (0.54 : on ne pouvait pas sauter dessous), caisses à sauter (devenues décor
+à casser), mine (remplacée par le robot à pointes), geyser, ronces,
 bloc de pilier, piqué de chauve-souris, plateformes de bois, premiers nénuphars verts (remplacés par ceux
 de Vorace), voix « Danger ! », tentacules de Vorace, idole de pierre des ruines (mise de côté, remplacée par les araignées).
 
