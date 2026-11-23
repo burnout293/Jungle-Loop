@@ -8,21 +8,27 @@
      with the game's own pictures, one of four at random: they come in from the left, run on the spot while
      it loads, run off to the right when the home screen is ready, then the page fades onto it.
      0.51: on black, nothing but the runners (the least to load).
+     0.52: it never freezes. Everything that moves is a CSS animation of `transform` or `opacity` only (the
+     legs: each sheet slides behind a window, steps() picking the frames; the group: in, then out), which the
+     browser plays on its compositor, apart from the page's JavaScript: while the engine is being compiled and
+     started (seconds of JavaScript that hold everything else), the runners keep running. The chase is set up
+     before the engine's script is even read.
      Source of html/shell.html: python html/make_shell.py (the pictures are put inside it). -->
 <style>
 html, body, #canvas { margin: 0; padding: 0; border: 0; }
 body { color: #fff8e6; background-color: #000; overflow: hidden; touch-action: none; }
 #canvas { display: block; }
 #canvas:focus { outline: none; }
-#jl-load { position: fixed; inset: 0; z-index: 10; overflow: hidden; background: #000; transition: opacity .6s ease; }
+#jl-load { position: fixed; inset: 0; z-index: 10; overflow: hidden; background: #000; transition: opacity .6s ease; will-change: opacity; }
 #jl-load.gone { opacity: 0; pointer-events: none; }
-#jl-group { position: absolute; left: 0; will-change: transform; }
-.jl-spr { position: absolute; bottom: 0; background-repeat: no-repeat; image-rendering: pixelated; animation: jl-run var(--d) steps(var(--n)) infinite; }
-@keyframes jl-run { from { background-position: 0 0; } to { background-position: calc(-1 * var(--n) * var(--w)) 0; } }
-.jl-flame { position: absolute; border-radius: 50%; background: #ffb13b; box-shadow: 0 0 6px 2px #ff7a2a; animation: jl-flick .12s steps(2) infinite; }
+#jl-group { position: absolute; left: 0; top: 0; will-change: transform; transform: translate3d(-200vw, 0, 0); }
+.jl-win { position: absolute; overflow: hidden; }
+.jl-strip { position: absolute; left: 0; top: 0; max-width: none; image-rendering: pixelated; will-change: transform; animation-timing-function: steps(var(--n)); animation-iteration-count: infinite; }
+.jl-flame { position: absolute; border-radius: 50%; background: #ffb13b; box-shadow: 0 0 6px 2px #ff7a2a; will-change: transform, opacity; animation: jl-flick .12s steps(2) infinite; }
 @keyframes jl-flick { from { transform: scale(1); opacity: 1; } to { transform: scale(.6); opacity: .7; } }
 #status-notice { display: none; position: absolute; left: 2rem; right: 2rem; top: 40%; z-index: 11; background: #5b3943; border: 1px solid #9b3943; border-radius: .5rem; color: #e0e0e0; font-family: sans-serif; line-height: 1.3; padding: 1rem; text-align: center; }
 </style>
+<style id="jl-keys"></style>
 $GODOT_HEAD_INCLUDE
 </head>
 <body>
@@ -32,14 +38,9 @@ $GODOT_HEAD_INCLUDE
 	<div id="jl-group"></div>
 </div>
 <div id="status-notice"></div>
-<script src="$GODOT_URL"></script>
 <script>
-const GODOT_CONFIG = $GODOT_CONFIG;
-const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
-const engine = new Engine(GODOT_CONFIG);
-
+// ---- the chase, before the engine's script (sizes in the game's art pixels: the game is 320 of them high) ----
 (function () {
-	// ---- the chase (sizes in the game's art pixels: the game is 320 of them high) ----
 	const SHEETS = {
 		hero: { src: '{{HERO}}', w: {{HERO_W}}, h: {{HERO_H}}, n: 8, d: .46, k: 1 / 3 },   // drawn by the game at 3 pixels per art pixel
 		spear: { src: '{{SPEAR}}', w: 64, h: 64, n: 8, d: .62, k: .8 },                // as the game shows the pygmies (0.8)
@@ -55,92 +56,100 @@ const engine = new Engine(GODOT_CONFIG);
 		[['spear', 0], ['gorilla', 60]],                                                 // a pygmy after the gorilla
 		[['rhino', 0], ['club', 118], ['spear', 158]],                                   // the rhino after two pygmies
 	];
+	const ENTER = 1.3, EXIT = .95;                          // seconds: in from the left edge, out by the right one
 	const load = document.getElementById('jl-load');
 	const group = document.getElementById('jl-group');
+	const keys = document.getElementById('jl-keys');
 	// to try it: ?chase=1 to 4 picks the scene, ?lent=5 keeps them running on the spot 5 seconds at least
 	const ask = new URLSearchParams(location.search);
 	const pick = parseInt(ask.get('chase') || '', 10);
 	const scene = SCENES[pick >= 1 && pick <= SCENES.length ? pick - 1 : Math.floor(Math.random() * SCENES.length)];
 	const hold = Math.min(30, Math.max(.25, parseFloat(ask.get('lent') || '') || .25));
-	let s = 1, gw = 0, x = 0, phase = 'enter', t0 = performance.now(), from = 0, to = 0, last = t0;
-	let started = false, ready = false, done = false;
+	const t0 = performance.now();
+	let ready = false, leaving = false, mid = 0, out = 0;
 
+	// the pictures, the frames' keyframes and the group's: all in pixels of this window, worked out once (again
+	// if the window changes size, which only happens on purpose)
 	function build() {
-		s = window.innerHeight / 320;
+		const s = window.innerHeight / 320;
 		group.innerHTML = '';
-		gw = 0;
-		for (const [name, at, lift] of scene) {
+		let css = '', gw = 0;
+		scene.forEach(([name, at, lift], i) => {
 			const S = SHEETS[name];
-			const w = S.w * S.k * s, h = S.h * S.k * s;
-			const d = document.createElement('div');
-			d.className = 'jl-spr';
-			d.style.width = w + 'px';
-			d.style.height = h + 'px';
-			d.style.left = at * s + 'px';
-			d.style.bottom = (lift || 0) * s + 'px';
-			d.style.backgroundImage = 'url(' + S.src + ')';
-			d.style.backgroundSize = (w * S.n) + 'px ' + h + 'px';
-			d.style.setProperty('--n', S.n);
-			d.style.setProperty('--w', w + 'px');
-			d.style.setProperty('--d', S.d + 's');
-			if (S.n === 1) d.style.animation = 'none';
-			if (S.flip) d.style.transform = 'scaleX(-1)';
-			group.appendChild(d);
+			const w = Math.round(S.w * S.k * s), h = Math.round(S.h * S.k * s);
+			const win = document.createElement('div');
+			win.className = 'jl-win';
+			win.style.cssText = 'width:' + w + 'px;height:' + h + 'px;left:' + Math.round(at * s) + 'px;bottom:' + Math.round((lift || 0) * s) + 'px' + (S.flip ? ';transform:scaleX(-1)' : '');
+			const strip = document.createElement('img');
+			strip.className = 'jl-strip';
+			strip.alt = '';
+			strip.src = S.src;
+			strip.style.width = (w * S.n) + 'px';
+			strip.style.height = h + 'px';
+			if (S.n > 1) {
+				strip.style.setProperty('--n', S.n);
+				strip.style.animationName = 'jl-run' + i;
+				strip.style.animationDuration = S.d + 's';
+				css += '@keyframes jl-run' + i + '{from{transform:translate3d(0,0,0)}to{transform:translate3d(' + (-w * S.n) + 'px,0,0)}}';
+			}
+			win.appendChild(strip);
+			group.appendChild(win);
 			if (name === 'missile') {                       // its flame, behind it (on the left once turned)
-				for (let i = 0; i < 3; i++) {
-					const f = document.createElement('div');
-					f.className = 'jl-flame';
-					const r = (5 - i * 1.4) * s;
-					f.style.width = f.style.height = r + 'px';
-					f.style.left = (at * s - r * (0.6 + i * 1.1)) + 'px';
-					f.style.bottom = ((lift || 0) + 9.5) * s - r / 2 + 'px';
-					f.style.animationDelay = (i * .04) + 's';
-					group.appendChild(f);
+				for (let f = 0; f < 3; f++) {
+					const fl = document.createElement('div');
+					fl.className = 'jl-flame';
+					const r = (5 - f * 1.4) * s;
+					fl.style.cssText = 'width:' + r + 'px;height:' + r + 'px;left:' + (at * s - r * (0.6 + f * 1.1)) + 'px;bottom:' + (((lift || 0) + 9.5) * s - r / 2) + 'px;animation-delay:' + (f * .04) + 's';
+					group.appendChild(fl);
 				}
 			}
 			gw = Math.max(gw, at * s + w);
-		}
-		const floor = 210 * s;                              // a little below the middle (no floor drawn)
-		group.style.top = '0px';
+		});
+		const floor = Math.round(210 * s);                  // a little below the middle (no floor drawn)
 		group.style.height = floor + 'px';
 		group.style.width = gw + 'px';
-		if (phase === 'enter') { from = -gw - 10 * s; to = (window.innerWidth - gw) / 2; }
-		else if (phase === 'wait') { x = (window.innerWidth - gw) / 2; }
+		const from = -gw - 10 * s;
+		mid = Math.round((window.innerWidth - gw) / 2);
+		out = Math.round(window.innerWidth + 20 * s);
+		css += '@keyframes jl-in{from{transform:translate3d(' + from + 'px,0,0)}to{transform:translate3d(' + mid + 'px,0,0)}}';
+		css += '@keyframes jl-out{from{transform:translate3d(' + mid + 'px,0,0)}to{transform:translate3d(' + out + 'px,0,0)}}';
+		keys.textContent = css;
+		if (!leaving) {
+			group.style.animation = 'none';
+			void group.offsetWidth;                         // (restarts it in this window's sizes)
+			const done = Math.min(ENTER, (performance.now() - t0) / 1000);
+			group.style.animation = 'jl-in ' + ENTER + 's cubic-bezier(.33,1,.68,1) ' + (-done) + 's forwards';
+		}
 	}
 
-	function ease(k, out) { return out ? 1 - Math.pow(1 - k, 3) : k * k * k; }
-
-	function frame(now) {
-		if (done) return;
-		const dt = Math.min(.05, (now - last) / 1000);
-		last = now;
-		const k = (now - t0) / 1000;
-		if (phase === 'enter') {                            // in from the left edge to the middle
-			x = from + (to - from) * ease(Math.min(1, k / 1.3), true);
-			if (k >= 1.3) { phase = 'wait'; t0 = now; }
-		} else if (phase === 'wait') {                      // on the spot
-			if (ready && k > hold) { phase = 'exit'; t0 = now; from = x; to = window.innerWidth + 20 * s; }
-		} else if (phase === 'exit') {                      // off to the right edge, then the home screen
-			x = from + (to - from) * ease(Math.min(1, k / .95), false);
-			if (k >= .95) { phase = 'fade'; load.classList.add('gone'); setTimeout(() => { done = true; load.remove(); }, 650); }
-		}
-		group.style.transform = 'translateX(' + x + 'px)';
-		requestAnimationFrame(frame);
+	// off to the right once the home screen is up, they have run on the spot `hold` seconds and are in the middle
+	function leave() {
+		if (leaving) return;
+		const wait = Math.max(0, (t0 + (ENTER + hold) * 1000) - performance.now());
+		if (wait > 0) { setTimeout(leave, wait); return; }
+		leaving = true;
+		group.style.animation = 'jl-out ' + EXIT + 's cubic-bezier(.32,0,.67,0) forwards';
+		setTimeout(() => {
+			load.classList.add('gone');
+			setTimeout(() => load.remove(), 650);
+		}, EXIT * 1000);
 	}
 
 	build();
-	window.addEventListener('resize', build);
-	requestAnimationFrame(frame);
-
+	window.addEventListener('resize', () => { if (!leaving) build(); });
 	// the game says when its home screen is up (main.gd: window.jlReady); after the engine has started,
 	// eight seconds at most
-	window.jlReady = function () { ready = true; };
-	function onStarted() {
-		started = true;
-		setTimeout(() => { ready = true; }, 8000);
-	}
+	window.jlReady = function () { ready = true; leave(); };
+	window.jlStarted = function () { setTimeout(window.jlReady, 8000); };
+}());
+</script>
+<script src="$GODOT_URL"></script>
+<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+const engine = new Engine(GODOT_CONFIG);
 
-	// ---- Godot ----
+(function () {
 	const notice = document.getElementById('status-notice');
 	function fail(err) {
 		console.error(err);
@@ -160,7 +169,7 @@ const engine = new Engine(GODOT_CONFIG);
 			fail('Ce navigateur ne peut pas lancer le jeu. Il manque :\n' + missing.join('\n'));
 		}
 	} else {
-		engine.startGame().then(onStarted, fail);
+		engine.startGame().then(() => window.jlStarted(), fail);
 	}
 }());
 </script>

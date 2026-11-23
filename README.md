@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.51.0** (22/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.52.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,31 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.52.0
+
+- **Temple de profil** (PixelLab, son porche repeint en couloir vu de côté ; `tools/split_temple.py`) : la pyramide
+  et son escalier en diagonale derrière le sol, les rochers qui bouchent le bout du couloir sur le sol (ils
+  disparaissent à l'explosion : l'intérieur sombre est peint derrière, quelques éclats restent dehors), le mur du
+  couloir et le pilier de droite devant Pépito. Sa porte reste au même endroit du monde (`TEMPLE_X` -185). **La
+  caméra part sur le temple entier** (`Game.TEMPLE_PAN`, 416 : l'accueil le montre aussi, `still.cam`) et glisse
+  jusqu'à la porte pendant le grondement (adoucie au début et à la fin ; en Histoire, pendant que les gardes
+  parlent) ; Pépito ne bouge pas dans le monde pendant ce temps. Le grondement dure 1,2 s au lieu de 0,75.
+  L'ancien temple (de face) est rangé dans l'archive (`godot/temple-0.50`).
+- **Relique** : ses quatre pièces redessinées par lui (sa source `relique-v51.psd` dans l'archive,
+  `assets/src/relique/relique-v51-*.png`), remises à leur place dans le masque entier par `tools/place_relic.py`.
+  L'outil de découpe automatique de la 0.51 est rangé dans l'archive (`godot/relique-0.51-auto`).
+- **Réglages** : plus d'onglet Son ; les volumes en tête de Jeu, les images par seconde dans Affichage.
+- **Écran de chargement qui ne se fige jamais** : tout ce qui bouge est une animation CSS de `transform` ou
+  d'`opacity` (les jambes : chaque planche glisse derrière une fenêtre, `steps()` choisit l'image ; le groupe :
+  `jl-in` puis `jl-out`), que le navigateur joue à part du JavaScript de la page : pendant que le moteur se
+  compile et démarre, ils courent toujours (essayé : 4 s de JavaScript bloquant, trois poses différentes). La
+  poursuite est en place avant même que le script du moteur soit lu.
+- **Décor de vol « Les pitons brumeux »** (il remplacera les ruines ; choisi : B) : ses images sont prêtes
+  (archive, `propositions/0.52` : fond lointain, couche du milieu, le piton-obstacle, les quatre volants découpés
+  de la planche : pygmée en deltaplane, frelons, toucan, fusée en bambou). Le jeu en vol seul viendra ensuite.
+- Bancs : `--tour52` (accueil sur le temple, Réglages, la caméra qui glisse, l'explosion, la sortie). t046 : le
+  missile seul sur la route pendant sa vérification (le reste de la route le touchait parfois).
 
 ## 0.51.0
 

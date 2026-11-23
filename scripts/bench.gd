@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -42,6 +42,7 @@ func _ready() -> void:
 			"tour47": opts["tour47"] = true        # 0.47's new things in pictures: urns, skins, the offer, the escape
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour52": opts["tour52"] = true        # 0.52's: Réglages without Son, the temple seen from the side and its camera, the heights
 			"tour51": opts["tour51"] = true        # 0.51's: Réglages in four categories, the three parties, Amis in three tabs
 			"tour50": opts["tour50"] = true        # 0.50's: the home screen B3 (modes, Défis), the wood buttons, the stone skin
 			"race": opts["race"] = kv[1]           # 0.48, the race for four: host | guest (in a browser, with ?net=)
@@ -146,6 +147,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour51"]:
 		await _tour51()
+		return
+	if opts["tour52"]:
+		await _tour52()
 		return
 	if opts["race"] != "":                           # four browsers, one race: see _race_bench
 		_race_bench(delta)
@@ -462,7 +466,6 @@ func _tour51() -> void:
 		steps51 = [
 			[0.5, "setup", ""], [0.6, "go", "settings"], [1.5, "shot", "51-01-reglages-jeu"],
 			[1.6, "settab", "show"], [1.9, "shot", "51-02-reglages-affichage"],
-			[2.0, "settab", "sound"], [2.3, "shot", "51-03-reglages-son"],
 			[2.4, "settab", "save"], [2.7, "shot", "51-04-reglages-sauvegarde"],
 			[2.8, "export", "1"], [3.1, "shot", "51-05-exporter"], [3.2, "unmodal", ""],
 			[3.3, "newslot", "2"], [3.6, "shot", "51-06-nouvelle-partie"], [3.7, "unmodal", ""],
@@ -536,6 +539,43 @@ func _fake_friends51() -> void:
 	rc.me = 0
 	rc.seats = {0: {"name": "Pépito", "code": "PEPI-6ZAW", "on": 0, "bet": 0}, 1: {"name": "Léo", "code": "PEPI-K7QM", "on": 1, "bet": 0}}
 	rc.invited = {"PEPI-INES": "Inès"}
+
+## --tour52: 0.52 in pictures: the home screen on the whole temple, Réglages (Jeu with the volumes, Affichage
+## with the frame rate), then a run: the camera sliding from the temple to the doorway, the blast, the way out.
+var steps52: Array = []
+
+func _tour52() -> void:
+	if steps52.is_empty():
+		steps52 = [
+			[0.5, "setup", ""], [1.4, "shot", "52-01-accueil-temple"],
+			[1.5, "go", "settings"], [2.4, "shot", "52-02-reglages-jeu"], [2.5, "settab", "show"], [2.8, "shot", "52-03-reglages-affichage"],
+			[2.9, "go", "menu"], [3.8, "play", ""], [3.85, "shot", "52-04-depart"], [4.25, "shot", "52-05-glisse"], [4.65, "shot", "52-06-glisse-bis"],
+			[5.05, "shot", "52-07-porte"], [5.35, "shot", "52-08-explosion"], [5.75, "shot", "52-09-sortie"], [6.3, "shot", "52-10-dehors"],
+			[6.5, "quit", ""],
+		]
+	while tour_i < steps52.size() and t >= steps52[tour_i][0]:
+		var st = steps52[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				main.save["seenIntro"] = true
+				main.endless_biome = 0
+				main.still.biome = 0
+				main.still.prev_biome = 0
+				main.refresh_menu()
+			"go": main.go(arg)
+			"settab":
+				main.set_tab = arg
+				main.refresh_settings()
+			"play":
+				main.save["mode"] = "endless"
+				main.go("play")
+				main.run.god = true
+			"quit": get_tree().quit()
 
 ## The steps of the full 0.48 tour (after the mock-up pictures).
 func _steps48() -> Array:

@@ -12,12 +12,14 @@ const PIXEL := Game.PIXEL
 const SIZE := Game.SIZE                 # 0.49: the hero, the dangers, the coins, the things picked up: 15 % bigger
 const VH := 320.0                      # play area height, in art pixels
 const GN := 280.0                      # floor line where the path is at its starting level
-const TEMPLE_X := -79.0                # temple's left edge, at camera 0 (0.50: its doorway's middle at x 48, as before)
-const DOOR_X := 35.0                   # and its doorway (temple 0.50: the door is x 110 to 146, y 148 to 204 of its pictures)
-const TEMPLE_FLOOR := 222.0            # the row of the temple's pictures that stands on the floor line
-# 0.50: the temple is three pictures of the same size lying on each other (tools/split_temple.py): "temple"
-# behind the floor (the pyramid), "temple-mid" on it (the porch, the steps), "temple-front" in front of
-# Pépito (the jaguar pillars, which he runs behind).
+const TEMPLE_X := -185.0               # temple's left edge, at camera 0 (its doorway's middle at x 48, as before)
+const DOOR_X := 35.0                   # and its doorway (0.52: the corridor's open end is x 220 to 250 of its pictures)
+const TEMPLE_FLOOR := 218.0            # the row of the temple's pictures that stands on the floor line
+# The temple is three pictures of the same size lying on each other (tools/split_temple.py; 0.52: seen from
+# the side): "temple" behind the floor (the pyramid, the inside of the corridor's open end), "temple-mid" on it
+# (the boulders blocking that end, gone once blown out), "temple-front" in front of Pépito (the corridor's near
+# wall and the right pillar of its open end, which he runs behind). At the start the camera stands on the
+# temple and slides to the doorway while it rumbles (Game.TEMPLE_PAN).
 const PROP_CELL := Game.PROP_CELL / Game.PIXEL
 const EARTH := 24.0
 const SLICE := 4
@@ -151,7 +153,7 @@ func show_run(r: Game.Run, time: float, q_: int) -> void:
 	seat = _seat()
 	# he steps out of the doorway: hidden while still inside
 	var in_temple = TEMPLE_X - r.cam / PIXEL > -_w("temple")
-	var rect = Rect2(DOOR_X, -400, view_w + 400, 1200) if in_temple and r.cam == 0 else Rect2(-400, -400, view_w + 800, 1200)
+	var rect = Rect2(DOOR_X - r.cam / PIXEL, -400, view_w + 400, 1200) if in_temple and r.cam <= 0 and not r.out else Rect2(-400, -400, view_w + 800, 1200)
 	if planted():                                    # head first in the ground: what is under the floor is not seen
 		rect = Rect2(-400, -400, view_w + 800, 400 + n(Game.floor_at(r, r.cam + r.sx)) + 1)
 	if rect != hero_clip.rect:
@@ -1001,15 +1003,7 @@ func chain(c: CanvasItem, x: float, y: float) -> void:
 ## The doorway blown open: a dark hole with ragged edges where the boulders were (the 0.50 temple's door,
 ## x 110 to 146 and y 148 to 204 of its pictures), and stones on the steps.
 func draw_blast(c: CanvasItem, x: float) -> void:
-	var hole = Color("#0d0a18")
-	var top = GN - TEMPLE_FLOOR + 150
-	rect(c, x + 112, top, 32, 54, hole)
-	rect(c, x + 109, top + 8, 3, 40, hole)
-	rect(c, x + 144, top + 6, 3, 44, hole)
-	rect(c, x + 116, top - 4, 24, 4, hole)
-	rect(c, x + 106, top + 26, 3, 16, hole)
-	rect(c, x + 147, top + 20, 2, 20, hole)
-	for s in [[100, 14, 12, 8, "#5d6a5c"], [122, 10, 9, 7, "#7d8a78"], [140, 15, 14, 9, "#45503f"], [160, 8, 8, 6, "#5d6a5c"], [176, 12, 11, 8, "#7d8a78"], [132, 20, 7, 5, "#7bd13c"]]:
+	for s in [[254, 9, 10, 7, "#6b4a2e"], [268, 6, 7, 5, "#8a6440"], [280, 10, 12, 8, "#5a3c26"], [297, 5, 6, 4, "#6b4a2e"], [310, 8, 9, 6, "#8a6440"], [262, 14, 6, 4, "#7bd13c"]]:
 		rect(c, x + s[0] - 1, GN - s[1] - 1, s[2] + 2, s[3] + 2, INK)
 		rect(c, x + s[0], GN - s[1], s[2], s[3], Color(s[4]))
 
@@ -1551,11 +1545,11 @@ func _draw_back(c: CanvasItem) -> void:
 	draw_dirt(c)
 
 	if in_temple:                                    # the porch, on the floor
-		var porch: Texture2D = Art.tex.get("temple-mid")
-		if porch != null:
-			blit(c, porch, templeX, GN - TEMPLE_FLOOR)
-		if run.exploded:                             # (its doorway is blocked in the picture itself, boulders
-			draw_blast(c, templeX)                   # held by vines: no rubble drawn over it)
+		var boulders: Texture2D = Art.tex.get("temple-mid")
+		if run.exploded:                             # blown out: the boulders are gone, a few lie outside
+			draw_blast(c, templeX)
+		elif boulders != null:
+			blit(c, boulders, templeX, GN - TEMPLE_FLOOR)
 
 	if not run.signs.is_empty():
 		_draw_signs(c)
@@ -1576,7 +1570,7 @@ func _draw_back(c: CanvasItem) -> void:
 		var floor_y = n(Game.top_at(p.plat, run.cam + run.sx)) if p.plat != null else floor_px(hx)
 		var M = run.mount
 		var aloft: bool = M != null and (p.hang or Game.MOUNTS[M.kind].get("fly", false))
-		if (not in_temple or hx > DOOR_X + 8) and (run.caught == null or run.caught.t < Game.CATCH_LEAP):
+		if (not in_temple or hx > DOOR_X - run.cam / PIXEL + 8) and (run.caught == null or run.caught.t < Game.CATCH_LEAP):
 			var w = 26.0 if aloft else (62.0 if M != null else maxf(8, 20 - (int(floor_y - n(p.y)) >> 3)))
 			shadow(c, hx - 2 + (8 if M != null and not aloft else 0), floor_y - 1, w)
 		if run.gone != null:                         # the mount that just took a blow: it tumbles back, shrinks and fades

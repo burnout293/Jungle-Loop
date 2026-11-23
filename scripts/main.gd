@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.51.0"
+const VERSION := "0.52.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -187,6 +187,7 @@ func _ready() -> void:
 	get_window().size_changed.connect(fit)
 	fit()
 	still = Game.new_run({})
+	still.cam = -Game.TEMPLE_PAN                  # (0.52) the home screen shows the whole temple, as the run starts
 	_roll_biome()
 	var layer = CanvasLayer.new()
 	add_child(layer)
@@ -2041,11 +2042,11 @@ func _build_shop() -> void:
 	prev.add_child(pc)
 	s.add_child(prev)
 
-## Réglages (0.51), laid out as the shop: the categories down the left side (Retour, Jeu, Affichage, Son,
-## Sauvegarde), the one open in a stone pane in the middle. Sauvegarde holds the three parties (SaveData
+## Réglages (0.51), laid out as the shop: the categories down the left side (Retour, Jeu, Affichage,
+## Sauvegarde; 0.52: the volumes at the top of Jeu, no Son any more), the one open in a stone pane in the middle. Sauvegarde holds the three parties (SaveData
 ## slots): each one's level and coins, « Jouer » to switch to it, its code out and in, erasing it. Opened
 ## from the pause, Sauvegarde only says it waits for the end of the run.
-const SET_TABS := [["game", "target", "Jeu"], ["show", "gems", "Affichage"], ["sound", "drum", "Son"], ["save", "shield", "Sauvegarde"]]
+const SET_TABS := [["game", "target", "Jeu"], ["show", "gems", "Affichage"], ["save", "shield", "Sauvegarde"]]
 
 func _build_settings() -> void:
 	var s = _screen("settings", true)
@@ -2064,11 +2065,22 @@ func _build_settings() -> void:
 	s.add_child(pane)
 	w["set-pane"] = pane
 	var all = _vbox(0)
-	# Jeu
+	# Jeu: the volumes first (0.52)
 	var game = _vbox(4)
+	for spec in [["Musique", "musicVol"], ["Effets", "sfxVol"]]:
+		var key: String = spec[1]
+		var row = _toggle_row(spec[0])
+		var vol = _hbox(4)
+		vol.add_child(_small_square("−", func() -> void: _volume(key, -1)))
+		var bar = _bar(110, 12, GOLD)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		vol.add_child(bar)
+		w["vol-" + key] = bar
+		vol.add_child(_small_square("+", func() -> void: _volume(key, 1)))
+		row.add_child(vol)
+		game.add_child(row)
 	for spec in [["Contours des dangers", "tg-rim", "Un liseré rouge autour de tout ce qui fait mal."],
-			["Signalements décalés", "tg-shift", "Les alertes des Fonceurs apparaissent plus à gauche, loin du pouce."],
-			["Images par seconde", "tg-fps", "Leur nombre, affiché pendant la course."]]:
+			["Signalements décalés", "tg-shift", "Les alertes des Fonceurs apparaissent plus à gauche, loin du pouce."]]:
 		game.add_child(_set_toggle(spec[0], spec[1], spec[2]))
 	var vrow = _toggle_row("Version " + VERSION)
 	if OS.has_feature("web"):                        # the browser keeps the game's files: a fresh copy on demand
@@ -2092,24 +2104,9 @@ func _build_settings() -> void:
 	full.visible = _can_full()
 	show.add_child(full)
 	show.add_child(_set_toggle("Police pixel", "tg-font", "Non : une police ronde, plus facile à lire."))
+	show.add_child(_set_toggle("Images par seconde", "tg-fps", "Leur nombre, affiché pendant la course."))
 	w["panel-show"] = show
 	all.add_child(show)
-	# Son
-	var sound = _vbox(8)
-	for spec in [["Musique", "musicVol"], ["Effets", "sfxVol"]]:
-		var key: String = spec[1]
-		var row = _toggle_row(spec[0])
-		var vol = _hbox(4)
-		vol.add_child(_small_square("−", func() -> void: _volume(key, -1)))
-		var bar = _bar(110, 12, GOLD)
-		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		vol.add_child(bar)
-		w["vol-" + key] = bar
-		vol.add_child(_small_square("+", func() -> void: _volume(key, 1)))
-		row.add_child(vol)
-		sound.add_child(row)
-	w["panel-sound"] = sound
-	all.add_child(sound)
 	# Sauvegarde: the three parties
 	var keep = _vbox(6)
 	for n in range(1, SaveData.SLOTS + 1):

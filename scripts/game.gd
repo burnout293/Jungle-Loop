@@ -149,7 +149,9 @@ const PLANT_TIME := 1.4
 # GUARD_GAP behind him (the second GUARD_STEP further), never touching him. Only to be looked at.
 const EXIT_LEAD := 0.24
 const EXIT_CATCH := 1.0
-const DOOR_X := 108.0              # the temple's doorway, in the world (render: TEMPLE_X + 112 art pixels)
+const DOOR_X := 108.0              # the temple's doorway, in the world (render: TEMPLE_X + 233 art pixels)
+const TEMPLE_PAN := 416.0          # 0.52: how far left the camera stands at the start, on the whole temple (render
+                                   # TEMPLE_X, in world pixels); it slides to the doorway while the temple rumbles
 const GUARD_OUT := 0.7
 const GUARD_NEXT := 0.4
 const GUARD_GAP := 117.0
@@ -632,6 +634,7 @@ class Run:
 	var shake := 0.0
 	var flash := 0.0
 	var wait := 0.0
+	var wait_max := 0.0                # (0.52) the longest the wait has been: how far the camera has slid
 	var exploded := false
 	var boom := 0.0
 	var biome_x := -1e9             # world x where the current scenery begins
@@ -1008,7 +1011,9 @@ static func biome_at(run: Run, x: float) -> int:
 
 ## The hero starts shut inside the temple: a short rumble, then the doorway blows out and he runs.
 static func launch(run: Run) -> void:
-	run.wait = 0.75
+	run.wait = 1.2
+	run.cam = -TEMPLE_PAN                            # (0.52) on the temple first; he is where he was, inside
+	run.sx += TEMPLE_PAN
 	var lines: Array = []
 	if run.mode == "story":                          # Histoire: the guards outside talk first, the camera still
 		for tk in run.talks:
@@ -3055,6 +3060,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			else:
 				run.wait = minf(run.wait, 1.05)
 		run.wait -= dt
+		run.wait_max = maxf(run.wait_max, run.wait + dt)
+		if run.cam < 0:                              # (0.52) the camera slides from the temple to the doorway,
+			var k = clampf(1.0 - maxf(run.wait, 0.0) / maxf(run.wait_max, 0.01), 0.0, 1.0)   # eased in and out
+			var wx = run.cam + run.sx
+			run.cam = 0.0 if run.wait <= 0 else -TEMPLE_PAN * (1.0 - k * k * (3.0 - 2.0 * k))
+			run.sx = wx - run.cam
 		if run.intro and was_wait >= 0.75 and run.wait < 0.75:
 			run.events.append("rumble")
 		if not run.intro or run.wait < 0.75:
