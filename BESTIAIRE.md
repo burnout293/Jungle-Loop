@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 24/11/2026, version Godot 0.59.0 (le jeu à l'adresse principale). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 24/11/2026, version Godot 0.60.0 (le jeu à l'adresse principale). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -80,6 +80,14 @@ un couteau suisse il peut s'évader (couper les cordes au bon moment), et ils s'
 s'équipe aussi, une ou deux évasions par course). Depuis la 0.54, après Vorace, ils reprennent la poursuite
 jusqu'à la falaise des pitons, puis l'y suivent en deltaplane. Leurs skins (0.47) :
 Feuilles d'automne, Nuit, Feu.
+
+## L'Aigle, gardien des pitons (Histoire, 0.60)
+
+Un immense pygargue brun et or à tête blanche (PixelLab, ébauches colonne 2). Il garde la tête d'ambre, la pièce
+jaune de la relique. Trois temps : par ciel dégagé il charge le long d'une ligne (annoncée par une bande rouge) ;
+sous des nuages sombres il vient tout près et referme ses ailes sur deux lignes à la fois ; dans l'orage il rugit,
+la grêle tombe. La foudre finit par le rôtir, façon dessin animé, et il s'écrase contre une colonne. Pépito se
+pose dessus, prend la tête d'ambre (la Sphère) et file vers le donjon.
 
 ## Les slimes du donjon (Histoire, 0.59)
 

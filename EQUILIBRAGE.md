@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 24/11/2026, **version Godot 0.59.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 24/11/2026, **version Godot 0.60.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) n'est plus en
 ligne depuis la 0.51 (archivée) ; là où elle différait, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil ; depuis la 0.48, un mot de passe le protège dans les versions publiées) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -178,6 +178,18 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Pendant le combat | aucun autre danger, mais 4 motifs sur 5 sont des nénuphars (un seul, deux en escalier, ou une chaîne) pour monter ; des traînées de pièces entre eux | `spawnPattern` |
 | Fin | au ralenti : la course tombe à 30 % (environ 4 m/s) pendant 2,9 s ; un tronc tombe à plat sur sa couronne (0,9 s), l'urne se fend, les pattes cèdent et elle s'affaisse, puis tout s'enfonce dans le sol avec le tronc, sans trou | `DEATH`, `voraceFrame` |
 | Récompense | une fois l'animation finie : 24 pièces et une gemme de chaque couleur jaillissent d'où elle a disparu ; puis, pendant que la vitesse remonte, une ligne de 16 gemmes bleues à hauteur de course, à 30 m environ (il suffit de continuer tout droit) ; puis le décor change, et la route revient peu à peu | `boss` |
+
+## 6 ter. Boss : l'Aigle, gardien des pitons (0.60)
+
+| Valeur | Aujourd'hui | Où |
+|---|---|---|
+| Quand | Histoire, seul : 700 m après le début des pitons ; le décor suivant attend qu'il soit battu ; pas à deux | `EAGLE_AT` |
+| Lignes | basse, milieu, haute : leur milieu à 3,75 / 7,5 / 11,25 m au-dessus de la brume, 2,9 m de haut (Pépito en fait 2,3) | `EAGLE_LANES`, `EAGLE_BAND` |
+| Phase 1 (ciel dégagé) | 6 ruées le long d'une ligne, annoncée 1,1 s avant (bande rouge, « ! »), à 37,5 m/s sur l'écran ; jamais deux fois la même ligne | `EAGLE_RUSHES`, `EAGLE_WARN`, `EAGLE_RUSH` |
+| Phase 2 (nuages sombres) | 6 fois : ailes levées 1 s au-dessus du milieu et d'une autre ligne, fermées 0,35 s, puis 0,7 s de répit ; la ligne libre (basse ou haute) montrée par une flèche | `EAGLE_SLAMS`, `EAGLE_RAISE`, `EAGLE_SLAM`, `EAGLE_REST` |
+| Phase 3 (orage) | il rugit sans attaquer ; 14 s de grêle, un grêlon toutes les 0,42 s, une fois en haut une fois en bas, tombant à 4,25 m/s | `EAGLE_STORM`, `EAGLE_HAIL`, `HAIL_V`, `HAIL_R` |
+| La fin | la foudre, la colonne (son sommet à 8,25 m), Pépito ralentit et s'y pose ; la tête d'ambre : la Sphère ; une urne ; puis le donjon | `PILLAR_TOP`, `RELIC_POWERS` |
+| Équité | `tests/eagle_060.gd` : en volant (montée 12 m/s, descente 22,5 m/s), un passage à chaque image, sur 3 graines | |
 
 ## 7. Nuées (monstres suiveurs)
 
