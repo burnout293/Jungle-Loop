@@ -1,0 +1,5 @@
+Jungle Loop — fichiers copiés tels quels à côté du jeu en ligne (tools/publish_web.py les met dans site/).
+
+jsQR.js — jsQR 1.4.0 (https://github.com/cozmo/jsQR), paquet npm « jsqr », fichier dist/jsQR.js, pris le
+23/11/2026 sur cdn.jsdelivr.net. Licence Apache 2.0, (c) Cosmo Wolfe. Le scanner de codes QR du jeu
+(Amis → Scanner son code QR) le charge seulement quand le navigateur n'a pas de lecteur à lui (iPhone, Firefox).

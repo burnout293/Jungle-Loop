@@ -170,7 +170,8 @@ func show_run(r: Game.Run, time: float, q_: int) -> void:
 		var gl: Layer = ghost_layers[i]
 		gl.visible = i < r.rivals.size()
 		if gl.visible:
-			gl.material.set_shader_parameter("hue", Race.HUES[int(r.rivals[i].get("k", 1)) % Race.HUES.size()])
+			var gh = float(r.rivals[i].get("gh", -1.0))   # (0.58: the colour he chose, else his place's)
+			gl.material.set_shader_parameter("hue", gh if gh >= 0.0 else Race.HUES[int(r.rivals[i].get("k", 1)) % Race.HUES.size()])
 			gl.queue_redraw()
 
 # ---------- small helpers ----------
@@ -1152,8 +1153,12 @@ func _draw_hero_layer(c: CanvasItem) -> void:
 		c.draw_set_transform_matrix(Transform2D.IDENTITY)
 		bubble(c, run.bubble_pos)
 		return
+	_hero_fx(c, run.p)                               # (0.58) the urns' effects: trail, jump's burst
 	draw_hero(c, seat)
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	_fall_fx(c)                                      # (0.58) ... and his fall staged
+	if not run.emote_me.is_empty():                  # (0.58) for two: what I just said, over me
+		_say_bubble(c, run.emote_me, n(run.sx), n(run.p.y) - 58)
 
 # The partner is Pépito too, his colours turned round the wheel: green leaves go orange, the teal scarf gold.
 const MATE_SHADER := """
@@ -1201,6 +1206,8 @@ func _draw_mate_layer(c: CanvasItem) -> void:
 		return
 	draw_hero(c, null, mp, x)
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	if not run.emote_mate.is_empty():                # (0.58) what he just said, over him
+		_say_bubble(c, run.emote_mate, x, n(mp.y) - 58)
 
 ## The race for four: the i-th of the others, where he was a moment ago (race.gd: smooth whatever the
 ## network does). Fallen, he is not drawn (his name stays on the board of places).
@@ -1275,8 +1282,12 @@ func _draw_signs(c: CanvasItem) -> void:
 		if x < -60 or x > view_w + 60:
 			continue
 		var own: bool = sg["own"]
+		var tier = int(sg.get("tier", -1))
 		if not sg.has("lines"):                      # (its lines and their widths, measured once)
-			sg["lines"] = ["TON RECORD", "%d M" % int(sg["d"])] if own else ["RECORD DE", str(sg["name"]).to_upper().left(10), "%d M" % int(sg["d"])]
+			if tier >= 0:                            # (0.58) a tier of the Course du jour
+				sg["lines"] = [str(sg["name"]).to_upper(), "%d M" % int(sg["d"])]
+			else:
+				sg["lines"] = ["TON RECORD", "%d M" % int(sg["d"])] if own else ["RECORD DE", str(sg["name"]).to_upper().left(10), "%d M" % int(sg["d"])]
 			sg["widths"] = sg["lines"].map(func(l): return sign_font.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x)
 		var lines: Array = sg["lines"]
 		var w = ceilf(sg["widths"].max()) + 8
@@ -1287,6 +1298,18 @@ func _draw_signs(c: CanvasItem) -> void:
 		var wood = Color("#9aa0b8") if own else Color("#8a5a2b")
 		var dark = Color("#2a2a3a") if own else Color("#2a160a")
 		var lite = Color("#c9cde0") if own else Color("#b07a3e")
+		var ink = Color()
+		var style: Dictionary = Skins.fx("sign") if own else Skins.skin(str(sg.get("look", ""))).get("fx", {})   # (0.58)
+		if tier >= 0:
+			wood = Color(Daily.TIER_COLOURS[tier]).darkened(0.25)
+			dark = Color(Daily.TIER_COLOURS[tier]).darkened(0.75)
+			lite = Color(Daily.TIER_COLOURS[tier])
+			ink = Color("#fff8e6")
+		elif not style.is_empty():
+			wood = Color(style["wood"])
+			dark = Color(style["dark"])
+			lite = Color(style["lite"])
+			ink = Color(style["ink"])
 		rect(c, snap(x) - 2, top + h - 1, 4, gy - top - h + 2, dark)              # the post
 		rect(c, snap(x) - 1, top + h - 1, 2, gy - top - h + 1, Color("#5a3a1a") if not own else Color("#6d6f86"))
 		rect(c, x0 - 1, top - 1, w + 2, h + 2, dark)                             # the board
@@ -1295,7 +1318,131 @@ func _draw_signs(c: CanvasItem) -> void:
 		rect(c, x0, top + h - 2, w, 1, dark.lerp(wood, 0.5))
 		for i in lines.size():
 			var col = Color("#ffd35c") if own else (Color("#fff8e6") if i == 1 else Color("#ffe9a0"))
+			if ink != Color():
+				col = ink
 			c.draw_string(sign_font, Vector2(snap(x - float(sg["widths"][i]) / 2), top + 2 + 8 * i + 6), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, col)
+
+# ---------- 0.58: the urns' effects (Skins.fx) ----------
+var fx_pts: Array = []        # bits of the trail and of the jump's burst: {x, y (game units), vx, vy, t0, life, col, shape}
+var fx_ground := true
+var fx_next := 0.0
+var fall_t0 := -1.0
+
+## His trail as he runs on the ground, the burst of his jump as he leaves it; then all the bits, fading.
+func _hero_fx(c: CanvasItem, p) -> void:
+	var tr = Skins.fx("trail")
+	var jp = Skins.fx("jump")
+	var wx = run.cam + run.sx
+	var free = run.leap == null and run.mount == null and not p.flying and p.ball == null
+	if not tr.is_empty() and p.ground and free and run.speed > 50 and t >= fx_next:
+		fx_next = t + 0.035
+		var cols: Array = tr["cols"]
+		fx_pts.append({"x": wx - 10 * PIXEL + randf() * 4 * PIXEL, "y": p.y - (2 + randf() * 9) * PIXEL, "vx": -40.0, "vy": -60.0 if tr.get("rise", false) else 0.0,
+			"t0": t, "life": 0.45, "col": Color(cols[randi() % cols.size()]), "shape": str(tr.get("shape", "dot"))})
+	if not jp.is_empty() and fx_ground and not p.ground and p.vy < 0 and free:
+		var cols2: Array = jp["cols"]
+		for i in 10:
+			var ang = PI + PI * i / 9.0                  # a fan under his feet
+			fx_pts.append({"x": wx, "y": p.y, "vx": cos(ang) * 260.0, "vy": sin(ang) * 120.0 - 40.0, "t0": t, "life": 0.4,
+				"col": Color(cols2[i % cols2.size()]), "shape": str(jp.get("shape", "puff"))})
+	fx_ground = p.ground
+	var keep: Array = []
+	for b in fx_pts:
+		var age = t - float(b["t0"])
+		if age > float(b["life"]) or age < 0:
+			continue
+		keep.append(b)
+		var k = age / float(b["life"])
+		var x = snap(sx(float(b["x"]) + float(b["vx"]) * age))
+		var y = snap(n(float(b["y"]) + float(b["vy"]) * age))
+		var col: Color = b["col"]
+		col.a = 1.0 - k * k
+		match str(b["shape"]):
+			"leaf":
+				rect(c, x, y, 2, 1, col)
+				rect(c, x + 1, y - 1, 1, 1, col.lightened(0.3))
+			"star":
+				rect(c, x - 1, y, 3, 1, col)
+				rect(c, x, y - 1, 1, 3, col)
+			"ring":
+				c.draw_arc(Vector2(x, y), 1.5 + 3.0 * k, 0, TAU, 10, col, 1.0)
+			"puff":
+				var rr = snap(1 + 2 * k)
+				rect(c, x - rr, y - rr, rr * 2, rr * 2, col)
+			_:
+				rect(c, x, y, 2, 2, col)
+	fx_pts = keep
+
+## His fall staged (Skins « Chute »): head first in the ground, a tomb rises beside him, a flower grows from
+## the mound, or a little cloud rains on him.
+func _fall_fx(c: CanvasItem) -> void:
+	if not planted():
+		fall_t0 = -1.0
+		return
+	var fx = Skins.fx("fall")
+	if fx.is_empty():
+		return
+	if fall_t0 < 0:
+		fall_t0 = t
+	var tex: Texture2D = Art.tex.get(str(fx["pic"]))
+	if tex == null:
+		return
+	var k = clampf((t - fall_t0 - 0.25) / 0.45, 0, 1)
+	var ox = n(run.sx)
+	var gy = n(Game.floor_at(run, run.cam + run.sx))
+	var tw = float(tex.get_width())
+	var th = float(tex.get_height())
+	match str(fx["pic"]):
+		"fall-tomb":                                 # out of the ground, behind him to the right
+			var shown = snap(th * k)
+			c.draw_texture_rect_region(tex, Rect2(snap(ox + 8), gy - shown, tw, shown), Rect2(0, 0, tw, shown))
+		"fall-flower":                               # it grows on the mound, a little sway
+			if k > 0:
+				var sc = Vector2(0.3 + 0.7 * k, k)
+				c.draw_set_transform_matrix(Transform2D(sin(t * 3) * 0.06, Vector2(snap(ox - 9), gy + 1)).scaled_local(sc))
+				c.draw_texture(tex, Vector2(-tw / 2, -th))
+				c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		"fall-cloud":                                # it floats down over him, and rains
+			var cy = snap(gy - 46 - 30 * (1 - k) + sin(t * 2) * 1.5)
+			c.draw_texture(tex, Vector2(snap(ox - tw / 2), cy - th / 2), Color(1, 1, 1, k))
+			if k >= 1:
+				for i in 6:
+					var dx = (i * 5) % int(maxf(1, tw - 6)) - tw / 2 + 3
+					var dy = fmod(t * 70 + i * 13, 40)
+					rect(c, snap(ox + dx), cy + th / 2 - 2 + dy, 1, 3, Color(0.6, 0.85, 1, 0.8))
+
+## (0.58) Words said for two (an emote), in a bubble over whoever said them, 2.5 s.
+func _say_bubble(c: CanvasItem, e: Dictionary, x: float, y: float) -> void:
+	var age = run.t - float(e.get("t", -9.0))
+	if age < 0 or age > 2.5:
+		return
+	var text = str(e["text"]).to_upper()
+	var tw = sign_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x
+	var bx = snap(x - tw / 2 - 4)
+	var by = snap(y - 6 - minf(age, 0.2) * 20)
+	var a_ = clampf((2.5 - age) / 0.3, 0, 1)
+	rect(c, bx - 1, by - 1, tw + 10, 14, Color(0.1, 0.06, 0.14, a_))
+	rect(c, bx, by, tw + 8, 12, Color(1, 0.97, 0.9, a_))
+	rect(c, snap(x) - 1, by + 12, 3, 2, Color(1, 0.97, 0.9, a_))
+	c.draw_string(sign_font, Vector2(bx + 4, by + 9), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.1, 0.06, 0.14, a_))
+
+## His scarf (Skins « Écharpe »): a band round his neck and its tail flapping behind, drawn over his trunk
+## (x0, y0: the top left of hero-body); stripes, or a shine running along it.
+func _scarf(c: CanvasItem, x0: float, y0: float, sc: Dictionary, pull: float) -> void:
+	var c1 = Color(sc["col"])
+	var c2 = Color(sc["col2"])
+	var striped: bool = sc.get("stripes", false)
+	for x in range(12, 22):
+		var col = c1 if not striped or (x / 2) % 2 == 0 else c2
+		rect(c, x0 + x, y0 + 31, 1, 1, col)
+		rect(c, x0 + x, y0 + 32, 1, 1, col.darkened(0.3))
+	rect(c, x0 + 10, y0 + 31, 2, 3, c2)              # the knot
+	for i in 6:                                      # the tail, flapping, pulled back by his speed
+		var wy = snap(sin(t * 12 - i * 0.9) * (0.5 + i * 0.25) + i * (0.6 - pull * 0.5))
+		var col = c1 if not striped or i % 2 == 0 else c2
+		rect(c, x0 + 9 - i, y0 + 32 + wy, 1, 2, col)
+	if sc.get("shine", false):
+		rect(c, x0 + 12 + int(t * 12) % 10, y0 + 31, 1, 1, Color(1, 1, 1, 0.9))
 
 ## A soap bubble round a fallen hero (world position of its middle): it wobbles and shines.
 func bubble(c: CanvasItem, at: Vector2) -> void:
@@ -1427,6 +1574,10 @@ func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN, who_leap = null
 			var dy = -air * 2.5 * up
 			put_region(c, body, pack, r, w - pack, 2, x0 + pack + snap(dx), y0 + r + snap(dy), w - pack, 2)
 			r += 2
+		if me:
+			var scf = Skins.fx("scarf")
+			if not scf.is_empty():
+				_scarf(c, x0, y0, scf, pull)
 	# the relic in his backpack: a soft glow, which flares when it moves the world
 	if B.has("gx"):
 		var gx = -tx_ + float(B["gx"])

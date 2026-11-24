@@ -30,6 +30,8 @@ for f in web.iterdir():
     if f.is_file():
         shutil.copy2(f, site / f.name)
 (site / 'version.txt').write_text(version + '\n', encoding='utf-8', newline='\n')
+for f in (here / 'web').glob('*.js'):                  # 0.58: files served beside the game (jsQR, web/LISEZMOI.txt)
+    shutil.copy2(f, site / f.name)
 notes = here / 'reglages' / 'nouveautes.txt'           # 0.49.1: shown in the window that offers the update
 if notes.exists():
     shutil.copy2(notes, site / 'nouveautes.txt')

@@ -1,0 +1,104 @@
+# Jungle Loop — les Courses du jour : toutes les courses possibles.
+#
+# Chaque jour, le jeu tire une de ces courses grâce à la date : la même pour tout le monde, sur la même route.
+# On peut la rejouer autant qu'on veut ; chaque palier ne paie qu'une fois par jour, au premier passage
+# (atteindre l'Or donne aussi le Bronze et l'Argent).
+#
+# ─── GUIDE : créer ou modifier une course ───────────────────────────────────────────────────────────────────
+#
+# Une course commence par une ligne « [course] » suivie de son nom, puis des lignes « clé | valeur ».
+# Seules « texte », « objets » et « paliers » sont obligatoires ; les autres changent les règles.
+#
+#   [course] Pressé                         le nom affiché (« RÈGLE DU JOUR : PRESSÉ »)
+#   texte     | Tu pars plus vite...        la phrase de la fenêtre du jour
+#   objets    | Esquive 1, Ressort 1        les équipements imposés, avec leur niveau (ce que le joueur porte ne
+#                                           compte pas). Leur nom en français, comme dans la boutique : Aimant,
+#                                           Double saut, Ressort, Esquive, Brise-tout, Sablier, Bottes de métal,
+#                                           Gemmes dispersées, Dernier élan, Vol, Trèfle, Vitalité, Fana de TNT…
+#   paliers   | 300 / 800 / 1600 / 2800     Bronze / Argent / Or / Légende, en mètres. Une course dure a des
+#                                           paliers plus courts ; repère d'une journée normale : 400/1000/2000/3500.
+#   vitesse   | 1.3                         départ et accélération multipliés (1 = normal, 1.3 = 30 % plus vite)
+#   decor     | cite                        toute la course dans ce décor : foret, cite, donjon (pitons : seulement
+#                                           si le Vol est imposé). Sans cette ligne, les décors s'enchaînent.
+#   coeurs    | 1                           le nombre de cœurs (sans cette ligne : ceux du joueur)
+#   montures  | non                         aucune monture sur le chemin
+#   obstacles | araignees, volants          seulement ces dangers-là (les autres ne viennent pas). Familles :
+#                                           herissons, araignees, volants, rondins. Les plates-formes, pentes et
+#                                           pièces restent toujours.
+#   poids     | 2                           (facultatif) chances d'être tirée : 2 = deux fois plus souvent, 0 = jamais
+#   date      | 2026-12-25                  (facultatif) cette course ce jour-là, à la place du tirage
+#
+# Les lignes qui commencent par # sont ignorées. Réexporte le jeu pour voir tes changements.
+# Les récompenses des paliers sont les mêmes pour toutes les courses : section [recompenses], tout en bas.
+# ──────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+[course] Classique
+texte     | La course de tous les jours, sans surprise.
+objets    | Aimant 2, Double saut 1
+paliers   | 400 / 1000 / 2000 / 3500
+
+[course] Pressé
+texte     | Tu pars plus vite et tu accélères 30 % plus vite.
+vitesse   | 1.3
+objets    | Esquive 1, Ressort 1
+paliers   | 300 / 800 / 1600 / 2800
+
+[course] Nuit dans la cité
+texte     | Toute la course dans la cité du futur, ses nuées et ses lasers.
+decor     | cite
+objets    | Aimant 2, Sablier 1
+paliers   | 350 / 900 / 1800 / 3200
+
+[course] Au fond du donjon
+texte     | Toute la course dans le donjon.
+decor     | donjon
+objets    | Brise-tout 1, Bottes de métal 1
+paliers   | 350 / 900 / 1800 / 3200
+
+[course] Un seul cœur
+texte     | Un seul cœur : pas de faute permise.
+coeurs    | 1
+objets    | Esquive 1, Aimant 2
+paliers   | 250 / 600 / 1200 / 2200
+
+[course] À pied
+texte     | Aucune monture ne vient : tes jambes, rien d'autre.
+montures  | non
+objets    | Double saut 1, Gemmes dispersées 2
+paliers   | 350 / 900 / 1800 / 3000
+
+[course] Ailé
+texte     | Le Vol pour tout le monde, même ceux qui ne l'ont pas encore.
+objets    | Vol 2, Aimant 2
+paliers   | 500 / 1200 / 2400 / 4000
+
+[course] Nid d'araignées
+texte     | Rien que des araignées : jaunes, rouges, en files et en nids.
+obstacles | araignees
+objets    | Brise-tout 1, Sablier 1
+paliers   | 300 / 800 / 1600 / 2800
+
+[course] Ciel de volants
+texte     | Des volants et des hérissons, rien d'autre.
+obstacles | volants, herissons
+objets    | Double saut 1, Esquive 1
+paliers   | 300 / 800 / 1600 / 2800
+
+[course] Grand prix
+texte     | Plus vite, et deux cœurs seulement.
+vitesse   | 1.15
+coeurs    | 2
+objets    | Dernier élan 2, Aimant 2
+paliers   | 300 / 750 / 1500 / 2600
+
+# ─── Récompenses (les mêmes pour toutes les courses) ──────────────────────────────────────────────────────
+# « pieces N », « urne commune », « urne rare », « urne legendaire », et « + objet du jour » (un skin ou un
+# effet tiré du catalogue des urnes ; s'il est déjà à toi, il devient des pièces, comme un doublon).
+# semaine : ce que donne l'Or atteint « semaine jours » jours sur les 7 derniers.
+[recompenses]
+bronze        | pieces 300
+argent        | urne commune
+or            | urne rare
+legende       | urne rare + objet du jour
+semaine       | urne legendaire
+semaine jours | 5

@@ -131,6 +131,10 @@ func rename(save: Dictionary, name: String) -> Dictionary:
 		SaveData.store(save)
 	return r
 
+## (0.58) The style of my record's board, as my friends see it (a Skins id of the « Panneau de record »; "": wood).
+func set_look(save: Dictionary, sign: String) -> Dictionary:
+	return await _call(save, "player/look", {"sign": sign})
+
 ## 0.48: everything about this player goes from the server (Réglages › Sauvegarde); the save forgets him.
 func delete_me(save: Dictionary) -> Dictionary:
 	if not save.get("online", {}).has("id"):

@@ -58,3 +58,8 @@ CREATE TABLE IF NOT EXISTS members (
   at INTEGER NOT NULL,
   PRIMARY KEY (room, player)
 );
+-- 0.58: the style of a player's record board, as his friends see it (a cosmetic id; '' the wooden one)
+CREATE TABLE IF NOT EXISTS looks (
+  player TEXT PRIMARY KEY,
+  sign TEXT NOT NULL DEFAULT ''
+);

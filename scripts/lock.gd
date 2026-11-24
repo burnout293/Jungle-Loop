@@ -9,9 +9,9 @@ extends RefCounted
 ## A new password: python tools/debug_password.py (it rewrites SALT, ROUNDS and CHECK below).
 ## Debug builds (the editor, the benches, an export made with --export-debug) are not locked.
 
-const SALT := "a389c5db8b317c07261b880172cc2bd1"
+const SALT := "4d0bcd7cb85d273e3b6dd0fecd841bf5"
 const ROUNDS := 300000
-const CHECK := "b769cafa26e11907135e00249cdbab79816b9771c33ad2688c31523d9e88b760"
+const CHECK := "a11c0e76c273b2ba874909f74b73cc02ece62c0a074e4eff4a1caa1b38a0736a"
 const KEPT := "user://jungle-loop-key.txt"
 const TRIES := 5                         # wrong passwords in a row before a pause
 const PAUSE := 30.0                      # seconds

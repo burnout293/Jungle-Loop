@@ -6,6 +6,7 @@
 #
 #   python tools/debug_password.py                     asks for it twice (hidden)
 #   python tools/debug_password.py --random FILE       makes one (12 letters and digits) and writes it in FILE
+#   python tools/debug_password.py --simple FILE       (0.58) one easy to remember, a word and two digits (lune65)
 #   python tools/debug_password.py --check             asks for one and says whether it is the current one
 #
 # Keep the password out of the repository (a FILE outside it).
@@ -45,6 +46,20 @@ def main():
         ok = check_of(getpass.getpass('Mot de passe : '), salt, rounds) == check
         print('C\'est le bon.' if ok else 'Ce n\'est pas celui-là.')
         return
+    if args[:1] == ['--simple']:                       # 0.58: a word and two digits, easy to remember
+        if len(args) < 2:
+            sys.exit('Indique le fichier où l\'écrire (hors du dépôt) : --simple FICHIER')
+        words = ['lune', 'soleil', 'jungle', 'singe', 'tigre', 'cobra', 'liane', 'panda', 'perle', 'mangue', 'coco',
+                 'fleur', 'nuage', 'volcan', 'toucan', 'jaguar', 'banane', 'orage', 'relique', 'temple', 'pepito', 'aigle']
+        password = secrets.choice(words) + str(secrets.randbelow(90) + 10)
+        os.makedirs(os.path.dirname(os.path.abspath(args[1])), exist_ok=True)
+        with open(args[1], 'w', encoding='utf-8') as f:
+            f.write('Jungle Loop — mot de passe du menu de debug (5 touches sur le badge de niveau) :\n\n    %s\n\n'
+                    'Majuscules, espaces et tirets ne comptent pas. Pour en changer : python tools/debug_password.py\n'
+                    '(ou --simple FICHIER pour un autre mot et deux chiffres)\n' % password)
+        write(password)
+        print('Nouveau mot de passe écrit dans %s ; scripts/lock.gd mis à jour (réexporte le jeu).' % args[1])
+        return
     if args[:1] == ['--random']:
         if len(args) < 2:
             sys.exit('Indique le fichier où l\'écrire (hors du dépôt) : --random FICHIER')
@@ -59,8 +74,8 @@ def main():
         return
     a = getpass.getpass('Nouveau mot de passe : ')
     b = getpass.getpass('Encore une fois : ')
-    if a != b or len(normal(a)) < 8:
-        sys.exit('Différents, ou moins de 8 lettres : rien n\'a changé.')
+    if a != b or len(normal(a)) < 5:
+        sys.exit('Différents, ou moins de 5 lettres : rien n\'a changé.')
     write(a)
     print('scripts/lock.gd mis à jour (réexporte le jeu).')
 

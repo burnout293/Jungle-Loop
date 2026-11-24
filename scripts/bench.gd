@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,7 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour58": opts["tour58"] = true        # 0.58's: Amis → Groupe (G1), « Expulser », « Inviter », the Affrontement (V1)
 			"tour57": opts["tour57"] = true        # 0.57's: Amis (Liste, Demandes), the home's panels, the Course du jour, the guest's lobby, watching
 			"tour56": opts["tour56"] = true        # 0.56's: a mushroom brushed, the city's lasers and their cue, the race's end screen
 			"tour55": opts["tour55"] = true        # 0.55's: the group on the home screen, the Affrontement, watching, skins in coins
@@ -151,6 +152,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour58"]:
+		await _tour58()
 		return
 	if opts["tour57"]:
 		await _tour57()
@@ -501,6 +505,133 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour58: 0.58 in pictures: Amis → Groupe in its layout G1 (four cards: the host, a good link, a slow one,
+## one linking again with the time his place still waits), « Expulser » asked, « Inviter » on a free place (the
+## friends to pick), then the Affrontement in its layout V1, as the host and as a guest.
+var steps58: Array = []
+
+func _tour58() -> void:
+	if steps58.is_empty():
+		steps58 = [
+			[0.5, "setup", ""], [0.7, "group", ""], [1.6, "shot", "58-01-groupe-g1"],
+			[1.7, "kick", ""], [2.3, "shot", "58-02-expulser"], [2.4, "unmodal", ""],
+			[2.5, "free", ""], [2.6, "pick", ""], [3.2, "shot", "58-03-inviter"], [3.3, "unpick", ""],
+			[3.4, "race", ""], [4.2, "shot", "58-04-affrontement-v1"],
+			[4.3, "guest", ""], [5.0, "shot", "58-05-affrontement-invite"],
+			[5.1, "alone", ""], [5.8, "shot", "58-06-groupe-sans-groupe"],
+			[5.9, "wear", ""], [6.0, "skins", ""], [6.8, "shot", "58-07-skins-familles"],
+			[6.9, "fxrun", ""], [9.0, "shot", "58-08-traine-echarpe"], [9.1, "tap", ""], [9.25, "shot", "58-09-eclat-saut"],
+			[10.0, "die", ""], [13.0, "shot", "58-10-chute-tombe"],
+			[13.1, "daily", ""], [13.8, "shot", "58-11-course-du-jour"], [13.9, "quit", ""],
+		]
+	while tour_i < steps58.size() and t >= steps58[tour_i][0]:
+		var st = steps58[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				var sv: Dictionary = main.save
+				sv["seenIntro"] = true
+				sv["coins"] = 23450
+				sv["xp"] = 40000.0
+				sv["upgrades"] = {"magnet": 2, "dash": 1, "horn": 2}
+				sv["equipped"] = ["magnet", "dash", "horn"]
+				_fake_friends51()
+				var rc: Race = main.race
+				rc.set_process(false)                 # (its links are stand-ins: nothing to poll)
+				Coop._supported = 1                   # (as in a browser: the buttons to invite, create, join)
+				Net.url = "http://127.0.0.1:9"        # (an address nobody answers: never the real server)
+				rc.invited = {}
+				rc.seats = {0: {"name": "Pépito", "code": "PEPI-6ZAW", "skin": "", "on": 0, "bet": 500, "ready": true},
+					1: {"name": "Léo", "code": "PEPI-K7QM", "skin": "pepito-ember", "on": 1, "bet": 1000, "ready": false},
+					2: {"name": "Inès", "code": "PEPI-INES", "skin": "pepito-amethyst", "on": 0, "bet": 100, "ready": true},
+					3: {"name": "Papa", "code": "PEPI-PAPA", "skin": "pepito-frost", "on": 3, "bet": 0, "ready": false, "away": true, "away_t": 138.0}}
+				for spec in [[1, 45.0], [2, 240.0]]:
+					var l = Race.Link.new()
+					l.seat = spec[0]
+					l.open = true
+					l.rtt = spec[1]
+					rc.links["c%d" % spec[0]] = l
+				rc.history = [{"n": 2, "rows": [{"k": 0, "name": "Pépito", "bet": 500, "on": 0, "dist": 1840, "gold": 212, "got": 1000, "win": true},
+						{"k": 1, "name": "Léo", "bet": 1000, "on": 1, "dist": 1210, "gold": 147, "got": 0, "win": false},
+						{"k": 2, "name": "Inès", "bet": 100, "on": 0, "dist": 760, "gold": 64, "got": 200, "win": false}]},
+					{"n": 1, "rows": [{"k": 0, "name": "Pépito", "bet": 0, "on": 0, "dist": 950, "gold": 95, "got": 0, "win": false},
+						{"k": 1, "name": "Léo", "bet": 500, "on": 1, "dist": 1430, "gold": 120, "got": 1000, "win": true}]}]
+				main.race_seen = true
+				main.refresh_menu()
+			"group":
+				main.friends_tab = "group"
+				main.go("friends")
+				main.refresh_friends()
+			"kick": main._group_kick(1)
+			"unmodal":
+				if main.modal != null:
+					main.modal.queue_free()
+					main.modal = null
+			"free":
+				main.race.seats.erase(3)
+				main.refresh_friends()
+			"pick": main._race_pick()
+			"unpick":
+				for ch in main.get_children():
+					if ch is CanvasLayer and ch.layer == 40:
+						ch.queue_free()
+			"race":
+				main.go("race")
+				main.refresh_race()
+			"guest":
+				var rc: Race = main.race
+				rc.role = "guest"
+				rc.me = 1
+				rc.links = {}
+				var l = Race.Link.new()
+				l.open = true
+				l.rtt = 60.0
+				rc.links["host"] = l
+				rc.seats[0]["ms"] = 0
+				rc.seats[2]["ms"] = 240
+				main.refresh_race()
+			"wear":                                     # the urns' cosmetics, worn
+				var sv: Dictionary = main.save
+				for id in ["scarf-striped", "trail-rainbow", "jump-stars", "fall-tomb", "shoes-gold", "bag-blue", "emote-gg"]:
+					if not id in sv["skins"]["owned"]:
+						sv["skins"]["owned"].append(id)
+				sv["skins"]["worn"] = {"scarf": "scarf-striped", "trail": "trail-rainbow", "jump": "jump-stars", "fall": "fall-tomb", "shoes": "shoes-gold", "bag": "bag-blue"}
+				Skins.apply(sv["skins"]["worn"])
+			"skins":
+				main.picked_skin = "scarf-striped"
+				main.tab = "skin"
+				main.go("shop")
+			"fxrun":
+				main.save["equipped"] = []                # (on foot: no rhino from the Corne)
+				main.save["mode"] = "endless"
+				main.daily_on = false
+				main.go("play")
+				main.run.god = true
+			"tap":
+				main.press()
+				main.input.hold = false
+			"die":
+				var r: Game.Run = main.run
+				r.god = false
+				r.hearts = 1
+				r.p.inv = 0
+				Game.hit(r, null)
+			"daily": main._daily_panel()
+			"alone":
+				var rc: Race = main.race
+				rc.role = ""
+				rc.state = "idle"
+				rc.room = ""
+				rc.seats = {}
+				rc.links = {}
+				main.go("friends")
+				main.refresh_friends()
 			"quit": get_tree().quit()
 
 ## --tour57: 0.57 in pictures: Amis's list (« Voir ») and its requests (a card to accept or refuse), the window

@@ -136,7 +136,7 @@ static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
 		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
-		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "rerollDay": "", "daily": {}, "stock": {}, "urns": 0, "urnPity": {"r": 0, "l": 0}, "skins": {"owned": [], "worn": {}}, "online": {}, "mountsOff": [], "xpv": 2, "relic": 0, "storyTry": 0}
+		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "rerollDay": "", "daily": {}, "stock": {}, "urns": 0, "urnBag": {"common": 0, "rare": 0, "legendary": 0}, "urnPity": {"r": 0, "l": 0}, "skins": {"owned": [], "worn": {}}, "online": {}, "mountsOff": [], "xpv": 2, "relic": 0, "storyTry": 0}
 
 static func _int(x) -> int:
 	if (x is int or x is float) and x > 0 and is_finite(float(x)):
@@ -200,6 +200,9 @@ static func sanitize(raw) -> Dictionary:
 	s["xp"] = float(xp) if (xp is int or xp is float) and xp > 0 else 0.0
 	s["questsDone"] = _int(raw.get("questsDone"))
 	s["urns"] = _int(raw.get("urns"))
+	if raw.get("urnBag") is Dictionary:              # (0.58) urns of a known rarity (the Course du jour's)
+		for rk in ["common", "rare", "legendary"]:
+			s["urnBag"][rk] = _int(raw["urnBag"].get(rk))
 	# 0.55: one money only. What a save of before still holds is paid in coins (once: it is not kept)
 	s["coins"] += mini(_int(raw.get("feathers")), 99) * FEATHER_COINS + _int(raw.get("shards")) * SHARD_COINS
 	if raw.get("stock") is Dictionary:
@@ -209,7 +212,8 @@ static func sanitize(raw) -> Dictionary:
 		s["rerollDay"] = str(raw["rerollDay"]).left(10)
 	var dl = raw.get("daily")                        # (0.57) the Course du jour: its day, the tiers won, the best
 	if dl is Dictionary and dl.get("day") is String and dl.get("got") is Array:
-		s["daily"] = {"day": str(dl["day"]).left(10), "got": Array(dl["got"]).slice(0, 12).map(func(x): return x == true), "best": _int(dl.get("best"))}
+		s["daily"] = {"day": str(dl["day"]).left(10), "got": Array(dl["got"]).slice(0, 12).map(func(x): return x == true), "best": _int(dl.get("best")),
+			"golds": Array(dl.get("golds", [])).slice(0, 7).map(func(x): return str(x).left(10))}   # (0.58: the days Or was reached)
 	if raw.get("urnPity") is Dictionary:             # urns opened since the last rare, the last legendary
 		s["urnPity"] = {"r": _int(raw["urnPity"].get("r")), "l": _int(raw["urnPity"].get("l"))}
 	var sk = raw.get("skins")

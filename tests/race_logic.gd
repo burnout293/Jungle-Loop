@@ -5,7 +5,8 @@ extends SceneTree
 # coins right (0.55: what was bet goes out, twice the bet comes back to whoever bet on the winner). Then the
 # cases that go wrong: a guest whose link drops (his place waits for him, he links again; gone for good, his
 # last distance stands and his stake comes back), the host who leaves (everyone's stake comes back), a tie,
-# nobody betting on the winner. 0.55 too: « Prêt », the history of the group's races.
+# nobody betting on the winner. 0.55 too: « Prêt », the history of the group's races. 0.58: each link's
+# delay, « Expulser ».
 #   godot --headless --path . -s tests/race_logic.gd   (tests/ has a .gdignore: kept out of the game)
 
 class FakeChan:
@@ -274,6 +275,30 @@ func _init() -> void:
 	check(s["pot"] == 0 and s["pay"][0] == 0 and s["pay"][1] == 0, "no bets: nothing moves")
 	s = Race.settle({0: {"dist": 900, "bet": 0, "on": 0}, 1: {"dist": 50, "bet": 250, "on": 1}, 2: {"dist": 60, "bet": 250, "on": 1}})
 	check(s["pay"][0] == 0 and s["pay"][1] == 0 and s["pay"][2] == 0, "nobody backed the winner: nobody gets anything")
+
+	# --- 0.58: the delay of each link (pings), a guest sent out of the group ---
+	made = make(["Hôte", "Un", "Deux"])
+	races = made[0]
+	host = races[0]
+	tick(races, 6)
+	check(host.links["PEPI-0001"].rtt >= 0 and host.link_of(1)["state"] == "ok" and races[1].link_of(0)["state"] == "ok", "(0.58) each link's delay is measured (pings and pongs), both ways")
+	host.links["PEPI-0002"].rtt = 260.0
+	check(host.link_of(2)["state"] == "slow" and int(host.link_of(2)["ms"]) == 260, "(0.58) a slow link (260 ms) says « lent »")
+	host._broadcast_lobby()
+	tick(races, 2)
+	check(int(races[1].seats[2].get("ms", -1)) == 260 and races[1].link_of(2)["state"] == "slow", "(0.58) the guests see the host's measure of the others")
+	host.kick(1)
+	tick(races, 3)
+	check(not host.seats.has(1) and races[1].state == "failed" and not races[2].seats.has(1), "(0.58) « Expulser »: his place is free on every phone, he is out")
+	races[1].role = "guest"
+	races[1].state = "linking"
+	races[1].seats = {0: {"name": "Hôte", "code": "", "on": 0, "bet": 0}, 1: races[1]._seat_of_me()}
+	pair(host, races[1], "PEPI-0001")
+	tick(races, 4)
+	check(not host.seats.has(1) and races[1].state == "failed", "(0.58) sent out, he is not let back in by himself")
+	host._lost("PEPI-0002")
+	var away = host.link_of(2)
+	check(away["state"] == "away" and int(away["wait"]) > 170, "(0.58) a link lost: « reconnexion… » and the time his place still waits")
 
 	print("\nBILAN : %d vérifications, %s" % [checks, "tout bon" if fails == 0 else "%d ÉCHEC(S)" % fails])
 	quit()

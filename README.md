@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.57.0** (23/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.58.0** (24/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,35 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.58.0
+
+- **Amis → Groupe** (maquette G1) : quatre cartes côte à côte (le perso de chacun, HÔTE, l'état de son lien :
+  délai mesuré par les pings, « lent » dès 200 ms, « reconnexion… » avec le temps que sa place attend encore) ;
+  **Expulser** (l'hôte, avant une course, après confirmation ; l'expulsé ne revient que réinvité) ; une place
+  libre : « Inviter » ouvre la liste des amis (le groupe se crée à la première invitation) ; dessous : le code du
+  groupe, Créer, Rejoindre, Quitter. Pas de changement d'hôte (abandonné). `Race.link_of`, `Race.kick`, `_pong`.
+- **Affrontement** (maquette V1) : les places en haut (PRÊT / PAS PRÊT, la mise sur sa ligne), trois panneaux
+  égaux qui ne se touchent pas (ta mise, l'équipement, l'historique en tableau), « Prêt ! » et « Lancer » dessous.
+- **Urnes** (`reglages/decisions-economie.md`, partie 1) : 100 % cosmétique, trois familles. Apparence : Feuilles,
+  Chaussures, Sac à dos, Écharpe ; Effets : Hélice du Vol, Traînée de course, Éclat du saut, Chute (pierre tombale,
+  fleur, petit nuage) ; Social : Panneau de record (vu par tes amis, serveur `player/look`, table `looks`,
+  `server/migrate-058.sql`), Fantôme (ta couleur dans l'Affrontement), Émotes à deux (bouton « ! » en coop, une
+  bulle au-dessus de celui qui parle). 49 objets, achetables aussi en pièces ; doublon = pièces. Les skins des
+  montures, des pygmées et des boutons restent à la boutique. Contenu des urnes : `[urnes]` de progression.txt
+  (« objet commun / rare / legendaire »). Urnes de rareté connue (`save.urnBag`) ouvertes d'abord, la meilleure d'abord.
+- **Course du jour** : toutes les courses dans `reglages/courses-du-jour.txt` (un guide en tête pour en créer :
+  texte, objets, paliers, vitesse, décor, cœurs, montures, obstacles gardés, poids, date) ; 10 courses ; paliers
+  Bronze / Argent / Or / Légende propres à chaque course (plus courts si elle est dure), sur la route en panneaux de
+  leur couleur ; récompenses : 300 pièces, urne commune, urne rare, urne rare + objet du jour ; l'Or 5 jours sur 7 :
+  une urne légendaire. Une course qui ne garde que certains dangers n'a plus aucun des autres.
+- **Scanner de QR** : sur iPhone et Firefox (pas de lecteur dans le navigateur), jsQR (Apache 2.0, `web/jsQR.js`,
+  copié à côté du jeu par `publish_web.py`) lit l'image de l'appareil photo.
+- **Code debug** : `python tools/debug_password.py --simple FICHIER` en fait un facile à retenir (un mot et deux
+  chiffres) ; le code actuel est dans le fichier de l'archive (jamais dans le dépôt).
+- **2e boss** : ébauches de l'aigle (PixelLab, 5 poses × 4) dans `Archives/Jungle-Loop/boss2`, rien de codé.
+- Tests : `tests/daily_058.gd` (38, remplace daily_057), `race_logic` (36 : délais, expulsion), `server/test.mjs`
+  (25). Banc `--tour58` (Groupe G1, Expulser, Inviter, Affrontement V1 hôte et invité).
 
 ## 0.57.0
 

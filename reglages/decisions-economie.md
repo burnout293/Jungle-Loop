@@ -46,6 +46,33 @@ Prix validés (« c'est très bien »).
 - **Sa demande en plus** : des **équipements imposés**, et parfois des **règles changées** (vitesse accélérée,
   certains obstacles seulement, etc.).
 
+### Contenu des urnes (validé le 23/11)
+- **100 % cosmétique**, trois familles seulement, plus des pièces :
+  - **apparence de Pépito** : skins par pièce (feuilles, écharpe, sac, chaussures) ;
+  - **effets** : traînée de course, hélice du Vol, éclat du saut, chute mise en scène (tombe, fleur, nuage) ;
+  - **social** : panneau de record vu par les amis, couleur du fantôme dans la course à 4, émotes à deux ;
+  - **pièces** : lot de consolation et doublons (400 / 1 500 / 5 000).
+- Rien qui aide à jouer. Pas de bestiaire pour l'instant (à ajouter plus tard si la collection s'essouffle).
+
+### Paliers de la Course du jour (validé le 23/11)
+- Essais illimités ; chaque palier est payé **une fois par jour**, au premier passage.
+
+| Palier | Repère (journée normale) | Récompense |
+|---|---|---|
+| Bronze | 400 m | 300 pièces |
+| Argent | 1 000 m | Urne commune |
+| Or | 2 000 m | Urne rare |
+| Légende | 3 500 m | Urne rare + skin ou effet « du jour » |
+
+- **Sa demande : les paliers sont adaptés à la difficulté de chaque course** (vitesse accélérée = paliers plus courts, etc.).
+- Le skin ou l'effet « du jour » est **repris plus tard dans le catalogue** : pas d'exclusivité définitive.
+- **Bonus de la semaine** : l'Or atteint 5 jours sur 7 donne une urne légendaire.
+- Classement entre amis sans récompense ; les paliers sont visibles sur la route, comme les panneaux de record.
+- **Sa demande : un fichier qui liste toutes les courses possibles** (par exemple `reglages/courses-du-jour.txt`) :
+  pour chacune, les équipements imposés, les règles changées (vitesse, obstacles retenus…) et ses 4 paliers.
+  En tête, **un guide en commentaire** pour qu'il puisse en créer ou en personnaliser lui-même, dans le style
+  des autres fichiers de `reglages/`.
+
 ## 2. Encore à trancher par lui
 
 - **Les Tambours** : son « on garde » visait la Course du jour. Options : supprimés, réutilisés comme mini-jeu

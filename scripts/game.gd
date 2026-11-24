@@ -786,6 +786,9 @@ class Run:
 	var spectating := false            # (0.55) fallen in an Affrontement: he watches the others (spectate)
 	var daily := false                 # (0.57) the Course du jour (daily.gd): its rule, its tiers
 	var gain_mul := 1.0                # (0.57) ... how much faster the speed grows (its rule « Pressé »)
+	var drop_kinds: Array = []         # (0.58) ... the dangers it leaves out (« obstacles | araignees »)
+	var emote_me := {}                 # (0.58) for two: the words I just said ({text, t: the run's time then})
+	var emote_mate := {}               # ... and those my partner said
 	var glide_go := false              # ... and off the cliff they have jumped (a line said « deltaplanes »)
 	var say_queue: Array = []          # ... the lines still to say
 	var talk_zones: Array = []         # ... where they talk: {at, x0, x1, lines, on, wait, done}
@@ -1384,6 +1387,8 @@ static func add_pinnacle(run: Run, x: float, h: float) -> Obs:
 	return o
 
 static func add_spiky(run: Run, x: float) -> void:
+	if "spiky" in run.drop_kinds:                    # (0.58) a Course du jour without hedgehogs: none at all
+		return
 	add_obs(run, x, floor_at(run, x) - SPIKY_H, SPIKY_W, SPIKY_H, "spiky", false).biome = biome_at(run, x)
 
 ## A hanging danger, still in mid-air: low (`h` above the floor of its middle: jump it) or at head height.
@@ -1693,6 +1698,9 @@ static func _cliff_flight(run: Run) -> void:
 		var px = run.cam + run.sx
 		run.talk_zones.append({"at": run.dist, "x0": px - run.held, "x1": px + 4000, "lines": lines, "on": false, "wait": false, "done": false})
 
+## (0.58) The road's kinds of danger a Course du jour may keep or leave out (Daily.FAMILIES).
+const DAILY_DANGERS := ["spiky", "double", "hover", "spiders", "nest", "lowhover", "skyhover", "curtain", "fly", "wave", "log"]
+
 static func spawn_pattern(run: Run) -> void:
 	var laid = run.coins.size()
 	if run.cliff_due and not run.coop and not road_held(run):
@@ -1796,6 +1804,12 @@ static func spawn_pattern(run: Run) -> void:
 			opts = ["pinrow", "pinrow", "pinrow", "pinthread", "skycoins"]
 		else:
 			opts = ["pinrow", "pinrow", "pinrow", "pinthread", "pinthread", "glidestair", "glidestair", "curtain", "curtain", "fly", "wave", "skycoins"]
+	if not run.drop_kinds.is_empty() and not sky:     # (0.58) a Course du jour keeping only some dangers
+		var kept = opts.filter(func(k): return not k in run.drop_kinds)
+		var dangers = kept.filter(func(k): return k in DAILY_DANGERS)   # (the dangers kept come more often:
+		for i in 2:                                                    # the road is not left empty)
+			kept.append_array(dangers)
+		opts = kept if not kept.is_empty() else ["coins"]
 	var kind: String = wpick(opts)
 	var extent = 0.0
 
@@ -3336,7 +3350,7 @@ static func signs_for(board: Array, mode: String, mine: int) -> Array:
 	for e in board:
 		var d = int(e.get("best" if mode == "story" else "endless", 0))
 		if d >= 50 and not e.get("me", false):
-			out.append({"d": d, "name": str(e.get("name", "?")), "own": false, "x": INF})
+			out.append({"d": d, "name": str(e.get("name", "?")), "own": false, "x": INF, "look": str(e.get("sign", ""))})   # (0.58: his board's style)
 	if mine >= 50:
 		out.append({"d": mine, "name": "", "own": true, "x": INF})
 	out.sort_custom(func(a, b): return a["d"] < b["d"])

@@ -6,15 +6,17 @@ extends RefCounted
 ## a legendary one everything on its table. 0.55 (reglages/decisions-economie.md): one money only, the coins;
 ## a skin already owned gives coins instead (about 15 % of its price), and the skins are bought with coins (the
 ## shop's Skins tab), at the price of their rarity. Urns are won (levels, the boss, the road), never bought.
+## 0.58: they hold cosmetics only (Skins.URN_LOOKS: Pépito's look, effects, social) and coins; the Course du
+## jour gives urns of a known rarity (save.urnBag), opened first, the best first.
 ## Everything here is read over these defaults from reglages/progression.txt, section [urnes] (load_config).
 
 static var cfg := {"rare": 15.0, "legendary": 2.0, "rare_pity": 10, "leg_pity": 50,
 	"price": {"standard": 2500, "rare": 10000, "legendary": 50000}, "dup": {"standard": 400, "rare": 1500, "legendary": 5000}}
 # what: coins or skin; n: from / to; w: its weight in the draw
 static var table := {
-	"common": [{"what": "coins", "n": [150, 400], "w": 70}, {"what": "skin", "n": [1, 1], "w": 30}],
-	"rare": [{"what": "skin", "n": [1, 1], "w": 50}, {"what": "coins", "n": [1000, 2000], "w": 50}],
-	"legendary": [{"what": "coins", "n": [3000, 5000], "w": 1}, {"what": "skin", "n": [1, 1], "w": 1}],
+	"common": [{"what": "coins", "n": [150, 400], "w": 60}, {"what": "look:standard", "n": [1, 1], "w": 40}],
+	"rare": [{"what": "look:rare", "n": [1, 1], "w": 50}, {"what": "look:standard", "n": [1, 1], "w": 25}, {"what": "coins", "n": [1000, 2000], "w": 25}],
+	"legendary": [{"what": "look:legendary", "n": [1, 1], "w": 1}, {"what": "look:rare", "n": [1, 1], "w": 1}, {"what": "coins", "n": [3000, 5000], "w": 1}],
 }
 const RARITY_KEYS := {"commune": "common", "commun": "common", "rare": "rare", "legendaire": "legendary", "légendaire": "legendary"}
 const NAMES := {"common": "Commune", "rare": "Rare", "legendary": "Légendaire"}
@@ -58,11 +60,45 @@ static func load_config(text: String) -> void:
 		table[rar] = fresh[rar]
 
 static func _what(word: String) -> String:
-	var w = word.to_lower()
-	return {"pieces": "coins", "pièces": "coins"}.get(w, w)
+	var w = Tune.key(word).strip_edges()
+	if w.begins_with("objet"):                       # (0.58) « objet commun / rare / legendaire »: a cosmetic of it
+		return "look:legendary" if w.contains("legendaire") else ("look:rare" if w.contains("rare") else "look:standard")
+	return {"pieces": "coins", "skin": "look:standard"}.get(w, w)
+
+## (0.58) Every urn of the save: the ones of a known rarity (the Course du jour's) and the others.
+static func total(save: Dictionary) -> int:
+	var n = int(save.get("urns", 0))
+	var bag: Dictionary = save.get("urnBag", {})
+	for k in bag:
+		n += int(bag[k])
+	return n
+
+## (0.58) An urn of a known rarity (common, rare, legendary), put in the save.
+static func add_urn(save: Dictionary, rarity: String, n: int = 1) -> void:
+	if not save.get("urnBag") is Dictionary:
+		save["urnBag"] = {}
+	save["urnBag"][rarity] = int(save["urnBag"].get(rarity, 0)) + n
+
+## (0.58) A cosmetic given (the urns, the Course du jour's « objet du jour »): already owned, coins instead.
+static func give_look(save: Dictionary, id: String) -> Dictionary:
+	var sk = Skins.skin(id)
+	if sk.is_empty():
+		return grant(save, "coins", 100)
+	var label = "%s : %s" % [Skins.TARGETS[sk["target"]]["name"], sk["name"]]
+	if id in save["skins"]["owned"]:
+		var dup = int(cfg["dup"].get(sk["rarity"], 400))
+		save["coins"] += dup
+		return {"what": "coins", "n": dup, "name": "Doublon (%s) : %d pièces" % [label, dup], "icon": "coin-icon"}
+	save["skins"]["owned"].append(id)
+	return {"what": "skin", "n": 1, "id": id, "name": label, "icon": "ico-star"}
 
 ## Breaks one urn of the save: what it gave, already in the save. {rarity, got: [{what, n, name, icon, id}]}.
 static func open(save: Dictionary) -> Dictionary:
+	var bag: Dictionary = save.get("urnBag", {})
+	for rk in ["legendary", "rare", "common"]:        # (0.58) the Course du jour's first, the best first
+		if int(bag.get(rk, 0)) > 0:
+			bag[rk] = int(bag[rk]) - 1
+			return _open_as(save, rk)
 	if int(save["urns"]) <= 0:
 		return {}
 	save["urns"] = int(save["urns"]) - 1
@@ -80,6 +116,9 @@ static func open(save: Dictionary) -> Dictionary:
 		pity["r"] = 0
 	elif rar == "rare":
 		pity["r"] = 0
+	return _open_as(save, rar)
+
+static func _open_as(save: Dictionary, rar: String) -> Dictionary:
 	var entries: Array = table[rar] if rar == "legendary" else [_draw(table[rar])]
 	var got: Array = []
 	for e in entries:
@@ -103,14 +142,14 @@ static func grant(save: Dictionary, what: String, n: int) -> Dictionary:
 		"coins":
 			save["coins"] += n
 			return {"what": what, "n": n, "name": "%d pièces" % n, "icon": "coin-icon"}
-		"skin":
-			var pick = Skins.CATALOG[randi() % Skins.CATALOG.size()]
-			if pick["id"] in save["skins"]["owned"]:  # a skin already owned: coins instead (0.55)
-				var dup = int(cfg["dup"].get(pick["rarity"], 400))
-				save["coins"] += dup
-				return {"what": "coins", "n": dup, "name": "Doublon (%s %s) : %d pièces" % [Skins.TARGETS[pick["target"]]["name"], pick["name"], dup], "icon": "coin-icon"}
-			save["skins"]["owned"].append(pick["id"])
-			return {"what": what, "n": 1, "id": pick["id"], "name": "Skin : %s %s" % [Skins.TARGETS[pick["target"]]["name"], pick["name"]], "icon": "ico-star"}
+		"skin":                                      # (an old line of the file: a common cosmetic)
+			return grant(save, "look:standard", 1)
+	if what.begins_with("look:"):                    # (0.58) a cosmetic of that rarity, drawn among the urns'
+		var rar = what.trim_prefix("look:")
+		var pool = Skins.URN_LOOKS.filter(func(id): return Skins.skin(id)["rarity"] == rar)
+		if pool.is_empty():
+			return grant(save, "coins", int(cfg["dup"].get(rar, 400)))
+		return give_look(save, pool[randi() % pool.size()])
 	return grant(save, "coins", 100)
 
 ## A skin's price in coins (0.55: the price of its rarity).

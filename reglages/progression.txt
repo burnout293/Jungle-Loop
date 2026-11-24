@@ -95,23 +95,21 @@ doublon commun       | 400
 doublon rare         | 1500
 doublon legendaire   | 5000
 # ce qu'elles contiennent : rareté | objet | quantité (de / à) | poids. Une commune ou une rare donne UNE ligne
-# tirée au sort (selon les poids) ; une légendaire donne TOUTES ses lignes. Objets : pieces, skin.
-commune    | pieces  | 150 / 400   | 70
-commune    | skin    | 1           | 30
-rare       | skin    | 1           | 50
-rare       | pieces  | 1000 / 2000 | 50
-legendaire | pieces  | 3000 / 5000 | 1
-legendaire | skin    | 1           | 1
+# tirée au sort (selon les poids) ; une légendaire donne TOUTES ses lignes.
+# 0.58 : 100 % cosmétique (rien qui aide à jouer). Objets : pieces, ou « objet commun / rare / legendaire » = un
+# cosmétique de cette rareté tiré parmi les trois familles (apparence de Pépito, effets, social ; la liste est
+# dans la boutique, onglet Skins). Déjà à toi : il devient des pièces (doublon, plus haut).
+commune    | pieces           | 150 / 400   | 60
+commune    | objet commun     | 1           | 40
+rare       | objet rare       | 1           | 50
+rare       | objet commun     | 1           | 25
+rare       | pieces           | 1000 / 2000 | 25
+legendaire | objet legendaire | 1           | 1
+legendaire | objet rare       | 1           | 1
+legendaire | pieces           | 3000 / 5000 | 1
 
-[course du jour]
-# 0.57 : une course par jour, la même route pour tous, avec la règle du jour et deux objets imposés ; on la
-# rejoue autant qu'on veut. Chaque palier atteint donne sa récompense, une seule fois par jour (atteindre le
-# 3e donne aussi le 1er et le 2e). palier | distance (m) | ce qu'il donne (pieces N, ou urne N)
-palier | 300  | pieces 300
-palier | 700  | pieces 600
-palier | 1200 | urne 1
-palier | 2000 | pieces 1500
-palier | 3000 | urne 2
+# La Course du jour (0.58) a son propre fichier : courses-du-jour.txt, à côté (toutes les courses, leurs règles,
+# leurs objets imposés, leurs paliers et les récompenses).
 
 [course a 4]
 # L'Affrontement (0.48, 0.55) : les mises toutes prêtes de l'écran (en pièces), séparées par / ; on peut aussi en

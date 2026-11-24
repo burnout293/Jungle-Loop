@@ -43,13 +43,15 @@ func _init() -> void:
 	check(not Treasure.buy_skin(b, "pepito-gold"), "pas assez de pièces : pas de skin")
 	var kinds = {}
 	var u2 = SaveData.blank()
-	u2["urns"] = 400
-	for i in 400:
+	u2["urns"] = 800
+	seed(58)                                         # (0.58: the same draws every time)
+	for i in 800:
 		var res = Treasure.open(u2)
 		for g in res["got"]:
 			kinds[g["what"]] = true
 	check(kinds.keys().all(func(k): return k in ["coins", "skin"]), "les urnes : des pièces ou des skins seulement (%s)" % str(kinds.keys()))
-	check(u2["skins"]["owned"].size() == Skins.CATALOG.size(), "en 400 urnes, tous les skins (les doublons en pièces)")
+	var commons = Skins.URN_LOOKS.filter(func(id): return Skins.skin(id)["rarity"] == "standard")
+	check(u2["skins"]["owned"].all(func(id): return id in Skins.URN_LOOKS) and commons.all(func(id): return id in u2["skins"]["owned"]), "en 800 urnes, tous les objets communs des urnes, rien d'autre (0.58 : les doublons en pièces)")
 
 	# --- the day's free change of an objective ---
 	var q = SaveData.blank()

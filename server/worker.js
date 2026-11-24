@@ -133,11 +133,20 @@ const routes = {
     return { name };
   },
 
+  // 0.58: the style of his record's board as his friends see it on their road (a cosmetic of the urns' « social »
+  // family: its id, letters, digits and dashes only; '' the wooden one).
+  async 'player/look'(db, body, now, me) {
+    const sign = String(body.sign || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 24);
+    await db.prepare('INSERT INTO looks (player, sign) VALUES (?, ?) ON CONFLICT(player) DO UPDATE SET sign = excluded.sign').bind(me.id, sign).run();
+    return { sign };
+  },
+
   // 0.48: « Effacer mes données en ligne » (Réglages): the player, his records, friendships, rooms, invitations.
   async 'player/delete'(db, body, now, me) {
     await db.prepare('DELETE FROM friends WHERE a = ? OR b = ?').bind(me.id, me.id).run();
     await db.prepare('DELETE FROM requests WHERE asker = ? OR target = ?').bind(me.id, me.id).run();
     await db.prepare('DELETE FROM scores WHERE player = ?').bind(me.id).run();
+    await db.prepare('DELETE FROM looks WHERE player = ?').bind(me.id).run();
     await db.prepare('DELETE FROM invites WHERE guest = ? OR host = ?').bind(me.id, me.id).run();
     await db.prepare('DELETE FROM members WHERE player = ?').bind(me.id).run();
     await db.prepare('DELETE FROM signals WHERE sender = ? OR dest = ?').bind(me.id, me.id).run();
@@ -206,12 +215,12 @@ const routes = {
   async 'friends'(db, body, now, me) {
     const week = weekOf(now);
     const rows = await db.prepare(
-      'SELECT p.id, p.code, p.name, s.mode, s.best, s.week, s.week_best FROM players p ' +
-      'LEFT JOIN scores s ON s.player = p.id ' +
+      'SELECT p.id, p.code, p.name, s.mode, s.best, s.week, s.week_best, l.sign FROM players p ' +
+      'LEFT JOIN scores s ON s.player = p.id LEFT JOIN looks l ON l.player = p.id ' +
       'WHERE p.id = ? OR p.id IN (SELECT b FROM friends WHERE a = ?)').bind(me.id, me.id).all();
     const by = new Map();
     for (const r of rows.results) {
-      const e = by.get(r.id) || { code: r.code, name: r.name, best: 0, week: 0, endless: 0, endless_week: 0, me: r.id === me.id };
+      const e = by.get(r.id) || { code: r.code, name: r.name, best: 0, week: 0, endless: 0, endless_week: 0, sign: r.sign || '', me: r.id === me.id };
       if (r.mode === 'story') { e.best = r.best; e.week = r.week === week ? r.week_best : 0; }
       if (r.mode === 'endless') { e.endless = r.best; e.endless_week = r.week === week ? r.week_best : 0; }
       by.set(r.id, e);

@@ -220,4 +220,12 @@ assert.equal((await call('friends', { id: q1.id, secret: q1.secret })).friends.l
 assert.equal((await call('friends/add', { id: q1.id, secret: q1.secret, code: q2.code })).friends, true);
 ok('0.57: refused, it goes (and cannot be accepted after); asked back: friends at once; already friends: nothing new');
 
+// 0.58: the style of a record's board, seen by friends (cleaned); gone with the player
+assert.equal((await call('player/look', { id: q1.id, secret: q1.secret, sign: 'Sign-GOLD<b>' })).sign, 'sign-goldb');
+assert.equal((await call('player/look', { id: q1.id, secret: q1.secret, sign: 'sign-neon' })).sign, 'sign-neon');
+assert.equal((await call('friends', { id: q2.id, secret: q2.secret })).friends[0].sign, 'sign-neon');
+assert.equal((await call('friends', { id: q1.id, secret: q1.secret })).friends[0].sign, '');
+assert.equal((await call('player/look', { id: q1.id, secret: 'nope', sign: 'x' })).status, 403);
+ok('0.58: the board style is kept (cleaned) and seen by friends; only with the secret');
+
 console.log(`\n${n} checks passed`);
