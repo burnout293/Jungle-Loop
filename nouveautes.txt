@@ -1,7 +1,7 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Urnes : écharpes, traînées, chutes, émotes à deux… 100 % cosmétique.
-Course du jour : 10 courses, paliers Bronze à Légende, l'Or de la semaine.
-Groupe : expulser, état des connexions ; Affrontement plus lisible.
-Le scanner de QR marche aussi sur iPhone et Firefox.
+Histoire : une chance de t'en sortir par niveau (les pygmées, puis les slimes).
+Assommé dans les pitons ? La longue chute jusqu'à la forêt…
+Donjon : des conduits pour tous, des murs de feux follets à passer dessous.
+Pitons : figures en séries, une flèche montre le passage, des colonnes au loin.

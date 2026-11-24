@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 18/11/2026, version Godot 0.47.0 (le jeu à l'adresse principale). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 24/11/2026, version Godot 0.59.0 (le jeu à l'adresse principale). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -80,6 +80,19 @@ un couteau suisse il peut s'évader (couper les cordes au bon moment), et ils s'
 s'équipe aussi, une ou deux évasions par course). Depuis la 0.54, après Vorace, ils reprennent la poursuite
 jusqu'à la falaise des pitons, puis l'y suivent en deltaplane. Leurs skins (0.47) :
 Feuilles d'automne, Nuit, Feu.
+
+## Les slimes du donjon (Histoire, 0.59)
+
+Trois gelées vertes aux gros yeux (PixelLab), qui sautillent derrière Pépito tant qu'il est dans le donjon de
+l'Histoire, en s'écrasant à chaque atterrissage. Elles ne font pas mal ; mais s'il se plante, la première lui saute
+dessus et l'avale (on le voit gigoter dedans). Une fois par niveau il peut s'en extirper (« Extirpe-toi ! ») : le
+slime est rejeté loin en arrière, et il repart.
+
+## Les feux follets du donjon
+
+Les nuées du donjon : des flammes pâles aux yeux noirs, en bande, qui visent puis chargent depuis la droite.
+Depuis la 0.59, une fois sur trois environ (après 450 m), la première vague est un **mur** dans toutes les voies :
+un conduit est posé juste dessous, on s'y glisse et ils passent au-dessus.
 
 ## Amis et trésors
 
