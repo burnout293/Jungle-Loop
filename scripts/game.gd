@@ -73,8 +73,8 @@ static var HEARTS := 1              # one life: the first blow ends the run (Vit
 # the last piece won) and STORY_CHAP (the pieces held) before a run alone: what the guards say depends on them.
 static var STORY_HEARTS := 2
 const RELIC_PIECES := ["jade", "ambre", "braise"]           # (0.53: the jaw, "lune", is the piece stolen)
-const RELIC_POWERS := ["flight", "dash", "slow"]
-const RELIC_POWER_NAMES := ["Vol", "Esquive", "Sablier"]
+const RELIC_POWERS := ["flight", "sphere", "slow"]        # (0.60: the amber head, the eagle's, gives the Sphère)
+const RELIC_POWER_NAMES := ["Vol", "Sphère", "Sablier"]
 const RELIC_PIECE_NAMES := ["La couronne de Vorace", "La tête d'ambre", "La tête de braise"]
 static var STORY_TRY := 1
 static var STORY_CHAP := 0
@@ -391,6 +391,265 @@ const PIPE_LAUNCH := 1150.0
 const PIPE_PEAK := 380.0
 const PIPE_SLOPE := 170.0
 static var WISP_WALL := 0.35
+# ---------- 0.60: the eagle, the heights' guardian (Histoire, alone) ----------
+# In the heights (EAGLE_AT metres in), alone, the scenery held until it is beaten. Three lines (low, middle,
+# high: EAGLE_LANES, their middles over the floor; EAGLE_BAND tall, the hero is 92: in another line, he is
+# clear). Phase 1, a clear sky: it flies off and rushes along one line from the right, the line flashing
+# EAGLE_WARN s before (EAGLE_RUSHES times, never the same line twice in a row). Phase 2, dark clouds: it hovers
+# by him and slams its wings shut over two lines, the middle and one more, raised EAGLE_RAISE s first
+# (EAGLE_SLAMS times). Phase 3, the storm: it roars and does not attack; hail falls slowly, to slip between
+# (EAGLE_STORM s). The end: lightning roasts it, it crashes into a column; he lands on the column, where the
+# yellow piece of the relic (the amber head: the Sphère) waits; then on to the dungeon.
+class Eagle:
+	var phase := "enter"     # enter, rush, wings, storm, strike, crash, relic, land
+	var t := 0.0             # time in the phase
+	var step := ""           # rush: out, warn, go, pause; wings: raise, slam, rest
+	var st := 0.0            # time in the step
+	var sx := 0.0            # where it is on the screen (game units from the camera's left)
+	var y := 0.0             # its middle (world y)
+	var n := 0               # attacks done in this phase
+	var lane := -1           # rush: its line; wings: the line left free
+	var last := -1
+	var obs: Array = []      # the boxes that hurt now
+	var hail_t := 0.0
+	var hail_hi := false
+	var pillar_x := 0.0      # the end: the column (world x)
+	var fall_x := 0.0
+	var fall_y := 0.0
+	var vmax := -1.0         # the end: how fast he may still go (he stops on the column); -1 no limit
+	var dark := 0.0          # 0 a clear sky, 1 dark clouds, 2 the storm (render.gd eases to it)
+	var bolt := -1.0         # a flash of lightning: how long ago (-1 none)
+
+static var EAGLE_AT := 700.0
+const EAGLE_LANES := [150.0, 300.0, 450.0]
+const EAGLE_BAND := 116.0
+const EAGLE_RUSHES := 6
+const EAGLE_WARN := 1.1
+const EAGLE_RUSH := 1500.0
+const EAGLE_W := 230.0
+const EAGLE_SLAMS := 6
+const EAGLE_RAISE := 1.0
+const EAGLE_SLAM := 0.35
+const EAGLE_REST := 0.7
+const EAGLE_STORM := 14.0
+const EAGLE_HAIL := 0.42
+const HAIL_V := 170.0
+const HAIL_R := 30.0
+const PILLAR_TOP := 330.0
+
+## The eagle's turn: it comes, then its phases, then the end (see above). Alone, in Histoire only.
+static func eagle(run: Run, d: float) -> void:
+	if run.eagle == null:
+		if run.eagle_done or run.mode != "story" or run.coop or run.dead or run.leap != null or run.boss != null:
+			return
+		if not run.sky or biome_at(run, run.cam + run.sx) != SKY:
+			return
+		if run.sky_dist0 < 0:
+			run.sky_dist0 = run.dist
+		if run.dist < run.sky_dist0 + EAGLE_AT:
+			return
+		var ne = Eagle.new()
+		ne.sx = run.view_w + 260
+		ne.y = GROUND - EAGLE_LANES[2]
+		run.eagle = ne
+		run.next_biome_at = INF                      # (the dungeon waits until it is beaten)
+		run.fm = null
+		run.fm_due = false
+		run.next_fm = INF
+		run.cues.clear()
+		for o in run.obs:                            # the heights' road ahead: gone, the eagle alone
+			if not o.gone and o.x + o.w > run.cam + run.sx + 40:
+				o.gone = true
+		run.relic = 1
+		run.events.append("eagle")
+		return
+	var e: Eagle = run.eagle
+	var p = run.p
+	var px = run.cam + run.sx
+	e.t += d
+	e.st += d
+	if e.bolt >= 0:
+		e.bolt += d
+	e.vmax = -1.0
+	match e.phase:
+		"enter":                                     # it flies in and hovers, high on the right
+			e.sx += (run.view_w * 0.74 - e.sx) * minf(1, d * 2.2)
+			e.y += (GROUND - EAGLE_LANES[1] - e.y) * minf(1, d * 2.0)
+			if e.t > 2.0:
+				_eagle_phase(run, e, "rush")
+				e.step = "out"
+		"rush":
+			match e.step:
+				"out":                               # up and off the screen
+					e.sx += 700 * d
+					e.y -= 600 * d
+					if e.st > 0.5:
+						_eagle_lane(e, W.randi() % 3)
+						e.step = "warn"
+						e.st = 0
+						run.events.append("screech")
+				"warn":                              # its line flashes at the right edge
+					e.sx = run.view_w + 200
+					e.y = GROUND - EAGLE_LANES[e.lane]
+					if e.st >= EAGLE_WARN:
+						var o = add_obs(run, px + run.view_w - run.sx + 40, e.y - EAGLE_BAND / 2, EAGLE_W, EAGLE_BAND, "eagle", false)
+						o.ghost = false
+						o.vx = run.speed - EAGLE_RUSH
+						e.obs = [o]
+						e.step = "go"
+						e.st = 0
+						run.events.append("rush")
+				"go":                                # across the screen along its line
+					e.sx -= EAGLE_RUSH * d                # (with its box: the same pace across the screen)
+					if e.sx < -EAGLE_W:
+						for o in e.obs:
+							o.gone = true
+						e.obs = []
+						e.n += 1
+						e.step = "pause"
+						e.st = 0
+				"pause":
+					if e.st > 0.35:
+						if e.n >= EAGLE_RUSHES:
+							_eagle_phase(run, e, "wings")
+							e.sx = run.view_w + 200
+						else:
+							_eagle_lane(e, W.randi() % 3)
+							e.step = "warn"
+							e.st = 0
+							run.events.append("screech")
+		"wings":                                     # dark clouds: by him, its wings over two lines
+			e.dark = 1.0
+			e.sx += (run.sx + 230 - e.sx) * minf(1, d * 3)
+			e.y += (GROUND - EAGLE_LANES[1] - e.y) * minf(1, d * 3)
+			match e.step:
+				"", "rest":
+					if e.st >= (0.8 if e.step == "" else EAGLE_REST):
+						for o in e.obs:
+							o.gone = true
+						e.obs = []
+						if e.n >= EAGLE_SLAMS:
+							_eagle_phase(run, e, "storm")
+						else:
+							e.lane = 0 if W.randf() < 0.5 else 2   # the line left free: low or high
+							if e.lane == e.last and W.randf() < 0.6:
+								e.lane = 2 - e.lane
+							e.last = e.lane
+							e.step = "raise"
+							e.st = 0
+							run.events.append("screech")
+				"raise":
+					if e.st >= EAGLE_RAISE:            # they slam shut: the middle line and the other one
+						var x0 = px - 140
+						var w_ = 140 + run.speed * EAGLE_SLAM + 260
+						for k in 3:
+							if k == e.lane:
+								continue
+							var o = add_obs(run, x0, GROUND - EAGLE_LANES[k] - EAGLE_BAND / 2, w_, EAGLE_BAND, "eagle", false)
+							o.ghost = false
+							e.obs.append(o)
+						e.step = "slam"
+						e.st = 0
+						run.shake = maxf(run.shake, 0.35)
+						run.events.append("slam")
+				"slam":
+					if e.st >= EAGLE_SLAM:
+						for o in e.obs:
+							o.gone = true
+						e.obs = []
+						e.n += 1
+						e.step = "rest"
+						e.st = 0
+		"storm":                                     # the storm: it roars, the hail falls
+			e.dark = 2.0
+			e.sx += (run.view_w * 0.8 - e.sx) * minf(1, d * 2)
+			e.y += (GROUND - EAGLE_LANES[2] - 40 - e.y) * minf(1, d * 2)
+			if floori(e.t / 2.6) > floori((e.t - d) / 2.6):
+				run.events.append("roar")
+			e.hail_t -= d
+			if e.hail_t <= 0 and e.t < EAGLE_STORM - 1.5:
+				e.hail_t = EAGLE_HAIL
+				e.hail_hi = not e.hail_hi            # (one high, one low: never two in one column)
+				var hy = rnd(60, 300) if e.hail_hi else rnd(300, GROUND - 160)
+				var o = add_obs(run, px - run.sx + run.view_w + rnd(40, 260), hy, HAIL_R, HAIL_R, "hail", false)
+				o.ghost = false
+				o.vy = HAIL_V * rnd(0.8, 1.2)
+			if e.t >= EAGLE_STORM:
+				_eagle_phase(run, e, "strike")
+				e.bolt = 0.0
+				e.pillar_x = px + run.view_w * 0.95
+				run.events.append("thunder")
+				run.flash = 1.0
+				run.shake = 1.0
+		"strike":                                    # roasted by the lightning
+			if e.t >= 0.7:
+				_eagle_phase(run, e, "crash")
+				e.fall_x = run.cam + e.sx
+				e.fall_y = e.y
+		"crash":                                     # it falls into the column, then down into the mist
+			var k = clampf(e.t / 0.9, 0, 1)
+			var wx = lerpf(e.fall_x, e.pillar_x, k)
+			var wy = lerpf(e.fall_y, GROUND - PILLAR_TOP + 40, k * k)
+			if e.t > 0.9:
+				wx = e.pillar_x + 30
+				wy = GROUND - PILLAR_TOP + 40 + 900 * (e.t - 0.9) * (e.t - 0.9)
+			if e.t - d < 0.9 and e.t >= 0.9:
+				run.events.append("eaglefall")
+				run.shake = 1.0
+			e.sx = wx - run.cam
+			e.y = wy
+			if e.t > 1.8:
+				_eagle_phase(run, e, "relic")
+		"relic":                                     # to the column's top, where the piece waits
+			var r = e.pillar_x - px
+			e.vmax = sqrt(2 * 700 * maxf(0, r))      # (he slows down to stop on it)
+			var top = GROUND - PILLAR_TOP
+			p.y = move_toward(p.y, top, 700 * d)
+			p.vy = 0
+			p.flying = false
+			p.rotor = false
+			if r <= 4:
+				p.y = top
+				p.ground = true
+				_eagle_phase(run, e, "land")
+				if run.chap < 2:                     # Histoire: the amber head, its power at once (the Sphère)
+					run.won = 1
+					grant(run, RELIC_POWERS[1])
+				run.events.append("relic")
+				run.events.append("eaglewon")
+		"land":                                      # on the column, the piece held up
+			e.vmax = 0.0
+			p.y = GROUND - PILLAR_TOP
+			p.vy = 0
+			p.ground = true
+			if e.t > 2.2:
+				for o in e.obs:
+					o.gone = true
+				run.eagle = null
+				run.eagle_done = true
+				run.urns += 1                        # (an urn for it, as for Vorace)
+				run.events.append("urn")
+				run.next_biome_at = run.dist         # on to the dungeon
+				p.ground = false
+				p.vy = -300
+
+static func _eagle_phase(run: Run, e: Eagle, ph: String) -> void:
+	e.phase = ph
+	e.t = 0.0
+	e.step = ""
+	e.st = 0.0
+	e.n = 0
+	for o in e.obs:
+		o.gone = true
+	e.obs = []
+
+## A line for the next rush: never the same twice in a row.
+static func _eagle_lane(e: Eagle, k: int) -> void:
+	if k == e.last:
+		k = (k + 1 + W.randi() % 2) % 3
+	e.lane = k
+	e.last = k
+
 # Follower monsters: FM_LANES lanes of FM_STEP each above the floor.
 const FM_W := 90.0 * SIZE
 const FM_H := 64.0 * SIZE
@@ -807,6 +1066,9 @@ class Run:
 	var slimes: Array = []             # (0.59) Histoire, the dungeon: the slimes after him ({x, ph})
 	var sky_n := 0                     # (0.59) the heights: figures laid since the last breath
 	var cues: Array = []               # ... where the way through the next figure is ({x, y}: render.gd's arrows)
+	var eagle = null                   # (0.60) Histoire, the heights: the eagle (Eagle), fighting
+	var eagle_done := false
+	var sky_dist0 := -1.0              # ... where the heights began (its distance)
 	var emote_mate := {}               # ... and those my partner said
 	var glide_go := false              # ... and off the cliff they have jumped (a line said « deltaplanes »)
 	var say_queue: Array = []          # ... the lines still to say
@@ -1831,6 +2093,8 @@ static func spawn_pattern(run: Run) -> void:
 			opts = ["pinrow", "pinrow", "pinrow", "pinthread", "pinthread", "glidestair", "glidestair", "curtain", "curtain", "fly", "wave", "skycoins"]
 		if run.sky_n >= SKY_SERIES and opts.size() > 1:   # (0.59) a series laid: a breath of coins
 			opts = ["skybreath"]
+		if run.eagle != null:                        # (0.60) the eagle's fight: coins only
+			opts = ["skycoins"]
 	if not run.drop_kinds.is_empty() and not sky:     # (0.58) a Course du jour keeping only some dangers
 		var kept = opts.filter(func(k): return not k in run.drop_kinds)
 		var dangers = kept.filter(func(k): return k in DAILY_DANGERS)   # (the dangers kept come more often:
@@ -2449,7 +2713,7 @@ static func _attack_fits(run: Run, b: Boss, move: String, now: Array) -> bool:
 ## a flyer is already on its way or something near that height is coming anyway (he must move for it).
 static func camp(run: Run, dt: float) -> void:
 	var p = run.p
-	if run.lvl("flight") == 0 or run.mount != null or run.boss != null or run.fm != null or run.fm_due or run.leap != null or run.dead or run.out < 2 or talking(run):
+	if run.lvl("flight") == 0 or run.mount != null or run.boss != null or run.eagle != null or run.fm != null or run.fm_due or run.leap != null or run.dead or run.out < 2 or talking(run):
 		run.camp_t = 0
 		return
 	if absf(p.y - run.camp_y) > CAMP_BAND:
@@ -3420,7 +3684,7 @@ static func laser_jump(run: Run) -> bool:
 static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 	var p = run.p
 	var px = run.cam + run.sx
-	if run.fm == null and run.boss != null:
+	if run.fm == null and (run.boss != null or run.eagle != null):
 		run.fm_due = false
 		run.next_fm = maxf(run.next_fm, run.dist + 150)
 		return
@@ -3791,6 +4055,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		ramp = MONSTER_RAMP
 	run.speed = _ease_speed(run.speed, pace, ramp, dt)
 	run.road_speed = _ease_speed(run.road_speed, road_pace, ramp, dt)
+	if run.eagle != null and run.eagle.vmax >= 0:    # (0.60) the eagle beaten: he slows down onto the column
+		run.speed = minf(run.speed, run.eagle.vmax)
+		run.road_speed = minf(run.road_speed, run.eagle.vmax)
 	run.own = own
 	run.relic = maxf(0, run.relic - dt * 0.6)
 	var gorilla_on = run.mount != null and run.mount.kind == "gorilla"
@@ -3842,6 +4109,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	_slimes(run, d, (px - px0) / d if d > 0 else 0.0)
 	var fl = floor_at(run, px)                      # the floor right under him
 	var sky_now = biome_at(run, px) == SKY and run.leap == null
+	if sky_now and not run.sky and run.sky_dist0 < 0:   # (0.60) where the heights began (the eagle comes from there)
+		run.sky_dist0 = run.dist
 	if sky_now and not run.sky:                      # (0.53) into the heights: no floor any more, he takes off
 		if run.mount != null and not MOUNTS[run.mount.kind].get("fly", false):
 			dismount(run, true)
@@ -4292,6 +4561,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 						o.dodged = true              # gone past him: one missile dodged (not the ghosts)
 						if not o.ghost:
 							run.events.append("missile")
+			if o.kind == "eagle":                    # (0.60) the eagle rushing along its line
+				o.x += o.vx * d
+			elif o.kind == "hail":                   # ... the storm's hail, falling slowly into the mist
+				o.y += o.vy * d
+				if o.y > GROUND + 40:
+					o.gone = true
 			if o.kind == "acid":
 				o.x += o.vx * d
 				if o.lob:                            # a blob in the air: where it lands, a puddle of acid stays
@@ -4352,6 +4627,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			return
 		if run.leap == null:
 			boss(run, d)
+			eagle(run, d)                        # (0.60) Histoire, the heights' guardian
 			camp(run, d)
 		if run.coop and run.mate != null and run.mate.get("b", false):
 			_rescue_check(run, px, box, d, move)        # the partner's bubble: jump into it to bring him back

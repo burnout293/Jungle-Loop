@@ -31,7 +31,8 @@ const NAMES := ["temple", "temple-mid", "temple-front", "temple-rubble", "vorace
 	"pinnacle", "glider", "hornets", "toucan", "rocket", "cliff",
 	"hero-body", "hero-ball", "hero-rotor", "hero-fist", "hero-shoe", "mount-gorilla", "mount-gorilla-hang", "mount-rhino", "mount-dragonfly",
 	"mosquito", "fly", "spiky", "coin", "gem", "gem-y", "gem-r", "gem-b", "heart", "monkey", "coin-icon",
-	"guard-spear", "guard-club", "pick-feather", "pick-urn", "pick-shield", "pick-knife", "isle-forest-1", "isle-forest-2", "fall-tomb", "fall-flower", "fall-cloud", "slime", "slime-full", "sky-pillar-0", "sky-pillar-1"]
+	"guard-spear", "guard-club", "pick-feather", "pick-urn", "pick-shield", "pick-knife", "isle-forest-1", "isle-forest-2", "fall-tomb", "fall-flower", "fall-cloud", "slime", "slime-full", "sky-pillar-0", "sky-pillar-1",
+	"eagle-fly", "eagle-rush", "eagle-wings", "eagle-roar", "eagle-roast", "hail", "storm-cloud"]
 
 # Frames of each danger's sheet.
 const HAZ_FRAMES := {"spiky": 1, "thornball": 1, "beartrap": 2, "spikebot": 1, "fly": 4, "vulture": 2, "arrow": 1, "missile": 1, "spider-low": 2, "spider-mid": 2,

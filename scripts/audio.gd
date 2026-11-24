@@ -245,6 +245,12 @@ func _recipes() -> Dictionary:
 		"whoosh": [N(0.9, 0.35, 900), T(1400, 0.9, "sine", 0.1, 0.0, 300)],
 		"tomb": [T(70, 0.45, "sine", 0.55, 0.0, 40), N(0.25, 0.45, 420), T(392, 0.5, "triangle", 0.12, 0.2, 392), T(330, 0.7, "triangle", 0.12, 0.5, 330)],
 		"slurp": [T(260, 0.35, "sine", 0.4, 0.0, 90), N(0.3, 0.3, 700, 0.05), T(180, 0.25, "sine", 0.3, 0.2, 60)],   # (0.59) a slime swallows him
+		# (0.60) the eagle: its cry, its wings slamming, its roar, the thunder, its fall onto the column
+		"screech": [T(2200, 0.35, "sawtooth", 0.12, 0.0, 1300), T(1800, 0.3, "square", 0.06, 0.05, 900)],
+		"slam": [N(0.25, 0.5, 500), T(110, 0.25, "sine", 0.45, 0.0, 50)],
+		"roar": [T(160, 0.9, "sawtooth", 0.22, 0.0, 90), N(0.8, 0.25, 600)],
+		"thunder": [N(1.4, 0.7, 300), T(55, 1.2, "sine", 0.6, 0.0, 30), N(0.2, 0.5, 3000)],
+		"eaglefall": [T(700, 0.5, "sine", 0.2, 0.0, 120), N(0.4, 0.55, 500, 0.45), T(90, 0.4, "sine", 0.5, 0.45, 40)],
 		"pop": [T(300, 0.12, "sine", 0.35, 0.0, 900), N(0.12, 0.3, 2400, 0.02)],                    # ... he gets out
 		"scuffle": [N(0.07, 0.4, 900), T(180, 0.08, "square", 0.1, 0, 90)],                       # a blow in the cloud of dust
 		"bonk": [T(620, 0.1, "square", 0.1, 0, 300), N(0.03, 0.25, 3200)],                         # ... a head knocked

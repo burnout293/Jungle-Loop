@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,7 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour60": opts["tour60"] = true        # 0.60's: the eagle's fight, each of its moments
 			"tour59": opts["tour59"] = true        # 0.59's: slimes, the dungeon's pipes, the wall of wisps, the heights, the long fall
 			"tour58": opts["tour58"] = true        # 0.58's: Amis → Groupe (G1), « Expulser », « Inviter », the Affrontement (V1)
 			"tour57": opts["tour57"] = true        # 0.57's: Amis (Liste, Demandes), the home's panels, the Course du jour, the guest's lobby, watching
@@ -153,6 +154,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour60"]:
+		await _tour60()
 		return
 	if opts["tour59"]:
 		await _tour59()
@@ -510,6 +514,42 @@ func _tour52() -> void:
 				main.go("play")
 				main.run.god = true
 			"quit": get_tree().quit()
+
+## --tour60: the eagle in pictures (Histoire, the heights, untouchable): one picture a little after each of its
+## moments begins (enter, a line flashing, a rush, wings raised, wings slammed, the storm, the lightning, the
+## column, the amber head on it, held up), then the dungeon.
+var shots60 := {}
+var key60 := ""
+var key60_t := 0.0
+
+func _tour60() -> void:
+	if t > 0.5 and not shots60.has("setup"):
+		shots60["setup"] = true
+		_run59(Game.SKY)
+		var r: Game.Run = main.run
+		r.up["flight"] = 1
+		r.boss_done = true
+		Game.EAGLE_AT = 0.0
+		r.sky_dist0 = r.dist
+		return
+	var r2: Game.Run = main.run
+	if r2 == null or not shots60.has("setup"):
+		return
+	var key = ""
+	if r2.eagle != null:
+		key = r2.eagle.phase + "-" + r2.eagle.step
+	elif r2.eagle_done:
+		key = "after"
+	if key != key60:
+		key60 = key
+		key60_t = t
+	var wait = {"rush-warn": 0.5, "rush-go": 0.35, "wings-raise": 0.6, "wings-slam": 0.1, "storm-": 3.0, "strike-": 0.1, "crash-": 0.7, "relic-": 0.6, "land-": 1.0, "after": 2.0, "enter-": 1.2}
+	if wait.has(key) and not shots60.has(key) and t - key60_t >= wait[key]:
+		shots60[key] = true
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(opts["shots"].path_join("60-%02d-%s.png" % [shots60.size(), key]))
+	if key == "after" and shots60.has("after") or t > 95:
+		get_tree().quit()
 
 ## --tour59: 0.59 in pictures: Histoire's dungeon (the slimes after him, a pipe with its mouth in the air, one
 ## that throws him up, a wall of will-o'-the-wisps over a pipe), swallowed by a slime (his one chance offered),

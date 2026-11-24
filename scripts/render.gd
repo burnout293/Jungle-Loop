@@ -1514,6 +1514,134 @@ func _scarf(c: CanvasItem, x0: float, y0: float, sc: Dictionary, pull: float) ->
 	if sc.get("shine", false):
 		rect(c, x0 + 12 + int(t * 12) % 10, y0 + 31, 1, 1, Color(1, 1, 1, 0.9))
 
+# ---------- 0.60: the eagle (Game.Eagle) ----------
+var eagle_dark := 0.0                  # how dark the sky is now (0 clear, 1 dark clouds, 2 the storm), eased
+var relic_amber: Texture2D = null
+
+## Its sky: darker with each phase, storm clouds drifting across, the rain and the lightning of the storm.
+func _draw_eagle_sky(c: CanvasItem) -> void:
+	var e = run.eagle
+	var want = 0.0
+	if e != null:
+		want = {"wings": 1.0, "storm": 2.0, "strike": 2.0, "crash": 1.0}.get(e.phase, 0.0)
+	eagle_dark = move_toward(eagle_dark, want, 0.012)
+	if eagle_dark <= 0.01:
+		return
+	var k = minf(eagle_dark, 1.0)
+	rect(c, 0, -8, view_w, VH + 16, Color(0.06, 0.07, 0.14, 0.38 * k + 0.2 * maxf(0, eagle_dark - 1)))
+	var cl: Texture2D = Art.tex.get("storm-cloud")
+	if cl != null:                                   # clouds drifting across the top, more in the storm
+		var n_ = 3 + roundi(3 * eagle_dark)
+		for i in n_:
+			var span = view_w + cl.get_width() * 1.6
+			var x = fposmod(i * 157.0 - t * (14 + i * 3) - run.cam / PIXEL * 0.2, span) - cl.get_width() * 0.8
+			var y = 4 + (i * 37) % 60
+			var sc = 1.2 + (i % 3) * 0.3
+			c.draw_texture_rect(cl, Rect2(snap(x), snap(y), cl.get_width() * sc, cl.get_height() * sc), false, Color(1, 1, 1, 0.85 * k))
+	if eagle_dark > 1.2:                             # the storm: rain, and lightning now and then
+		var r_ = eagle_dark - 1.0
+		for i in 90:
+			var rx = fposmod(i * 61.7 - t * 140 - run.cam / PIXEL * 0.6, view_w + 40) - 20
+			var ry = fposmod(i * 23.3 + t * 520, VH + 40) - 20
+			rect(c, snap(rx), snap(ry), 1, 7, Color(0.7, 0.8, 1, 0.45 * r_))
+		var flash = fposmod(t, 3.1)
+		if flash < 0.18:
+			rect(c, 0, -8, view_w, VH + 16, Color(1, 1, 1, 0.22 * (1 - flash / 0.18)))
+			_bolt(c, 60 + fposmod(floorf(t / 3.1) * 173.0, view_w - 120), -4, 40 + fposmod(floorf(t / 3.1) * 97.0, 120), GN - 40, floori(t / 3.1), 0.7)
+	if e != null and e.bolt >= 0 and e.bolt < 0.5:   # the bolt that ends the fight, onto the eagle
+		var ex = e.sx / PIXEL
+		_bolt(c, ex + 30, -4, ex, n(e.y), 7, 1.0)
+		rect(c, 0, -8, view_w, VH + 16, Color(1, 1, 1, 0.5 * (1 - e.bolt / 0.5)))
+
+## A bolt of lightning from (x0, y0) to (x1, y1): a broken line, white in a pale blue glow.
+func _bolt(c: CanvasItem, x0: float, y0: float, x1: float, y1: float, sd: int, a_: float) -> void:
+	var pts = PackedVector2Array()
+	var n_ = 9
+	for i in n_ + 1:
+		var u = float(i) / n_
+		var jx = 0.0 if i == 0 or i == n_ else (float((sd * 7919 + i * 131) % 29) - 14.0)
+		pts.append(Vector2(lerpf(x0, x1, u) + jx, lerpf(y0, y1, u)))
+	c.draw_polyline(pts, Color(0.6, 0.8, 1, 0.5 * a_), 5.0)
+	c.draw_polyline(pts, Color(1, 1, 1, a_), 2.0)
+
+## The eagle: in its pose of the moment, the lines it threatens (a red band; its wings: the two lines that
+## slam, a green arrow at the one left free), the column it crashes into and the amber head waiting on it.
+func _draw_eagle(c: CanvasItem) -> void:
+	var e = run.eagle
+	var hx = n(run.sx)
+	var pulse = 0.5 + 0.5 * sin(t * 18)
+	if e.phase == "rush" and e.step == "warn":       # its line, from the right edge
+		var ly = n(e.y)
+		var bh = n(Game.EAGLE_BAND) - n(0)
+		rect(c, 0, snap(ly - bh / 2), view_w, snap(bh), Color(1, 0.23, 0.3, 0.12 + 0.12 * pulse))
+		warn_mark(c, view_w - 20, ly, e.st)
+	if e.phase == "wings" and e.step in ["raise", "slam"]:
+		var bh2 = n(Game.EAGLE_BAND) - n(0)
+		for k in 3:
+			var ly2 = n(Game.GROUND - Game.EAGLE_LANES[k])
+			if k == e.lane:                          # the line left free: an arrow, by him
+				for i in 3:
+					rect(c, snap(hx + 30 + i * 2), snap(ly2 - 4 + i), 2, 2, Color(0.6, 1, 0.55, 0.9))
+					rect(c, snap(hx + 30 + i * 2), snap(ly2 + 3 - i), 2, 2, Color(0.6, 1, 0.55, 0.9))
+				continue
+			var a_ = (0.12 + 0.25 * e.st / Game.EAGLE_RAISE * pulse) if e.step == "raise" else 0.55
+			var col = Color(1, 0.23, 0.3, a_) if e.step == "raise" else Color(1, 1, 1, a_)
+			rect(c, snap(hx - 60), snap(ly2 - bh2 / 2), 300, snap(bh2), col)
+	if e.phase in ["crash", "relic", "land"] or (e.phase == "strike" and e.pillar_x > 0):
+		_draw_end_column(c, e)
+	var pic = "eagle-fly"
+	var sc = 0.85
+	match e.phase:
+		"rush":
+			if e.step == "go":
+				pic = "eagle-rush"
+				sc = 0.75
+		"wings":
+			pic = "eagle-wings" if e.step == "raise" else ("eagle-rush" if e.step == "slam" else "eagle-fly")
+		"storm":
+			pic = "eagle-roar"
+		"strike", "crash":
+			pic = "eagle-roast"
+		"relic", "land":
+			return
+	if e.phase == "rush" and e.step in ["warn", "pause"]:
+		return                                       # (off the screen)
+	var tex: Texture2D = Art.tex.get(pic)
+	if tex == null:
+		return
+	var ex = e.sx / PIXEL
+	var ey = n(e.y) + (sin(t * 3) * 3 if e.phase in ["enter", "wings", "storm"] else 0.0)
+	var rot = 0.0
+	if e.phase == "crash":
+		rot = e.t * 6.0
+	var flash = Color(2, 2, 2) if (e.phase == "wings" and e.step == "slam") or (e.phase == "strike" and floori(e.t * 20) % 2 == 0) else Color.WHITE
+	c.draw_set_transform_matrix(Transform2D(rot, Vector2(snap(ex), snap(ey))).scaled_local(Vector2(sc, sc)))
+	c.draw_texture(tex, Vector2(-tex.get_width() / 2.0, -tex.get_height() / 2.0), flash)
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+## The end: the column it crashes into (from the mist up to Game.PILLAR_TOP), the amber head on its top, held
+## up by him once he stands there.
+func _draw_end_column(c: CanvasItem, e) -> void:
+	var pil: Texture2D = Art.tex.get("sky-pillar-0")
+	var top = n(Game.GROUND - Game.PILLAR_TOP)
+	var x = sx(e.pillar_x)
+	if pil != null:
+		var sc = (GN + 30 - top) / pil.get_height()
+		var w = pil.get_width() * sc
+		c.draw_texture_rect(pil, Rect2(snap(x - w / 2), snap(top - 6 * sc), snap(w), snap(pil.get_height() * sc)), false)
+	if relic_amber == null and ResourceLoader.exists("res://assets/img/relic/relique-tete-gauche.png"):
+		relic_amber = load("res://assets/img/relic/relique-tete-gauche.png")
+	if relic_amber == null or e.phase not in ["crash", "relic", "land"]:
+		return
+	var rx = x
+	var ry = top - 30 + sin(t * 3) * 3
+	if e.phase == "land":                            # held up over his head
+		rx = n(run.sx) + 2
+		ry = n(run.p.y) - 70 - minf(e.t, 0.4) * 20
+	glow(c, rx, ry, 26 + sin(t * 5) * 3, Color(1, 0.85, 0.35, 0.55))
+	var rs = 0.45
+	c.draw_texture_rect(relic_amber, Rect2(snap(rx - relic_amber.get_width() * rs / 2), snap(ry - relic_amber.get_height() * rs / 2), relic_amber.get_width() * rs, relic_amber.get_height() * rs), false)
+
 ## (0.59) The heights: whole temple columns standing in the mist far off (PixelLab: sky-pillar-0/1), slower
 ## than the road (0.55 of it), pale with the distance; never two side by side.
 const PILLAR_STEP := 260.0
@@ -1796,6 +1924,10 @@ func _draw_back(c: CanvasItem) -> void:
 
 	draw_hills(c)                                    # dark hills behind the path
 	_draw_sky_pillars(c)                             # (0.59) the heights: whole columns standing in the mist
+	if run.eagle != null or eagle_dark > 0.01:       # (0.60) the eagle: its sky, then itself
+		_draw_eagle_sky(c)
+	if run.eagle != null:
+		_draw_eagle(c)
 	if run.boss != null:
 		draw_vorace(c)                               # behind the floor: its legs plunge into it
 	draw_props(c)
@@ -2230,6 +2362,16 @@ func _draw_obstacles(c: CanvasItem) -> void:
 		var foot = n(o.y + o.h)
 		if (x > view_w + 10 and not (o.kind == "dart" and o.state == "warn")) or x < -80:
 			continue                                 # a fonceur waiting off screen still shows its warning
+		if o.kind == "eagle":                        # (0.60) the eagle's boxes: it is drawn by _draw_eagle
+			continue
+		if o.kind == "hail":                         # ... the storm's hail
+			var hl: Texture2D = Art.tex.get("hail")
+			if hl != null and not o.gone:
+				var hs = (o.w / PIXEL) / hl.get_width() * 1.25
+				c.draw_set_transform_matrix(Transform2D(t * 2 + o.x, Vector2(sx(o.x + o.w / 2), n(o.y + o.h / 2))).scaled_local(Vector2(hs, hs)))
+				c.draw_texture(hl, Vector2(-hl.get_width() / 2.0, -hl.get_height() / 2.0))
+				c.draw_set_transform_matrix(Transform2D.IDENTITY)
+			continue
 		if o.kind == "acid":                         # the plant's acid: a glowing ball in the air, a bubbling puddle on the floor
 			var w = n(o.w)
 			var cx = x + w / 2

@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.59.0** (24/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.60.0** (24/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,27 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.60.0
+
+- **L'Aigle, le gardien des pitons** (Histoire, seul ; ébauches colonne 2 choisies par lui : PixelLab
+  `eagle-fly`, `eagle-rush`, `eagle-wings`, `eagle-roar`, `eagle-roast`) : 700 m après le début des pitons, le
+  décor suivant attend qu'il soit battu ; trois lignes (basse, milieu, haute) :
+  - **phase 1, ciel dégagé** : il sort de l'écran et charge le long d'une ligne, qui clignote en rouge avec un « ! »
+    1,1 s avant (6 ruées, jamais deux fois la même ligne) ;
+  - **phase 2, nuages sombres** : à côté de lui, ailes levées 1 s au-dessus du milieu et d'une autre ligne, puis
+    elles se referment (6 fois) ; une flèche verte montre la ligne libre ;
+  - **phase 3, l'orage** (éclairs, pluie, PixelLab `storm-cloud`) : il rugit sans attaquer ; la **grêle** tombe
+    lentement (PixelLab `hail`), à éviter 14 s ;
+  - **la fin** : la foudre le rôtit, il s'écrase contre une colonne et tombe dans la brume ; Pépito ralentit et se
+    pose sur la colonne, où l'attend la **tête d'ambre** (la pièce jaune de la relique) : elle donne la **Sphère**
+    (`RELIC_POWERS[1]`, avant l'Esquive) ; une urne ; puis le **donjon**.
+  `Game.Eagle`, `eagle()`, `EAGLE_*`, `HAIL_*`, `PILLAR_TOP` ; bannières « L'Aigle ! », « Foudroyé ! », « La tête
+  d'ambre ! » ; sons screech, slam, roar, thunder, eaglefall. Pas à deux (la route de l'Histoire à deux reste
+  sans lui).
+- Conduits : retirés de la forêt seulement en Histoire (sa décision : gardés en Run illimitée).
+- Tests : `tests/eagle_060.gd` (18 : un passage à chaque image du combat sur 3 graines, ses phases, posé sur la
+  colonne, la Sphère, le donjon). Banc `--tour60` (chaque moment du combat).
 
 ## 0.59.0
 
