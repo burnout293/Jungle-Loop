@@ -3,6 +3,7 @@
 assets/img/ui-v2/wood/. The stone ones stay: they are the skin « Pierre du temple ».
 
     python tools/make_wood_ui.py
+    python tools/make_wood_ui.py <dir of the two drawings> <folder under ui-v2>   (a skin's buttons, same kit)
 
 The ends (kept whole, the middle stretched): 30 art pixels wide at height 30, 34 at 38, 40 at 50 and 58
 (main.gd WOOD_CAP). Heights the kit needs (30, 38, 50, 58): rows are taken out of (or repeated in) the middle of the plank, so
@@ -13,13 +14,14 @@ States: hover (and chosen) brighter with gold gems, pressed darker, disabled gre
 """
 import colorsys
 import pathlib
+import sys
 
 from PIL import Image
 
 here = pathlib.Path(__file__).resolve().parent.parent
-src = here / 'assets' / 'src' / 'ui-bois'
+src = pathlib.Path(sys.argv[1]) if len(sys.argv) > 2 else here / 'assets' / 'src' / 'ui-bois'
 stone = here / 'assets' / 'img' / 'ui-v2'
-out = stone / 'wood'
+out = stone / (sys.argv[2] if len(sys.argv) > 2 else 'wood')
 out.mkdir(exist_ok=True)
 
 
