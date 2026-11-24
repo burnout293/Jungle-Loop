@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,7 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour59": opts["tour59"] = true        # 0.59's: slimes, the dungeon's pipes, the wall of wisps, the heights, the long fall
 			"tour58": opts["tour58"] = true        # 0.58's: Amis → Groupe (G1), « Expulser », « Inviter », the Affrontement (V1)
 			"tour57": opts["tour57"] = true        # 0.57's: Amis (Liste, Demandes), the home's panels, the Course du jour, the guest's lobby, watching
 			"tour56": opts["tour56"] = true        # 0.56's: a mushroom brushed, the city's lasers and their cue, the race's end screen
@@ -152,6 +153,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour59"]:
+		await _tour59()
 		return
 	if opts["tour58"]:
 		await _tour58()
@@ -505,6 +509,86 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour59: 0.59 in pictures: Histoire's dungeon (the slimes after him, a pipe with its mouth in the air, one
+## that throws him up, a wall of will-o'-the-wisps over a pipe), swallowed by a slime (his one chance offered),
+## the heights (whole columns far off, a pygmy on his glider firing a rocket, the arrow of the way through),
+## then the long fall of level 2 and its tomb.
+var steps59: Array = []
+
+func _run59(biome: int) -> void:
+	main.save["seenIntro"] = true
+	main.save["equipped"] = []
+	main.save["mode"] = "endless"
+	main.daily_on = false
+	main.go("play")
+	var r: Game.Run = main.run
+	r.wait = 0.0
+	r.exploded = true
+	r.out = 2
+	r.intro = false
+	r.mode = "story"
+	r.biome = biome
+	r.prev_biome = biome
+	r.biome_x = -INF
+	r.next_biome_at = INF
+	r.boss_at = INF
+	r.guards_off = 0
+	r.god = true
+	r.obs = r.obs.filter(func(o): return false)
+	r.zones = []
+	r.sky = biome == Game.SKY
+
+func _tour59() -> void:
+	if steps59.is_empty():
+		steps59 = [
+			[0.5, "dungeon", ""], [3.0, "shot", "59-01-slimes"],
+			[3.1, "pipes", ""], [3.6, "shot", "59-02-conduits"],
+			[3.7, "wall", ""], [4.6, "shot", "59-03-mur-feux-follets"],
+			[6.5, "ko", ""], [8.6, "shot", "59-04-avale"],
+			[8.7, "sky", ""], [10.0, "rocket", ""], [10.6, "shot", "59-05-pitons"],
+			[10.7, "ko", ""], [12.2, "shot", "59-06-longue-chute"], [14.6, "shot", "59-07-tombe"], [14.8, "quit", ""],
+		]
+	while tour_i < steps59.size() and t >= steps59[tour_i][0]:
+		var st = steps59[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"dungeon": _run59(3)
+			"pipes":
+				var r: Game.Run = main.run
+				var px = r.cam + r.sx
+				var zm = Game.tight(r, "chute", px + 520, 700, Game.GROUND - 24)
+				zm.mouth = 150.0
+				var zl = Game.tight(r, "gallery", px + 1300, 500, Game.GROUND + Game.GALLERY - 22)
+				zl.launch = true
+			"wall":
+				var r: Game.Run = main.run
+				r.zones = []
+				r.dist = 800.0
+				var f = Game.Swarm.new()
+				f.biome = 3
+				f.wall = true
+				r.fm = f
+				Game.wave(r)
+			"ko":
+				var r: Game.Run = main.run
+				r.fm = null
+				r.god = false
+				r.hearts = 1
+				r.p.inv = 0
+				Game.hit(r, null)
+			"sky": _run59(Game.SKY)
+			"rocket":
+				var r: Game.Run = main.run
+				var o = Game.add_dart(r, r.cam + r.view_w + 40, 180.0)
+				o.state = "warn"
+				o.t = 0.2
+				r.cues.append({"x": r.cam + r.view_w + 200, "y": Game.GROUND - 260})
 			"quit": get_tree().quit()
 
 ## --tour58: 0.58 in pictures: Amis → Groupe in its layout G1 (four cards: the host, a good link, a slow one,

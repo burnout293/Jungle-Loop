@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.58.0"
+const VERSION := "0.59.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -6108,14 +6108,21 @@ func _esc_view() -> void:
 	var c = run.caught if run != null else null
 	var ph: String = c.phase if c != null else ""
 	w["esc"].visible = ph == "offer" or ph == "escape"
+	var slime = c != null and c.get("by", "") == "slime"   # (0.59) Histoire, the dungeon
 	if ph == "offer":
-		w["esc-label"].text = "Capturé ! Couteau suisse : %d" % run.free_knives
+		if slime:
+			w["esc-label"].text = "Avalé ! Une chance de t'extirper (une par niveau)"
+		elif Game.story_revive_ok(run):
+			w["esc-label"].text = "Capturé ! Une chance de t'évader (une par niveau)"
+		else:
+			w["esc-label"].text = "Capturé ! Couteau suisse : %d" % run.free_knives
+		w["esc-knife"].text = "S'extirper" if slime else "S'évader"
 		w["esc-knife"].visible = true
 		w["esc-bar"].visible = false
 		set_bar(w["esc-time"], c.timer / Game.ESC_OFFER)
 	elif ph == "escape":
 		var e: Dictionary = c.esc
-		w["esc-label"].text = "Ronge les cordes ! Encore %d" % e.rope
+		w["esc-label"].text = ("Extirpe-toi ! Encore %d" if slime else "Ronge les cordes ! Encore %d") % e.rope
 		w["esc-knife"].visible = false
 		w["esc-bar"].visible = true
 		w["esc-bar"].e = e
@@ -6126,7 +6133,7 @@ func _esc_view() -> void:
 func _use_knife() -> void:
 	if run == null or run.caught == null or run.caught.phase != "offer":
 		return
-	if run.free_knives > 0 and Game.escape_start(run):   # (0.55: the one equipped only)
+	if (run.free_knives > 0 or Game.story_revive_ok(run)) and Game.escape_start(run):   # (0.55: the one equipped only; 0.59: Histoire's one chance a level)
 		Audio.sfx("buy")
 
 func toast(ico: String, text: String, coins: int, xp: int) -> void:
@@ -6493,8 +6500,12 @@ func _step(h: float) -> void:
 				if not photo_taken and run.leap == null:   # when his head lands in the ground)
 					photo_taken = true
 					_take_photo()
+			"tomb":                                 # (0.59) the long fall of level 2: the photo with his tomb
+				if not photo_taken:
+					photo_taken = true
+					_take_photo.call_deferred()
 			"plant":
-				if not photo_taken and run.caught == null:   # (caught by the guards: the photo is of him on the spit)
+				if not photo_taken and run.caught == null and run.skyfall == null:   # (caught by the guards: the photo is of him on the spit)
 					photo_taken = true
 					_take_photo.call_deferred()
 			"snap":

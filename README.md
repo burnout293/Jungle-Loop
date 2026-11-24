@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.58.0** (24/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.59.0** (24/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,29 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.59.0
+
+- **Histoire, une chance par niveau** (`run.revives`, `Game.story_level`, `story_revive_ok`) :
+  - niveau 1 (la forêt) : **plus de conduits** (tronc creux, galerie) sur sa route ; assommé, les pygmées le
+    prennent et l'évasion lui est offerte **une fois, sans couteau** ; pendant Vorace ils ne viennent pas (il reste
+    assommé : la fin) ;
+  - niveau 2 (les pitons) : **aucune chance** : il sort par le bas de l'écran, puis, vu du sol de la forêt tout en
+    bas, il tombe de très haut la tête la première, s'enfonce entièrement dans la terre, et une **tombe** sort
+    aussitôt (photo de fin avec elle). `_skyfall`, sons « whoosh » et « tomb » ;
+  - niveau 3 (le donjon) : **trois slimes** sautillent derrière lui (PixelLab : `slime`, `slime-full`) ; assommé, le
+    premier lui saute dessus et **l'avale** ; une fois par niveau il peut **s'extirper** (la même barre que
+    l'évasion : « Extirpe-toi ! ») ; le slime est rejeté en arrière. `_slimes`, `_slime_capture`.
+- **Donjon, les conduits** (toutes les courses) : on y entre **sans la Sphère** (roulé en boule) ; trois sortes :
+  par le sol et **propulsé en haut** à la sortie (des pièces là-haut), **bouche en l'air** (à mi-hauteur ou en haut :
+  on y entre en sautant, on ressort au sol), **droits** ; **mur de feux follets** (35 % des nuées du donjon après
+  450 m) : la première vague remplit toutes les voies, un conduit posé dessous (on y entre n'importe où), où ils ne
+  le touchent pas. `PIPE_*`, `WISP_WALL`, `Zone.open/launch/mouth/wall`.
+- **Pitons (niveau 2) peaufinés** : figures en **séries de 3** puis une **respiration** (pièces, de la place) ;
+  une **flèche** au bord droit montre le passage de la figure suivante 1,5 s avant ; des **colonnes entières** au
+  loin dans la brume (PixelLab `sky-pillar-0/1`) ; un **pygmée en deltaplane** au bord de l'écran tire les
+  fusées-bambou. `SKY_SERIES`, `SKY_BREATH`, `run.cues`.
+- Tests : `tests/story_059.gd` (23). Banc `--tour59`.
 
 ## 0.58.0
 

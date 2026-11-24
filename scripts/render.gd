@@ -217,6 +217,48 @@ func draw_guards(c: CanvasItem) -> void:
 		shadow(c, x, foot - 1, 16)
 		guard_at(c, i, x, foot, g.v < 0, floori(t * 13 + i * 3))
 
+## (0.59) Histoire, the dungeon: the slimes hopping after him (squashed as they land, stretched as they leap).
+func draw_slimes(c: CanvasItem) -> void:
+	if run.slimes.is_empty() or run.caught != null:
+		return
+	var tex: Texture2D = Art.tex.get("slime")
+	if tex == null:
+		return
+	for sl in run.slimes:
+		var x = sx(float(sl.x))
+		if x < -60 or x > view_w + 60:
+			continue
+		var hop = absf(sin(float(sl.ph)))
+		var foot = floor_px(x)
+		shadow(c, x, foot - 1, 14)
+		_slime_at(c, tex, x, foot - hop * 16, 1.0 + 0.16 * (1 - hop) - 0.08 * hop, 1.0 - 0.16 * (1 - hop) + 0.1 * hop)
+
+## One slime, its feet at (x, foot), squashed or stretched round them.
+func _slime_at(c: CanvasItem, tex: Texture2D, x: float, foot: float, kx: float, ky: float, mod: Color = Color.WHITE) -> void:
+	var w = tex.get_width() * 0.62 * kx
+	var h = tex.get_height() * 0.62 * ky
+	c.draw_texture_rect(tex, Rect2(snap(x - w / 2), snap(foot - h), snap(w), snap(h)), false, mod)
+
+## (0.59) The slime's catch: it hops from behind onto him (knocked out, head first), then he is in it, kicking;
+## his escape (main.gd) or, swallowed for good, it wobbles there, pleased.
+func _draw_slime_catch(c: CanvasItem, k, hx: float, fy: float) -> void:
+	var tex: Texture2D = Art.tex.get("slime")
+	var full: Texture2D = Art.tex.get("slime-full")
+	if k.phase == "hop":
+		draw_hero(c, seat)
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		if tex != null:
+			var u = clampf(k.t / Game.SLIME_HOP, 0, 1)
+			var x = lerpf(sx(float(k.gx0[0])), hx, u * u * (3 - 2 * u))
+			_slime_at(c, tex, x, fy - sin(PI * u) * 40, 0.92, 1.12)
+		return
+	var pic = full if full != null else tex
+	if pic == null:
+		return
+	var wob = sin(t * 9) * 0.06
+	shadow(c, hx, fy - 1, 20)
+	_slime_at(c, pic, hx, fy, 1.45 + wob, 1.45 - wob)
+
 ## Caught (Histoire, alone, Game._capture): they leap on him, a cloud of dust and blows, then off he goes tied
 ## under a spit, carried back to the temple. Drawn in his own layer, over everything of the road.
 func draw_capture(c: CanvasItem) -> void:
@@ -225,6 +267,9 @@ func draw_capture(c: CanvasItem) -> void:
 		return
 	var hx = n(run.sx)
 	var fy = floor_px(hx)
+	if k.get("by", "") == "slime":                   # (0.59) a slime hops on him and swallows him
+		_draw_slime_catch(c, k, hx, fy)
+		return
 	if k.t < 0:                                      # 0.47: from far behind, they run in
 		draw_hero(c, seat)
 		c.draw_set_transform_matrix(Transform2D.IDENTITY)
@@ -1376,6 +1421,9 @@ func _hero_fx(c: CanvasItem, p) -> void:
 ## His fall staged (Skins « Chute »): head first in the ground, a tomb rises beside him, a flower grows from
 ## the mound, or a little cloud rains on him.
 func _fall_fx(c: CanvasItem) -> void:
+	if run.skyfall != null:                          # (0.59) Histoire, the heights: his long fall, then his tomb
+		_skyfall_fx(c)
+		return
 	if not planted():
 		fall_t0 = -1.0
 		return
@@ -1426,6 +1474,28 @@ func _say_bubble(c: CanvasItem, e: Dictionary, x: float, y: float) -> void:
 	rect(c, snap(x) - 1, by + 12, 3, 2, Color(1, 0.97, 0.9, a_))
 	c.draw_string(sign_font, Vector2(bx + 4, by + 9), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.1, 0.06, 0.14, a_))
 
+## (0.59) The long fall of level 2: streaks over him as he comes down; once he is under the ground, his tomb,
+## out of it at once (a little bounce), twice the size of the fall's cosmetic one.
+func _skyfall_fx(c: CanvasItem) -> void:
+	var s: Dictionary = run.skyfall
+	var ox = n(run.sx)
+	var gy = n(Game.floor_at(run, run.cam + run.sx))
+	if s.ph == "fall":
+		var hy = n(run.p.y)
+		for i in 7:
+			var dx = (i * 7) % 26 - 13
+			var len_ = 30 + (i * 13) % 40
+			rect(c, snap(ox + dx), snap(hy - 60 - len_ - (i * 17) % 50), 1, len_, Color(1, 1, 1, 0.55))
+	elif s.ph == "tomb":
+		var tex: Texture2D = Art.tex.get("fall-tomb")
+		if tex == null:
+			return
+		var age = float(s.t) - float(s.at)
+		var bounce = 1.0 + 0.25 * maxf(0, 1 - age / 0.18) * sin(age * 40)
+		var tw = tex.get_width() * 2.0
+		var th = tex.get_height() * 2.0 * bounce
+		c.draw_texture_rect(tex, Rect2(snap(ox - tw / 2), snap(gy - th), tw, th), false)
+
 ## His scarf (Skins « Écharpe »): a band round his neck and its tail flapping behind, drawn over his trunk
 ## (x0, y0: the top left of hero-body); stripes, or a shine running along it.
 func _scarf(c: CanvasItem, x0: float, y0: float, sc: Dictionary, pull: float) -> void:
@@ -1443,6 +1513,47 @@ func _scarf(c: CanvasItem, x0: float, y0: float, sc: Dictionary, pull: float) ->
 		rect(c, x0 + 9 - i, y0 + 32 + wy, 1, 2, col)
 	if sc.get("shine", false):
 		rect(c, x0 + 12 + int(t * 12) % 10, y0 + 31, 1, 1, Color(1, 1, 1, 0.9))
+
+## (0.59) The heights: whole temple columns standing in the mist far off (PixelLab: sky-pillar-0/1), slower
+## than the road (0.55 of it), pale with the distance; never two side by side.
+const PILLAR_STEP := 260.0
+func _draw_sky_pillars(c: CanvasItem) -> void:
+	var pics: Array = [Art.tex.get("sky-pillar-0"), Art.tex.get("sky-pillar-1")].filter(func(p): return p != null)
+	if pics.is_empty():
+		return
+	var off = run.cam / PIXEL * 0.55
+	var k0 = floori(off / PILLAR_STEP) - 1
+	for k in range(k0, k0 + int(view_w / PILLAR_STEP) + 3):
+		var h = absi(hash(k * 7919 + 13))
+		if h % 3 == 0:
+			continue                                 # (gaps: not a colonnade)
+		var sxp = k * PILLAR_STEP + (h % 90) - off
+		var wx = run.cam + sxp * PIXEL
+		if Game.biome_at(run, wx) != Game.SKY:
+			continue
+		var pic: Texture2D = pics[h % pics.size()]
+		var sc = 0.75 + float(h % 5) * 0.08
+		var pw = pic.get_width() * sc
+		var ph_ = pic.get_height() * sc
+		c.draw_texture_rect(pic, Rect2(snap(sxp - pw / 2), snap(GN + 26 - ph_), snap(pw), snap(ph_)), false, Color(0.82, 0.88, 0.98, 0.8))
+
+## (0.59) The heights: an arrow at the right edge at the height of the way through the next figure, from a
+## second and a half before it comes into sight; forgotten once it is in sight.
+func _draw_cues(c: CanvasItem) -> void:
+	var edge = run.cam + run.view_w
+	var lead = maxf(run.speed, 300.0) * 1.5
+	run.cues = run.cues.filter(func(q): return float(q["x"]) > edge - 40)
+	for q in run.cues:
+		var qx = float(q["x"])
+		if qx > edge + lead:
+			continue
+		var y = snap(n(float(q["y"])))
+		var a_ = 0.55 + 0.4 * sin(t * 10)
+		var x0 = snap(view_w - 16 + sin(t * 8) * 2)
+		for i in 3:                                  # a chevron pointing on: three short bars
+			rect(c, x0 + i * 2, y - 4 + i, 2, 2, Color(0.6, 1, 0.55, a_))
+			rect(c, x0 + i * 2, y + 3 - i, 2, 2, Color(0.6, 1, 0.55, a_))
+		rect(c, x0 + 6, y - 1, 2, 3, Color(0.6, 1, 0.55, a_))
 
 ## A soap bubble round a fallen hero (world position of its middle): it wobbles and shines.
 func bubble(c: CanvasItem, at: Vector2) -> void:
@@ -1684,6 +1795,7 @@ func _draw_back(c: CanvasItem) -> void:
 	Ambient.draw_sky(c, t, view_w)
 
 	draw_hills(c)                                    # dark hills behind the path
+	_draw_sky_pillars(c)                             # (0.59) the heights: whole columns standing in the mist
 	if run.boss != null:
 		draw_vorace(c)                               # behind the floor: its legs plunge into it
 	draw_props(c)
@@ -1731,6 +1843,8 @@ func _draw_back(c: CanvasItem) -> void:
 
 	if not run.signs.is_empty():
 		_draw_signs(c)
+	if not run.cues.is_empty():                      # (0.59) the heights: where the way through the next figure is
+		_draw_cues(c)
 	_draw_zones(c)
 	_draw_plats(c)
 	for co in run.coins:
@@ -1741,6 +1855,7 @@ func _draw_back(c: CanvasItem) -> void:
 	_draw_items(c)
 	_draw_obstacles(c)
 	draw_guards(c)
+	draw_slimes(c)                                   # (0.59) Histoire, the dungeon
 
 	if not run.dead or show_dead:
 		var p = run.p
@@ -1819,6 +1934,8 @@ func _draw_zones(c: CanvasItem) -> void:
 				if co.tight == "log" and co.x >= z.x and co.x < z.x + z.w:
 					coin_at(c, co)
 			ribs(c, z, false)
+		elif z.kind == "chute":                      # (0.59) the dungeon: a mouth in the air, down to the floor
+			_draw_chute(c, z, x, w, S)
 		else:
 			if z.im == null or z.of != bi:          # the burrow is drawn once, then kept with its zone
 				var deep = roundi(Game.GALLERY / PIXEL)
@@ -1839,6 +1956,37 @@ func _draw_zones(c: CanvasItem) -> void:
 				z.im = Art.make(im)
 				z.of = bi
 			blit(c, z.im, x, GN)
+			if z.launch:                             # (0.59) out of it thrown up high: arrows at its far end
+				var ex = snap(x + w - 10)
+				for i in 3:
+					var a_ = 0.45 + 0.45 * sin(t * 8 - i * 1.2)
+					var cy = snap(GN - 6 - i * 7)
+					rect(c, ex - 3, cy, 7, 2, Color(1, 0.83, 0.36, a_))
+					rect(c, ex - 1, cy - 2, 3, 2, Color(1, 0.83, 0.36, a_))
+			if z.wall:                               # (0.59) the way under the wisps: its top glows, an arrow
+				var a2 = 0.35 + 0.35 * sin(t * 6)    # over its start
+				rect(c, x, GN - 1, w, 2, Color(0.47, 1, 0.86, a2))
+				var ax = snap(x + 30)
+				for i in 3:
+					rect(c, ax - 4 + i, snap(GN - 26 + i * 3 + sin(t * 7) * 2), 9 - 2 * i, 2, Color(0.47, 1, 0.86, 0.9))
+
+## (0.59) A pipe of the dungeon whose mouth is in the air (Zone.mouth over the floor): its mouth, the slope
+## down to the floor, then along it to its way out. In the scenery's own pipe colours (S["hollow"]).
+func _draw_chute(c: CanvasItem, z, x: float, w: float, S: Dictionary) -> void:
+	var hol: Array = S["hollow"]
+	var gy = n(Game.floor_at(run, z.x))
+	var my = n(Game.floor_at(run, z.x) - z.mouth)
+	var sl = n(Game.PIPE_SLOPE)
+	var th = 20.0
+	var pts = PackedVector2Array([Vector2(x + 6, my), Vector2(x + sl, gy - th / 2), Vector2(x + w, gy - th / 2)])
+	for pass_ in [[th + 4, INK], [th, hol[0]], [th - 6, hol[3]], [3.0, hol[2]]]:
+		c.draw_polyline(pts, pass_[1], pass_[0])
+	c.draw_circle(Vector2(x + 6, my), th * 0.55 + 2, INK)                 # the mouth: a dark ring, open to the left
+	c.draw_circle(Vector2(x + 6, my), th * 0.55, hol[0])
+	c.draw_circle(Vector2(x + 4, my), th * 0.4, hol[1])
+	rect(c, snap(x + w - 3), snap(gy - th), 5, th, hol[1])                # its way out, at the floor
+	var a_ = 0.4 + 0.4 * sin(t * 6)                                       # a glint on the mouth: in here
+	rect(c, snap(x - 6), snap(my - 1), 4, 2, Color(1, 0.83, 0.36, a_))
 
 # 0.49: the forest's two platforms: the middle of what is walked on, and how far its top stands above it (art pixels).
 const ISLE_PICS := {"isle-forest-1": {"mid": 54.5, "top": 13}, "isle-forest-2": {"mid": 75.5, "top": 14}}
@@ -2146,6 +2294,10 @@ func _draw_obstacles(c: CanvasItem) -> void:
 		elif o.kind == "dart":                       # a "!" at the edge, at its height; then across in one go
 			if o.state == "warn":
 				warn_mark(c, (roundf(view_w * 0.64) if shift else view_w - 20) - stack.get(o, 0) * 27, cy, o.t)
+				if name == "rocket" and not shift:   # (0.59) the heights: a pygmy on his glider, who fires it
+					var gl: Texture2D = Art.tex.get("glider")
+					if gl != null:
+						blit(c, gl, snap(view_w - 30 - stack.get(o, 0) * 27), snap(cy - gl.get_height() - 4 + sin(t * 4 + o.ph) * 2), true)
 			elif o.state == "go":
 				var frame = floori(t * (14 if name == "fly" else 9) + o.ph) % frames if frames > 1 else 0
 				var x0 = snap(cx - fw / 2)

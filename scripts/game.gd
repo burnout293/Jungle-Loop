@@ -32,6 +32,8 @@ const THREAD_AMP := 22.0
 const STAIR_HS := [190.0, 300.0, 410.0]
 const GLIDE_STEP := 300.0
 static var SKY_EASY := 150.0
+static var SKY_SERIES := 3           # (0.59) the heights in waves: this many figures, then a breath (coins only)
+static var SKY_BREATH := 700.0       # ... this much more room
 # 0.54: the cliff between the forest and the heights. The forest's floor climbs CLIFF_H over CLIFF_RISE, runs
 # flat CLIFF_TOP (its edge, where the heights begin: render.gd draws the cliff there), then drops into the mist
 # CLIFF_LIP further on (the moss hanging over). Off it he leaps (CLIFF_LEAP) and falls CLIFF_FALL s before the
@@ -383,6 +385,12 @@ const ZIG_HIGH := 230.0
 const ZIG_PERIOD := 1.6
 const HANG_Y := 190.0
 
+# (0.59) The dungeon's pipes: thrown up this fast out of a « pipeup » (its coins at PIPE_PEAK), down a mouth's
+# slope over PIPE_SLOPE; a swarm of will-o'-the-wisps is a wall over a pipe WISP_WALL of the time (past 450 m).
+const PIPE_LAUNCH := 1150.0
+const PIPE_PEAK := 380.0
+const PIPE_SLOPE := 170.0
+static var WISP_WALL := 0.35
 # Follower monsters: FM_LANES lanes of FM_STEP each above the floor.
 const FM_W := 90.0 * SIZE
 const FM_H := 64.0 * SIZE
@@ -561,6 +569,10 @@ class Zone:
 	var kind := ""
 	var im = null          # the burrow's picture, made by the renderer
 	var of := -1
+	var open := false      # (0.59) a pipe of the dungeon: anyone gets in (curled up), not only with the Sphère
+	var launch := false    # ... out of it thrown up high
+	var mouth := -1.0      # ... its mouth in the air, this high over the floor (in as he passes it), out by the floor
+	var wall := false      # ... the way under a wall of will-o'-the-wisps: in anywhere along it
 
 class Monkey:
 	var x := 0.0
@@ -599,6 +611,8 @@ class Boss:
 	var last_gap := -1       # the free lanes of the last fan (the next stays within reach)
 
 class Swarm:
+	var wall := false          # (0.59) the dungeon: its first wave fills every lane, a pipe under it (Zone.wall)
+	var walled := false
 	var biome := 0
 	var waves := 1
 	var aim := 1.7
@@ -788,6 +802,11 @@ class Run:
 	var gain_mul := 1.0                # (0.57) ... how much faster the speed grows (its rule « Pressé »)
 	var drop_kinds: Array = []         # (0.58) ... the dangers it leaves out (« obstacles | araignees »)
 	var emote_me := {}                 # (0.58) for two: the words I just said ({text, t: the run's time then})
+	var revives := {}                  # (0.59) Histoire: the levels whose one way back is used (level -> true)
+	var skyfall = null                 # (0.59) Histoire, the heights: his long fall to the forest's floor ({t, ph, cut, at, x})
+	var slimes: Array = []             # (0.59) Histoire, the dungeon: the slimes after him ({x, ph})
+	var sky_n := 0                     # (0.59) the heights: figures laid since the last breath
+	var cues: Array = []               # ... where the way through the next figure is ({x, y}: render.gd's arrows)
 	var emote_mate := {}               # ... and those my partner said
 	var glide_go := false              # ... and off the cliff they have jumped (a line said « deltaplanes »)
 	var say_queue: Array = []          # ... the lines still to say
@@ -1582,11 +1601,12 @@ static func burst(run: Run, x: float, y: float, color: Color, n: int, spd: float
 		part(run, x, y, cos(a) * v, sin(a) * v - 80, rnd(0.3, 0.7), color, rnd(4, 9), 700)
 
 # A tight place and what it holds: coins all along, a few gems, once in a blue moon a heart.
-static func tight(run: Run, kind: String, x: float, w: float, y: float) -> void:
+static func tight(run: Run, kind: String, x: float, w: float, y: float) -> Zone:
 	var z = Zone.new()
 	z.x = x
 	z.w = w
 	z.kind = kind
+	z.open = biome_at(run, x) == 3                   # (0.59) the dungeon's pipes: for anyone
 	run.zones.append(z)
 	var count = floori((w - 160) / 40)
 	for i in count:
@@ -1598,6 +1618,7 @@ static func tight(run: Run, kind: String, x: float, w: float, y: float) -> void:
 		var c = coin(run, x + w - 70, y)
 		c.tight = kind
 		c.heart = true
+	return z
 
 # Gemmes dispersées: among the coins just laid, a few turn into gems.
 static func scatter(run: Run, start: int) -> void:
@@ -1781,6 +1802,10 @@ static func spawn_pattern(run: Run) -> void:
 		opts.append("skyshape")
 	if riding:
 		opts = opts.filter(func(k): return k != "cave")
+	if biome_at(run, x) == 3 and x >= 70 * PPM:      # (0.59) the dungeon: pipes for anyone, of three kinds
+		opts.append_array(["pipeup", "pipedrop", "log"])
+	if run.mode == "story" and biome_at(run, x) == 0:   # (0.59) Histoire, level 1: no pipes in the forest
+		opts = opts.filter(func(k): return k != "log" and k != "gallery")
 	if x < run.calm_until:
 		opts = ["coins"]
 	elif x < run.easy_until:
@@ -1804,6 +1829,8 @@ static func spawn_pattern(run: Run) -> void:
 			opts = ["pinrow", "pinrow", "pinrow", "pinthread", "skycoins"]
 		else:
 			opts = ["pinrow", "pinrow", "pinrow", "pinthread", "pinthread", "glidestair", "glidestair", "curtain", "curtain", "fly", "wave", "skycoins"]
+		if run.sky_n >= SKY_SERIES and opts.size() > 1:   # (0.59) a series laid: a breath of coins
+			opts = ["skybreath"]
 	if not run.drop_kinds.is_empty() and not sky:     # (0.58) a Course du jour keeping only some dangers
 		var kept = opts.filter(func(k): return not k in run.drop_kinds)
 		var dangers = kept.filter(func(k): return k in DAILY_DANGERS)   # (the dangers kept come more often:
@@ -1866,6 +1893,11 @@ static func spawn_pattern(run: Run) -> void:
 		"fly":
 			add_dart(run, x, wpick(DART_ALTS[tier]) if tier >= 2 else dart_alt(run, tier)).aim = tier >= 2
 			extent = 120
+		"skybreath":                                 # (0.59) the heights: after a series, a breath (coins, room)
+			run.sky_n = 0
+			for i in 12:
+				coin(run, x + i * 44, floor_at(run, x) - 250 - 60 * sin(i * 0.5))
+			extent = 12 * 44 + SKY_BREATH
 		"skycoins":                                  # (0.53) the heights: coins in the air (0.54: a gentle wave)
 			var h0: float = wpick([170.0, 250.0, 330.0])
 			for i in 9:
@@ -1880,9 +1912,12 @@ static func spawn_pattern(run: Run) -> void:
 				var at = x + 80 + k * step
 				add_pinnacle(run, at, h)
 				sky_arc(run, at - 50, h + 60, 60, 5, PIN_W + 100)   # over its top
+				if k == 0:                             # (0.59) over the first one's top
+					run.cues.append({"x": at, "y": floor_at(run, at) - h - 70})
 				var dir = (1 if W.randf() < 0.5 else -1) if i > 0 and i < PIN_HS.size() - 1 else (1 if i == 0 else -1)
 				i += dir                               # (at the bottom or the top, it turns back: never twice the same)
 			extent = (n - 1) * step + PIN_W + 240
+			run.sky_n += 1
 		"pinthread":                                 # (0.54) a pinnacle, a glider over it: through the gap between
 			var h: float = PIN_HS[W.randi() % 2]
 			add_pinnacle(run, x + 80, h)
@@ -1891,6 +1926,8 @@ static func spawn_pattern(run: Run) -> void:
 				gl.amp = THREAD_AMP
 			coin_line(run, x, floor_at(run, x) - h - THREAD_GAP / 2 + 20, floori((PIN_W + 160) / 44))
 			extent = PIN_W + 300
+			run.sky_n += 1
+			run.cues.append({"x": x + 80, "y": floor_at(run, x) - h - THREAD_GAP / 2})   # (0.59) through the gap
 		"glidestair":                                # (0.54) three gliders in a slant: under the rising ones, over
 			var rising = W.randf() < 0.5               # the falling ones (the coins show which)
 			var step = maxf(GLIDE_STEP, lay_speed(run, x) * 0.42)
@@ -1901,7 +1938,10 @@ static func spawn_pattern(run: Run) -> void:
 					gl.amp = THREAD_AMP
 				var cy = h - 130 if rising else h + 130
 				coin_line(run, x + 120 + k * step - 30, floor_at(run, x) - cy, 3)
+				if k == 0:                             # (0.59) under the rising ones, over the falling ones
+					run.cues.append({"x": x + 120, "y": floor_at(run, x) - cy})
 			extent = 2 * step + HOVER_W + 240
+			run.sky_n += 1
 		"wave":                                      # a wave of flyers, more and closer together the faster he goes
 			extent = _wave(run, x, tier)
 		"swarm":                                     # two flyers, one after the other, at different heights
@@ -1972,6 +2012,19 @@ static func spawn_pattern(run: Run) -> void:
 			else:
 				coin_line(run, x + R + 60, G - STEP - 40, 6)
 			extent = 2 * R + w
+		"pipeup":                                    # (0.59) the dungeon: in by the floor, out by the floor thrown up high
+			var w = roundf(wrnd(700, 1000))
+			tight(run, "gallery", x, w, G + GALLERY - 22).launch = true
+			coin_arc(run, x + w + 60, PIPE_PEAK - 40, 7, 420)
+			extent = w + 520
+		"pipedrop":                                  # (0.59) the dungeon: a mouth half way up or high, out by the floor
+			var hs: Array = [[150.0], [150.0, 250.0], [150.0, 250.0, 330.0]][tier]
+			var h: float = wpick(hs)
+			var w = roundf(wrnd(650, 900))
+			var z = tight(run, "chute", x, w, G - 24)
+			z.mouth = h
+			coin_arc(run, x - 260, h + 10, 5, 240)
+			extent = w + 120
 		"log":                                       # a hollow trunk behind the path: only a ball gets in
 			tight(run, "log", x, LOG_W, G - 24)
 			extent = LOG_W
@@ -2767,6 +2820,9 @@ static func hit(run: Run, o: Obs) -> void:
 		to_bubble(run)
 		return
 	_fatal(run)
+	if run.mode == "story" and not run.coop and biome_at(run, run.cam + run.sx) == SKY:   # (0.59) level 2: no way back,
+		_skyfall_start(run)                                                                    # the long fall
+		return
 	if run.lvl("lastLeap") > 0:                      # Dernier élan: knocked out, he still bounces a few metres further
 		var p = run.p
 		var lp = Leap.new()
@@ -2985,7 +3041,7 @@ static func _capture(run: Run, d: float, px: float, fl: float) -> bool:
 		run.events.append("skewer")
 		for i in 16:
 			part(run, px + rnd(-60, 60), fl - rnd(0, 40), rnd(-200, 200), rnd(-200, -40), rnd(0.4, 0.7), colour_of(["#e8dcc0", "#c9b89a"]), rnd(6, 11), 500)
-		c.phase = "offer" if run.knives + run.free_knives > 0 else "gone"   # a Couteau suisse: offered (main.gd)
+		c.phase = "offer" if run.knives + run.free_knives > 0 or story_revive_ok(run) else "gone"   # a Couteau suisse (or 0.59: Histoire's one chance a level): offered (main.gd)
 		c.timer = ESC_OFFER
 	if t0 < CATCH_FIGHT + 0.6 and c.t >= CATCH_FIGHT + 0.6:
 		run.events.append("snap")                    # (the photo: him on the spit)
@@ -3006,6 +3062,73 @@ static func _capture(run: Run, d: float, px: float, fl: float) -> bool:
 				return true
 	return false
 
+## (0.59) Histoire, level 3 (the dungeon): slimes hop after him, SLIME_N of them, their gaps behind him. Into
+## the dungeon they come from the left edge; out of it (or a boss) they fall behind and go.
+const SLIME_N := 3
+const SLIME_GAP := 110.0
+const SLIME_STEP := 70.0
+const SLIME_HOP := 0.55              # seconds for the first one to hop on him, once he is knocked out
+const SLIME_GONE := 1.6              # ... swallowed for good: this long, then the end
+
+static func _slimes(run: Run, d: float, hv: float) -> void:
+	if run.caught != null:
+		return
+	var px = run.cam + run.sx
+	var on = run.mode == "story" and not run.coop and run.boss == null and not run.dead and run.leap == null and story_level(run) == 3
+	if on and run.slimes.is_empty():
+		for i in SLIME_N:
+			run.slimes.append({"x": run.cam - 80.0 - i * 90.0, "ph": i * 1.7})
+	for i in run.slimes.size():
+		var sl: Dictionary = run.slimes[i]
+		sl.ph += d * 7.0
+		if on:
+			var want = px - SLIME_GAP - SLIME_STEP * i
+			sl.x += (hv + clampf((want - sl.x) * 1.5, -0.4 * hv, 520.0)) * d
+		else:
+			sl.x += hv * 0.5 * d                     # (left behind)
+	if not on:
+		run.slimes = run.slimes.filter(func(sl): return sl.x > run.cam - 300)
+
+## (0.59) The slime got him: it hops on him and swallows him; his one chance on this level offered (main.gd:
+## the same escape as from the pygmies, « Extirpe-toi ! »), else swallowed for good. True once it is over.
+static func _slime_capture(run: Run, d: float, px: float) -> bool:
+	var c = run.caught
+	var t0: float = c.t
+	c.t += d
+	match c.phase:
+		"hop":
+			if c.t >= SLIME_HOP:
+				run.events.append("slurp")
+				run.shake = maxf(run.shake, 0.5)
+				c.phase = "offer" if story_revive_ok(run) else "gone"
+				c.timer = ESC_OFFER
+				if c.t - d < SLIME_HOP + 0.5:
+					run.events.append("snap")        # (the photo: him in the slime)
+		"offer":
+			c.timer -= d
+			if c.timer <= 0:
+				c.phase = "gone"
+		"escape":
+			_escape_step(run, d)
+		_:
+			c.gone_t += d
+			if c.gone_t > SLIME_GONE:
+				die(run)
+				return true
+	return false
+
+## (0.59) Histoire's levels: 1 the forest, 2 the heights, 3 the dungeon, 4 the city (where he is now).
+static func story_level(run: Run) -> int:
+	return {0: 1, SKY: 2, 3: 3, 2: 4}.get(biome_at(run, run.cam + run.sx), 1)
+
+## (0.59) Histoire: his one way back on this level is still there (level 1: out of the pygmies' hands; level 3:
+## out of a slime). Level 2 has none.
+static func story_revive_ok(run: Run) -> bool:
+	if run.mode != "story" or run.coop:
+		return false
+	var lv = story_level(run)
+	return lv in [1, 3] and not run.revives.has(lv)
+
 ## Alone, any mode, no boss: whether the pygmies come for him when he falls (0.47: wherever he is).
 static func capture_ok(run: Run) -> bool:
 	return not run.coop and not run.dead and run.boss == null and run.exploded
@@ -3015,7 +3138,9 @@ static func escape_start(run: Run) -> bool:
 	var c = run.caught
 	if c == null or c.phase != "offer":
 		return false
-	if run.free_knives > 0:                      # (0.54) the one equipped first, then the stock
+	if story_revive_ok(run):                     # (0.59) Histoire: the level's one chance, no knife needed
+		run.revives[story_level(run)] = true
+	elif run.free_knives > 0:                    # (0.54) the one equipped first, then the stock
 		run.free_knives -= 1
 	else:
 		run.knives = maxi(0, run.knives - 1)
@@ -3069,6 +3194,10 @@ static func _release(run: Run) -> void:
 	var c = run.caught
 	var x: float = c.x
 	run.escapes += 1
+	if c.get("by", "") == "slime":                   # (0.59) out of the slime: it is thrown back, dazed
+		run.events.append("pop")
+		for sl in run.slimes:
+			sl.x -= 500.0
 	run.caught = null
 	run.leap = null
 	run.fatal = false
@@ -3116,6 +3245,90 @@ static func call_mount(run: Run) -> void:
 	burst(run, run.cam + run.sx, run.p.y - 60, Color("#ffd35c"), 16, 260)
 	run.events.append("horn")
 
+## (0.59) Histoire, level 2: knocked out in the heights there is no way back. He drops off the bottom of the
+## screen; then, seen from the forest's floor far below, he comes down from very high, head first, sinks into
+## the ground all of him, and a tomb comes out of it at once. Then the end.
+const SKYFALL_DROP := 1.0            # seconds he falls out of sight
+const SKYFALL_V := 2600.0            # how fast he comes down to the forest's floor (units/s)
+const SKYFALL_SINK := 0.5            # seconds to sink all of him
+const SKYFALL_HOLD := 2.4            # the tomb, before the end
+
+static func _skyfall_start(run: Run) -> void:
+	var p = run.p
+	var lp = Leap.new()
+	lp.v = 0.0
+	run.leap = lp
+	run.skyfall = {"t": 0.0, "ph": "drop", "cut": 0.0, "at": 0.0}
+	p.vy = -260.0
+	p.ground = false
+	p.plat = null
+	p.rotor = false
+	p.flew = false
+	p.flying = false
+	burst(run, run.cam + run.sx, p.y - 40, Color("#ff4d6d"), 14, 320)
+	run.events.append_array(["hurt", "fling"])
+
+static func _skyfall(run: Run, d: float, px: float) -> void:
+	var s: Dictionary = run.skyfall
+	var p = run.p
+	s.t += d
+	match s.ph:
+		"drop":                                      # off the bottom of the screen
+			p.vy += 2200 * d
+			p.y += p.vy * d
+			p.roll += d * 9
+			if s.t > SKYFALL_DROP:
+				_skyfall_cut(run, px)
+		"fall":                                      # from very high, head first
+			p.y += SKYFALL_V * d
+			p.roll = PI
+			var fl = floor_at(run, px)
+			if p.y >= fl:
+				p.y = fl
+				s.ph = "sink"
+				s.at = s.t
+				run.leap.planted = true
+				run.leap.pt = 0.0
+				run.shake = 1.0
+				run.events.append("plant")
+				for i in 26:                         # a spray of earth
+					part(run, px + rnd(-24, 24), fl - 2, rnd(-300, 300), rnd(-520, -140), rnd(0.5, 0.9), colour_of(["#8a6a42", "#6a4f30", "#b08a58", "#f4f0e0"]), rnd(6, 13), 1400)
+		"sink":                                      # into the ground, all of him
+			var k = clampf((s.t - s.at) / SKYFALL_SINK, 0, 1)
+			p.y = floor_at(run, px) + k * (HERO_H + 30)
+			if k >= 1:
+				s.ph = "tomb"
+				s.at = s.t
+				run.shake = 0.5
+				run.events.append("tomb")
+				for i in 14:
+					part(run, px + rnd(-30, 30), floor_at(run, px) - 2, rnd(-160, 160), rnd(-260, -60), rnd(0.4, 0.7), colour_of(["#8a6a42", "#b08a58"]), rnd(5, 9), 900)
+		"tomb":
+			if s.t - s.at > SKYFALL_HOLD and not run.dead:
+				die(run)
+
+## The cut: far below, the forest's floor (the heights' road and mist gone), and he comes down from very high.
+static func _skyfall_cut(run: Run, px: float) -> void:
+	var s: Dictionary = run.skyfall
+	s.ph = "fall"
+	s.cut = s.t
+	run.biome = 0
+	run.prev_biome = 0
+	run.biome_x = -INF
+	run.next_biome_at = INF
+	run.strip_biome = -1
+	run.sky = false
+	run.terrain = [Vector2(px - 6000, GROUND), Vector2(px + 9000, GROUND)]
+	run.pits = []
+	run.obs = []
+	run.coins = []
+	run.zones = []
+	run.plats = []
+	run.p.y = GROUND - 1500
+	run.p.roll = PI
+	run.flash = 1.0
+	run.events.append("whoosh")
+
 static func die(run: Run) -> void:
 	_fatal(run)
 	run.dead = true
@@ -3148,6 +3361,20 @@ static func wave(run: Run) -> void:
 	f.act = []
 	f.act.resize(N)
 	f.act.fill(false)
+	if f.wall and not f.walled:                      # (0.59) a wall of will-o'-the-wisps: every lane, and a pipe
+		f.walled = true                              # under it, laid where he will be as it charges
+		f.act.fill(true)
+		f.level = 3
+		var sp = maxf(run.speed, 300.0)
+		var gx = run.cam + run.sx + sp * 1.0
+		var z = tight(run, "gallery", gx, sp * 2.8, GROUND + GALLERY - 22)
+		z.open = true
+		z.wall = true
+		f.phase = "aim"
+		f.t = 0
+		f.sx = run.view_w + 90
+		f.hit = false
+		return
 	if level < 2:                                    # one or two lanes, among those he is likely to be in
 		var low: Array = [0, 1, 2].filter(func(k): return k != safe)
 		wshuffle(low)
@@ -3210,6 +3437,7 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 		nf.biome = biome_at(run, px)
 		nf.waves = 1 + (1 if run.dist > 450 and W.randf() < 0.6 else 0) + (1 if run.dist > 900 and W.randf() < 0.5 else 0)
 		nf.aim = 1.7
+		nf.wall = nf.biome == 3 and run.dist > 450 and not run.coop and W.randf() < WISP_WALL   # (0.59)
 		run.fm = nf
 		wave(run)
 	var f: Swarm = run.fm
@@ -3250,7 +3478,8 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 	else:
 		f.sx += (260.0 if f.t < 0.14 else -FM_RUSH) * d   # a short recoil, then the charge
 	var x0 = run.cam + f.sx - FM_W / 2
-	if not f.hit and not f.ghost and x0 + 8 < box.r and x0 + FM_W - 8 > box.l:
+	var under = p.ball != null and p.ball.kind == "gallery"   # (0.59) in a pipe under the floor: out of their reach
+	if not f.hit and not f.ghost and not under and x0 + 8 < box.r and x0 + FM_W - 8 > box.l:
 		for k in FM_LANES:
 			var y0 = GROUND - (k + 0.5) * FM_STEP - FM_H * FM_THICK / 2
 			if not f.act[k] or y0 + 6 > box.b or y0 + FM_H * FM_THICK - 6 < box.t:
@@ -3568,6 +3797,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	run.vine = clampf(run.vine + (1.0 if gorilla_on else -1.0) * dt * 2.5, 0, 1)
 	if run.leap != null:
 		run.leap.v = 0.0 if run.leap.planted else maxf(160, run.leap.v * (1 - LEAP_DRAG * d))   # knocked out: he only slows down, slowly
+		if run.skyfall != null:
+			run.leap.v = 0.0                         # (0.59: the long fall: straight down)
 	# he is thrown out of the temple faster than he runs
 	var move: float
 	if run.leap != null:
@@ -3608,6 +3839,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.dist = nd
 	var px = run.cam + run.sx
 	_guards(run, d, (px - px0) / d if d > 0 else 0.0)
+	_slimes(run, d, (px - px0) / d if d > 0 else 0.0)
 	var fl = floor_at(run, px)                      # the floor right under him
 	var sky_now = biome_at(run, px) == SKY and run.leap == null
 	if sky_now and not run.sky:                      # (0.53) into the heights: no floor any more, he takes off
@@ -3627,10 +3859,16 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				run.events.append("takeoff")
 	run.sky = sky_now
 
+	if run.skyfall != null:                          # (0.59) Histoire, the heights: the long fall to the forest's floor
+		_skyfall(run, d, px)
+		return
 	if run.leap != null and run.leap.planted:        # --- head first in the ground, legs kicking ---
 		var kicks = floori(run.leap.pt / 0.28)
 		run.leap.pt += d
-		if run.caught != null:                       # (Histoire: the guards were at his heels)
+		if run.caught != null and run.caught.get("by", "") == "slime":   # (0.59) a slime got him
+			if _slime_capture(run, d, px):
+				return
+		elif run.caught != null:                     # (Histoire: the guards were at his heels)
 			if _capture(run, d, px, fl):
 				return
 		elif floori(run.leap.pt / 0.28) > kicks and run.leap.pt < PLANT_TIME:
@@ -3662,7 +3900,10 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				for i in 14:                         # a spray of earth
 					part(run, px + rnd(-16, 16), fl - 2, rnd(-220, 220), rnd(-380, -120), rnd(0.4, 0.7), colour_of(["#8a6a42", "#6a4f30", "#b08a58", "#f4f0e0"]), rnd(5, 11), 1400)
 				run.shake = maxf(run.shake, 0.6)
-				if capture_ok(run):
+				if capture_ok(run) and run.mode == "story" and story_level(run) == 3 and not run.slimes.is_empty():
+					var sl: Dictionary = run.slimes[0]   # (0.59) Histoire, the dungeon: the first slime swallows him
+					run.caught = {"by": "slime", "t": 0.0, "x": px, "sx0": run.sx, "gx": [sl.x], "gx0": [sl.x], "phase": "hop", "timer": 0.0, "gone_t": 0.0, "esc": {}}
+				elif capture_ok(run):
 					var near = guards_after(run)     # at his heels (Histoire, before their turn), or from far behind
 					var gx: Array = run.guards.map(func(g): return g.x) if near else [px - GUARD_GAP, px - GUARD_GAP - GUARD_STEP]
 					var gx0: Array = gx.duplicate() if near else [run.cam - 120.0, run.cam - 220.0]
@@ -3687,13 +3928,27 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		var half: float = M["half"] if mounted else HERO_HALF
 		var tall: float = M["tall"] if mounted else HERO_H
 		if p.ball != null and px > p.ball.x + p.ball.w:   # out at the far end, back on his feet
+			var out_of: Zone = p.ball
 			p.ball = null
 			p.y = fl
 			_puff(run, px, p.y)
 			run.events.append("unroll")
-		if p.ball == null and run.lvl("sphere") > 0 and not mounted and p.ground and p.plat == null:   # the Sphère: in he rolls
+			if out_of.launch:                        # (0.59) thrown up high out of it
+				p.ground = false
+				p.plat = null
+				p.vy = -PIPE_LAUNCH
+				p.jumps = 1
+				run.events.append("bounce")
+		if p.ball == null and not mounted and p.plat == null:   # the Sphère (0.59: or a pipe of the dungeon): in he rolls
 			for z in run.zones:
-				if px >= z.x and px < z.x + 110:
+				if run.lvl("sphere") <= 0 and not z.open:
+					continue
+				if z.mouth > 0:                      # (0.59) a mouth in the air: in as he passes it
+					var my = floor_at(run, z.x) - z.mouth
+					if not p.ground and px >= z.x and px < z.x + 130 and absf(p.y - HERO_H * 0.5 - my) < 64:
+						p.ball = z
+						break
+				elif (p.ground or (z.wall and p.y > fl - 50)) and px >= z.x and px < z.x + (maxf(110.0, z.w - 140) if z.wall else 110.0):
 					p.ball = z
 					break
 			if p.ball != null:
@@ -3711,6 +3966,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			p.flew = false
 			p.jumps = 0
 			p.y = fl + (GALLERY * maxf(0, k) if z.kind == "gallery" else 0.0)
+			if z.mouth > 0:                          # (0.59) down from the mouth to the floor, then along it
+				var u = clampf((px - z.x) / PIPE_SLOPE, 0, 1)
+				p.y = lerpf(fl - z.mouth + HERO_H * 0.5, fl, u * u * (3 - 2 * u))
 			p.roll += run.speed * d / 26
 			p.balled += dt
 		elif run.soar > 0 and not mounted:

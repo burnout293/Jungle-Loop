@@ -241,6 +241,11 @@ func _recipes() -> Dictionary:
 		"fling": [T(1500, 0.55, "sine", 0.16, 0.0, 420), T(1520, 0.55, "sine", 0.06, 0.0, 430)],
 		"plant": [T(95, 0.38, "sine", 0.6, 0.0, 36), N(0.3, 0.55, 520), N(0.14, 0.4, 2600, 0.02), T(180, 0.5, "triangle", 0.26, 0.14, 640), T(640, 0.32, "triangle", 0.16, 0.46, 230), T(900, 0.08, "square", 0.07, 0.78, 1300), T(1300, 0.08, "square", 0.07, 0.88, 900)],
 		"pounce": [N(0.3, 0.5, 600), T(85, 0.35, "sine", 0.6, 0, 38), T(400, 0.18, "triangle", 0.12, 0.02, 160)],   # the guards leap on him
+		# (0.59) Histoire, level 2: the long fall (wind rushing past), then the tomb out of the ground
+		"whoosh": [N(0.9, 0.35, 900), T(1400, 0.9, "sine", 0.1, 0.0, 300)],
+		"tomb": [T(70, 0.45, "sine", 0.55, 0.0, 40), N(0.25, 0.45, 420), T(392, 0.5, "triangle", 0.12, 0.2, 392), T(330, 0.7, "triangle", 0.12, 0.5, 330)],
+		"slurp": [T(260, 0.35, "sine", 0.4, 0.0, 90), N(0.3, 0.3, 700, 0.05), T(180, 0.25, "sine", 0.3, 0.2, 60)],   # (0.59) a slime swallows him
+		"pop": [T(300, 0.12, "sine", 0.35, 0.0, 900), N(0.12, 0.3, 2400, 0.02)],                    # ... he gets out
 		"scuffle": [N(0.07, 0.4, 900), T(180, 0.08, "square", 0.1, 0, 90)],                       # a blow in the cloud of dust
 		"bonk": [T(620, 0.1, "square", 0.1, 0, 300), N(0.03, 0.25, 3200)],                         # ... a head knocked
 		"skewer": [T(70, 0.14, "sine", 0.55), T(70, 0.14, "sine", 0.5, 0.18), T(90, 0.22, "sine", 0.55, 0.36), T(hz(12), 0.14, "triangle", 0.16, 0.5), T(hz(15), 0.14, "triangle", 0.16, 0.59), T(hz(19), 0.14, "triangle", 0.16, 0.68), T(hz(24), 0.32, "triangle", 0.16, 0.77)],   # tied to the spit: drums, a little tune
