@@ -335,6 +335,7 @@ static var SPIDER_COLUMN := 2
 # each way of their height (5 m in all) in SPIDER_PERIOD seconds, never past the floor or the ceiling.
 static var SPIDER_AMP := 100.0
 static var SPIDER_PERIOD := 2.4
+static var SPIDER_STILL := 0.3     # (0.61) a red spider stops moving this long before he reaches it
 const SPIDER_TOP := 566.0       # the highest a spider's middle goes: its back under the ceiling
 # Waves of flyers: 2 at 9 m/s up to 10 at 30 m/s, 0.9 s apart down to 0.3 s. On foot they come at head
 # height (stay down) or just over his head (Double saut); a low one (jump it) only with WAVE_JUMP seconds
@@ -4434,6 +4435,10 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		# --- the red spiders go up and down ---
 		for o in run.obs:
 			if o.kind == "hover" and o.amp > 0:
+				if o.x - (px + HERO_HALF) <= maxf(run.speed, 1.0) * SPIDER_STILL:
+					o.amp = 0.0                      # (0.61) SPIDER_STILL s before he gets there: still, where it is
+					o.y0 = o.y
+					continue
 				o.y = o.y0 - sin(run.t * TAU / SPIDER_PERIOD + o.ph) * o.amp
 		# --- the rare floating things: they zigzag up and down; touched, they are his ---
 		for it in run.bonuses:
@@ -4555,8 +4560,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 							run.last_aim = o.alt
 						run.events.append("dart")
 				if o.state == "go":
-					o.x -= DART_SPEED * d
-					o.y = floor_at(run, o.x + o.w / 2) - o.alt - DART_H / 2
+					o.x -= DART_SPEED * d            # (0.61: at its own height, never along the ground's)
 					if not o.gone and not o.dodged and o.x + o.w < px - HERO_HALF - 10:
 						o.dodged = true              # gone past him: one missile dodged (not the ghosts)
 						if not o.ghost:

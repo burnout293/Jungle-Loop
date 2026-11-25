@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.60.0"
+const VERSION := "0.61.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -5309,6 +5309,14 @@ func refresh_race() -> void:
 			sb.custom_minimum_size = Vector2(a(38), a(20))
 			sb.disabled = nn > coins
 			w["rc-stakes"].add_child(sb)
+		var all_in = mini(Race.BET_MAX, coins)          # (0.61) « Tout »: every coin he has
+		var ab = _button("Tout", "tab sel" if my_bet > 0 and my_bet == all_in else "tab", func() -> void:
+			race_seen = true
+			race.bet(int(race.my_seat().get("on", race.me)), mini(Race.BET_MAX, int(save["coins"])))
+			w["rc-amount"].text = str(int(race.my_seat().get("bet", 0))))
+		ab.custom_minimum_size = Vector2(a(38), a(20))
+		ab.disabled = coins <= 0
+		w["rc-stakes"].add_child(ab)
 		var order = race.seats.keys()
 		order.sort()
 		for k in order:

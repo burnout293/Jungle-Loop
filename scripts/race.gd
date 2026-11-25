@@ -37,7 +37,7 @@ const KEEP_LIFE := 540.0                # ... for as long as the server keeps it
 const HUES := [0.0, 0.42, 0.62, 0.22]   # ... and the hue the ghost is turned by (render.gd)
 const SLOW_MS := 200                    # (0.58) a link this slow (ms there and back) or slower shows « lent »
 
-static var stakes: Array = [100, 500, 1000, 5000]   # reglages/progression.txt, [course a 4]: the ready-made bets
+static var stakes: Array = [100, 500, 1000]   # reglages/progression.txt, [course a 4]: the ready-made bets
 
 var net: Net
 var save: Dictionary
@@ -1007,8 +1007,9 @@ func _end(m: Dictionary) -> void:
 			seats[int(k)]["gold"] = maxi(0, int(m["golds"][k]))
 	paid = 0
 	_remember()
-	for k in seats:                               # (the bets stay as they were for a rematch; 0.55: ready again)
+	for k in seats:                               # (0.61: every bet back to 0 for the next race; 0.55: ready again)
 		seats[k]["done"] = false
 		seats[k]["ready"] = false
+		seats[k]["bet"] = 0
 	message.emit({"t": "result"})
 	changed.emit()

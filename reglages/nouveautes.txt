@@ -1,6 +1,6 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Histoire : l'Aigle, le gardien des pitons, t'attend.
-Ses ruées, ses ailes qui se referment, puis l'orage et la grêle.
-Bats-le pour la tête d'ambre : la Sphère, avant le donjon.
+Affrontement : les mises repartent de 0 à chaque course, et un bouton « Tout ».
+Les missiles gardent leur hauteur, ils ne suivent plus le sol.
+Les araignées rouges s'arrêtent juste avant que tu arrives.
