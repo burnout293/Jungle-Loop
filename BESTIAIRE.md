@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 24/11/2026, version Godot 0.61.0 (le jeu à l'adresse principale). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 24/11/2026, version Godot 0.62.0 (le jeu à l'adresse principale). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
