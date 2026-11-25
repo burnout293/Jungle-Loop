@@ -3,4 +3,4 @@
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
 Affrontement : les mises repartent de 0 à chaque course, et un bouton « Tout ».
 Les missiles gardent leur hauteur, ils ne suivent plus le sol.
-Les araignées rouges s'arrêtent juste avant que tu arrives.
+Les araignées rouges s'arrêtent sur une seule ligne juste avant toi.

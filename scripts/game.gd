@@ -335,7 +335,8 @@ static var SPIDER_COLUMN := 2
 # each way of their height (5 m in all) in SPIDER_PERIOD seconds, never past the floor or the ceiling.
 static var SPIDER_AMP := 100.0
 static var SPIDER_PERIOD := 2.4
-static var SPIDER_STILL := 0.3     # (0.61) a red spider stops moving this long before he reaches it
+static var SPIDER_STILL := 0.2     # (0.61) a red spider is still on one line (CURTAIN) this long before he reaches it
+static var SPIDER_SETTLE := 0.4    # (0.61) ... after this long going there
 const SPIDER_TOP := 566.0       # the highest a spider's middle goes: its back under the ceiling
 # Waves of flyers: 2 at 9 m/s up to 10 at 30 m/s, 0.9 s apart down to 0.3 s. On foot they come at head
 # height (stay down) or just over his head (Double saut); a low one (jump it) only with WAVE_JUMP seconds
@@ -751,6 +752,8 @@ class Obs:
 	var meet := 0.0          # (0.55) on foot: where it will meet him (worked out as it stops)
 	var y0 := 0.0            # a red spider: the middle of its course, and how far it goes each way
 	var amp := 0.0
+	var lane_y := -1.0       # (0.61) a red spider: the line it stops on before he gets there, and how fast it goes
+	var lane_v := 0.0
 	var puddle := false
 	var lane := 0.0
 	var vx := 0.0
@@ -4435,9 +4438,18 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		# --- the red spiders go up and down ---
 		for o in run.obs:
 			if o.kind == "hover" and o.amp > 0:
-				if o.x - (px + HERO_HALF) <= maxf(run.speed, 1.0) * SPIDER_STILL:
-					o.amp = 0.0                      # (0.61) SPIDER_STILL s before he gets there: still, where it is
-					o.y0 = o.y
+				var reach = (o.x - (px + HERO_HALF)) / maxf(run.speed, 1.0)   # seconds before he gets there
+				if reach <= SPIDER_STILL + SPIDER_SETTLE:
+					if o.lane_y < 0:                 # (0.61) onto ONE line (CURTAIN), the nearest, still by SPIDER_STILL
+						var lfl = floor_at(run, o.x + o.w / 2)
+						var lh = lfl - (o.y + HOVER_H / 2)
+						var best = CURTAIN[0]
+						for c in CURTAIN:
+							if c <= SPIDER_TOP and absf(c - lh) < absf(best - lh):
+								best = c
+						o.lane_y = lfl - best - HOVER_H / 2
+						o.lane_v = absf(o.lane_y - o.y) / maxf(reach - SPIDER_STILL, 0.05)
+					o.y = move_toward(o.y, o.lane_y, o.lane_v * d)
 					continue
 				o.y = o.y0 - sin(run.t * TAU / SPIDER_PERIOD + o.ph) * o.amp
 		# --- the rare floating things: they zigzag up and down; touched, they are his ---

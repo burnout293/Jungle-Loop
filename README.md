@@ -110,7 +110,8 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
 - Affrontement : toutes les mises reviennent à 0 après chaque course (plus de gain sur une mise qu'on n'a plus) ;
   le bouton 5000 devient « Tout » (toutes ses pièces).
 - Missiles : lancés, ils gardent leur hauteur et ne suivent plus le relief du sol.
-- Araignées rouges : immobiles `SPIDER_STILL` (0,3 s) avant que Pépito les atteigne.
+- Araignées rouges : en 0,4 s (`SPIDER_SETTLE`) elles vont sur UNE ligne (`CURTAIN`, la plus proche) et y sont
+  immobiles `SPIDER_STILL` (0,2 s) avant que Pépito les atteigne : plus jamais à cheval sur deux lignes.
 
 ## 0.60.0
 
