@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.61.0"
+const VERSION := "0.62.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -5153,6 +5153,16 @@ func _build_race() -> void:
 	w["rc-kit-note"].autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	w["rc-kit-note"].custom_minimum_size.x = a(150)
 	kv.add_child(w["rc-kit-note"])
+	var rr = _hbox(3)                                   # (0.61) the host's rules: the score, the end
+	w["rc-score"] = _button("Distance", "tab", func() -> void:
+		race.set_rule("score", "dist" if race.rules.get("score", "dist") == "gold" else "gold"))
+	w["rc-score"].custom_minimum_size = Vector2(a(60), a(20))
+	rr.add_child(w["rc-score"])
+	w["rc-end"] = _button("Dernier en vie", "tab", func() -> void:
+		race.set_rule("end", "last" if race.rules.get("end", "last") == "open" else "open"))
+	w["rc-end"].custom_minimum_size = Vector2(a(90), a(20))
+	rr.add_child(w["rc-end"])
+	kv.add_child(rr)
 	kitp.add_child(kv)
 	s.add_child(kitp)
 	w["rc-kitbox"] = kitp
@@ -5329,6 +5339,10 @@ func refresh_race() -> void:
 			w["rc-on"].add_child(ob)
 		if not w["rc-amount"].has_focus():
 			w["rc-amount"].text = str(my_bet)
+	w["rc-score"].text = "Pièces" if race.rules.get("score", "dist") == "gold" else "Distance"   # (0.61) the rules
+	w["rc-end"].text = "Illimité" if race.rules.get("end", "last") == "open" else "Dernier en vie"
+	w["rc-score"].disabled = not host or not lobby
+	w["rc-end"].disabled = not host or not lobby
 	var grid: GridContainer = w["rc-kit"]               # the race's items and powers
 	for ch in grid.get_children():
 		grid.remove_child(ch)
@@ -5617,7 +5631,11 @@ func _on_race(m: Dictionary) -> void:
 		"result":
 			if state == "play" and run != null and run.race and not run.dead:
 				var win: Array = race.result.get("win", [])
-				banner("Tu gagnes la course ! Continue pour ton record." if win == [race.me] else "La course est jouée.")
+				if race.rules.get("end", "last") == "last":   # (0.61) « Dernier en vie »: it ends here for him too
+					banner("Tu gagnes la course !" if race.me in win else "La course est jouée.")
+					game_over()
+				else:
+					banner("Tu gagnes la course ! Continue pour ton record." if win == [race.me] else "La course est jouée.")
 			refresh_race()
 		"gone":
 			race_note = race.info

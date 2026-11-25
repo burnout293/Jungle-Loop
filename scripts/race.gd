@@ -62,6 +62,9 @@ var _ping_t := 0.0
 var _end_t := 0.0
 var message_time := 0.0                 # my run's time (main.gd sets it every step): the trails' clock
 var tries := 0                          # a guest's links to the host tried again (once at most)
+var rules := {"score": "dist", "end": "last"}   # (0.61) the host's rules: score dist|gold, end last (5 s after one is left)|open
+var last_at := -1                       # (0.61) when only one was left running (ms), -1 if not
+static var LAST_WAIT := 5.0                  # (0.61) « Dernier en vie »: the race ends this long after only one is left
 var kit := {}                           # (0.55) the host's items and powers, for all: shown before the start
 var history: Array = []                 # (0.55) the group's races, the latest first: [{n, rows: [{k, name, bet, on, dist, gold, got, win}]}]
 var relink_t := -1.0                    # (0.55) a guest linking again since (-1: not)
@@ -386,13 +389,14 @@ func reach(k: int, dist: float) -> void:
 
 ## 0.55: from everyone's final distance, who won (the furthest, or those tied), and what each gets back:
 ## twice his bet if he bet on one of them, nothing otherwise. {win, pay: place -> coins, pot (all the bets)}.
-static func settle(seats_: Dictionary) -> Dictionary:
+static func settle(seats_: Dictionary, score: String = "dist") -> Dictionary:
+	var by = "gold" if score == "gold" else "dist"   # (0.61) the host's rule: the furthest, or the most coins
 	var best = -1
 	for k in seats_:
-		best = maxi(best, int(seats_[k].get("dist", 0)))
+		best = maxi(best, int(seats_[k].get(by, 0)))
 	var win: Array = []
 	for k in seats_:
-		if int(seats_[k].get("dist", 0)) == best:
+		if int(seats_[k].get(by, 0)) == best:
 			win.append(k)
 	var pot_ = 0
 	var pay = {}
@@ -599,7 +603,18 @@ func _broadcast(msg: Dictionary, reliable: bool = true, except: String = "") -> 
 		send(msg, reliable)
 
 func _broadcast_lobby() -> void:
-	_broadcast({"t": "lobby", "seats": _public_seats(), "room": room, "running": running, "kit": kit, "n": races})
+	_broadcast({"t": "lobby", "seats": _public_seats(), "room": room, "running": running, "kit": kit, "n": races, "rules": rules})
+
+## (0.61) The host sets a rule of the group (in the lobby): "score" dist|gold, "end" last|open.
+func set_rule(key: String, value: String) -> void:
+	if role != "host" or running or not rules.has(key):
+		return
+	rules[key] = value
+	_broadcast_lobby()
+	changed.emit()
+
+static func rules_text(r: Dictionary) -> String:
+	return "%s · %s" % ["Pièces" if r.get("score", "dist") == "gold" else "Distance", "Illimité" if r.get("end", "last") == "open" else "Dernier en vie"]
 
 ## The room's new messages: the handshakes (host: from each guest; guest: from the host).
 func _read() -> void:
@@ -866,6 +881,8 @@ func _on_message(k: String, l: Link, m: Dictionary) -> void:
 				room = str(m["room"])
 			if m.get("kit") is Dictionary:
 				kit = m["kit"]
+			if m.get("rules") is Dictionary:
+				rules = {"score": "gold" if str(m["rules"].get("score", "")) == "gold" else "dist", "end": "open" if str(m["rules"].get("end", "")) == "open" else "last"}
 			races = maxi(races, int(m.get("n", 0)))
 			changed.emit()
 		"full":
@@ -946,6 +963,7 @@ func _begin(m: Dictionary) -> void:
 		seats[k]["done"] = false
 	trails.clear()
 	result = {}
+	last_at = -1
 	var b = mini(int(seats.get(me, {}).get("bet", 0)), int(save["coins"]))
 	if seats.has(me):
 		seats[me]["bet"] = b
@@ -967,17 +985,23 @@ func _check_end() -> void:
 			best_done = maxi(best_done, int(seats[k].get("dist", 0)))
 		else:
 			on.append(k)
-	if on.size() > 1 or (on.size() == 1 and int(seats[on[0]].get("dist", 0)) <= best_done):
+	if on.size() > 1:
+		last_at = -1
 		return
+	if on.size() == 1:                            # (0.61) one left: « Illimité » runs on to his fall; « Dernier
+		if rules.get("end", "last") == "open":    # en vie » ends LAST_WAIT s later (by distance: once he is
+			return                                # beyond everyone, so he is never stopped short of winning)
+		if rules.get("score", "dist") == "dist" and int(seats[on[0]].get("dist", 0)) <= best_done:
+			return
+		if last_at < 0:
+			last_at = Time.get_ticks_msec()
+		if Time.get_ticks_msec() - last_at < LAST_WAIT * 1000.0:
+			return
 	var dists = {}
 	for k in seats:
 		dists[k] = int(seats[k].get("dist", 0))
-	if on.size() == 1:                            # (he runs on for his record: the race is his)
-		dists[on[0]] = maxi(dists[on[0]], best_done + 1)
 	var view = seats.duplicate(true)
-	for k in view:
-		view[k]["dist"] = dists[k]
-	var s = settle(view)
+	var s = settle(view, str(rules.get("score", "dist")))
 	var msg = {"t": "result", "pot": s["pot"], "win": s["win"], "pay": {}, "dists": {}, "golds": {}}
 	for k in seats:
 		msg["pay"][str(k)] = s["pay"][k]

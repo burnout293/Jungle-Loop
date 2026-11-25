@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.61.0** (25/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.62.0** (25/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,15 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.62.0
+
+- Affrontement : **règles du salon choisies par l'hôte** (deux boutons sous l'équipement, `Race.rules`, envoyées
+  avec le salon) :
+  - **Score** : Distance (le plus loin gagne) ou Pièces (le plus de pièces ramassées) ; `Race.settle(seats, score)` ;
+  - **Fin** : Dernier en vie (quand il n'en reste qu'un, la course finit `LAST_WAIT` 5 s après ; en Distance, une
+    fois qu'il a dépassé tout le monde) ou Illimité (il court jusqu'à sa chute).
+- Pas encore faits : type de mise (communes / individuelles), pari (soi seul / tout le monde), score Boss.
 
 ## 0.61.0
 

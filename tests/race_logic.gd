@@ -145,6 +145,7 @@ func coins(r: Race) -> int:
 
 func _init() -> void:
 	# --- a full race: four of them, bets, the last one out of reach ---
+	Race.LAST_WAIT = 0.0                         # (0.61: « Dernier en vie » without its 5 s)
 	var made = make(["Hôte", "Un", "Deux", "Trois"])
 	var races: Array = made[0]
 	tick(races)

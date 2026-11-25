@@ -1,6 +1,6 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Affrontement : les mises repartent de 0 à chaque course, et un bouton « Tout ».
-Les missiles gardent leur hauteur, ils ne suivent plus le sol.
-Les araignées rouges s'arrêtent sur une seule ligne juste avant toi.
+Affrontement : l'hôte choisit les règles du salon.
+Score : la distance ou les pièces ramassées.
+Fin : dernier en vie (5 s après) ou illimitée.
