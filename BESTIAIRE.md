@@ -1,6 +1,6 @@
 # Jungle Loop — bestiaire par décor
 
-État au 24/11/2026, version Godot 0.62.0 (le jeu à l'adresse principale). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
+État au 24/11/2026, version Godot 0.63.0 (le jeu à l'adresse principale). Tout ce qui est décrit ici est dans le jeu. Les chiffres (tailles,
 distances, vitesses) sont dans [EQUILIBRAGE.md](EQUILIBRAGE.md).
 
 Deux modes : **Histoire** (avec les boss) et **Run illimitée** (sans boss).
@@ -16,7 +16,7 @@ Tous ont un contour sombre et un bord éclairé (lisibilité 5) ; le décor de f
 |---|---|---|---|---|
 | **Au sol** : sauter | hérisson violet | aucun : pas de sol, seulement la brume (y tomber coûte un cœur) | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
 | **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur (avec le Vol : la tienne, et il vient si tu restes trop à la même hauteur), puis il traverse l'écran | coléoptère | fusée en bambou des pygmées, ou toucan qui pique | flèche enflammée | missile |
-| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m (nids dès 900 m), à hauteur de tête (rester au sol) dès 1500 m ; avec le Vol aussi plus haut, et en rideaux (une colonne avec un seul passage) | araignée jaune (basse, immobile), rouge (plus haut, monte et descend de 5 m, posée sur une seule ligne et immobile 0,2 s avant que Pépito l'atteigne) | pygmée en deltaplane de feuilles ; et les pitons, à survoler | chauve-souris | drone |
+| **Suspendu** : immobile dans le vide ; bas (sauter) dès 150 m (nids dès 900 m), à hauteur de tête (rester au sol) dès 1500 m ; avec le Vol aussi plus haut, et en rideaux (une colonne avec un seul passage) | araignée jaune (basse, immobile), rouge (plus haut, monte et descend de 5 m, va dans un seul sens jusqu'à sa place, immobile 6 m avant Pépito) | pygmée en deltaplane de feuilles ; et les pitons, à survoler | chauve-souris | drone |
 | **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | frelons | feux follets | gros drones qui tirent un laser au lieu de foncer |
 
 0.49 : tous les dangers, le héros, les pièces et les objets sont dessinés 15 % plus grands. Ordre d'apparition :
