@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.62.0"
+const VERSION := "0.63.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -5163,6 +5163,10 @@ func _build_race() -> void:
 	w["rc-end"].custom_minimum_size = Vector2(a(90), a(20))
 	rr.add_child(w["rc-end"])
 	kv.add_child(rr)
+	w["rc-stake"] = _button("Mise individuelle", "tab", func() -> void:   # (0.63) individual or common stakes
+		race.set_rule("stake", "solo" if race.rules.get("stake", "solo") == "common" else "common"))
+	w["rc-stake"].custom_minimum_size = Vector2(a(153), a(20))
+	kv.add_child(w["rc-stake"])
 	kitp.add_child(kv)
 	s.add_child(kitp)
 	w["rc-kitbox"] = kitp
@@ -5314,15 +5318,15 @@ func refresh_race() -> void:
 			var nn = int(n)
 			var sb = _button(str(nn), "tab sel" if nn == my_bet else "tab", func() -> void:
 				race_seen = true
-				race.bet(int(race.my_seat().get("on", race.me)), mini(nn, int(save["coins"])))
+				race.bet(int(race.my_seat().get("on", race.me)), mini(nn, int(save["coins"])), false)
 				w["rc-amount"].text = str(int(race.my_seat().get("bet", 0))))
 			sb.custom_minimum_size = Vector2(a(38), a(20))
-			sb.disabled = nn > coins
+			sb.disabled = nn > coins or (race.rules.get("stake", "solo") == "common" and race.role != "host")
 			w["rc-stakes"].add_child(sb)
 		var all_in = mini(Race.BET_MAX, coins)          # (0.61) « Tout »: every coin he has
 		var ab = _button("Tout", "tab sel" if my_bet > 0 and my_bet == all_in else "tab", func() -> void:
 			race_seen = true
-			race.bet(int(race.my_seat().get("on", race.me)), mini(Race.BET_MAX, int(save["coins"])))
+			race.bet(int(race.my_seat().get("on", race.me)), mini(Race.BET_MAX, int(save["coins"])), true)
 			w["rc-amount"].text = str(int(race.my_seat().get("bet", 0))))
 		ab.custom_minimum_size = Vector2(a(38), a(20))
 		ab.disabled = coins <= 0
@@ -5336,6 +5340,7 @@ func refresh_race() -> void:
 				race_seen = true
 				race.bet(kk, int(race.my_seat().get("bet", 0))))
 			ob.custom_minimum_size = Vector2(a(40), a(20))
+			ob.disabled = race.rules.get("stake", "solo") == "common" and kk != race.me
 			w["rc-on"].add_child(ob)
 		if not w["rc-amount"].has_focus():
 			w["rc-amount"].text = str(my_bet)
@@ -5343,6 +5348,11 @@ func refresh_race() -> void:
 	w["rc-end"].text = "Illimité" if race.rules.get("end", "last") == "open" else "Dernier en vie"
 	w["rc-score"].disabled = not host or not lobby
 	w["rc-end"].disabled = not host or not lobby
+	var common = race.rules.get("stake", "solo") == "common"
+	w["rc-stake"].text = "Mise commune" if common else "Mise individuelle"
+	w["rc-stake"].disabled = not host or not lobby
+	var locked = common and not host                   # (0.63) common: the host's bet for all, or « Tout »
+	w["rc-amount"].editable = not locked
 	var grid: GridContainer = w["rc-kit"]               # the race's items and powers
 	for ch in grid.get_children():
 		grid.remove_child(ch)
@@ -5358,7 +5368,8 @@ func refresh_race() -> void:
 		lvl.position = Vector2(a(12), a(10))
 		cell.add_child(lvl)
 		grid.add_child(cell)
-	w["rc-kit-note"].text = ("Aucun." if grid.get_child_count() == 0 else "") + (" Celui de l'hôte, pour tous." if race.role != "" else "")
+	w["rc-kit-note"].text = "Aucun." if grid.get_child_count() == 0 else ""   # (0.63: room for the rules)
+	w["rc-kit-note"].visible = grid.get_child_count() == 0
 	var hist: VBoxContainer = w["rc-hist"]               # the group's races, the latest first
 	for ch in hist.get_children():
 		hist.remove_child(ch)

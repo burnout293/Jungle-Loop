@@ -62,7 +62,7 @@ var _ping_t := 0.0
 var _end_t := 0.0
 var message_time := 0.0                 # my run's time (main.gd sets it every step): the trails' clock
 var tries := 0                          # a guest's links to the host tried again (once at most)
-var rules := {"score": "dist", "end": "last"}   # (0.61) the host's rules: score dist|gold, end last (5 s after one is left)|open
+var rules := {"score": "dist", "end": "last", "stake": "solo"}   # (0.63) stake solo (each his own, twice back) | common (the same for all, the winner takes the pot)   # (0.61) the host's rules: score dist|gold, end last (5 s after one is left)|open
 var last_at := -1                       # (0.61) when only one was left running (ms), -1 if not
 static var LAST_WAIT := 5.0                  # (0.61) « Dernier en vie »: the race ends this long after only one is left
 var kit := {}                           # (0.55) the host's items and powers, for all: shown before the start
@@ -269,15 +269,17 @@ func join(code: String) -> void:
 	_signal({"t": "hi", "seat": me}, "")
 
 ## My bet: `n` coins on place `on` (myself by default). Kept until the start, when it is paid in.
-func bet(on: int, n: int) -> void:
+func bet(on: int, n: int, all_in: bool = false) -> void:
 	if not seats.has(me) or running:
 		return
 	seats[me]["on"] = on
 	seats[me]["bet"] = clampi(n, 0, BET_MAX)
+	seats[me]["all"] = all_in
 	if role == "host":
+		_common()
 		_broadcast_lobby()
 	else:
-		send({"t": "bet", "on": on, "n": n})
+		send({"t": "bet", "on": on, "n": n, "all": all_in})
 	changed.emit()
 
 ## Leaves the race (and its links) for good. A race on: what was put in is lost, like a fall.
@@ -389,7 +391,7 @@ func reach(k: int, dist: float) -> void:
 
 ## 0.55: from everyone's final distance, who won (the furthest, or those tied), and what each gets back:
 ## twice his bet if he bet on one of them, nothing otherwise. {win, pay: place -> coins, pot (all the bets)}.
-static func settle(seats_: Dictionary, score: String = "dist") -> Dictionary:
+static func settle(seats_: Dictionary, score: String = "dist", stake: String = "solo") -> Dictionary:
 	var by = "gold" if score == "gold" else "dist"   # (0.61) the host's rule: the furthest, or the most coins
 	var best = -1
 	for k in seats_:
@@ -404,6 +406,9 @@ static func settle(seats_: Dictionary, score: String = "dist") -> Dictionary:
 		var b = int(seats_[k].get("bet", 0))
 		pot_ += b
 		pay[k] = 2 * b if b > 0 and int(seats_[k].get("on", k)) in win else 0
+	if stake == "common":                         # (0.63) the winner(s) take the whole pot
+		for k in seats_:
+			pay[k] = pot_ / win.size() if k in win else 0
 	win.sort()
 	return {"win": win, "pay": pay, "pot": pot_}
 
@@ -420,7 +425,7 @@ func _public_seats() -> Dictionary:
 	var out = {}
 	for k in seats:
 		var s: Dictionary = seats[k]
-		out[str(k)] = {"name": s.get("name", "?"), "code": s.get("code", ""), "skin": s.get("skin", ""), "on": int(s.get("on", k)), "bet": int(s.get("bet", 0)),
+		out[str(k)] = {"name": s.get("name", "?"), "code": s.get("code", ""), "skin": s.get("skin", ""), "on": int(s.get("on", k)), "bet": int(s.get("bet", 0)), "all": bool(s.get("all", false)),
 			"ready": s.get("ready", false), "away": s.get("away", false), "gone": s.get("gone", false), "done": s.get("done", false), "dist": int(s.get("dist", 0)),
 			"gold": int(s.get("gold", 0)), "gh": float(s.get("gh", -1.0)), "ms": _ms_of(k), "wait": maxi(0, ceili(AWAY_KEEP - float(s.get("away_t", 0.0)))) if s.get("away", false) else 0}
 	return out
@@ -489,7 +494,7 @@ func _read_seats(d: Dictionary) -> void:
 		var s: Dictionary = d[k]
 		seats[int(k)] = {"name": str(s.get("name", "?")).left(16), "code": str(s.get("code", "")), "skin": str(s.get("skin", "")).left(40), "on": int(s.get("on", int(k))),
 			"bet": clampi(int(s.get("bet", 0)), 0, BET_MAX), "ready": bool(s.get("ready", false)), "away": bool(s.get("away", false)), "ms": int(s.get("ms", -1)), "wait": int(s.get("wait", 0)), "gh": clampf(float(s.get("gh", -1.0)), -1.0, 1.0),
-			"gone": bool(s.get("gone", false)), "done": bool(s.get("done", false)), "dist": int(s.get("dist", 0)),
+			"gone": bool(s.get("gone", false)), "done": bool(s.get("done", false)), "dist": int(s.get("dist", 0)), "all": bool(s.get("all", false)),
 			"gold": maxi(0, int(s.get("gold", 0)))}
 	if not seats.has(me):
 		seats[me] = mine
@@ -610,8 +615,19 @@ func set_rule(key: String, value: String) -> void:
 	if role != "host" or running or not rules.has(key):
 		return
 	rules[key] = value
+	_common()
 	_broadcast_lobby()
 	changed.emit()
+
+## (0.63) Common stakes (the host keeps them): everyone's bet is the host's, on himself, but for whoever
+## goes « Tout » (all he has); once one does, the others may too.
+func _common() -> void:
+	if role != "host" or rules.get("stake", "solo") != "common" or not seats.has(0):
+		return
+	for k in seats:
+		seats[k]["on"] = k
+		if k != 0 and not seats[k].get("all", false):
+			seats[k]["bet"] = int(seats[0].get("bet", 0))
 
 static func rules_text(r: Dictionary) -> String:
 	return "%s · %s" % ["Pièces" if r.get("score", "dist") == "gold" else "Distance", "Illimité" if r.get("end", "last") == "open" else "Dernier en vie"]
@@ -848,6 +864,8 @@ func _on_message(k: String, l: Link, m: Dictionary) -> void:
 					var on = int(m.get("on", l.seat))
 					seats[l.seat]["on"] = on if seats.has(on) else l.seat
 					seats[l.seat]["bet"] = clampi(int(m.get("n", 0)), 0, BET_MAX)
+					seats[l.seat]["all"] = bool(m.get("all", false))
+					_common()
 					_broadcast_lobby()
 					changed.emit()
 			"ready":                             # (0.55) a guest ready, or no longer
@@ -882,7 +900,8 @@ func _on_message(k: String, l: Link, m: Dictionary) -> void:
 			if m.get("kit") is Dictionary:
 				kit = m["kit"]
 			if m.get("rules") is Dictionary:
-				rules = {"score": "gold" if str(m["rules"].get("score", "")) == "gold" else "dist", "end": "open" if str(m["rules"].get("end", "")) == "open" else "last"}
+				rules = {"score": "gold" if str(m["rules"].get("score", "")) == "gold" else "dist", "end": "open" if str(m["rules"].get("end", "")) == "open" else "last",
+					"stake": "common" if str(m["rules"].get("stake", "")) == "common" else "solo"}
 			races = maxi(races, int(m.get("n", 0)))
 			changed.emit()
 		"full":
@@ -1001,7 +1020,7 @@ func _check_end() -> void:
 	for k in seats:
 		dists[k] = int(seats[k].get("dist", 0))
 	var view = seats.duplicate(true)
-	var s = settle(view, str(rules.get("score", "dist")))
+	var s = settle(view, str(rules.get("score", "dist")), str(rules.get("stake", "solo")))
 	var msg = {"t": "result", "pot": s["pot"], "win": s["win"], "pay": {}, "dists": {}, "golds": {}}
 	for k in seats:
 		msg["pay"][str(k)] = s["pay"][k]
@@ -1035,5 +1054,6 @@ func _end(m: Dictionary) -> void:
 		seats[k]["done"] = false
 		seats[k]["ready"] = false
 		seats[k]["bet"] = 0
+		seats[k]["all"] = false
 	message.emit({"t": "result"})
 	changed.emit()

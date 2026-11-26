@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.62.0** (25/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.63.0** (26/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,14 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.63.0
+
+- Affrontement, règle **Mise** choisie par l'hôte (`rules.stake`) : **individuelle** (chacun la sienne, le double
+  s'il a parié sur le vainqueur) ou **commune** (la mise de l'hôte pour tous, sur soi ; « Tout » permis à chacun ;
+  le ou les vainqueurs se partagent tout le pot) ; `Race._common()`, `settle(seats, score, stake)`.
+- Araignées rouges : un seul sens (haut ou bas) depuis `y0 ± amp` jusqu'à la hauteur posée par la route (celle que
+  vérifie le test d'équité), atteinte `SPIDER_STILL_M` (6 m) avant Pépito, en `SPIDER_RUN_M` (12 m) ; immobiles ensuite.
 
 ## 0.62.0
 

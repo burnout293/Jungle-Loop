@@ -335,8 +335,8 @@ static var SPIDER_COLUMN := 2
 # each way of their height (5 m in all) in SPIDER_PERIOD seconds, never past the floor or the ceiling.
 static var SPIDER_AMP := 100.0
 static var SPIDER_PERIOD := 2.4
-static var SPIDER_STILL := 0.2     # (0.61) a red spider is still on one line (CURTAIN) this long before he reaches it
-static var SPIDER_SETTLE := 0.4    # (0.61) ... after this long going there
+static var SPIDER_STILL_M := 6.0   # (0.63) a red spider is still at its height this many metres before him
+static var SPIDER_RUN_M := 12.0    # (0.63) ... after going there, one way, over this many metres
 const SPIDER_TOP := 566.0       # the highest a spider's middle goes: its back under the ceiling
 # Waves of flyers: 2 at 9 m/s up to 10 at 30 m/s, 0.9 s apart down to 0.3 s. On foot they come at head
 # height (stay down) or just over his head (Double saut); a low one (jump it) only with WAVE_JUMP seconds
@@ -4438,20 +4438,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		# --- the red spiders go up and down ---
 		for o in run.obs:
 			if o.kind == "hover" and o.amp > 0:
-				var reach = (o.x - (px + HERO_HALF)) / maxf(run.speed, 1.0)   # seconds before he gets there
-				if reach <= SPIDER_STILL + SPIDER_SETTLE:
-					if o.lane_y < 0:                 # (0.61) onto ONE line (CURTAIN), the nearest, still by SPIDER_STILL
-						var lfl = floor_at(run, o.x + o.w / 2)
-						var lh = lfl - (o.y + HOVER_H / 2)
-						var best = CURTAIN[0]
-						for c in CURTAIN:
-							if c <= SPIDER_TOP and absf(c - lh) < absf(best - lh):
-								best = c
-						o.lane_y = lfl - best - HOVER_H / 2
-						o.lane_v = absf(o.lane_y - o.y) / maxf(reach - SPIDER_STILL, 0.05)
-					o.y = move_toward(o.y, o.lane_y, o.lane_v * d)
-					continue
-				o.y = o.y0 - sin(run.t * TAU / SPIDER_PERIOD + o.ph) * o.amp
+				var gap = o.x - (px + HERO_HALF)         # (0.63) one way only, up or down, from y0 +- amp to y0 (the
+				var k = clampf((gap - SPIDER_STILL_M * PPM) / (SPIDER_RUN_M * PPM), 0.0, 1.0)   # height the road laid,
+				o.y = o.y0 + (1.0 if sin(o.ph) >= 0 else -1.0) * o.amp * k   # fair), reached SPIDER_STILL_M m before him
 		# --- the rare floating things: they zigzag up and down; touched, they are his ---
 		for it in run.bonuses:
 			if it.x < run.cam + run.view_w - 30:
