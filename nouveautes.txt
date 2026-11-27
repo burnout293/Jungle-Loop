@@ -1,5 +1,6 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Affrontement : mise commune (le vainqueur rafle tout) ou individuelle.
-Les araignées rouges vont dans un seul sens et s'arrêtent bien avant toi.
+Réglages : un bouton « Changements » montre ce qui a changé.
+Araignées rouges immobiles 10 m avant toi ; drones et chauves-souris rouges qui bougent.
+Affrontement : la mise s'applique dès qu'on l'écrit.
