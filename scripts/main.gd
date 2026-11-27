@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.63.0"
+const VERSION := "0.64.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -1360,7 +1360,7 @@ func _build_menu() -> void:
 	_place(lbox, M, 320 - M - 58, 126, 58)
 	s.add_child(lbox)
 	w["menu-loadout-box"] = lbox
-	var version = _label("v" + VERSION + " · Godot", roundi(7 * U), DIM, 1)
+	var version = _label("v" + VERSION, roundi(7 * U), DIM, 1)
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER   # (0.57: under JOUER, the corners have panels)
 	version.modulate.a = 0.75
 	_place(version, 569 / 2.0 - 60, 320 - 9, 120, 9)
@@ -2326,6 +2326,9 @@ func _build_settings() -> void:
 			["Signalements décalés", "tg-shift", "Les alertes des Fonceurs apparaissent plus à gauche, loin du pouce."]]:
 		game.add_child(_set_toggle(spec[0], spec[1], spec[2]))
 	var vrow = _toggle_row("Version " + VERSION)
+	var cb = _button("Changements", "small", _show_changes)   # (0.64) the changelog
+	cb.custom_minimum_size.x = a(100)
+	vrow.add_child(cb)
 	if OS.has_feature("web"):                        # the browser keeps the game's files: a fresh copy on demand
 		var ub = _button("Mettre à jour", "small", _check_update)
 		ub.custom_minimum_size.x = a(110)
@@ -3125,6 +3128,18 @@ func _offer_update() -> void:
 		text += "\n\n" + update_notes
 	text += "\n\nLe jeu se recharge, ta partie est gardée."
 	_confirm(text, _update_now, "Mettre à jour", "Plus tard")
+
+## (0.64) « Changements »: reglages/changements.txt, the latest versions first.
+func _show_changes() -> void:
+	var out: Array = []
+	for line in FileAccess.get_file_as_string("res://reglages/changements.txt").split("\n"):
+		var t = line.strip_edges()
+		if t == "" or t.begins_with("#"):
+			continue
+		out.append(("Version " + t.substr(1).strip_edges()) if t.begins_with("=") else "• " + t)
+		if out.size() >= 14:
+			break
+	_confirm("\n".join(out), func() -> void: pass, "OK", "Fermer")
 
 func _update_now() -> void:
 	_upd_say("Rechargement…")
@@ -5124,11 +5139,9 @@ func _build_race() -> void:
 	bv.add_child(_label("TA MISE", ts("s"), RELIC, 0))
 	var amt = _hbox(4)
 	w["rc-amount"] = _field("0", 8, "Ta mise, de 0 à 99 999 999 pièces :", _race_amount)
-	w["rc-amount"].custom_minimum_size = Vector2(a(90), a(22))
+	w["rc-amount"].custom_minimum_size = Vector2(a(150), a(22))
 	amt.add_child(w["rc-amount"])
-	var take = _button("Miser", "small", _race_amount)
-	take.custom_minimum_size = Vector2(a(56), a(22))
-	amt.add_child(take)
+	w["rc-amount"].text_changed.connect(func(_t) -> void: _race_amount(false))   # (0.64) applied as it is typed
 	bv.add_child(amt)
 	w["rc-stakes"] = _hbox(3)
 	bv.add_child(w["rc-stakes"])
@@ -5144,9 +5157,9 @@ func _build_race() -> void:
 	var kv = _vbox(3)
 	kv.add_child(_label("ÉQUIPEMENT DE LA COURSE", ts("s"), RELIC, 0))
 	var grid = GridContainer.new()
-	grid.columns = 5
-	grid.add_theme_constant_override("h_separation", roundi(a(4)))
-	grid.add_theme_constant_override("v_separation", roundi(a(4)))
+	grid.columns = 8                                    # (0.64: smaller, more to a row: the rules stay inside)
+	grid.add_theme_constant_override("h_separation", roundi(a(3)))
+	grid.add_theme_constant_override("v_separation", roundi(a(2)))
 	kv.add_child(grid)
 	w["rc-kit"] = grid
 	w["rc-kit-note"] = _label("", ts("s"), DIM, 0)
@@ -5362,10 +5375,10 @@ func refresh_race() -> void:
 		var lv = int(kit.get(u["id"], 0))
 		if lv <= 0:
 			continue
-		var cell = _icon_rect(icon("ico-" + u["icon"]), 18)
+		var cell = _icon_rect(icon("ico-" + u["icon"]), 15)
 		cell.tooltip_text = "%s (niv. %d)" % [u["name"], lv]
 		var lvl = _label(str(lv), ts("s"), GOLD, 0)
-		lvl.position = Vector2(a(12), a(10))
+		lvl.position = Vector2(a(10), a(7))
 		cell.add_child(lvl)
 		grid.add_child(cell)
 	w["rc-kit-note"].text = "Aucun." if grid.get_child_count() == 0 else ""   # (0.63: room for the rules)
@@ -5478,7 +5491,7 @@ func _fill_recap(grid: GridContainer, rows_in: Array) -> void:
 			grid.add_child(_label(c, ts("s"), tint, 0))
 
 ## « Miser »: the number written, as my bet (0 to 99 999 999, never more than my coins).
-func _race_amount() -> void:
+func _race_amount(done: bool = true) -> void:
 	var digits = ""
 	for ch in str(w["rc-amount"].text):
 		if ch >= "0" and ch <= "9":
@@ -5486,8 +5499,12 @@ func _race_amount() -> void:
 	var n = clampi(int(digits) if digits != "" else 0, 0, mini(Race.BET_MAX, int(save["coins"])))
 	race_seen = true
 	race.bet(int(race.my_seat().get("on", race.me)), n)
-	w["rc-amount"].text = str(n)
-	w["rc-amount"].release_focus()
+	if done or str(n) != w["rc-amount"].text:
+		var at = w["rc-amount"].caret_column
+		w["rc-amount"].text = str(n)
+		w["rc-amount"].caret_column = mini(at, str(n).length())
+	if done:
+		w["rc-amount"].release_focus()
 
 ## « Prêt ! » / « Plus prêt » (0.55).
 func _race_ready_toggle() -> void:

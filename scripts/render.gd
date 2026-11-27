@@ -2424,6 +2424,8 @@ func _draw_obstacles(c: CanvasItem) -> void:
 		var cx = x + n(o.w) / 2
 		var cy = y + n(o.h) / 2
 		var mod = Color(1, 1, 1, 0.78 + 0.1 * sin(t * 6 + o.x)) if o.ghost else Color.WHITE
+		if o.kind == "hover" and o.biome != 0 and o.amp > 0 and not o.ghost:
+			mod = Color(1.0, 0.5, 0.42)              # (0.64) a mobile one (AM): a drone or a bat in red, as the forest's red spiders
 		if o.kind == "spiky":                        # on the floor
 			var shut = name == "beartrap" and absf(cx - n(run.sx)) < 30    # the trap snaps as he goes over it
 			var hop = -1.0 if (name == "spiky" and sin(t * 6 + o.x) > 0.6) else 0.0

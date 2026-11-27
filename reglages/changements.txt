@@ -1,0 +1,14 @@
+# Jungle Loop — les changements montrés par le bouton « Changements » (Réglages, à côté de « Mettre à jour »).
+# La version la plus récente en premier ; une ligne « = 0.xx » ouvre chaque version. Lignes en # ignorées.
+= 0.64
+Le mot de passe du menu de debug change chaque jour.
+Les araignées rouges sont immobiles 10 m avant toi.
+Affrontement : la mise s'applique dès qu'on l'écrit.
+= 0.63
+Affrontement : mise commune (le vainqueur rafle tout) ou individuelle.
+= 0.62
+Affrontement : l'hôte choisit le score (distance ou pièces) et la fin (dernier en vie ou illimitée).
+= 0.61
+Mises remises à 0 après chaque course, bouton « Tout ». Missiles à hauteur fixe.
+= 0.60
+Histoire : l'Aigle, gardien des pitons, et la Sphère.

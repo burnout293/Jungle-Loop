@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.63.0** (26/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.64.0** (27/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,18 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.64.0
+
+- Réglages : bouton **Changements** (à côté de « Mettre à jour ») : `reglages/changements.txt`, à compléter à chaque
+  version. La version affichée n'a plus « · Godot ».
+- Menu de debug : **mot de passe du jour** (`Lock.of_day`) : l'astre du jour de la semaine (Lune, Mars, Mercure,
+  Jupiter, Vénus, Saturne, Soleil) + jour du mois + mois, date de l'appareil (ex. mercredi 26/11 : Mercure37) ;
+  casse, accents, espaces ignorés ; l'appareil le garde jusqu'au lendemain. `tools/debug_password.py` retiré.
+- Aériens : **AF** (fixe) et **AM** (mobile), ex-Suspendu ; AM immobiles `SPIDER_STILL_M` **10 m** avant Pépito ;
+  drones et chauves-souris AM teintés en rouge (comme l'araignée rouge).
+- Affrontement : la mise s'applique à la frappe (plus de bouton « Miser ») ; équipement en icônes plus petites
+  (8 par ligne) pour que les règles restent dans leur cadre.
 
 ## 0.63.0
 

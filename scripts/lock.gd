@@ -1,17 +1,13 @@
 class_name Lock
 extends RefCounted
-## The debug menu's lock (0.48). Five touches on the level badge ask for a password, and the password itself
-## is nowhere in the game: only a salt and the SHA-256 of the key that PBKDF2-HMAC-SHA256 draws from it
-## (ROUNDS rounds). Reading the game's files (a decompiler, a dataminer) does not give it away, and every
-## password tried costs ROUNDS hashes. Once the right one is typed on a device, its key (never the password)
-## is kept there (KEPT) and the menu opens straight away; « Verrouiller cet appareil » in the menu forgets it.
-## Letters only count: case, spaces and dashes are ignored (abcd-efgh = ABCD EFGH).
-## A new password: python tools/debug_password.py (it rewrites SALT, ROUNDS and CHECK below).
-## Debug builds (the editor, the benches, an export made with --export-debug) are not locked.
+## The debug menu's lock (0.48, 0.64). Five touches on the level badge ask for the password of the day: the
+## day's planet (Monday Lune, Tuesday Mars, Wednesday Mercure, Thursday Jupiter, Friday Vénus, Saturday
+## Saturne, Sunday Soleil) then the day of the month plus the month, by the device's own date: Wednesday
+## 26 November gives Mercure37. Case, accents, spaces and dashes are ignored. Once typed, the device keeps
+## the day's code (KEPT) and the menu opens straight away until the day changes; « Verrouiller cet
+## appareil » forgets it. Debug builds (the editor, the benches, --export-debug) are not locked.
 
-const SALT := "4d0bcd7cb85d273e3b6dd0fecd841bf5"
-const ROUNDS := 300000
-const CHECK := "a11c0e76c273b2ba874909f74b73cc02ece62c0a074e4eff4a1caa1b38a0736a"
+const PLANETS := ["Soleil", "Lune", "Mars", "Mercure", "Jupiter", "Vénus", "Saturne"]   # Time's weekday: 0 is Sunday
 const KEPT := "user://jungle-loop-key.txt"
 const TRIES := 5                         # wrong passwords in a row before a pause
 const PAUSE := 30.0                      # seconds
@@ -20,14 +16,19 @@ static var _open := -1                   # -1 not looked at yet, 0 locked, 1 ope
 static var wrong := 0
 static var wait_until := 0.0             # (ticks, seconds) no try before then
 
+## The password of a day ({weekday, day, month} as Time gives it; today's by default): « Mercure37 ».
+static func of_day(d: Dictionary = {}) -> String:
+	if d.is_empty():
+		d = Time.get_date_dict_from_system()
+	return "%s%d" % [PLANETS[int(d["weekday"]) % 7], int(d["day"]) + int(d["month"])]
+
 static func unlocked() -> bool:
 	if OS.is_debug_build():
 		return true
 	if _open < 0:
 		_open = 0
 		if FileAccess.file_exists(KEPT):
-			var k = FileAccess.get_file_as_string(KEPT).strip_edges()
-			if k.length() == 64 and fits(k.hex_decode()):
+			if FileAccess.get_file_as_string(KEPT).strip_edges() == normal(of_day()):
 				_open = 1
 	return _open == 1
 
@@ -39,8 +40,7 @@ static func waiting() -> float:
 static func attempt(password: String) -> bool:
 	if waiting() > 0:
 		return false
-	var key = derive(password)
-	if not fits(key):
+	if normal(password) != normal(of_day()):
 		wrong += 1
 		if wrong >= TRIES:
 			wrong = 0
@@ -49,7 +49,7 @@ static func attempt(password: String) -> bool:
 	wrong = 0
 	var f = FileAccess.open(KEPT, FileAccess.WRITE)
 	if f != null:
-		f.store_string(key.hex_encode())
+		f.store_string(normal(of_day()))
 		f.close()
 	_open = 1
 	return true
@@ -61,38 +61,7 @@ static func forget() -> void:
 		DirAccess.remove_absolute(KEPT)
 
 static func normal(password: String) -> String:
-	return password.strip_edges().to_upper().replace(" ", "").replace("-", "")
-
-## PBKDF2-HMAC-SHA256, one block of 32 bytes (the same as Python's hashlib.pbkdf2_hmac).
-static func derive(password: String, salt_hex: String = SALT, rounds: int = ROUNDS) -> PackedByteArray:
-	var c = Crypto.new()
-	var p = normal(password).to_utf8_buffer()
-	var s = salt_hex.hex_decode()
-	s.append_array(PackedByteArray([0, 0, 0, 1]))
-	var u: PackedByteArray = c.hmac_digest(HashingContext.HASH_SHA256, p, s)
-	var t0 = u.decode_u64(0)
-	var t1 = u.decode_u64(8)
-	var t2 = u.decode_u64(16)
-	var t3 = u.decode_u64(24)
-	for i in rounds - 1:
-		u = c.hmac_digest(HashingContext.HASH_SHA256, p, u)
-		t0 ^= u.decode_u64(0)
-		t1 ^= u.decode_u64(8)
-		t2 ^= u.decode_u64(16)
-		t3 ^= u.decode_u64(24)
-	var out = PackedByteArray()
-	out.resize(32)
-	out.encode_u64(0, t0)
-	out.encode_u64(8, t1)
-	out.encode_u64(16, t2)
-	out.encode_u64(24, t3)
-	return out
-
-## Whether a key is the password's: its SHA-256 is CHECK.
-static func fits(key: PackedByteArray) -> bool:
-	if key.size() != 32:
-		return false
-	var h = HashingContext.new()
-	h.start(HashingContext.HASH_SHA256)
-	h.update(key)
-	return h.finish().hex_encode() == CHECK
+	var t = password.strip_edges().to_upper().replace(" ", "").replace("-", "")
+	for pair in [["É", "E"], ["È", "E"], ["Ê", "E"], ["Ë", "E"]]:
+		t = t.replace(pair[0], pair[1])
+	return t

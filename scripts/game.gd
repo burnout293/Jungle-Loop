@@ -335,7 +335,7 @@ static var SPIDER_COLUMN := 2
 # each way of their height (5 m in all) in SPIDER_PERIOD seconds, never past the floor or the ceiling.
 static var SPIDER_AMP := 100.0
 static var SPIDER_PERIOD := 2.4
-static var SPIDER_STILL_M := 6.0   # (0.63) a red spider is still at its height this many metres before him
+static var SPIDER_STILL_M := 10.0  # (0.63) a red spider is still at its height this many metres before him
 static var SPIDER_RUN_M := 12.0    # (0.63) ... after going there, one way, over this many metres
 const SPIDER_TOP := 566.0       # the highest a spider's middle goes: its back under the ceiling
 # Waves of flyers: 2 at 9 m/s up to 10 at 30 m/s, 0.9 s apart down to 0.3 s. On foot they come at head
