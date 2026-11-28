@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jungle Loop — maquettes du menu Skins</title>
+<link rel="stylesheet" href="../../site.css">
+<style>
+.mk { margin: 26px 0 40px; }
+.mk h2 { margin-bottom: 4px; }
+.mk p { color: var(--dim); margin: 0 0 10px; }
+.scr { position: relative; width: 100%; max-width: 820px; aspect-ratio: 569 / 320; background: #0d1715; border: 3px solid #1a1024;
+  border-radius: 8px; box-shadow: 0 0 0 2px #2b3b2f inset; overflow: hidden; font: 700 clamp(7px, 1.25vw, 11px) "Silkscreen", monospace; color: var(--ink); }
+.pn { position: absolute; background: #1b2422; border: 2px solid #1a1024; border-radius: 5px; box-shadow: 0 0 0 1px #3b5345 inset; }
+.tt { color: var(--gold); }
+.row { display: flex; align-items: center; gap: 4%; padding: 2.6% 4%; border-bottom: 1px solid #2b3b2f; }
+.row.on { background: #2f4a3a; color: var(--gold); }
+.ico { width: 1.6em; height: 1.6em; border-radius: 3px; background: #3b5345; flex: none; }
+.grid6 { display: grid; gap: 5%; padding: 5%; }
+.tile { aspect-ratio: 1; border-radius: 4px; background: #24312c; border: 2px solid var(--c, #c9d6c3); display: flex; align-items: flex-end;
+  justify-content: center; font-size: .75em; padding-bottom: 4%; position: relative; }
+.tile::before { content: ""; position: absolute; inset: 22% 26% 30%; background: var(--c, #c9d6c3); opacity: .45; border-radius: 40% 40% 30% 30%; }
+.tile.sel { box-shadow: 0 0 0 3px var(--gold); }
+.c { --c: #c9d6c3; } .r { --c: #5cb8ff; } .l { --c: #ffd35c; }
+.hero { position: absolute; width: 34%; aspect-ratio: .8; left: 33%; top: 16%; }
+.hero i { position: absolute; display: block; border-radius: 50%; }
+.btn { position: absolute; background: linear-gradient(#ffe48a, #ffd35c 55%, #d9a92c); color: #2a1a08; border: 2px solid #1a1024;
+  border-radius: 5px; text-align: center; padding: 1.2% 0; }
+.chip { display: inline-block; padding: 1% 2.4%; margin: 0 1% 1% 0; border-radius: 4px; background: #24312c; border: 1px solid #3b5345; }
+.chip.on { background: var(--gold); color: #2a1a08; }
+.spot { position: absolute; width: 7%; aspect-ratio: 1; border-radius: 50%; border: 2px solid var(--gold); background: rgba(255,211,92,.18);
+  display: flex; align-items: center; justify-content: center; font-size: .7em; }
+.pep { position: absolute; inset: 0; }
+.pep .head { left: 18%; top: 0; width: 64%; height: 46%; background: #1b1724; border: 2px solid #0b0916; }
+.pep .leaf { left: 6%; top: -12%; width: 88%; height: 30%; background: #6cc22e; border-radius: 50% 50% 20% 20%; }
+.pep .eye { width: 12%; height: 12%; background: #fff; top: 18%; }
+.pep .scarf { left: 20%; top: 46%; width: 60%; height: 10%; background: #2bb3a6; border-radius: 3px; }
+.pep .body { left: 28%; top: 54%; width: 44%; height: 26%; background: #8a5a2e; border-radius: 30%; }
+.pep .bag { left: 6%; top: 52%; width: 26%; height: 24%; background: #6e4b2a; border-radius: 25%; }
+.pep .shoe { top: 86%; width: 26%; height: 12%; background: #e0456b; border-radius: 40%; }
+</style>
+</head>
+<body>
+<nav><a href="../../infos.html">Accueil</a><a href="../../">Jouer</a><a href="../index.html" class="on">Dev-library</a></nav>
+<main>
+<h1>Menu Skins : 3 agencements</h1>
+<p class="sub">Trois façons de ranger beaucoup de catégories. Seule la partie Skins du menu Améliorations change ; l'aperçu est
+une image fixe de Pépito (ou de la monture) avec le skin.</p>
+
+<section class="mk">
+<h2>A · Vestiaire en colonnes</h2>
+<p>À gauche, les familles et leurs catégories dépliables (Pépito, Effets, Social, Montures, Interface) ; au centre la
+grille des skins de la catégorie, bordée selon la rareté ; à droite le grand aperçu et « Porter ». Le plus clair pour
+beaucoup de catégories : on voit toujours où l'on est.</p>
+<div class="scr">
+  <div class="pn" style="left:2%;top:4%;width:24%;height:92%">
+    <div class="row tt">PÉPITO ▾</div>
+    <div class="row on"><span class="ico"></span>Feuilles</div>
+    <div class="row"><span class="ico"></span>Chaussures</div>
+    <div class="row"><span class="ico"></span>Sac à dos</div>
+    <div class="row"><span class="ico"></span>Écharpe</div>
+    <div class="row tt">EFFETS ▸</div>
+    <div class="row tt">SOCIAL ▸</div>
+    <div class="row tt">MONTURES ▸</div>
+    <div class="row tt">INTERFACE ▸</div>
+  </div>
+  <div class="pn" style="left:28%;top:4%;width:38%;height:92%">
+    <div class="grid6" style="grid-template-columns:repeat(4,1fr)">
+      <div class="tile c sel">ORIG.</div><div class="tile c">AUTOM.</div><div class="tile c">GIVRE</div><div class="tile c">BRAISE</div>
+      <div class="tile r">NUIT</div><div class="tile r">OR</div><div class="tile r">CERISE</div><div class="tile l">AURORE</div>
+      <div class="tile l">CRISTAL</div><div class="tile c">MOUSSE</div><div class="tile r">CORAIL</div><div class="tile c">CENDRE</div>
+    </div>
+  </div>
+  <div class="pn" style="left:68%;top:4%;width:30%;height:92%">
+    <div class="row tt">FEUILLES · ORIGINAL</div>
+    <div class="hero" style="left:22%;top:22%;width:56%"><div class="pep"><i class="leaf"></i><i class="head"></i><i class="eye" style="left:34%"></i><i class="eye" style="left:56%"></i><i class="scarf"></i><i class="bag"></i><i class="body"></i><i class="shoe" style="left:22%"></i><i class="shoe" style="left:52%"></i></div></div>
+    <div class="btn" style="left:20%;width:60%;bottom:6%">PORTER</div>
+  </div>
+</div>
+</section>
+
+<section class="mk">
+<h2>B · Onglets et puces</h2>
+<p>En haut, une rangée d'onglets par famille ; dessous, des puces par catégorie (elles défilent s'il y en a beaucoup) ;
+une grande grille ; l'aperçu en médaillon dans le coin. Le plus de skins visibles d'un coup.</p>
+<div class="scr">
+  <div style="position:absolute;left:2%;top:4%;right:2%">
+    <span class="chip on">PÉPITO</span><span class="chip">EFFETS</span><span class="chip">SOCIAL</span><span class="chip">MONTURES</span><span class="chip">INTERFACE</span>
+  </div>
+  <div style="position:absolute;left:2%;top:14%;right:2%;color:var(--dim)">
+    <span class="chip on">Feuilles</span><span class="chip">Chaussures</span><span class="chip">Sac à dos</span><span class="chip">Écharpe</span><span class="chip">Cape</span><span class="chip">Lunettes</span> ›
+  </div>
+  <div class="pn" style="left:2%;top:25%;width:66%;height:71%">
+    <div class="grid6" style="grid-template-columns:repeat(6,1fr);gap:4%">
+      <div class="tile c sel">ORIG.</div><div class="tile c">AUTOM.</div><div class="tile c">GIVRE</div><div class="tile c">BRAISE</div><div class="tile r">NUIT</div><div class="tile r">OR</div>
+      <div class="tile r">CERISE</div><div class="tile l">AURORE</div><div class="tile l">CRISTAL</div><div class="tile c">MOUSSE</div><div class="tile r">CORAIL</div><div class="tile c">CENDRE</div>
+    </div>
+  </div>
+  <div class="pn" style="left:70%;top:25%;width:28%;height:71%">
+    <div class="hero" style="left:22%;top:8%;width:56%"><div class="pep"><i class="leaf" style="background:#ffd35c"></i><i class="head"></i><i class="eye" style="left:34%"></i><i class="eye" style="left:56%"></i><i class="scarf"></i><i class="bag"></i><i class="body"></i><i class="shoe" style="left:22%"></i><i class="shoe" style="left:52%"></i></div></div>
+    <div style="position:absolute;bottom:22%;width:100%;text-align:center" class="tt">FEUILLES OR · RARE</div>
+    <div class="btn" style="left:15%;width:70%;bottom:5%">10 000 ◈</div>
+  </div>
+</div>
+</section>
+
+<section class="mk">
+<h2>C · Le mannequin</h2>
+<p>Pépito en grand au milieu, des pastilles sur ce qui se change (feuilles, écharpe, sac, chaussures, hélice) ; une
+touche ouvre le carrousel de cette partie en bas. À gauche, les familles qui ne sont pas sur lui (effets, social,
+montures, interface). Le plus visuel et ludique.</p>
+<div class="scr">
+  <div class="pn" style="left:2%;top:4%;width:20%;height:92%">
+    <div class="row on"><span class="ico"></span>Pépito</div>
+    <div class="row"><span class="ico"></span>Effets</div>
+    <div class="row"><span class="ico"></span>Social</div>
+    <div class="row"><span class="ico"></span>Montures</div>
+    <div class="row"><span class="ico"></span>Interface</div>
+  </div>
+  <div class="hero" style="left:42%;top:8%;width:22%"><div class="pep"><i class="leaf"></i><i class="head"></i><i class="eye" style="left:34%"></i><i class="eye" style="left:56%"></i><i class="scarf"></i><i class="bag"></i><i class="body"></i><i class="shoe" style="left:22%"></i><i class="shoe" style="left:52%"></i></div></div>
+  <div class="spot" style="left:36%;top:6%">1</div>
+  <div class="spot" style="left:66%;top:30%">2</div>
+  <div class="spot" style="left:32%;top:40%">3</div>
+  <div class="spot" style="left:64%;top:52%">4</div>
+  <div class="pn" style="left:24%;top:70%;width:74%;height:26%;display:flex;align-items:center;gap:2%;padding:0 2%">
+    ‹ <div class="tile c sel" style="width:13%">ORIG.</div><div class="tile c" style="width:13%">AUTOM.</div><div class="tile r" style="width:13%">NUIT</div><div class="tile r" style="width:13%">OR</div><div class="tile l" style="width:13%">AURORE</div><div class="tile l" style="width:13%">CRISTAL</div> ›
+  </div>
+  <div class="btn" style="right:3%;width:17%;top:8%">PORTER</div>
+</div>
+</section>
+</main>
+</body>
+</html>
