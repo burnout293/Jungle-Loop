@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.64.0** (27/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.65.0** (28/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,26 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.65.0
+
+- Affrontement, **types** (`rules.score`, bouton de l'hôte) : **Distance** ; **Pièces** (le plus de pièces ; la route
+  passe la falaise vers les piliers brumeux à `SKY_RACE_AT` 150 m et y reste : `Run.sky_only`) ; **Trésor** (`rounds`
+  3/5/7/10 courses, chacune sous une règle de la Course du jour tirée par l'hôte, `pick` ; les mises vont dans la
+  cagnotte `rules.pot`, rien n'est rendu ; la dernière : vitesse ×1,4 `FINAL_SPEED`, 3 cœurs, aucune pièce
+  `Run.no_coins` ; 80 % de la cagnotte au 1er, 20 % au 2e) ; **Mystère** (règle cachée, « Valider » sans retour,
+  révélée quand tous ont validé, puis l'hôte lance : 3 s). Pas encore : le boss du décor tous les 1000 m de la
+  dernière course du Trésor. Test `tests/race_types_065.gd` (5).
+
+- Pouvoirs **Gravité augmentée** (`gravUp`, gravité ×1,2) et **Gravité réduite** (`gravDown`, ×0,82) : `Run.grav()`,
+  icône PixelLab `ico-gravup` (la plume pour la réduite) ; 6000 pièces, niveau 9 (`reglages/progression.txt`).
+- **Sphère en bascule** : bouton Normal / Sphère (`btn-ball`, touche B), sans recharge, `Run.ball_on` ; +4 m/s
+  (`BALL_PLUS`) ; les conduits ne se prennent qu'en Sphère (sans le pouvoir : les conduits ouverts du donjon).
+- Évasion au couteau : 3 gros points (un par corde), noirs puis jaunes (`EscapeBar`).
+- Urnes volantes : une tous les `URN_EVERY` 25 000 m, Run illimitée et Affrontement seulement (plus en Histoire).
+- Décor qui disparaissait derrière Pépito : le sol gardé 1500 unités derrière la caméra (au lieu de 300), le décor
+  cassable 900, les accessoires dessinés 4 cases plus tôt.
+- EQUILIBRAGE : tableau des objets volants (distances min / max, quelles courses).
 
 ## 0.64.0
 

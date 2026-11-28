@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.64.0"
+const VERSION := "0.65.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -118,6 +118,8 @@ const INVITE_POLL := 5.0
 var testing := false                   # a bench drives the game (--test, ?test on this computer): nothing looked up online
 var update_busy := false
 var update_online := ""                # the version online (version.txt beside the game), once looked at
+var mystery_shown := ""                # (0.65) the mystery rule already revealed on this phone
+const FINAL_SPEED := 1.4               # (0.65) a treasure's last race: its speed, times this
 var update_text := ""                  # what Réglages says about it
 var update_sure := false               # « à jour » said: pressing again reloads anyway
 var update_notes := ""                 # 0.49.1: what the new version brings (nouveautes.txt beside the game)
@@ -905,6 +907,7 @@ func _fill_hud() -> void:
 	hearts.visible = run.max_hearts > 1          # a single life needs no counter
 	for k in ACTS:
 		w["btn-" + k].visible = run.lvl(k) > 0
+	w["btn-ball"].visible = run.lvl("sphere") > 0
 	w["btn-pause"].visible = not run.coop            # (0.55) for two or more, no pause: the others run on
 	w["btn-emote"].visible = run.coop and not run.race and not _emotes().is_empty()   # (0.58) words for two
 	w["emote-row"].visible = false
@@ -1069,7 +1072,19 @@ func _build_hud() -> void:
 		acts.add_child(b)
 		w["btn-" + k] = b
 		w["cd-" + k] = cool
-	_place(acts, 569 - 12 - 300, 320 - 12 - 52, 300, 52)       # room for the five (three at most are equipped)
+	var bb = Button.new()                               # (0.65) the Sphère's mode: Normal / Sphère, no wait
+	bb.focus_mode = Control.FOCUS_NONE
+	_style_button(bb, "square")
+	bb.custom_minimum_size = Vector2(a(52), a(52))
+	bb.icon = icon("ico-sphere")
+	bb.expand_icon = true
+	bb.add_theme_constant_override("icon_max_width", roundi(a(34)))
+	bb.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bb.button_down.connect(func() -> void: input.ball = true)
+	acts.add_child(bb)
+	acts.move_child(bb, 0)
+	w["btn-ball"] = bb
+	_place(acts, 569 - 12 - 360, 320 - 12 - 52, 360, 52)       # room for the five (three at most are equipped) and the Sphère
 	s.add_child(acts)
 	# 0.47: caught by the pygmies: the Couteau suisse offered, then the escape (a cursor, a zone, the ropes)
 	var esc = PanelContainer.new()
@@ -1081,7 +1096,7 @@ func _build_hud() -> void:
 	w["esc-label"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ec.add_child(w["esc-label"])
 	var eb = EscapeBar.new()
-	eb.custom_minimum_size = Vector2(a(250), a(24))
+	eb.custom_minimum_size = Vector2(a(250), a(44))
 	eb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ec.add_child(eb)
 	w["esc-bar"] = eb
@@ -1138,7 +1153,14 @@ class EscapeBar extends Control:
 		if e.is_empty():
 			return
 		var W_ = size.x
-		var H_ = size.y
+		var H_ = size.y * 0.55                    # (0.65) the bar above, the ropes' dots below
+		var n = int(e.get("ropes", 3))           # (0.65) one big dot a good touch: black, yellow once cut
+		var r = minf(size.y * 0.18, W_ / (n * 3.0))
+		for i in n:
+			var c = Vector2(W_ / 2 + (i - (n - 1) / 2.0) * r * 3.0, size.y - r - 1)
+			var cut = i < n - int(e.get("rope", n))
+			draw_circle(c, r + 2, Color("#1a1024"))
+			draw_circle(c, r, Color("#ffd35c") if cut else Color("#2a2030"))
 		draw_rect(Rect2(0, 0, W_, H_), Color("#1a1024"))
 		draw_rect(Rect2(2, 2, W_ - 4, H_ - 4), Color("#3b2a1c"))
 		var zw: float = e["w"] * (W_ - 4)
@@ -3904,9 +3926,19 @@ func go(name: String) -> void:
 			up = {}
 			for k in rs["up"]:
 				up[str(k)] = int(rs["up"][k])
-			run = Game.coop_run(up, int(rs["seed"]), int(rs["tier"]), false, "endless")
+			run = Game.coop_run(up, int(rs["seed"]), int(rs["tier"]), false, "endless", bool(rs.get("sky", false)))
 			run.race = true
 			endless_biome = int(rs["biome"])
+			if bool(rs.get("final", false)):             # (0.65) a treasure's last race: fast, three hearts, no coins
+				Daily.apply(run, {"race": {"speed": FINAL_SPEED, "hearts": 3}, "kit": {}})
+				run.no_coins = true
+				run.daily = false
+			elif str(rs.get("rule", "")) != "":          # (0.65) treasure, mystery: a rule of the Course du jour's
+				var dd = Daily.of_day(str(rs["rule"]))
+				Daily.apply(run, dd)
+				run.daily = false
+				if dd["race"].has("biome"):
+					run.coop_biome_x = INF
 			coop_owed = 0.0
 			race_send_t = 0.0
 		elif coop_last:                                  # for two: the same road (seed, scenery, tier) on both phones,
@@ -5168,7 +5200,8 @@ func _build_race() -> void:
 	kv.add_child(w["rc-kit-note"])
 	var rr = _hbox(3)                                   # (0.61) the host's rules: the score, the end
 	w["rc-score"] = _button("Distance", "tab", func() -> void:
-		race.set_rule("score", "dist" if race.rules.get("score", "dist") == "gold" else "gold"))
+		var ts_: Array = Race.TYPES                  # (0.65) Distance, Pièces, Trésor, Mystère
+		race.set_rule("score", ts_[(ts_.find(str(race.rules.get("score", "dist"))) + 1) % ts_.size()]))
 	w["rc-score"].custom_minimum_size = Vector2(a(60), a(20))
 	rr.add_child(w["rc-score"])
 	w["rc-end"] = _button("Dernier en vie", "tab", func() -> void:
@@ -5177,7 +5210,11 @@ func _build_race() -> void:
 	rr.add_child(w["rc-end"])
 	kv.add_child(rr)
 	w["rc-stake"] = _button("Mise individuelle", "tab", func() -> void:   # (0.63) individual or common stakes
-		race.set_rule("stake", "solo" if race.rules.get("stake", "solo") == "common" else "common"))
+		if race.rules.get("score", "") == "treasure":   # (0.65) a treasure: how many races
+			var rr_: Array = Race.ROUNDS
+			race.set_rule("rounds", rr_[(rr_.find(int(race.rules.get("rounds", 5))) + 1) % rr_.size()])
+		else:
+			race.set_rule("stake", "solo" if race.rules.get("stake", "solo") == "common" else "common"))
 	w["rc-stake"].custom_minimum_size = Vector2(a(153), a(20))
 	kv.add_child(w["rc-stake"])
 	kitp.add_child(kv)
@@ -5357,12 +5394,13 @@ func refresh_race() -> void:
 			w["rc-on"].add_child(ob)
 		if not w["rc-amount"].has_focus():
 			w["rc-amount"].text = str(my_bet)
-	w["rc-score"].text = "Pièces" if race.rules.get("score", "dist") == "gold" else "Distance"   # (0.61) the rules
+	var rtype = str(race.rules.get("score", "dist"))
+	w["rc-score"].text = Race.TYPE_NAMES.get(rtype, "Distance")   # (0.61, 0.65) the rules
 	w["rc-end"].text = "Illimité" if race.rules.get("end", "last") == "open" else "Dernier en vie"
 	w["rc-score"].disabled = not host or not lobby
 	w["rc-end"].disabled = not host or not lobby
 	var common = race.rules.get("stake", "solo") == "common"
-	w["rc-stake"].text = "Mise commune" if common else "Mise individuelle"
+	w["rc-stake"].text = ("Trésor : %d courses" % int(race.rules.get("rounds", 5))) if rtype == "treasure" else ("Mise commune" if common else "Mise individuelle")
 	w["rc-stake"].disabled = not host or not lobby
 	var locked = common and not host                   # (0.63) common: the host's bet for all, or « Tout »
 	w["rc-amount"].editable = not locked
@@ -5371,6 +5409,12 @@ func refresh_race() -> void:
 		grid.remove_child(ch)
 		ch.queue_free()
 	var kit: Dictionary = race.kit if not race.kit.is_empty() or not host else SaveData.loadout(save)
+	var rpick = str(race.rules.get("pick", ""))       # (0.65) treasure, mystery: the rule's own kit (mystery: once revealed)
+	var hidden = rtype == "mystery" and not race.all_ready()
+	if race.treasure_final():
+		kit = {}
+	elif rpick != "" and not hidden:
+		kit = Daily.of_day(rpick)["kit"]
 	for u in SaveData.UPGRADES:
 		var lv = int(kit.get(u["id"], 0))
 		if lv <= 0:
@@ -5381,8 +5425,19 @@ func refresh_race() -> void:
 		lvl.position = Vector2(a(10), a(7))
 		cell.add_child(lvl)
 		grid.add_child(cell)
-	w["rc-kit-note"].text = "Aucun." if grid.get_child_count() == 0 else ""   # (0.63: room for the rules)
-	w["rc-kit-note"].visible = grid.get_child_count() == 0
+	var note = "Aucun." if grid.get_child_count() == 0 else ""   # (0.63: room for the rules)
+	if rtype == "mystery":
+		note = "Règle : ??? (révélée quand tous ont validé)" if hidden else "Règle : %s — %s" % [Daily.of_day(rpick)["rule"]["name"], Daily.of_day(rpick)["rule"]["desc"]]
+	elif race.treasure_final():
+		note = "Trésor, dernière course : vitesse, 3 cœurs, sans pièces. Cagnotte %d" % int(race.rules.get("pot", 0))
+	elif rtype == "treasure" and rpick != "":
+		note = "Trésor %d/%d : %s · cagnotte %d" % [int(race.rules.get("series", 0)) + 1, int(race.rules.get("rounds", 5)), Daily.of_day(rpick)["rule"]["name"], int(race.rules.get("pot", 0))]
+	w["rc-kit-note"].text = note
+	w["rc-kit-note"].visible = note != ""
+	if rtype == "mystery" and not hidden and rpick != "" and mystery_shown != rpick and lobby and modal == null:
+		mystery_shown = rpick                         # (0.65) everyone validated: the rule, revealed
+		var rr = Daily.of_day(rpick)["rule"]
+		_confirm("Règle révélée : %s\n\n%s" % [rr["name"], rr["desc"]], func() -> void: pass, "OK", "Fermer")
 	var hist: VBoxContainer = w["rc-hist"]               # the group's races, the latest first
 	for ch in hist.get_children():
 		hist.remove_child(ch)
@@ -5428,7 +5483,9 @@ func refresh_race() -> void:
 	w["rc-text"].visible = text != "" and not (lobby and race.seats.has(race.me))
 	var my_ready = bool(mine.get("ready", false))
 	w["rc-ready"].visible = lobby and race.seats.has(race.me) and not recap
-	w["rc-ready"].text = "Plus prêt" if my_ready else "Prêt !"
+	var mystery = str(race.rules.get("score", "")) == "mystery"   # (0.65) « Valider »: no way back
+	w["rc-ready"].text = ("Validé" if my_ready else "Valider") if mystery else ("Plus prêt" if my_ready else "Prêt !")
+	w["rc-ready"].disabled = mystery and my_ready
 	_style_button(w["rc-ready"], "" if my_ready else "go")
 	w["rc-go"].visible = lobby and race.seats.has(race.me) and not recap   # (0.57: for all, greyed until it can go)
 	w["rc-go"].disabled = not (host and race.all_ready())
@@ -5626,7 +5683,15 @@ func _race_go() -> void:
 		return
 	var up = SaveData.loadout(save)
 	race_note = ""
-	race.start({"seed": randi() % 2147483647, "biome": endless_biome, "tier": Coop.tier_of(up), "up": up}, 3.0)
+	var type = str(race.rules.get("score", "dist"))  # (0.65) the kind of race: its rule, its kit, its scenery
+	var pick = str(race.rules.get("pick", ""))
+	var final = race.treasure_final()
+	if final:
+		up = {}
+	elif pick != "":
+		up = Daily.of_day(pick)["kit"]
+	var biome = 0 if type == "gold" else endless_biome
+	race.start({"seed": randi() % 2147483647, "biome": biome, "tier": Coop.tier_of(up), "up": up, "rule": "" if final else pick, "final": final, "sky": type == "gold"}, 3.0)
 
 func _race_quit() -> void:
 	if race.running and not race.my_seat().get("done", false):
@@ -5650,7 +5715,8 @@ func _on_race(m: Dictionary) -> void:
 	match str(m.get("t", "")):
 		"start":
 			var delay = maxf(0.2, float(m.get("in", 3.0)))
-			race_start = {"seed": int(m.get("seed", 0)), "biome": int(m.get("biome", 0)), "tier": int(m.get("tier", 0)), "up": m.get("up", {}), "at": time + delay}
+			race_start = {"seed": int(m.get("seed", 0)), "biome": int(m.get("biome", 0)), "tier": int(m.get("tier", 0)), "up": m.get("up", {}), "at": time + delay,
+				"rule": str(m.get("rule", "")), "final": bool(m.get("final", false)), "sky": bool(m.get("sky", false))}
 			race_seen = false
 			race_note = ""
 			if state != "race":
@@ -6275,6 +6341,7 @@ func hud() -> void:
 			create_tween().tween_property(h, "modulate", Color(0.35, 0.35, 0.35, 0.5) if lost else Color.WHITE, 0.2)
 			create_tween().tween_property(h, "scale", Vector2(0.8, 0.8) if lost else Vector2.ONE, 0.2)
 			i += 1
+	w["btn-ball"].modulate = Color(1.0, 0.85, 0.35) if run.ball_on else Color.WHITE   # (0.65) lit while rolled up
 	for k in ACTS:
 		var act = {"dash": run.dash, "slow": run.slow, "boots": run.boots, "tnt": run.tnt, "monster": run.monster}[k]
 		var cool: Cooldown = w["cd-" + k]
@@ -6399,6 +6466,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			input.tnt = true
 		elif label == KEY_R:
 			input.monster = true
+		elif label == KEY_B:
+			input.ball = true                        # (0.65) the Sphère's mode
 		elif k.keycode == KEY_ESCAPE or label == KEY_P:
 			if state == "play":
 				pause()
@@ -6596,6 +6665,7 @@ func _taps_done() -> void:
 	input.pressed = false
 	input.dash = false
 	input.slow = false
+	input.ball = false
 	input.stomp = false
 	input.tnt = false
 	input.monster = false

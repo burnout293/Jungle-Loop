@@ -32,6 +32,8 @@ slow           | 12 | 30000 / 100000         # Sablier
 flight         | 5  | 4800 / 40000 / 120000  # Vol : montée 12, 13,5 puis 15 m/s
 sprint         | 5  | 4000                 # Sprint
 sphere         | 5  | 60000                  # Sphère
+gravUp         | 9  | 6000                   # Gravité augmentée (0.65)
+gravDown       | 9  | 6000                   # Gravité réduite (0.65)
 rewind         | 12 | 160000                 # Rembobinage
 swiss          | 4  | 1500 / 3500 / 8000     # Couteau suisse (0.54) : 1 évasion par course, puis plus facile, puis 2
 horn           | 4  | 1500 / 4000 / 9000     # Corne de brousse (0.55) : départ sur le rhino, 300 / 500 / 800 m

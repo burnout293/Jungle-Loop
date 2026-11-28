@@ -798,7 +798,7 @@ func _hill_foot(x: float, w: float) -> float:
 ## alone, so the same stretch always looks the same within a run.
 func draw_props(c: CanvasItem) -> void:
 	var cam = run.cam / PIXEL
-	var first = floori(cam / PROP_CELL) - 1
+	var first = floori(cam / PROP_CELL) - 4             # (0.65: wide props, drawn until they are off screen)
 	var last = floori((cam + view_w) / PROP_CELL) + 1
 	for i in range(first, last + 1):
 		var pr = Game.prop_at(i)
@@ -1706,7 +1706,7 @@ func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN, who_leap = null
 		glow(c, ox, oy - 18 * SIZE, (30 + sin(t * 30) * 2) * SIZE, Color(1, 211 / 255.0, 92 / 255.0, 0.6))
 	if me and p.inv > 0 and leap == null and not (st != null and st["k"] < 1) and floori(t * 14) % 2 == 1:
 		return                                       # blinking while invincible
-	if p.ball != null:                               # the Sphère: a ball of leaves, rolling, swelling out of a puff
+	if p.ball != null or (me and run.ball_on and leap == null):   # the Sphère (0.65: or its mode): a ball of leaves
 		var base: Texture2D = Art.tex.get("hero-ball")
 		if base == null:
 			return

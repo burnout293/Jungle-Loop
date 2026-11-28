@@ -145,6 +145,10 @@ static var JUMP_V := 760.0
 static var JUMP_DOUBLE := 700.0
 static var JUMP_GRAVITY := 2400.0
 static var JUMP_HELD := 1500.0
+static var SKY_RACE_AT := 150.0   # (0.65) Affrontement « Pièces »: the cliff to the heights this many metres in
+static var BALL_PLUS := 4.0      # (0.65) m/s more while rolled up (the Sphère's mode)
+static var GRAV_UP := 1.2        # (0.65) Gravité augmentée: gravity times this (jumps 1/1.2 as high, back down sooner)
+static var GRAV_DOWN := 0.82     # (0.65) Gravité réduite: gravity times this (jumps higher, floats down)
 # The flyer: a "!" at the right edge shows its height DART_WARN seconds before it crosses the screen; while it
 # shows, it drifts lazily towards his height (late: DART_LAG, never faster than DART_TRACK units a second), and
 # (0.54) stops following him DART_FREEZE seconds before it goes: the height it will cross at is known by then.
@@ -352,7 +356,8 @@ static var BONUS_EVERY := [1400.0, 2400.0]   # metres between two
 # hourglass's share, then what was the feather's (0.55: an hourglass too); the rest an urn, once a run at most,
 # from URN_FROM metres.
 static var BONUS_SHARE := [0.4, 0.45]
-static var URN_FROM := 600.0
+static var URN_FROM := 600.0          # (unused since 0.65)
+static var URN_EVERY := 25000.0       # (0.65) a flying urn: extremely rare, one every this many metres, never in Histoire
 # 0.55, equipped (Run illimitée only): the Idole dorée adds IDOL_MUL[level] to every coin picked up; the Corne
 # de brousse: out of the temple on the rhino, for HORN_M[level] metres.
 const IDOL_MUL := [0.0, 0.25, 0.5, 0.75]
@@ -922,6 +927,7 @@ class Controls:
 	var stomp := false       # Bottes de métal
 	var tnt := false         # Fana de TNT
 	var monster := false     # RedMonster
+	var ball := false        # (0.65) the Sphère's button: Normal / Sphère
 
 class Shape:
 	var name := ""
@@ -1020,7 +1026,11 @@ class Run:
 	var mounts: Array = ["gorilla", "rhino", "dragonfly"]   # the animals that may wait on the road (Montures: on / off)
 	var brake := 0.0               # what the brakes picked up take off his speed, for good
 	var bonuses: Array = []        # the rare floating things (Item: kind "brake" or "urn")
-	var urn_laid := false          # an urn floats once a run at most
+	var urn_laid := false          # an urn floated this run
+	var no_coins := false          # (0.65) Affrontement « Trésor », its last race: no coins
+	var sky_only := false          # (0.65) Affrontement « Pièces »: the misty heights, early and for good
+	var ball_on := false           # (0.65) the Sphère's mode: rolled up for good, until pressed again
+	var urn_n := 0                 # (0.65) urns laid so far (one every URN_EVERY m)
 	var urns := 0                  # picked up this run
 	var lanterns := 0              # the forest's lanterns lit as he ran past (0.47: the escape's zone grows)
 	var idol := 0.0                # the Idole dorée equipped: the share it adds (and what it has added so far)
@@ -1092,6 +1102,10 @@ class Run:
 	var strip_x1 := 0.0
 	var sky := false               # 0.53: he is in the misty heights now (the Vol on, the mist under him)
 	var sky_ok := false            # ... and the heights may come on this run (Histoire, or the Vol worn: new_run)
+
+	## (0.65) The gravity powers: Gravité augmentée (lower, quicker jumps), Gravité réduite (higher, slower).
+	func grav() -> float:
+		return (Game.GRAV_UP if int(up.get("gravUp", 0)) > 0 else 1.0) * (Game.GRAV_DOWN if int(up.get("gravDown", 0)) > 0 else 1.0)
 
 	func lvl(id: String) -> int:
 		if sky and id == "flight":               # (0.53) the heights: the Vol always on
@@ -1180,7 +1194,7 @@ static func road_luck(run: Run) -> int:
 ## change one player's pace alone (a mount, the hourglass picked up) or bend the road for him alone
 ## (Relique altérée, Trèfle's gems, the swarms that follow him). `mode`: "endless" or "story" (Vorace then
 ## laid on the road: see COOP_VIEW).
-static func coop_run(upgrades: Dictionary, seed_: int, tier: int, guest: bool, mode: String = "endless") -> Run:
+static func coop_run(upgrades: Dictionary, seed_: int, tier: int, guest: bool, mode: String = "endless", sky_only: bool = false) -> Run:
 	var up = upgrades.duplicate()
 	up.erase("drunk")
 	var keep = [STORY_TRY, STORY_CHAP]               # (for two: the first talks, the same on both phones)
@@ -1203,6 +1217,10 @@ static func coop_run(upgrades: Dictionary, seed_: int, tier: int, guest: bool, m
 		run.coop_biome_x = run.coop_zone_at + COOP_AHEAD
 	else:
 		run.coop_biome_x = ZONE_ENDLESS * PPM
+	if sky_only:                                     # (0.65) Affrontement « Pièces »: off the forest's cliff early, then
+		run.sky_only = true                          # the misty heights for good
+		run.sky_ok = true
+		run.coop_biome_x = SKY_RACE_AT * PPM
 	if guest:
 		run.home = PX - 70                       # just behind the host, on both screens: both are seen
 	return run
@@ -1245,6 +1263,8 @@ static func part(run: Run, x: float, y: float, vx: float, vy: float, mx: float, 
 static func coin(run: Run, x: float, y: float, gem_: String = "") -> Coin:
 	var c = Coin.new(x, y)
 	c.gem = gem_
+	if run.no_coins:
+		return c                                     # (0.65) a treasure's last race: no coin on the road
 	run.coins.append(c)
 	return c
 
@@ -1367,6 +1387,8 @@ static func flat_at(run: Run, x: float, w: float) -> bool:
 
 ## The scenery after `b` on this run (0.53: the heights skipped when they may not come).
 static func next_biome(run: Run, b: int) -> int:
+	if run.sky_only:
+		return SKY                                   # (0.65) Affrontement « Pièces »
 	var nb: int = NEXT_BIOME[b]
 	if nb == SKY and not run.sky_ok:
 		nb = NEXT_BIOME[nb]
@@ -1380,7 +1402,7 @@ static func biome_at(run: Run, x: float) -> int:
 
 ## The hero starts shut inside the temple: a short rumble, then the doorway blows out and he runs.
 static func launch(run: Run) -> void:
-	run.sky_ok = run.mode == "story" or int(run.up.get("flight", 0)) > 0   # (0.53) the heights: Histoire, or the Vol worn
+	run.sky_ok = run.mode == "story" or int(run.up.get("flight", 0)) > 0 or run.sky_only   # (0.53) the heights: Histoire, or the Vol worn
 	run.wait = 1.2
 	run.cam = -TEMPLE_PAN                            # (0.52) on the temple first; he is where he was, inside
 	run.sx += TEMPLE_PAN
@@ -1750,17 +1772,18 @@ static func _nest(run: Run, x: float) -> float:
 static func add_bonus(run: Run, x: float) -> void:
 	var roll = W.randf()
 	var ph = wrnd(0, 2)
-	if run.coop:
+	if run.coop and not run.race:                    # (0.65: a race of the Affrontement has them: each his own)
 		return
 	var it = Item.new()
 	it.x = x
-	if roll < BONUS_SHARE[0]:
+	if roll < 0.0:
 		it.kind = "brake"
-	elif roll < BONUS_SHARE[0] + BONUS_SHARE[1] or run.urn_laid or x / PPM < URN_FROM:
-		it.kind = "brake"                            # (0.55: where a feather was; the road's dice unchanged)
-	else:
-		it.kind = "urn"
+	elif run.mode != "story" and x / PPM >= URN_EVERY * (run.urn_n + 1):
+		it.kind = "urn"                              # (0.65) Run illimitée and Affrontement only: one every URN_EVERY m
+		run.urn_n += 1
 		run.urn_laid = true
+	else:
+		it.kind = "brake"                            # (0.55: where a feather was; the road's dice unchanged)
 	it.ph = ph
 	it.y = floor_at(run, x) - BONUS_LOW
 	run.bonuses.append(it)
@@ -1914,7 +1937,7 @@ static func spectate(run: Run, dt: float, x: float) -> void:
 	run.obs = run.obs.filter(func(o): return not o.gone and o.x + o.w > run.cam - 120)
 	run.plats = run.plats.filter(func(pl): return pl.x + pl.w > run.cam - 120)
 	run.coins = run.coins.filter(func(c): return c.x > run.cam - 200)
-	while run.terrain.size() > 2 and run.terrain[1].x < run.cam - 300:
+	while run.terrain.size() > 2 and run.terrain[1].x < run.cam - 1500:   # (0.65: was 300: the scenery behind him lost its floor and vanished)
 		run.terrain.pop_front()
 	var edge = run.cam + run.view_w + 200
 	var n = 0
@@ -4017,6 +4040,13 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.events.append("monster")
 	if run.monster.t > 0 and randf() < 0.6:          # red fizz flying off behind him
 		part(run, run.cam + run.sx - rnd(10, 40), run.p.y - rnd(10, 70), -rnd(160, 420), rnd(-60, 40), rnd(0.2, 0.45), colour_of(["#ff3b3b", "#ff6b4a", "#ffd35c"]), rnd(4, 9), 0)
+	if input.ball and run.lvl("sphere") > 0 and not run.dead:   # (0.65) Normal / Sphère, no wait
+		run.ball_on = not run.ball_on
+		run.p.balled = 0
+		run.events.append("roll" if run.ball_on else "unroll")
+	if run.ball_on and run.p.ball == null:
+		run.p.roll += run.speed * dt / 26
+		run.p.balled += dt
 	if run.leap == null and input.slow and run.lvl("slow") > 0 and run.slow.cd == 0:
 		run.slow.t = SLOW_TIME[run.lvl("slow")]
 		run.slow.cd = SLOW_CD
@@ -4057,6 +4087,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	var ramp = MOUNTS[run.mount.kind].get("ramp", RAMP) if run.mount != null and run.boss == null else RAMP
 	if run.monster.t > 0 and run.mount == null and run.boss == null:
 		ramp = MONSTER_RAMP
+	if run.ball_on:                                  # (0.65) the Sphère's mode: faster
+		pace += BALL_PLUS * PPM
 	run.speed = _ease_speed(run.speed, pace, ramp, dt)
 	run.road_speed = _ease_speed(run.road_speed, road_pace, ramp, dt)
 	if run.eagle != null and run.eagle.vmax >= 0:    # (0.60) the eagle beaten: he slows down onto the column
@@ -4214,8 +4246,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				run.events.append("bounce")
 		if p.ball == null and not mounted and p.plat == null:   # the Sphère (0.59: or a pipe of the dungeon): in he rolls
 			for z in run.zones:
-				if run.lvl("sphere") <= 0 and not z.open:
-					continue
+				if (not run.ball_on) if run.lvl("sphere") > 0 else not z.open:
+					continue                         # (0.65) with the Sphère: in its mode only; without it, the open ones
 				if z.mouth > 0:                      # (0.59) a mouth in the air: in as he passes it
 					var my = floor_at(run, z.x) - z.mouth
 					if not p.ground and px >= z.x and px < z.x + 130 and absf(p.y - HERO_H * 0.5 - my) < 64:
@@ -4251,7 +4283,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			p.plat = null
 			p.rotor = false
 			p.flying = false
-			p.vy += JUMP_GRAVITY * d
+			p.vy += JUMP_GRAVITY * run.grav() * d
 			p.y += p.vy * d
 			if run.soar <= 0 or p.y > GROUND - 40:     # (never down into the mist)
 				run.soar = 0
@@ -4363,9 +4395,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 					p.flew = true
 					p.vy = minf(-flap(run), p.vy + JUMP_GRAVITY * d)   # the leaf rotor: a steady climb while held
 				elif p.flew:
-					p.vy += JUMP_GRAVITY * VOL_DROP * heavy * d    # released after flying: down quickly
+					p.vy += JUMP_GRAVITY * VOL_DROP * heavy * run.grav() * d    # released after flying: down quickly
 				else:
-					p.vy += (JUMP_HELD if (input.hold and p.vy < 0 and not p.vine_leap) else JUMP_GRAVITY * heavy) * d
+					p.vy += (JUMP_HELD if (input.hold and p.vy < 0 and not p.vine_leap) else JUMP_GRAVITY * heavy) * run.grav() * d
 				p.flying = p.rotor or p.spin > 0
 				if p.flying and randf() < 0.25:
 					_leaves(run, px, p.y)
@@ -4665,13 +4697,13 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			if run.dead:
 				return
 	run.items = run.items.filter(func(it): return not it.gone and it.x > run.cam - 200)
-	run.decor = run.decor.filter(func(dc): return dc.x > run.cam - 200)
+	run.decor = run.decor.filter(func(dc): return dc.x > run.cam - 900)   # (0.65: wide pictures, kept until well off screen)
 	run.hills = run.hills.filter(func(hl): return hl.x + hl.w > run.cam - 200)
 	run.zones = run.zones.filter(func(z): return z.x + z.w > run.cam - 200 or z == run.p.ball)
 	run.obs = run.obs.filter(func(o): return not o.gone and o.x + o.w > run.cam - 120)
 	run.plats = run.plats.filter(func(pl): return pl.x + pl.w > run.cam - 120)
 
-	while run.terrain.size() > 2 and run.terrain[1].x < run.cam - 300:
+	while run.terrain.size() > 2 and run.terrain[1].x < run.cam - 1500:   # (0.65: was 300: the scenery behind him lost its floor and vanished)
 		run.terrain.pop_front()
 
 	place_signs(run)

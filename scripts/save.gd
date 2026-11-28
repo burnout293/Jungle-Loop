@@ -32,6 +32,8 @@ static var UPGRADES := [
 	{"id": "idol", "unlock": 5, "icon": "idolgold", "kind": "passif", "name": "Idole dorée", "desc": "Sans fin : les pièces ramassées valent 25 % de plus, puis 50 %, puis 75 %.", "costs": [2000, 6000, 15000]},
 	{"id": "lastLeap", "unlock": 6, "icon": "leap", "kind": "passif", "name": "Dernier élan", "desc": "Au dernier cœur perdu, tu rebondis encore pour gagner quelques mètres.", "costs": [1600, 3600, 7200]},
 	{"id": "flight", "unlock": 10, "icon": "flight", "kind": "passif", "power": true, "name": "Vol", "desc": "En l'air, chaque appui te fait remonter d'un coup d'hélice. Relâche : tu retombes. Niveaux 2 et 3 : tu montes plus vite.", "costs": [4800, 7000, 10000]},
+	{"id": "gravUp", "unlock": 9, "icon": "gravup", "kind": "passif", "power": true, "name": "Gravité augmentée", "desc": "Tu sautes moins haut et retombes plus vite.", "costs": [6000]},
+	{"id": "gravDown", "unlock": 9, "icon": "feather", "kind": "passif", "power": true, "name": "Gravité réduite", "desc": "Tu sautes plus haut et retombes plus lentement.", "costs": [6000]},
 	{"id": "sprint", "unlock": 8, "icon": "shoes", "kind": "passif", "power": true, "name": "Sprint", "desc": "Cours plus vite dès le départ, les jambes en tourbillon.", "costs": [4000]},
 	{"id": "sphere", "unlock": 10, "icon": "sphere", "kind": "passif", "power": true, "name": "Sphère", "desc": "Roule en boule dans les endroits exigus, troncs creux et galeries : il n'y a que des trésors là-dedans.", "costs": [6000]},
 	{"id": "rewind", "unlock": 12, "icon": "rewind", "kind": "passif", "name": "Rembobinage", "desc": "Une fois par course, la relique annule ta chute.", "costs": [10000]},

@@ -62,7 +62,7 @@ var _ping_t := 0.0
 var _end_t := 0.0
 var message_time := 0.0                 # my run's time (main.gd sets it every step): the trails' clock
 var tries := 0                          # a guest's links to the host tried again (once at most)
-var rules := {"score": "dist", "end": "last", "stake": "solo"}   # (0.63) stake solo (each his own, twice back) | common (the same for all, the winner takes the pot)   # (0.61) the host's rules: score dist|gold, end last (5 s after one is left)|open
+var rules := {"score": "dist", "end": "last", "stake": "solo", "rounds": 5, "pick": "", "series": 0, "pot": 0}   # (0.63) stake solo (each his own, twice back) | common (the same for all, the winner takes the pot)   # (0.61) the host's rules: score dist|gold, end last (5 s after one is left)|open
 var last_at := -1                       # (0.61) when only one was left running (ms), -1 if not
 static var LAST_WAIT := 5.0                  # (0.61) « Dernier en vie »: the race ends this long after only one is left
 var kit := {}                           # (0.55) the host's items and powers, for all: shown before the start
@@ -157,6 +157,8 @@ func all_ready() -> bool:
 func set_ready(on: bool) -> void:
 	if not seats.has(me) or running:
 		return
+	if not on and rules.get("score", "") == "mystery" and seats[me].get("ready", false):
+		return                                   # (0.65) « Valider »: no way back
 	seats[me]["ready"] = on
 	if role == "host":
 		_broadcast_lobby()
@@ -610,11 +612,34 @@ func _broadcast(msg: Dictionary, reliable: bool = true, except: String = "") -> 
 func _broadcast_lobby() -> void:
 	_broadcast({"t": "lobby", "seats": _public_seats(), "room": room, "running": running, "kit": kit, "n": races, "rules": rules})
 
+## (0.65) The kinds of race (rules.score): « dist » the furthest, « gold » the most coins (in the misty heights only),
+## « treasure » a series of `rounds` races, each under a rule of the Course du jour's (pick), bets kept in the
+## series' pot (rules.pot, nothing paid back) until the last one, a hard one: 80 % of the pot to its winner, 20 %
+## to the second; « mystery » a rule hidden (pick) until everyone has said « Valider » (no way back).
+const TYPES := ["dist", "gold", "treasure", "mystery"]
+const TYPE_NAMES := {"dist": "Distance", "gold": "Pièces", "treasure": "Trésor", "mystery": "Mystère"}
+const ROUNDS := [3, 5, 7, 10]
+
+## (0.65) The host: the rule of the next race (treasure, mystery), drawn anew.
+func new_pick() -> void:
+	if role != "host":
+		return
+	var t = str(rules.get("score", "dist"))
+	rules["pick"] = ("tresor-%d" % randi()) if t == "treasure" else (("mystere-%d" % randi()) if t == "mystery" else "")
+
+## (0.65) The next race of a treasure is its last (the hard one).
+func treasure_final() -> bool:
+	return str(rules.get("score", "")) == "treasure" and int(rules.get("series", 0)) >= int(rules.get("rounds", 5)) - 1
+
 ## (0.61) The host sets a rule of the group (in the lobby): "score" dist|gold, "end" last|open.
-func set_rule(key: String, value: String) -> void:
+func set_rule(key: String, value) -> void:
 	if role != "host" or running or not rules.has(key):
 		return
 	rules[key] = value
+	if key == "score":
+		rules["series"] = 0
+		rules["pot"] = 0
+		new_pick()
 	_common()
 	_broadcast_lobby()
 	changed.emit()
@@ -900,8 +925,10 @@ func _on_message(k: String, l: Link, m: Dictionary) -> void:
 			if m.get("kit") is Dictionary:
 				kit = m["kit"]
 			if m.get("rules") is Dictionary:
-				rules = {"score": "gold" if str(m["rules"].get("score", "")) == "gold" else "dist", "end": "open" if str(m["rules"].get("end", "")) == "open" else "last",
-					"stake": "common" if str(m["rules"].get("stake", "")) == "common" else "solo"}
+				var sc = str(m["rules"].get("score", ""))
+				rules = {"score": sc if sc in TYPES else "dist", "end": "open" if str(m["rules"].get("end", "")) == "open" else "last",
+					"stake": "common" if str(m["rules"].get("stake", "")) == "common" else "solo", "rounds": clampi(int(m["rules"].get("rounds", 5)), 1, 10),
+					"pick": str(m["rules"].get("pick", "")).left(40), "series": maxi(0, int(m["rules"].get("series", 0))), "pot": maxi(0, int(m["rules"].get("pot", 0)))}
 			races = maxi(races, int(m.get("n", 0)))
 			changed.emit()
 		"full":
@@ -1010,7 +1037,7 @@ func _check_end() -> void:
 	if on.size() == 1:                            # (0.61) one left: « Illimité » runs on to his fall; « Dernier
 		if rules.get("end", "last") == "open":    # en vie » ends LAST_WAIT s later (by distance: once he is
 			return                                # beyond everyone, so he is never stopped short of winning)
-		if rules.get("score", "dist") == "dist" and int(seats[on[0]].get("dist", 0)) <= best_done:
+		if rules.get("score", "dist") != "gold" and int(seats[on[0]].get("dist", 0)) <= best_done:
 			return
 		if last_at < 0:
 			last_at = Time.get_ticks_msec()
@@ -1021,6 +1048,27 @@ func _check_end() -> void:
 		dists[k] = int(seats[k].get("dist", 0))
 	var view = seats.duplicate(true)
 	var s = settle(view, str(rules.get("score", "dist")), str(rules.get("stake", "solo")))
+	if rules.get("score", "") == "treasure":         # (0.65) a treasure: the bets go to its pot; its last race pays it
+		var final = treasure_final()
+		rules["pot"] = int(rules.get("pot", 0)) + int(s["pot"])
+		for k in s["pay"]:
+			s["pay"][k] = 0
+		if final:
+			var order = seats.keys()
+			order.sort_custom(func(a, b): return dists[a] > dists[b])
+			var total = int(rules["pot"])
+			if order.size() > 0:
+				s["pay"][order[0]] = roundi(total * 0.8)
+			if order.size() > 1:
+				s["pay"][order[1]] = total - roundi(total * 0.8)
+			elif order.size() > 0:
+				s["pay"][order[0]] = total
+			rules["series"] = 0
+			rules["pot"] = 0
+		else:
+			rules["series"] = int(rules.get("series", 0)) + 1
+	if role == "host":
+		new_pick()
 	var msg = {"t": "result", "pot": s["pot"], "win": s["win"], "pay": {}, "dists": {}, "golds": {}}
 	for k in seats:
 		msg["pay"][str(k)] = s["pay"][k]
@@ -1028,6 +1076,7 @@ func _check_end() -> void:
 		msg["golds"][str(k)] = int(seats[k].get("gold", 0))
 	_broadcast(msg)
 	_end(msg)
+	_broadcast_lobby()                            # (0.65) the next race's rule, the treasure's count and pot
 
 ## The result: my share of the pot is paid.
 func _end(m: Dictionary) -> void:
