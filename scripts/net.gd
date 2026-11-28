@@ -217,3 +217,14 @@ func invite_no(save: Dictionary, room: String) -> Dictionary:
 ## The host left his room: it goes (and its invitation).
 func close_room(save: Dictionary, room: String) -> Dictionary:
 	return await _call(save, "room/close", {"room": room})
+
+## (0.66) A player's word about the game (Réglages → Envoyer un retour): 600 characters at most.
+func feedback(save: Dictionary, text: String, version: String) -> Dictionary:
+	return await _call(save, "feedback", {"text": text.left(600), "version": version})
+
+## (0.66) « Partie rapide »: a race room waiting for players ({room}), or {} (then open one and match_open it).
+func quick_match(save: Dictionary) -> Dictionary:
+	return await _call(save, "match", {})
+
+func match_open(save: Dictionary, room: String) -> Dictionary:
+	return await _call(save, "match/open", {"room": room})

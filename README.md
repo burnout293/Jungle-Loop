@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.65.0** (28/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.66.0** (28/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,22 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.66.0
+
+- **Partie rapide** (mode de l'accueil, et Amis → Groupe) : `net.quick_match` (route `match`) donne un salon de
+  course qui attend des joueurs ; sinon le joueur ouvre le sien et l'offre (`match/open`, renouvelé toutes les
+  45 s, oublié par le serveur après 2 min). Serveur : tables `queue` et `feedback` (`server/migrate-066.sql`).
+- **Envoyer un retour** (Réglages) : 600 caractères, avec la version, route `feedback` (5 par heure au plus).
+  Les lire : `npx --yes wrangler@4 d1 execute jungle-loop --remote --command="SELECT * FROM feedback ORDER BY at DESC"`
+  (depuis `server/`).
+- **Scènes de l'accueil** (`Run.home_scene`, `render.gd draw_home_scene`, au hasard, et suivies au départ d'une
+  Run illimitée) : le feu de camp (PixelLab `campfire`, le poulet à la broche ; le souffle l'envoie hors champ
+  et les deux pygmées plantés tête la première plus loin), les pygmées sur les rebords (ils sursautent), le
+  pygmée poursuivi par le rhino (lancé, planté devant l'entrée ; le rhino s'arrête, souffle, repart). Banc
+  `--tour66`.
+- Magasins (`store/`) : fiches refaites, sécurité des données (retours, inconnus), confidentialité, captures ;
+  **plus de menu de debug dans les versions des magasins** (`Lock.store_build`).
 
 ## 0.65.0
 

@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.65.0"
+const VERSION := "0.66.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -1304,7 +1304,7 @@ func _build_menu() -> void:
 	modes.set_meta("still", true)
 	modes.size = Vector2(W, H)
 	modes.z_index = 3
-	for spec in [["story", "ico-relic", "HISTOIRE"], ["endless", "ico-leap", "SANS FIN"], ["daily", "ico-urn", "COURSE DU JOUR"], ["race", "ico-friends", "AFFRONTEMENT"]]:
+	for spec in [["story", "ico-relic", "HISTOIRE"], ["endless", "ico-leap", "SANS FIN"], ["daily", "ico-urn", "COURSE DU JOUR"], ["race", "ico-friends", "AFFRONTEMENT"], ["quick", "ico-friends", "PARTIE RAPIDE"]]:
 		var mode: String = spec[0]
 		var on_mode = func() -> void:
 			if tip_held:
@@ -1317,7 +1317,7 @@ func _build_menu() -> void:
 		b.visible = false
 		b.set_meta("mode", mode)
 		b.set_meta("sub", sub)
-		if mode != "race" and mode != "daily":
+		if mode != "race" and mode != "daily" and mode != "quick":
 			_menu_tip_on(b, mode)
 		modes.add_child(b)
 		w["menu-go-" + mode] = b
@@ -1452,7 +1452,7 @@ func _home_modes(open: bool) -> void:
 		if b.has_meta("tw"):
 			(b.get_meta("tw") as Tween).kill()
 	if open:
-		var listed: Array = modes.get_children().filter(func(b): return b.get_meta("mode") != "race" or (Net.enabled() and Coop.supported()))
+		var listed: Array = modes.get_children().filter(func(b): return b.get_meta("mode") not in ["race", "quick"] or (Net.enabled() and Coop.supported()))
 		for b in modes.get_children():
 			if not b in listed:
 				b.visible = false
@@ -1488,6 +1488,7 @@ func _mode_texts() -> void:
 		"endless": "RECORD %d M" % best_of("endless"),
 		"race": ("TON GROUPE · %d/4" % race.count()) if race.role != "" else "CRÉE TON GROUPE",
 		"daily": "PALIERS %d/4 · %s" % [Daily.won(save), str(Daily.of_day()["rule"]["name"]).to_upper()],
+		"quick": "CONTRE D'AUTRES JOUEURS",
 	}
 	for b in w["menu-modes"].get_children():
 		(b.get_meta("sub") as Label).text = subs[b.get_meta("mode")]
@@ -1530,6 +1531,9 @@ func _race_ready() -> bool:
 ## A mode picked in the list: for two the host starts it for both; Affrontement is the race of the group.
 func _pick_mode(mode: String) -> void:
 	_home_modes(false)
+	if mode == "quick":                              # (0.66) strangers, in a race
+		_race_quick()
+		return
 	if mode == "race":                               # 0.51: the group's room first, where the bets are made
 		race_seen = true
 		if race.role == "":                          # (0.55) no group yet: one is made, its screen shows
@@ -1719,6 +1723,7 @@ func _roll_biome() -> void:
 	if still != null:
 		still.biome = endless_biome
 		still.prev_biome = endless_biome
+		still.home_scene = randi() % 3               # (0.66) one of the temple's scenes, at random
 
 ## A HUD button pressed: tnt, boots, slow, dash or monster.
 func _act(k: String) -> void:
@@ -2361,6 +2366,15 @@ func _build_settings() -> void:
 	um.custom_minimum_size.x = a(300)
 	w["upd-msg"] = um
 	game.add_child(um)
+	var fb = _hbox(4)                                  # (0.66) a word to the author, sent to the server
+	w["fb-text"] = _field("", 600, "Ton retour sur le jeu :", _send_feedback)
+	w["fb-text"].placeholder_text = "Un retour, une idée, un bug…"
+	w["fb-text"].custom_minimum_size = Vector2(a(220), a(22))
+	fb.add_child(w["fb-text"])
+	fb.add_child(_button("Envoyer", "small", _send_feedback))
+	game.add_child(fb)
+	w["fb-note"] = _label("", ts("s"), DIM, 0)
+	game.add_child(w["fb-note"])
 	w["panel-game"] = game
 	all.add_child(game)
 	# Affichage
@@ -3150,6 +3164,22 @@ func _offer_update() -> void:
 		text += "\n\n" + update_notes
 	text += "\n\nLe jeu se recharge, ta partie est gardée."
 	_confirm(text, _update_now, "Mettre à jour", "Plus tard")
+
+## (0.66) « Envoyer un retour »: the text to the server (never anything else than it and the version).
+func _send_feedback() -> void:
+	var t = str(w["fb-text"].text).strip_edges()
+	if t == "":
+		return
+	if not Net.enabled():
+		w["fb-note"].text = "Hors ligne : le retour ne peut pas partir."
+		return
+	w["fb-note"].text = "Envoi…"
+	var r = await net.feedback(save, t, VERSION)
+	if r.has("error"):
+		w["fb-note"].text = "Trop de retours d'un coup : réessaie plus tard." if r["error"] == "busy" else "Le retour n'est pas parti : réessaie plus tard."
+	else:
+		w["fb-text"].text = ""
+		w["fb-note"].text = "Merci, ton retour est bien arrivé !"
 
 ## (0.64) « Changements »: reglages/changements.txt, the latest versions first.
 func _show_changes() -> void:
@@ -3966,6 +3996,8 @@ func go(name: String) -> void:
 				run = Game.new_run(day["kit"], "endless", int(day["seed"]))
 			else:
 				run = Game.new_run(up, save["mode"])
+				if save["mode"] == "endless" and still != null:
+					run.home_scene = still.home_scene    # (0.66) the scene the home screen showed goes on
 			run.mounts = Game.MOUNT_KINDS.filter(func(k): return not k in save["mountsOff"])   # Montures: on / off
 			if daily_on:
 				run.biome = 0
@@ -4431,6 +4463,8 @@ func _build_group_g1(s: Control) -> void:
 	rv.alignment = BoxContainer.ALIGNMENT_CENTER
 	w["ra-host"] = _button("Créer un groupe", "small gold", func() -> void: _race_host(false))
 	rv.add_child(w["ra-host"])
+	w["ra-quick"] = _button("Partie rapide", "small gold", _race_quick)   # (0.66) strangers, in a race
+	rv.add_child(w["ra-quick"])
 	var rj = _hbox(4)
 	w["ra-code"] = _field("ABCD", 4, "Les 4 lettres du groupe :", _race_join)
 	rj.add_child(w["ra-code"])
@@ -4518,6 +4552,7 @@ func _refresh_group_g1() -> void:
 	w["g1-code"].text = race.room if not r_idle and race.room != "" else ""
 	w["g1-code"].visible = w["g1-code"].text != ""
 	w["ra-host"].visible = can and r_idle and Net.enabled()
+	w["ra-quick"].visible = w["ra-host"].visible            # (0.66)
 	w["ra-join-row"].visible = can and r_idle and Net.enabled()
 	w["ra-leave"].visible = not r_idle
 	var txt = ""
@@ -5638,6 +5673,29 @@ func _race_host(show: bool = true) -> void:
 	refresh_race()
 	if state == "friends":
 		refresh_friends()
+
+## (0.66) « Partie rapide »: into a race room waiting for players, or my own opened and offered to them (renewed
+## while it waits, until full or started).
+func _race_quick() -> void:
+	if not Net.enabled():
+		group_note = "Hors ligne : pas de partie rapide."
+		refresh_friends()
+		return
+	race.save = save
+	race_note = "Recherche d'adversaires…"
+	race_seen = true
+	var r = await net.quick_match(save)
+	if str(r.get("room", "")) != "":
+		race_note = ""
+		go("race")
+		race.join(str(r["room"]))
+		return
+	await _race_host(true)
+	race_note = "En attente d'adversaires (partie rapide)…"
+	refresh_race()
+	while race.role == "host" and race.state == "lobby" and race.count() < 4 and race.room != "":
+		await net.match_open(save, race.room)
+		await get_tree().create_timer(45.0).timeout
 
 func _race_join() -> void:
 	var code = w["ra-code"].text.strip_edges().to_upper()

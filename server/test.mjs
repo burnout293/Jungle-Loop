@@ -228,4 +228,20 @@ assert.equal((await call('friends', { id: q1.id, secret: q1.secret })).friends[0
 assert.equal((await call('player/look', { id: q1.id, secret: 'nope', sign: 'x' })).status, 403);
 ok('0.58: the board style is kept (cleaned) and seen by friends; only with the secret');
 
+
+// 0.66: feedback and the quick match
+assert.equal((await call('feedback', { id: a.id, secret: a.secret, text: '  Super jeu !  ', version: '0.66.0' })).ok, true);
+assert.equal((await call('feedback', { id: a.id, secret: a.secret, text: '   ' })).error, 'empty');
+for (let i = 0; i < 4; i++) await call('feedback', { id: a.id, secret: a.secret, text: 'encore ' + i });
+assert.equal((await call('feedback', { id: a.id, secret: a.secret, text: 'trop' })).error, 'busy');
+ok('feedback is kept, empty refused, 5 an hour at most');
+assert.deepEqual(Object.keys(await call('match', { id: b.id, secret: b.secret })).filter((k) => k !== 'status'), []);
+const qr = await call('race', { id: a.id, secret: a.secret, seed: 5 });
+assert.equal((await call('match/open', { id: a.id, secret: a.secret, room: qr.room })).ok, true);
+assert.equal((await call('match', { id: b.id, secret: b.secret })).room, qr.room);
+assert.equal((await call('match', { id: a.id, secret: a.secret })).room, undefined);
+await call('room/close', { id: a.id, secret: a.secret, room: qr.room });
+assert.equal((await call('match', { id: b.id, secret: b.secret })).room, undefined);
+ok('quick match: no room, then the waiting one (never my own), gone once closed');
+
 console.log(`\n${n} checks passed`);

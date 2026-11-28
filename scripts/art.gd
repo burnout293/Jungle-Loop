@@ -26,7 +26,7 @@ const BIOMES := [
 		"platform": "dungeon-platform", "pillar": "dungeon-pillar", "crate": "dungeon-crate", "slab": "dungeon-slab", "tunnel": "dungeon-tunnel", "plat_top": 2, "slab_top": 2, "hollow": ["#4a3026", "#140d0d", "#5c4636", "#0a0707"]},
 ]
 
-const NAMES := ["temple", "temple-mid", "temple-front", "temple-rubble", "vorace-legs", "vorace-head", "vorace-body", "vorace-log", "crate-big", "lilypad", "walkway", "hover-plat", "vine-garland", "vine-hang",
+const NAMES := ["campfire", "temple", "temple-mid", "temple-front", "temple-rubble", "vorace-legs", "vorace-head", "vorace-body", "vorace-log", "crate-big", "lilypad", "walkway", "hover-plat", "vine-garland", "vine-hang",
 	"spikebot", "spider-low", "spider-mid", "bat", "thornball", "beartrap", "vulture", "arrow", "missile", "idol", "drone", "wasp", "drone-big",
 	"pinnacle", "glider", "hornets", "toucan", "rocket", "cliff",
 	"hero-body", "hero-ball", "hero-rotor", "hero-fist", "hero-shoe", "mount-gorilla", "mount-gorilla-hang", "mount-rhino", "mount-dragonfly",

@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,7 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour66": opts["tour66"] = true        # 0.66: the temple's three scenes
 			"tour60": opts["tour60"] = true        # 0.60's: the eagle's fight, each of its moments
 			"tour59": opts["tour59"] = true        # 0.59's: slimes, the dungeon's pipes, the wall of wisps, the heights, the long fall
 			"tour58": opts["tour58"] = true        # 0.58's: Amis → Groupe (G1), « Expulser », « Inviter », the Affrontement (V1)
@@ -154,6 +155,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour66"]:
+		await _tour66()
 		return
 	if opts["tour60"]:
 		await _tour60()
@@ -513,6 +517,40 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour66: the temple's scenes: each on the home screen, then as the run starts (the blast and after).
+var steps66: Array = []
+
+func _tour66() -> void:
+	if steps66.is_empty():
+		steps66 = [[0.5, "scene", "0"], [1.5, "shot", "66-01-feu-accueil"], [1.6, "play", "0"], [2.6, "shot", "66-02-feu-depart"],
+			[3.2, "shot", "66-03-feu-souffle"], [3.8, "shot", "66-04-feu-vol"], [4.6, "shot", "66-05-feu-plantes"],
+			[7.6, "go", "menu"], [7.7, "scene", "1"], [8.6, "shot", "66-06-rebords-accueil"], [8.7, "play", "1"], [10.4, "shot", "66-07-rebords-souffle"],
+			[10.5, "go", "menu"], [10.6, "scene", "2"], [11.6, "shot", "66-08-rhino-poursuite"], [21.3, "shot", "66-09-rhino-lance"],
+			[22.5, "shot", "66-10-rhino-plante"], [24.5, "shot", "66-11-rhino-souffle"], [26.5, "shot", "66-12-rhino-repart"], [26.6, "quit", ""]]
+	while tour_i < steps66.size() and t >= steps66[tour_i][0]:
+		var st = steps66[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"scene":
+				main.save["seenIntro"] = true
+				main.endless_biome = 0
+				main.still.biome = 0
+				main.still.prev_biome = 0
+				main.still.home_scene = int(arg)
+				main.render.hs_run = null
+				main.refresh_menu()
+			"play":
+				main.save["mode"] = "endless"
+				main.still.home_scene = int(arg)
+				main.go("play")
+				main.run.god = true
+			"go": main.go(arg)
 			"quit": get_tree().quit()
 
 ## --tour60: the eagle in pictures (Histoire, the heights, untouchable): one picture a little after each of its

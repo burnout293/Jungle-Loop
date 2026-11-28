@@ -18,14 +18,16 @@ Jungle Loop est une course sans fin en pixel art : un seul doigt pour sauter, et
 plus en plus vite. Saute par-dessus les hérissons, passe sous les araignées, esquive les nuées de
 moustiques, grimpe sur le dos d'un gorille, d'un rhinocéros ou d'une libellule géante.
 
-★ Une jungle qui change : forêt, ruines, donjon et cité futuriste, chacun avec ses dangers.
-★ Le mode Histoire : la scène du temple, les gardes qui te poursuivent, et Vorace, la fleur-reine carnivore.
-★ Plus de 50 améliorations : double saut, vol, aimant, Esquive, Sablier, Rembobinage…
-★ Des défis, des niveaux, des urnes à briser et des skins à collectionner.
-★ Les Tambours des pygmées : un jeu de rythme chaque jour, avec une récompense.
+★ Une jungle qui change : forêt, piliers brumeux, ruines, donjon et cité futuriste, chacun avec ses dangers.
+★ Le mode Histoire : le temple, les gardes, et ses boss : Vorace, la fleur-reine carnivore, puis l'Aigle des
+  pitons, dans l'orage.
+★ Des pouvoirs à débloquer : double saut, Vol, Sphère, gravité, aimant, Esquive, Sablier, Rembobinage…
+★ La Course du jour : une règle nouvelle chaque jour et quatre paliers à atteindre.
+★ Des défis, des niveaux, des urnes à briser et plus de 50 cosmétiques à collectionner.
 ★ Capturé ? Un couteau suisse et un peu de dextérité pour couper les cordes et repartir.
 ★ Avec tes amis : ajoute-les par un code, un lien ou un code QR, croise leurs records sur la route, joue
-  à deux sur la même route, ou lance une course à quatre et mise tes pièces sur le plus rapide.
+  à deux, ou lance un Affrontement jusqu'à quatre (Distance, Pièces, Trésor ou Mystère) et mise tes
+  pièces. Ou une partie rapide contre d'autres joueurs.
 
 Sans publicité. Sans achat intégré. Jouable hors ligne (les amis demandent Internet).
 
@@ -48,14 +50,16 @@ Jungle Loop is an endless runner in pixel art: one finger to jump, and a jungle 
 faster. Leap over hedgehogs, slip under spiders, dodge mosquito swarms, ride a gorilla, a rhino or a giant
 dragonfly.
 
-★ A changing world: forest, ruins, dungeon and a futuristic city, each with its own dangers.
-★ Story mode: the temple scene, the guards on your heels, and Vorace, the carnivorous queen flower.
-★ Over 50 upgrades: double jump, flight, magnet, Dodge, Hourglass, Rewind…
-★ Challenges, levels, urns to break and skins to collect.
-★ The pygmies' Drums: a daily rhythm game with a reward.
+★ A changing world: forest, misty pillars, ruins, dungeon and a futuristic city, each with its own dangers.
+★ Story mode: the temple, the guards and its bosses: Vorace, the carnivorous queen flower, then the Eagle of
+  the peaks, in the storm.
+★ Powers to unlock: double jump, Flight, Sphere, gravity, magnet, Dodge, Hourglass, Rewind…
+★ The Daily Race: a new rule every day and four tiers to reach.
+★ Challenges, levels, urns to break and over 50 cosmetics to collect.
 ★ Caught? A Swiss knife and a steady hand to cut the ropes and run again.
-★ With friends: add them by code, link or QR code, pass their records on the road, run together on the
-  same road, or start a four-player race and bet your coins on the fastest.
+★ With friends: add them by code, link or QR code, pass their records on the road, run together, or start a
+  showdown for up to four (Distance, Coins, Treasure or Mystery) and bet your coins. Or a quick match
+  against other players.
 
 No ads. No in-app purchases. Plays offline (friends need the Internet).
 

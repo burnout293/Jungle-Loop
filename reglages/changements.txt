@@ -1,5 +1,9 @@
 # Jungle Loop — les changements montrés par le bouton « Changements » (Réglages, à côté de « Mettre à jour »).
 # La version la plus récente en premier ; une ligne « = 0.xx » ouvre chaque version. Lignes en # ignorées.
+= 0.66
+Partie rapide : contre d'autres joueurs (Jouer, ou Amis → Groupe).
+Réglages : envoyer un retour à l'auteur du jeu.
+Accueil : une des trois scènes des pygmées devant le temple (feu de camp, rebords, rhino).
 = 0.65
 Affrontement : 4 types — Distance, Pièces (dans les piliers brumeux), Trésor (3 à 10 courses, la cagnotte à la fin), Mystère (règle cachée).
 Nouveaux pouvoirs : Gravité augmentée et Gravité réduite.

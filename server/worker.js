@@ -29,6 +29,10 @@
 //   invites       {id, secret}                             -> {items: [{room, name, code}]}
 //   invite/no     {id, secret, room}                       -> {ok}              (the host reads {"t":"no"})
 //   room/close    {id, secret, room}                       -> {ok}              (the host left: room and invitation go)
+//   feedback      {id, secret, text, version}              -> {ok}              (0.66: a player's word, 5 an hour at most)
+//   match         {id, secret}                             -> {room} | {}       (0.66: « Partie rapide »: a room waiting for
+//                                                                                players, or none: open one, then match/open)
+//   match/open    {id, secret, room}                       -> {ok}              (0.66: my race room waits for players)
 //
 // ice: the relay (TURN) that carries a coop run when the two phones cannot reach each other directly
 // (a 4G / 5G network often forbids it). Cloudflare Realtime's TURN, with short-lived credentials made
@@ -38,6 +42,7 @@
 const MODES = ['story', 'endless'];
 const ROOM_LIFE = 10 * 60 * 1000;          // a room lasts ten minutes (the phones linked stay linked: it is
                                            // only for meeting)
+const QUEUE_LIFE = 2 * 60 * 1000;          // 0.66: a quick match's room waits this long without being renewed
 const RACE_GUESTS = 3;                     // a race: the host and three more
 const INVITE_LIFE = 2 * 60 * 1000;         // an invitation waits two minutes
 const TURN_TTL = 4 * 3600;                 // seconds a relay credential lasts: longer than any run for two
@@ -152,6 +157,8 @@ const routes = {
     await db.prepare('DELETE FROM signals WHERE sender = ? OR dest = ?').bind(me.id, me.id).run();
     await db.prepare('DELETE FROM rooms WHERE host = ?').bind(me.id).run();
     await db.prepare('UPDATE rooms SET guest = NULL WHERE guest = ?').bind(me.id).run();
+    await db.prepare('DELETE FROM feedback WHERE player = ?').bind(me.id).run();
+    await db.prepare('DELETE FROM queue WHERE player = ?').bind(me.id).run();
     await db.prepare('DELETE FROM players WHERE id = ?').bind(me.id).run();
     return { ok: true };
   },
@@ -336,6 +343,37 @@ const routes = {
     await db.prepare('DELETE FROM invites WHERE room = ? AND host = ?').bind(room, me.id).run();
     await db.prepare('DELETE FROM members WHERE room = ?').bind(room).run();
     await db.prepare('DELETE FROM rooms WHERE code = ? AND host = ?').bind(room, me.id).run();
+    await db.prepare('DELETE FROM queue WHERE player = ?').bind(me.id).run();
+    return { ok: true };
+  },
+
+  // 0.66: a player's word about the game, kept for the author (read with wrangler d1 execute).
+  async 'feedback'(db, body, now, me) {
+    const text = String(body.text || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 600);
+    if (!text) return { error: 'empty' };
+    const recent = await db.prepare('SELECT COUNT(*) AS n FROM feedback WHERE player = ? AND at > ?').bind(me.id, now - 3600 * 1000).first();
+    if (recent && recent.n >= 5) return { error: 'busy' };
+    await db.prepare('INSERT INTO feedback (player, version, text, at) VALUES (?, ?, ?, ?)')
+      .bind(me.id, String(body.version || '').slice(0, 16), text, now).run();
+    return { ok: true };
+  },
+
+  // 0.66: « Partie rapide »: a race room waiting for players (not mine, fresh, not full), else nothing.
+  async 'match'(db, body, now, me) {
+    await db.prepare('DELETE FROM queue WHERE at < ?').bind(now - QUEUE_LIFE).run();
+    const rows = (await db.prepare('SELECT q.room AS room FROM queue q JOIN rooms r ON r.code = q.room WHERE q.player != ? AND r.kind = ? ORDER BY q.at LIMIT 8').bind(me.id, 'race').all()).results;
+    for (const row of rows) {
+      const n = await db.prepare('SELECT COUNT(*) AS n FROM members WHERE room = ?').bind(row.room).first();
+      if (!n || n.n < RACE_GUESTS) return { room: row.room };
+    }
+    return {};
+  },
+
+  async 'match/open'(db, body, now, me) {
+    const room = roomCode(body.room);
+    const r = await db.prepare('SELECT 1 FROM rooms WHERE code = ? AND host = ? AND kind = ?').bind(room, me.id, 'race').first();
+    if (!r) return { error: 'unknown' };
+    await db.prepare('INSERT OR REPLACE INTO queue (player, room, at) VALUES (?, ?, ?)').bind(me.id, room, now).run();
     return { ok: true };
   },
 

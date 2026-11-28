@@ -12,6 +12,7 @@
 | Nom (le pseudo choisi, 16 caractères) | Oui | Non | Fonctionnement : tes amis le voient | Oui |
 | Identifiants de l'appareil ou autres (un identifiant aléatoire et un secret créés par le jeu) | Oui | Non | Fonctionnement : reconnaître le joueur | Oui |
 | Activité dans l'appli : autres actions (meilleures distances par mode) | Oui | Non | Fonctionnement : tableau des amis, panneaux de record | Oui |
+| Messages : autres contenus créés par l'utilisateur (0.66 : les retours envoyés depuis Réglages, 600 caractères) | Oui | Non | Assistance, amélioration du jeu | Oui |
 
 - **Chiffrées en transit** : oui (HTTPS vers le serveur ; WebRTC chiffre les parties à plusieurs).
 - **Suppression** : oui, dans le jeu (Réglages › Sauvegarde › « Effacer mes données en ligne », 0.48) ; et par
@@ -31,7 +32,7 @@
 | Sang, contenu sexuel, langage grossier, drogue | Non | |
 | **Jeux d'argent simulés** | **Oui, probablement** | la course à 4 permet de miser des pièces du jeu sur le vainqueur. Pas d'argent réel, rien à acheter, mais IARC compte en général « parier une monnaie virtuelle » comme jeu d'argent simulé : la note peut monter à 12 ans (PEGI 12). Voir le point D de mon rapport |
 | Objets au hasard (urnes) | Oui, gagnés en jouant, jamais achetés | pas de « loot box » payante : rien à déclarer côté achats |
-| Les joueurs interagissent | Oui | pseudos visibles par les amis, parties ensemble ; pas de messagerie, pas de texte libre hormis le pseudo |
+| Les joueurs interagissent | Oui | pseudos visibles, parties ensemble entre amis **et avec des inconnus** (0.66 : partie rapide) ; pas de messagerie, pas de texte libre hormis le pseudo (les retours vont à l'auteur seul) |
 | Partage de localisation | Non | |
 | Achats numériques | Non | |
 

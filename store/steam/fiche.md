@@ -11,11 +11,12 @@ entre amis où l'on mise ses pièces sur le plus rapide.
 Un seul bouton pour sauter, une jungle qui accélère sans cesse. Saute, glisse, vole, chevauche un gorille,
 un rhinocéros ou une libellule géante, et va toujours plus loin que la dernière fois.
 
-- Quatre décors qui s'enchaînent, chacun avec ses dangers
-- Le mode Histoire : le temple, les gardes, et Vorace, la fleur-reine carnivore
-- Plus de 50 améliorations, des défis, des niveaux, des urnes et des skins
-- Les Tambours des pygmées : un jeu de rythme quotidien
-- À deux sur la même route, ou en course à quatre avec des mises entre amis
+- Cinq décors qui s'enchaînent, chacun avec ses dangers
+- Le mode Histoire : le temple, les gardes, et ses boss, Vorace la fleur-reine puis l'Aigle des pitons
+- Des pouvoirs (Vol, Sphère, gravité…), des défis, des niveaux, des urnes et plus de 50 cosmétiques
+- La Course du jour : une règle nouvelle chaque jour
+- À deux sur la même route, ou en Affrontement à quatre (Distance, Pièces, Trésor, Mystère) avec des mises ;
+  partie rapide contre d'autres joueurs
 - Clavier, souris, écran tactile ou manette
 
 ## English
@@ -29,11 +30,12 @@ where you bet your coins on the fastest.
 One button to jump, a jungle that never stops speeding up. Jump, slide, fly, ride a gorilla, a rhino or a
 giant dragonfly, and always go further than last time.
 
-- Four worlds in a row, each with its own dangers
-- Story mode: the temple, the guards, and Vorace, the carnivorous queen flower
-- 50+ upgrades, challenges, levels, urns and skins
-- The pygmies' Drums: a daily rhythm game
-- Two players on the same road, or four-player races with bets between friends
+- Five worlds in a row, each with its own dangers
+- Story mode: the temple, the guards and its bosses, Vorace the queen flower then the Eagle of the peaks
+- Powers (Flight, Sphere, gravity…), challenges, levels, urns and 50+ cosmetics
+- The Daily Race: a new rule every day
+- Two players on the same road, or four-player showdowns (Distance, Coins, Treasure, Mystery) with bets;
+  quick match against other players
 - Keyboard, mouse, touch screen or gamepad
 
 ## Réglages Steamworks proposés

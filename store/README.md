@@ -4,6 +4,22 @@ Ce dossier rassemble tout ce qui peut être prêt avant la publication. Ce qui r
 **un paiement**, **une clé de signature à toi** ou **un téléchargement à accepter** : c'est en bas, dans
 « À faire par toi ».
 
+## Mise à jour du 28/11/2026 (0.66)
+
+- Fiches Play et Steam (`play/fiche.md`, `steam/fiche.md`) refaites pour le jeu d'aujourd'hui : cinq décors,
+  les boss de l'Histoire (Vorace, l'Aigle), les pouvoirs (Vol, Sphère, gravité), la Course du jour, les
+  cosmétiques, l'Affrontement (Distance, Pièces, Trésor, Mystère) et la partie rapide. Les Tambours (retirés en
+  0.55) n'y sont plus.
+- Sécurité des données et questionnaire IARC (`play/questionnaires.md`) : les retours envoyés depuis Réglages
+  (nouvelle donnée collectée) et les parties avec des inconnus (partie rapide).
+- Politique de confidentialité mise à jour (`site/confidentialite.html`, en ligne avec le jeu).
+- Les versions des magasins (fonction `play` pour Android, `steam` pour Windows et Linux) n'ont **plus de menu
+  de debug** (`Lock.store_build`) : le mot de passe du jour se devine en lisant le code.
+- Captures : `capture-08-tambours.png` montre un mode retiré, remplacée par l'Affrontement ; nouvelles captures
+  de l'Aigle, de la Course du jour et de l'accueil avec ses scènes (`capture-11` à `capture-13`).
+- Toujours à faire par toi (en bas) : comptes, paiements, clé de signature, outils Android, SteamCMD ; et
+  l'extension **webrtc-native** (téléchargement à accepter) pour jouer à plusieurs dans les versions natives.
+
 ## Ce qui est prêt
 
 | Quoi | Où |

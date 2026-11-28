@@ -22,9 +22,16 @@ static func of_day(d: Dictionary = {}) -> String:
 		d = Time.get_date_dict_from_system()
 	return "%s%d" % [PLANETS[int(d["weekday"]) % 7], int(d["day"]) + int(d["month"])]
 
+## (0.66) The builds for the stores (Play: feature « play », Steam: « steam »): no debug menu at all (the
+## password of the day can be worked out from the game's code).
+static func store_build() -> bool:
+	return OS.has_feature("play") or OS.has_feature("steam")
+
 static func unlocked() -> bool:
 	if OS.is_debug_build():
 		return true
+	if store_build():
+		return false
 	if _open < 0:
 		_open = 0
 		if FileAccess.file_exists(KEPT):
@@ -40,7 +47,7 @@ static func waiting() -> float:
 static func attempt(password: String) -> bool:
 	if waiting() > 0:
 		return false
-	if normal(password) != normal(of_day()):
+	if store_build() or normal(password) != normal(of_day()):
 		wrong += 1
 		if wrong >= TRIES:
 			wrong = 0

@@ -217,6 +217,167 @@ func draw_guards(c: CanvasItem) -> void:
 		shadow(c, x, foot - 1, 16)
 		guard_at(c, i, x, foot, g.v < 0, floori(t * 13 + i * 3))
 
+## (0.66) The temple's little scenes (Run.home_scene), on the home screen and as a Run illimitée starts. In world
+## pixels from the doorway; times from when this run was first drawn (hs_t0) and the doorway blown (hs_blast).
+## 0: two pygmies at a campfire, a chicken on the spit; the blast throws the fire off screen and them to the
+## right, where he finds them later, heads in the ground. 1: pygmies sitting on the temple's ledges, who jump
+## at the blast. 2: a pygmy chased by the rhino across the screen, now and then; once, tossed out of sight,
+## he lands head first before the doorway; the rhino comes up, stops, snorts, and goes back the way it came.
+var hs_run = null
+var hs_t0 := 0.0
+var hs_blast := -1.0
+
+func draw_home_scene(c: CanvasItem) -> void:
+	if run.home_scene < 0:
+		return
+	if hs_run != run:
+		hs_run = run
+		hs_t0 = t
+		hs_blast = -1.0
+	if run.exploded and hs_blast < 0:
+		hs_blast = t
+	var cam = run.cam / PIXEL
+	var bt = t - hs_blast if hs_blast >= 0 else -1.0
+	var lt = t - hs_t0
+	match run.home_scene:
+		0:
+			_scene_fire(c, cam, bt)
+		1:
+			_scene_ledges(c, cam, bt)
+		2:
+			_scene_chase(c, cam, lt)
+
+func _scene_fire(c: CanvasItem, cam: float, bt: float) -> void:
+	var fire: Texture2D = Art.tex.get("campfire")
+	var fx = DOOR_X + 95.0 - cam
+	var foot = floor_px(fx)
+	if bt < 0:
+		if fire != null:
+			glow(c, fx, foot - 14, 34 + sin(t * 9) * 3, Color(1, 0.6, 0.2, 0.35))
+			blit(c, fire, snap(fx - fire.get_width() / 2.0), foot - fire.get_height() + 2)
+		guard_at(c, 0, fx - 34, foot, false, 0, absf(sin(t * 2.0)) * 1.5)
+		guard_at(c, 1, fx + 36, foot, true, 0, absf(sin(t * 2.0 + 1.3)) * 1.5)
+		return
+	if fire != null and bt < 2.0:                    # thrown off, spinning, out of sight
+		var x = fx + 260 * bt
+		var y = foot - fire.get_height() - (320 * bt - 260 * bt * bt)
+		c.draw_set_transform(Vector2(x, y), bt * 7.0, Vector2.ONE)
+		blit(c, fire, -fire.get_width() / 2.0, -fire.get_height() / 2.0)
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	for i in 2:                                      # catapulted to the right, then planted, heads in the ground
+		var land = DOOR_X + 460.0 + i * 80.0 - cam
+		var fly = 1.1
+		if bt < fly:
+			var k = bt / fly
+			var x0 = fx + (-34.0 if i == 0 else 36.0)
+			var x = lerpf(x0, land, k)
+			var y = floor_px(x) - 300 * sin(PI * k) - 20
+			c.draw_set_transform(Vector2(x, y), bt * 11.0 + i, Vector2.ONE)
+			guard_at(c, i, 0, 20, i == 1, 3)
+			c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		else:
+			_planted(c, i, land, bt - fly)
+
+func _scene_ledges(c: CanvasItem, cam: float, bt: float) -> void:
+	var temple: Texture2D = Art.tex.get("temple")
+	if temple == null:
+		return
+	var tx = snap(TEMPLE_X - cam)
+	var ty = GN - TEMPLE_FLOOR
+	for spot in [[86.0, 89.0, 0, false], [140.0, 128.0, 1, true], [44.0, 128.0, 1, false]]:
+		var lift = 0.0
+		if bt >= 0 and bt < 0.6:                     # the blast: a jump of fright, then a shiver
+			lift = 34 * sin(PI * bt / 0.6)
+		var shake = 1.5 * sin(t * 40) if bt >= 0.6 and bt < 1.6 else 0.0
+		guard_at(c, spot[2], tx + spot[0] + shake, ty + spot[1], spot[3], 0, lift + absf(sin(t * 1.5 + spot[0])) * 0.8)
+
+func _scene_chase(c: CanvasItem, cam: float, lt: float) -> void:
+	var period = 5.0
+	var toss_n = 2 + (run.seed % 2)                   # the pass on which the rhino tosses him
+	var n_ = floori(lt / period)
+	var p = fmod(lt, period)
+	var left = cam - 60
+	var right = cam + view_w + 60
+	var door = DOOR_X - 60.0                        # (left of the doorway: the home screen's JOUER covers it)
+	if n_ < toss_n:
+		if p < 2.6:                                  # across, the rhino at his heels
+			var dir = 1 if n_ % 2 == 0 else -1
+			var k = p / 2.6
+			var px = lerpf(left, right, k) if dir > 0 else lerpf(right, left, k)
+			_scene_rhino(c, px - dir * 110 - cam, dir, floori(t * 12))
+			guard_at(c, 0, px - cam, floor_px(px - cam), dir < 0, floori(t * 16), absf(sin(t * 16)) * 4)
+		return
+	var s = lt - toss_n * period                     # the toss: up out of sight, then head first before the doorway
+	var mid = (left + right) / 2.0
+	if s < 1.3:
+		var k = s / 1.3
+		var px = lerpf(left, mid, minf(1.0, k * 2.0))
+		_scene_rhino(c, px - 110 - cam, 1, floori(t * 12))
+		if k < 0.5:
+			guard_at(c, 0, px - cam, floor_px(px - cam), false, floori(t * 16))
+		else:
+			var y = floor_px(mid - cam) - 600 * (k - 0.5)
+			c.draw_set_transform(Vector2(mid - cam, y), s * 12.0, Vector2.ONE)
+			guard_at(c, 0, 0, 20, false, 3)
+			c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		return
+	if s < 2.0:                                      # coming down onto the doorway
+		var k = (s - 1.3) / 0.7
+		var y = floor_px(door - cam) - 500 * (1 - k)
+		c.draw_set_transform(Vector2(door - cam, y), PI, Vector2.ONE)
+		guard_at(c, 0, 0, 0, false, 3)
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		_scene_rhino(c, mid - 110 - cam, 1, 0)
+		return
+	_planted(c, 0, door - cam, s - 2.0)
+	var r0 = mid - 110                               # it comes up, stops, snorts, then goes back
+	var stop = door + (110.0 if r0 > door else -110.0)
+	var toward = 1 if stop > r0 else -1
+	var rx = r0
+	var dir = toward
+	var moving = true
+	if s < 3.4:
+		rx = lerpf(r0, stop, (s - 2.0) / 1.4)
+	elif s < 5.0:
+		rx = stop
+		moving = false
+		for k in 3:                                  # the snort
+			var q = fmod(s * 2.0 + k * 0.33, 1.0)
+			c.draw_circle(Vector2(rx - cam + toward * (40 + q * 30), floor_px(rx - cam) - 30 - q * 10), 4 + q * 6, Color(1, 1, 1, 0.5 * (1 - q)))
+	else:
+		dir = -toward
+		rx = stop + dir * (s - 5.0) * 420
+	if rx > left - 200 and rx < right + 200:
+		_scene_rhino(c, rx - cam, dir, floori(t * 12) if moving else 0)
+
+## A pygmy planted head first in the ground: his legs in the air, kicking now and then.
+func _planted(c: CanvasItem, i: int, x: float, since: float) -> void:
+	var im: Texture2D = Art.tex.get(GUARDS[i % GUARDS.size()])
+	if im == null or x < -60 or x > view_w + 60:
+		return
+	var foot = floor_px(x)
+	var fw = im.get_width() / 8.0
+	var dw = fw * 0.8
+	var dh = im.get_height() * 0.8
+	var kick = sin(since * 9.0) * 2.0 if fmod(since, 2.5) < 0.6 else 0.0
+	c.draw_set_transform(Vector2(0, foot + 2), 0.0, Vector2(1, -1))   # upside down: the hips at the ground, the feet up
+	c.draw_texture_rect_region(im, Rect2(snap(x - dw / 2 + kick), 0, dw, dh * 0.55), Rect2(0, im.get_height() * 0.45, fw, im.get_height() * 0.55), Color(0.92, 0.92, 0.96))
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	rect(c, snap(x - 9), foot - 1, 18, 3, Color("#5a3d22"))
+
+## The rhino of the scenes, running (`dir` 1 right, -1 left).
+func _scene_rhino(c: CanvasItem, x: float, dir: int, frame: int) -> void:
+	if x < -160 or x > view_w + 160:
+		return
+	var M: Dictionary = Art.meta.get("mounts", {}).get("rhino", {})
+	var fr = maxi(1, int(M.get("frames", 1)))
+	if dir < 0:
+		c.draw_set_transform(Vector2(x, 0), 0.0, Vector2(-1, 1))
+		draw_mount(c, "rhino", frame % fr, 0, floor_px(x), 0)
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	else:
+		draw_mount(c, "rhino", frame % fr, x, floor_px(x), 0)
+
 ## (0.59) Histoire, the dungeon: the slimes hopping after him (squashed as they land, stretched as they leap).
 func draw_slimes(c: CanvasItem) -> void:
 	if run.slimes.is_empty() or run.caught != null:
@@ -1987,6 +2148,7 @@ func _draw_back(c: CanvasItem) -> void:
 	_draw_items(c)
 	_draw_obstacles(c)
 	draw_guards(c)
+	draw_home_scene(c)                               # (0.66) the pygmies by the temple
 	draw_slimes(c)                                   # (0.59) Histoire, the dungeon
 
 	if not run.dead or show_dead:

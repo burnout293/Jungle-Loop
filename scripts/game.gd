@@ -1027,6 +1027,8 @@ class Run:
 	var brake := 0.0               # what the brakes picked up take off his speed, for good
 	var bonuses: Array = []        # the rare floating things (Item: kind "brake" or "urn")
 	var urn_laid := false          # an urn floated this run
+	var home_scene := -1           # (0.66) the temple's little scene (render.gd draw_home_scene): 0 the campfire, 1 the
+	                               # ledges, 2 the rhino; -1 none (Histoire, races, for two)
 	var no_coins := false          # (0.65) Affrontement « Trésor », its last race: no coins
 	var sky_only := false          # (0.65) Affrontement « Pièces »: the misty heights, early and for good
 	var ball_on := false           # (0.65) the Sphère's mode: rolled up for good, until pressed again
