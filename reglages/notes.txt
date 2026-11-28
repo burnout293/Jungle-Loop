@@ -1,6 +1,9 @@
 # Jungle Loop — les notes courtes du bouton « Changements » (Réglages). Une ligne « = 0.xx » ouvre chaque version,
 # la plus récente en premier ; une à trois lignes très courtes par version. Le journal complet est
 # reglages/changements.txt (publié sur le site : journal.html). Les lignes en # sont ignorées.
+= 0.71
+Panneaux de record : le pseudo seul, lisible, posés jusqu'en bas.
+Donjon : bannières de l'étage difficile et du tranquille.
 = 0.70
 Pause : réglages en haut à gauche, bouton Recommencer.
 Accueil : tes défis à l'écran, des pastilles quand il y a du nouveau.

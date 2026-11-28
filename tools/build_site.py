@@ -141,6 +141,12 @@ def build():
             thumb = f'<img src="{rel}/{name}" alt="" loading="lazy">' if f.suffix.lower() != '.html' else '<b>page</b>'
             cells += f'<a href="{rel}/{name}">{thumb}{name}</a>'
         galleries.append(f'<h2>{html.escape(title)}</h2><div class="grid">{cells}</div>')
+    mq = dev / 'maquettes'                         # the mock-ups, written straight into the site (pages)
+    if mq.is_dir():
+        cells = ''.join(f'<a href="maquettes/{html.escape(f.name)}"><b>maquette</b>{html.escape(f.stem)}</a>'
+                        for f in sorted(mq.iterdir()) if f.suffix == '.html')
+        if cells:
+            galleries.insert(0, f'<h2>Maquettes</h2><div class="grid">{cells}</div>')
     body = ('<h1>Dev-library</h1><p class="sub">Les propositions, maquettes et images du jeu, gardées ici pour les retrouver. '
             'Touche une image pour la voir en grand.</p>' + ''.join(galleries))
     (dev / 'index.html').write_text(page('dev/index.html', 'dev-library', body, depth=1), encoding='utf-8')

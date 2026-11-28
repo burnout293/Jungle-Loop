@@ -996,6 +996,7 @@ class Run:
 	var split_end := -INF          # (0.69) the dungeon in two: where its last cycle ended (a new stretch past it)
 	var split_hard := 0            # ... which part is the hard one in this stretch: 0 below, 1 above
 	var split_next := [0.0, 0.0]   # ... where each part's next danger may stand (kept from one cycle to the next)
+	var split_starts: Array = []   # (0.70) where each stretch began (render.gd hangs there which part is the hard one)
 	var easy_until := 0.0
 	var dash := Active.new()
 	var slow := Active.new()
@@ -1815,6 +1816,9 @@ static func lay_split(run: Run, x: float) -> void:
 	if x > run.split_end + 1.0:                      # a new stretch of dungeon: which part is the hard one
 		run.split_hard = 0 if W.randf() < 0.5 else 1
 		run.split_next = [x + 200.0, x + 200.0]
+		run.split_starts.append(x)
+		if run.split_starts.size() > 4:
+			run.split_starts.pop_front()
 	run.split_end = x + L
 	_deck(run, x, x + L, deck_y)
 	var a = x + 100.0

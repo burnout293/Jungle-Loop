@@ -552,6 +552,8 @@ func _tour70s() -> void:
 		r.sky_ok = true
 		r.up["flight"] = 1
 		r.god = true
+		for k in 3:                                  # friends' signs (0.70: the pseudo only, the post to the bottom)
+			r.signs.append({"x": r.cam + r.sx + 900.0 + k * 1400.0, "own": k == 2, "name": ["Léa", "Maxou"][k % 2], "d": 100 + k * 30})
 		return
 	if shots70s == 0:
 		return

@@ -625,14 +625,14 @@ static func build_scene(b: Dictionary) -> Dictionary:
 		"isles": isles, "gtop": top,
 		"bg": make(bg) if bg != null else null,
 		"mid": make(mid) if mid != null else null,
-		"ground": {"pieces": pieces, "len": ln, "soil": row_colour(kinds[0] if kinds.size() > 0 else null, -2, Color("#2a1c2c")), "top": top},
+		"ground": {"pieces": pieces, "len": ln, "soil": Color("#dfeeea") if b["id"] == "heights" else row_colour(kinds[0] if kinds.size() > 0 else null, -2, Color("#2a1c2c")), "top": top},   # (0.71: under the heights' mist, mist, not a dark band)
 		"props": props,
 		"glows": glows,
 		"fore": clouds() if b["id"] == "heights" else silhouettes(shade),   # (0.70) the heights: clouds only
 		"falls": falls(b["mid"], mid) if b["id"] == "heights" else {},       # (0.70) its waterfalls, flowing
 		"falls_bg": falls(b["bg"], bg) if b["id"] == "heights" else {},
 		"sky": row_colour(img.get(b["bg"]), 0, Color("#7fb9ec")),
-		"base": row_colour(img.get(b["mid"]), -1, Color("#1c2c3a")),
+		"base": Color("#dfeeea") if b["id"] == "heights" else row_colour(img.get(b["mid"]), -1, Color("#1c2c3a")),   # (0.71: the heights: mist below)
 	}
 
 ## What lights up in a prop, pixel for pixel over it: its cyan glass and flame (a lantern's window), or its

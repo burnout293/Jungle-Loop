@@ -1532,6 +1532,8 @@ func label(c: CanvasItem, text: String, x: float, y: float, col: Color, right: b
 	c.draw_string(sign_font, Vector2(x0, base), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 
 ## 0.48: a wooden board on a post at a friend's record (his own: a stone one, in gold).
+const SIGN_FONT := 10                  # (0.70) the signs' letters, bigger (they were 8)
+
 func _draw_signs(c: CanvasItem) -> void:
 	for sg in run.signs:
 		if sg["x"] == INF:
@@ -1545,13 +1547,13 @@ func _draw_signs(c: CanvasItem) -> void:
 			if tier >= 0:                            # (0.58) a tier of the Course du jour
 				sg["lines"] = [str(sg["name"]).to_upper(), "%d M" % int(sg["d"])]
 			else:
-				sg["lines"] = ["TON RECORD", "%d M" % int(sg["d"])] if own else ["RECORD DE", str(sg["name"]).to_upper().left(10), "%d M" % int(sg["d"])]
-			sg["widths"] = sg["lines"].map(func(l): return sign_font.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, 8).x)
+				sg["lines"] = ["TOI"] if own else [str(sg["name"]).to_upper().left(12)]   # (0.70) the pseudo only
+			sg["widths"] = sg["lines"].map(func(l): return sign_font.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, SIGN_FONT).x)
 		var lines: Array = sg["lines"]
-		var w = ceilf(sg["widths"].max()) + 8
-		var h = 8.0 * lines.size() + 4
+		var w = ceilf(sg["widths"].max()) + 10
+		var h = float(SIGN_FONT) * lines.size() + 6
 		var gy = floor_px(x)
-		var top = snap(gy - 22 - h)
+		var top = snap(gy - 26 - h)
 		var x0 = snap(x - w / 2)
 		var wood = Color("#9aa0b8") if own else Color("#8a5a2b")
 		var dark = Color("#2a2a3a") if own else Color("#2a160a")
@@ -1568,8 +1570,9 @@ func _draw_signs(c: CanvasItem) -> void:
 			dark = Color(style["dark"])
 			lite = Color(style["lite"])
 			ink = Color(style["ink"])
-		rect(c, snap(x) - 2, top + h - 1, 4, gy - top - h + 2, dark)              # the post
-		rect(c, snap(x) - 1, top + h - 1, 2, gy - top - h + 1, Color("#5a3a1a") if not own else Color("#6d6f86"))
+		var post_end = VH + lift + 4                 # (0.70) the post down to the bottom of the screen: never flying
+		rect(c, snap(x) - 2, top + h - 1, 4, post_end - top - h + 2, dark)        # the post
+		rect(c, snap(x) - 1, top + h - 1, 2, post_end - top - h + 1, Color("#5a3a1a") if not own else Color("#6d6f86"))
 		rect(c, x0 - 1, top - 1, w + 2, h + 2, dark)                             # the board
 		rect(c, x0, top, w, h, wood)
 		rect(c, x0, top, w, 1, lite)
@@ -1578,7 +1581,10 @@ func _draw_signs(c: CanvasItem) -> void:
 			var col = Color("#ffd35c") if own else (Color("#fff8e6") if i == 1 else Color("#ffe9a0"))
 			if ink != Color():
 				col = ink
-			c.draw_string(sign_font, Vector2(snap(x - float(sg["widths"][i]) / 2), top + 2 + 8 * i + 6), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 8, col)
+			var at = Vector2(snap(x - float(sg["widths"][i]) / 2), top + 3 + SIGN_FONT * i + SIGN_FONT - 2)
+			for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:   # (0.70) outlined: readable
+				c.draw_string(sign_font, at + o, lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, SIGN_FONT, dark)
+			c.draw_string(sign_font, at, lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, SIGN_FONT, col)
 
 # ---------- 0.58: the urns' effects (Skins.fx) ----------
 var fx_pts: Array = []        # bits of the trail and of the jump's burst: {x, y (game units), vx, vy, t0, life, col, shape}
@@ -2398,6 +2404,26 @@ func _draw_tube(c: CanvasItem, z, S: Dictionary) -> void:
 ## (0.69) The ends of the pipes of the dungeon in two, over the deck: the mouth (a dark round opening, a gold
 ## glint and arrows over it while he is rolled up: roll over it to go in) and the way out.
 func _draw_tube_ends(c: CanvasItem) -> void:
+	for x0 in run.split_starts:                      # (0.70) as a stretch begins: which part is the hard one (a red
+		var bx = sx(float(x0) + 60.0)                # banner, two bars) and which the calm one (a green banner, a leaf)
+		if bx < -40 or bx > view_w + 40:
+			continue
+		var fl = floor_px(bx)
+		var deck = fl - Game.DECK_H / PIXEL
+		for part in 2:
+			var hard = part == run.split_hard
+			var top = deck + Game.SLAB_T / PIXEL + 2 if part == 0 else deck - 52
+			var cloth = Color("#c0303a") if hard else Color("#3f8f3a")
+			var sway = sin(t * 2.4 + part) * 1.5
+			rect(c, snap(bx - 10), top - 4, 2, (deck - top + 4) if part == 1 else 28, INK)   # its pole (on the deck above)
+			rect(c, snap(bx - 9), top + 2, 18, 22, INK)
+			rect(c, snap(bx - 8 + sway * 0.3), top + 3, 16, 20, cloth)
+			rect(c, snap(bx - 8 + sway * 0.3), top + 3, 16, 2, cloth.lightened(0.3))
+			if hard:
+				rect(c, snap(bx - 4), top + 7, 2, 10, Color.WHITE)
+				rect(c, snap(bx + 2), top + 7, 2, 10, Color.WHITE)
+			else:
+				c.draw_circle(Vector2(bx, top + 13), 4, Color("#b8f08a"))
 	for z in run.zones:
 		if z.tube == 0 or z.path.is_empty():
 			continue

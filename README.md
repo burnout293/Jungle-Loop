@@ -105,6 +105,18 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
 
+## 0.71.0
+
+- **Panneaux de record** (`_draw_signs`) : le pseudo seul (« TOI » pour le sien), `SIGN_FONT` 10 cerné de sombre,
+  le poteau jusqu'en bas de l'écran (`VH + lift`) : plus de panneau qui flotte au-dessus d'un creux ou de la brume.
+- **Donjon** : `run.split_starts` (où chaque partie coupée commence) ; `_draw_tube_ends` y dessine une bannière
+  rouge (deux barres) sur l'étage difficile, verte (une feuille) sur le tranquille.
+- **Pitons** : sous la brume, la terre et le bas du plan moyen sont pâles (`soil`, `base`), et le bas de
+  `heights-mist.png` repeint (l'original dans `assets/src/heights`) : plus de bande noire en bas.
+- **Propositions** (PixelLab, `Archives/Jungle-Loop/propositions/0.70`, planche `tools/make_planche.py`) :
+  toucans, pygmée en deltaplane, nénuphars, falaises, panneaux, caisses de la ville, rhino sérieux, poses des
+  pygmées ; dans la dev-library du site avec `site/dev/maquettes/skins.html` (3 agencements du menu Skins).
+
 ## 0.70.0
 
 - **Pitons** : la brume ne fait plus rebondir (`p.vy = 0` à `MIST_SINK`, il vole le long d'elle) ; plus de pitons

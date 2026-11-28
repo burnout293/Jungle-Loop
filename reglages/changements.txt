@@ -1,5 +1,10 @@
 # Jungle Loop — les changements montrés par le bouton « Changements » (Réglages, à côté de « Mettre à jour »).
 # La version la plus récente en premier ; une ligne « = 0.xx » ouvre chaque version. Lignes en # ignorées.
+= 0.71
+Panneaux de record sur la route : seulement le pseudo (« TOI » pour le tien), en lettres plus grandes et cernées, et leur poteau descend jusqu'en bas de l'écran : ils ne flottent plus.
+Donjon : à l'entrée de chaque partie coupée en deux, une bannière rouge (deux barres) sur l'étage difficile, une verte (une feuille) sur le tranquille.
+Pitons : plus de bande noire sous la brume, en bas de l'écran.
+Site : dans la dev-library, les propositions de la 0.70 (planche) et trois maquettes du menu Skins.
 = 0.70
 Pitons brumeux : plus de piliers sur la route ; ils sont du décor (au loin et assombris, ou devant en silhouette), avec des morceaux de forêt volants et une cabane.
 Pitons brumeux : de petits nénuphars volants, fixes (AF) ou mobiles (AM), une nuée de toucans, un pygmée qui fonce en deltaplane.
