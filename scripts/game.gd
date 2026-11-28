@@ -863,7 +863,9 @@ class Zone:
 	var launch_v := 0.0    # (0.67) ... this fast (0: PIPE_LAUNCH)
 	var mouth := -1.0      # ... its mouth in the air, this high over the floor (in as he passes it), out by the floor
 	var wall := false      # ... the way under a wall of will-o'-the-wisps: in anywhere along it
-	var tube := 0          # (0.69) the dungeon in two: +1 from the floor up to the deck, -1 from the deck down
+	var tube := 0          # (0.69) the dungeon in two: +1 going up, -1 going down
+	var from_line := 0     # (0.70) ... from which line to which: 0 the floor, 1 a jump over it, 2 the deck, 3 a jump over it
+	var to_line := 2
 	var shape := ""        # ... its way (TUBE_SHAPES)
 	var path := PackedVector2Array()    # ... the ball's middle along it (world), from its mouth to its way out
 	var lens := PackedFloat32Array()    # ... the length run at each point
@@ -1820,8 +1822,12 @@ static func lay_split(run: Run, x: float) -> void:
 	if TUBE_FORCE != "":
 		shape = TUBE_FORCE
 	var tw = TUBE_W
-	_tube(run, a, tw, fl, deck_y, 1, shape)
-	_tube(run, a, tw, fl, deck_y, -1, shape)
+	var lower = 0 if W.randf() < 0.6 else 1          # (0.70) from any line to any other: one pipe from each part
+	var upper = 2 if W.randf() < 0.6 else 3
+	var to_a = [1, 2, 3].filter(func(k): return k != lower)
+	var to_b = [0, 1, 2].filter(func(k): return k != upper)
+	_tube(run, a, tw, fl, deck_y, lower, to_a[W.randi() % to_a.size()], shape)
+	_tube(run, a, tw, fl, deck_y, upper, to_b[W.randi() % to_b.size()], shape)
 	var quiet = run.fm != null or run.fm_due
 	var base = maxf(spider_gap(run, x), v * 1.0)
 	var spots = [[a + 200.0, a + tw - 80.0], [a + tw + 300.0, x + L - 140.0]]   # where dangers may stand (never
@@ -1887,17 +1893,19 @@ static func lay_split(run: Run, x: float) -> void:
 
 ## (0.69) A pipe of the dungeon in two: from its mouth at a (on the floor if it goes up, on the deck if it goes
 ## down) to its way out tw further, on the other part's floor. The ball's middle follows `path`.
-static func _tube(run: Run, a: float, tw: float, fl: float, deck_y: float, dir: int, shape: String) -> Zone:
+static func _tube(run: Run, a: float, tw: float, fl: float, deck_y: float, from: int, to: int, shape: String) -> Zone:
 	var z = Zone.new()
 	z.x = a
 	z.w = tw
 	z.kind = "tube"
-	z.tube = dir
+	z.from_line = from
+	z.to_line = to
 	z.shape = shape
 	z.open = true
-	var y0 = (fl if dir > 0 else deck_y) - BALL_MID
-	var y1 = (deck_y if dir > 0 else fl) - BALL_MID
-	z.path = tube_path(a, y0, a + tw, y1, shape, dir)
+	var y0 = line_y(fl, deck_y, from) - BALL_MID
+	var y1 = line_y(fl, deck_y, to) - BALL_MID
+	z.tube = 1 if y1 < y0 else -1
+	z.path = tube_path(a, y0, a + tw, y1, shape, z.tube)
 	var total = 0.0
 	z.lens.append(0.0)
 	for i in range(1, z.path.size()):
@@ -1906,6 +1914,12 @@ static func _tube(run: Run, a: float, tw: float, fl: float, deck_y: float, dir: 
 	run.zones.append(z)
 	return z
 
+## (0.70) Where a line of the dungeon in two has the ball's bottom: the floor, a jump over it, the deck, a jump
+## over the deck.
+static func line_y(fl: float, deck_y: float, k: int) -> float:
+	return [fl, fl - TUBE_AIR, deck_y, deck_y - TUBE_AIR][clampi(k, 0, 3)]
+
+const TUBE_AIR := 150.0                # (0.70) a mouth in the air: this high over its floor (a plain jump reaches it)
 const BALL_MID := 28.5                 # (0.69) the ball's middle over the floor (it is drawn so)
 
 ## (0.69) The way of a pipe of the dungeon, 48 points from (x0, y0) to (x1, y1): a diagonal easing out of its
@@ -2314,9 +2328,9 @@ static func spawn_pattern(run: Run) -> void:
 		if x < run.calm_until or run.fm != null or run.fm_due:
 			opts = ["skycoins"]
 		elif into < SKY_EASY:
-			opts = ["pinrow", "pinrow", "pinrow", "pinthread", "skycoins"]
+			opts = ["lilyrow", "lilyrow", "lilyrow", "lilythread", "skycoins"]
 		else:
-			opts = ["pinrow", "pinrow", "pinrow", "pinthread", "pinthread", "glidestair", "glidestair", "curtain", "curtain", "fly", "wave", "skycoins"]
+			opts = ["lilyrow", "lilyrow", "lilyrow", "lilythread", "lilythread", "glidestair", "glidestair", "curtain", "curtain", "fly", "wave", "skycoins"]
 		if run.sky_n >= SKY_SERIES and opts.size() > 1:   # (0.59) a series laid: a breath of coins
 			opts = ["skybreath"]
 		if run.eagle != null:                        # (0.60) the eagle's fight: coins only
@@ -2408,6 +2422,40 @@ static func spawn_pattern(run: Run) -> void:
 				i += dir                               # (at the bottom or the top, it turns back: never twice the same)
 			extent = (n - 1) * step + PIN_W + 240
 			run.sky_n += 1
+		"lilyrow":                                   # (0.70) columns of two still lily pads, the gap between them a step
+			var n = 3 + (1 if press >= 0.5 else 0) + W.randi() % 2   # higher or lower each time (the pinnacles' row)
+			var step = maxf(PIN_GAP, lay_speed(run, x) * PIN_TIME)
+			var i = W.randi() % PIN_HS.size()
+			for k in n:
+				var mid_h: float = PIN_HS[i] + 40.0
+				var at = x + 80 + k * step
+				for h in [mid_h - THREAD_GAP / 2.0, mid_h + THREAD_GAP / 2.0]:
+					var o = add_hover(run, at, h)
+					if o != null:
+						o.amp = 0.0                    # AF: still
+						o.y = floor_at(run, at) - h - HOVER_H / 2
+						o.y0 = o.y
+				coin_line(run, at - 70, floor_at(run, at) - mid_h + 20, 4)
+				if k == 0:
+					run.cues.append({"x": at, "y": floor_at(run, at) - mid_h})
+				var dir = (1 if W.randf() < 0.5 else -1) if i > 0 and i < PIN_HS.size() - 1 else (1 if i == 0 else -1)
+				i += dir
+			extent = (n - 1) * step + HOVER_W + 240
+			run.sky_n += 1
+		"lilythread":                                # (0.70) a still lily pad, a moving one over it: through the gap
+			var h: float = PIN_HS[W.randi() % 2]
+			var lo = add_hover(run, x + 80, h)
+			if lo != null:
+				lo.amp = 0.0
+				lo.y = floor_at(run, x + 80) - h - HOVER_H / 2
+				lo.y0 = lo.y
+			var gl = add_hover(run, x + 80, h + THREAD_GAP + HOVER_H / 2)
+			if gl != null:
+				gl.amp = THREAD_AMP
+			coin_line(run, x, floor_at(run, x) - h - THREAD_GAP / 2 + 20, floori((HOVER_W + 160) / 44))
+			extent = HOVER_W + 300
+			run.sky_n += 1
+			run.cues.append({"x": x + 80, "y": floor_at(run, x) - h - THREAD_GAP / 2})
 		"pinthread":                                 # (0.54) a pinnacle, a glider over it: through the gap between
 			var h: float = PIN_HS[W.randi() % 2]
 			add_pinnacle(run, x + 80, h)
@@ -4357,6 +4405,15 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	_guards(run, d, (px - px0) / d if d > 0 else 0.0)
 	_slimes(run, d, (px - px0) / d if d > 0 else 0.0)
 	var fl = floor_at(run, px)                      # the floor right under him
+	if run.mount != null and not MOUNTS[run.mount.kind].get("fly", false) and run.cliff_x > 1000.0 and px > run.cliff_x - CLIFF_TOP * 0.6 and px < run.cliff_x:
+		dismount(run, true)                          # (0.70) the gorilla (or the rhino) stops before the heights...
+		if not run.coop and "dragonfly" in MOUNTS:   # ... and a dragonfly is offered there instead
+			var it = Item.new()
+			it.x = run.cliff_x + 700.0
+			it.kind = "dragonfly"
+			it.ph = 0.0
+			it.y = GROUND - ZIG_LOW
+			run.items.append(it)
 	var sky_now = biome_at(run, px) == SKY and run.leap == null
 	if sky_now and not run.sky and run.sky_dist0 < 0:   # (0.60) where the heights began (the eagle comes from there)
 		run.sky_dist0 = run.dist
@@ -4454,7 +4511,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			p.bdx = 0.0
 			var end = tz.path[tz.path.size() - 1]
 			p.y = end.y + BALL_MID
-			p.vy = -180.0
+			p.vy = -120.0 if tz.to_line == 1 or tz.to_line == 3 else -180.0   # (0.70: out in the air, he drops)
 			p.ground = false
 			p.plat = null
 			p.jumps = 1
@@ -4472,13 +4529,25 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				p.vy = -(out_of.launch_v if out_of.launch_v > 0 else PIPE_LAUNCH)
 				p.jumps = 1
 				run.events.append("bounce")
-		if p.ball == null and not mounted and run.ball_on and p.ground:   # (0.69) rolling over a mouth of the dungeon in two
-			var on_deck = p.plat != null and p.plat.kind == "slab"
+		if p.ball == null and not mounted and run.ball_on:   # (0.69) rolling over a mouth of the dungeon in two (0.70: or
+			var on_deck = p.plat != null and p.plat.kind == "slab"   # jumping through one in the air)
 			for z in run.zones:
-				if z.tube != 0 and px >= z.x - 40 and px < z.x + 60 and ((z.tube > 0 and p.plat == null) or (z.tube < 0 and on_deck)):
+				if z.tube == 0 or px < z.x - 40 or px >= z.x + 60:
+					continue
+				var air = z.from_line == 1 or z.from_line == 3
+				var ok = false
+				if air:
+					var above_deck = z.from_line == 3
+					var deck_y = floor_at(run, z.x) - DECK_H
+					ok = not p.ground and absf(p.y - BALL_MID - z.path[0].y) < 52 and ((p.y <= deck_y + 4) == above_deck)
+				elif p.ground:
+					ok = (z.from_line == 0 and p.plat == null) or (z.from_line == 2 and on_deck)
+				if ok:
 					p.ball = z
 					p.balled = 0
 					p.plat = null
+					p.ground = true
+					p.vy = 0
 					_puff(run, px, p.y)
 					run.events.append("roll")
 					break
@@ -4666,15 +4735,16 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 							p.vy = 0
 				var land = fl if p.y >= fl and not run.sky else NAN   # (0.53: no one stands on the heights' mist)
 				if run.sky and p.y >= fl + MIST_SINK and p.vy > 0 and not mounted:
-					p.y = fl + MIST_SINK                  # (0.54) it does him no harm: it holds him up, he bounces
-					p.vy = -MIST_BOUNCE                   # off it softly and the Vol takes him on from there
-					p.rotor = false
-					p.flew = false
+					if p.vy > 260:                       # (0.70) at the bottom he flies on along the mist: no bounce
+						for i in 6:                      # (a puff as he reaches it)
+							part(run, px + rnd(-34, 34), fl + rnd(-4, 14), rnd(-160, 160), rnd(-140, -30), rnd(0.4, 0.7), colour_of(["#e8f4f0", "#cfe3df", "#ffffff"]), rnd(8, 14), -60)
+						run.events.append("mist")
+					p.y = fl + MIST_SINK
+					p.vy = 0.0
 					p.diving = false
-					p.jumps = 1
-					for i in 8:
-						part(run, px + rnd(-34, 34), fl + rnd(-4, 14), rnd(-160, 160), rnd(-140, -30), rnd(0.4, 0.7), colour_of(["#e8f4f0", "#cfe3df", "#ffffff"]), rnd(8, 14), -60)
-					run.events.append("mist")
+					p.jumps = maxi(p.jumps, 1)
+					if randf() < 0.2:                    # skimming it: a wisp of mist behind him
+						part(run, px - rnd(10, 30), fl + rnd(0, 10), -rnd(60, 160), -rnd(10, 40), rnd(0.3, 0.6), Color("#e8f4f0"), rnd(6, 10), 0)
 				var on = null
 				if p.vy > 0:                         # ledges only catch a falling hero
 					for pl in run.plats:

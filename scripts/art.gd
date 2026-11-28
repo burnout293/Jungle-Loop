@@ -26,7 +26,7 @@ const BIOMES := [
 		"platform": "dungeon-platform", "pillar": "dungeon-pillar", "crate": "dungeon-crate", "slab": "dungeon-slab", "tunnel": "dungeon-tunnel", "plat_top": 2, "slab_top": 2, "hollow": ["#4a3026", "#140d0d", "#5c4636", "#0a0707"]},
 ]
 
-const NAMES := ["campfire", "temple", "temple-mid", "temple-front", "temple-rubble", "vorace-legs", "vorace-head", "vorace-body", "vorace-log", "crate-big", "lilypad", "walkway", "hover-plat", "vine-garland", "vine-hang",
+const NAMES := ["sky-lily", "sky-toucan", "sky-far-0", "sky-far-1", "sky-far-2", "campfire", "temple", "temple-mid", "temple-front", "temple-rubble", "vorace-legs", "vorace-head", "vorace-body", "vorace-log", "crate-big", "lilypad", "walkway", "hover-plat", "vine-garland", "vine-hang",
 	"spikebot", "spider-low", "spider-mid", "bat", "thornball", "beartrap", "vulture", "arrow", "missile", "idol", "drone", "wasp", "drone-big",
 	"pinnacle", "glider", "hornets", "toucan", "rocket", "cliff",
 	"hero-body", "hero-ball", "hero-rotor", "hero-fist", "hero-shoe", "mount-gorilla", "mount-gorilla-hang", "mount-rhino", "mount-dragonfly",
@@ -36,7 +36,7 @@ const NAMES := ["campfire", "temple", "temple-mid", "temple-front", "temple-rubb
 
 # Frames of each danger's sheet.
 const HAZ_FRAMES := {"spiky": 1, "thornball": 1, "beartrap": 2, "spikebot": 1, "fly": 4, "vulture": 2, "arrow": 1, "missile": 1, "spider-low": 2, "spider-mid": 2,
-	"idol": 1, "bat": 3, "drone": 1, "mosquito": 4, "wasp": 1, "drone-big": 1, "glider": 1, "hornets": 1, "toucan": 1, "rocket": 1}
+	"idol": 1, "bat": 3, "drone": 1, "mosquito": 4, "wasp": 1, "drone-big": 1, "glider": 1, "hornets": 1, "toucan": 1, "rocket": 1, "sky-lily": 1, "sky-toucan": 1}
 
 static var img := {}          # name -> Image, as loaded (RGBA8)
 static var tex := {}          # name -> Texture2D
@@ -450,6 +450,80 @@ static func high_row(colour: Color, seed: int, peak: int) -> Image:
 		disc.call(cx + 1, ln, 2)
 	return c
 
+## (0.70) The heights' foreground: rows of clouds along the bottom and the top (no plants, no creepers), pale,
+## two depths like the other sceneries' silhouettes.
+static func clouds() -> Dictionary:
+	return {
+		"low": [make(cloud_row(Color("#cfe6e2"), Color("#f4fbf8"), 13, 22, false)), make(cloud_row(Color("#e6f4f1"), Color("#ffffff"), 37, 30, false))],
+		"high": [make(cloud_row(Color("#cfe6e2"), Color("#f4fbf8"), 53, 20, true)), make(cloud_row(Color("#e6f4f1"), Color("#ffffff"), 71, 26, true))],
+	}
+
+## One row of clouds FORE_W wide (it tiles), `peak` high: round puffs side by side, a light rim on their edge;
+## from the bottom up, or (`top`) from the top down.
+static func cloud_row(body: Color, rim: Color, seed: int, peak: int, top: bool) -> Image:
+	var c = blank(FORE_W, peak)
+	var prof = PackedFloat32Array()
+	prof.resize(FORE_W)
+	for i in 34:
+		var cx = h01(i, seed) * FORE_W
+		var r = 5.0 + h01(i, seed + 1) * peak * 0.55
+		var base = h01(i, seed + 2) * peak * 0.3
+		for x in range(floori(cx - r), ceili(cx + r) + 1):
+			var dx = x - cx
+			if absf(dx) > r:
+				continue
+			var hh = base + sqrt(r * r - dx * dx) * 0.85
+			var xx = posmod(x, FORE_W)
+			prof[xx] = maxf(prof[xx], hh)
+	for x in FORE_W:
+		var h = mini(peak, maxi(roundi(prof[x]), 4 if top else 10))   # (a band all along: the edge never shows through)
+		if top:
+			c.fill_rect(Rect2i(x, 0, 1, h), body)
+			c.fill_rect(Rect2i(x, maxi(0, h - 2), 1, 2), rim)
+		else:
+			c.fill_rect(Rect2i(x, peak - h, 1, h), body)
+			c.fill_rect(Rect2i(x, peak - h, 1, mini(2, h)), rim)
+	return c
+
+## (0.70) The waterfalls of a heights' picture (assets/img/heights-falls.json, tools/find_falls.py), made to flow:
+## FALL_FRAMES pictures of their columns, light streaks running down them (the picture as drawn, `drawn`, for
+## the colours). {x, y, w, h, frames}; empty if there is none.
+const FALL_FRAMES := 8
+static func falls(name: String, drawn: Image) -> Dictionary:
+	var raw = FileAccess.get_file_as_string(DIR + "heights-falls.json")
+	var all = JSON.parse_string(raw) if raw != "" else null
+	if not all is Dictionary or not all.has(name) or drawn == null:
+		return {}
+	var cols: Array = all[name]
+	if cols.is_empty():
+		return {}
+	var x0 = 99999
+	var x1 = -1
+	var y0 = 99999
+	var y1 = -1
+	for cl in cols:
+		x0 = mini(x0, int(cl[0]))
+		x1 = maxi(x1, int(cl[0]))
+		y0 = mini(y0, int(cl[1]))
+		y1 = maxi(y1, int(cl[2]))
+	var w = x1 - x0 + 1
+	var h = y1 - y0 + 1
+	var frames: Array = []
+	for f in FALL_FRAMES:
+		var im = blank(w, h)
+		for cl in cols:
+			var cx = int(cl[0])
+			var ph = int(h01(cx, 91) * 13)
+			for y in range(int(cl[1]), int(cl[2]) + 1):
+				var k = posmod(y - f * 3 + ph, 12)
+				var base: Color = drawn.get_pixel(cx, y)
+				if k < 2:
+					im.set_pixel(cx - x0, y - y0, base.lerp(Color.WHITE, 0.55))
+				elif k == 6 or k == 7:
+					im.set_pixel(cx - x0, y - y0, base.darkened(0.12))
+		frames.append(make(im))
+	return {"x": x0, "y": y0, "w": w, "h": h, "frames": frames}
+
 static func silhouettes(shade: Color) -> Dictionary:
 	var black = Color("#0b0916")
 	return {
@@ -554,7 +628,9 @@ static func build_scene(b: Dictionary) -> Dictionary:
 		"ground": {"pieces": pieces, "len": ln, "soil": row_colour(kinds[0] if kinds.size() > 0 else null, -2, Color("#2a1c2c")), "top": top},
 		"props": props,
 		"glows": glows,
-		"fore": silhouettes(shade),
+		"fore": clouds() if b["id"] == "heights" else silhouettes(shade),   # (0.70) the heights: clouds only
+		"falls": falls(b["mid"], mid) if b["id"] == "heights" else {},       # (0.70) its waterfalls, flowing
+		"falls_bg": falls(b["bg"], bg) if b["id"] == "heights" else {},
 		"sky": row_colour(img.get(b["bg"]), 0, Color("#7fb9ec")),
 		"base": row_colour(img.get(b["mid"]), -1, Color("#1c2c3a")),
 	}

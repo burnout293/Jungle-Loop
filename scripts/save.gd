@@ -138,7 +138,7 @@ static func blank() -> Dictionary:
 	# best: the record of the Histoire mode; bestEndless: the Run illimitée's
 	return {"v": 1, "coins": 0, "best": 0, "bestEndless": 0, "mode": "story", "loops": 0, "upgrades": {}, "musicVol": 7, "sfxVol": 7, "pixelFont": true,
 		"dangerRim": false, "alertShift": false, "showFps": false, "quality": "", "full": true, "seenIntro": false,
-		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "rerollDay": "", "daily": {}, "stock": {}, "urns": 0, "urnBag": {"common": 0, "rare": 0, "legendary": 0}, "urnPity": {"r": 0, "l": 0}, "skins": {"owned": [], "worn": {}}, "online": {}, "mountsOff": [], "xpv": 2, "relic": 0, "storyTry": 0}
+		"equipped": [], "powersOff": [], "xp": 0.0, "quests": [], "questsDone": 0, "questSteps": {}, "lastQuest": "", "rerollDay": "", "daily": {}, "stock": {}, "urns": 0, "urnBag": {"common": 0, "rare": 0, "legendary": 0}, "urnPity": {"r": 0, "l": 0}, "skins": {"owned": [], "worn": {}}, "online": {}, "mountsOff": [], "xpv": 2, "relic": 0, "storyTry": 0, "seen": {}}
 
 static func _int(x) -> int:
 	if (x is int or x is float) and x > 0 and is_finite(float(x)):
@@ -158,6 +158,8 @@ static func sanitize(raw) -> Dictionary:
 	s["loops"] = _int(raw.get("loops"))
 	s["relic"] = mini(_int(raw.get("relic")), Game.RELIC_PIECES.size())   # 0.49: the relic's pieces won (Histoire)
 	s["storyTry"] = _int(raw.get("storyTry"))
+	if raw.get("seen") is Dictionary:                # (0.70) what the home's novelty dots have been shown (quests, items, skins)
+		s["seen"] = raw["seen"]
 	for pair in [["musicVol", "music"], ["sfxVol", "sfx"]]:     # volumes go from 0 (off) to 10
 		var v = raw.get(pair[0])
 		if (v is int or v is float) and v >= 0 and v <= 10 and float(v) == floorf(v):

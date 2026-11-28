@@ -1,6 +1,7 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Donjon : le pont de pierre ne s'interrompt plus ; deux conduits se croisent tous les 40 m.
-En Sphère, roule sur une bouche pour changer d'étage (saute-la pour rester) ; 4 formes de conduits.
-Un étage difficile (plus de dangers, plus de pièces), l'autre tranquille ; les feux follets reviennent.
+Pitons brumeux refaits : nénuphars volants, nuée de toucans, cascades qui coulent, plus de rebond sur la brume.
+Accueil : tes défis à l'écran et des pastilles « ! » quand il y a du nouveau.
+Pause : réglages en haut à gauche, Recommencer ; Changements en notes courtes.
+Donjon : des conduits entre toutes les lignes ; un site avec journal, feuille de route et dev-library.

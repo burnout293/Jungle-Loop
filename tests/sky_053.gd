@@ -130,6 +130,6 @@ func _init() -> void:
 		if r2.obs.any(func(o): return o.kind == "pinnacle"):
 			any_pin = true
 			break
-	check(any_pin, "des pitons sortent de la brume")
+	check(not any_pin and r2.obs.any(func(o): return o.kind == "hover"), "(0.70) plus de pitons sur la route : des nénuphars volants")
 	print("BILAN pitons : %d vérifications, %d échecs" % [checks, fails])
 	quit(1 if fails > 0 else 0)

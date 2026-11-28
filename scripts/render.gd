@@ -48,9 +48,9 @@ const RED := Color("#ff3b4e")
 # (PixelLab): the pygmies' bamboo rockets and the diving toucans, the pygmies on leaf gliders, the hornets.
 const ROLE := {
 	"spiky": ["spiky", "thornball", "spikebot", "beartrap"],
-	"dart": ["fly", "rocket", "missile", "arrow"],
-	"hover": ["spider", "glider", "drone", "bat"],
-	"swarm": ["mosquito", "hornets", "drone-big", "wisp"],
+	"dart": ["fly", "glider", "missile", "arrow"],          # (0.70) the heights: a pygmy charging on his glider,
+	"hover": ["spider", "sky-lily", "drone", "bat"],         # little flying lily pads, a swarm of toucans
+	"swarm": ["mosquito", "sky-toucan", "drone-big", "wisp"],
 }
 const DIGITS := {1: "010110010010111", 2: "111001111100111", 3: "111001111001111"}
 # Dangers drawn lower than their picture's foot: the dungeon's trap trails its chain below its jaws.
@@ -231,6 +231,7 @@ var lift := 0.0                                  # (0.68) HOME_LIFT now (art pix
 var hs_run = null
 var hs_t0 := 0.0
 var hs_blast := -1.0
+var hs_cam0 := 0.0                     # (0.70) where the camera was as the scene began: it stays put in the world
 
 func draw_home_scene(c: CanvasItem) -> void:
 	if run.home_scene < 0:
@@ -239,6 +240,7 @@ func draw_home_scene(c: CanvasItem) -> void:
 		hs_run = run
 		hs_t0 = t
 		hs_blast = -1.0
+		hs_cam0 = run.cam / PIXEL
 	if run.exploded and hs_blast < 0:
 		hs_blast = t
 	var cam = run.cam / PIXEL
@@ -296,64 +298,90 @@ func _scene_ledges(c: CanvasItem, cam: float, bt: float) -> void:
 		var shake = 1.5 * sin(t * 40) if bt >= 0.6 and bt < 1.6 else 0.0
 		guard_at(c, spot[2], tx + spot[0] + shake, ty + spot[1], spot[3], 0, lift + absf(sin(t * 1.5 + spot[0])) * 0.8)
 
+## (0.70) The rhino after a pygmy, laid in the world (it stays behind as the run starts, and no pass begins once
+## the temple has blown). Twice or three times across the screen, the rhino at his heels; then from the left: it
+## catches him in the middle and tosses him in an arc we see whole, spinning, head first into the ground ahead;
+## the rhino skids to a stop, walks up to him, snorts at him (its head lowered, puffs, a hoof stamping, a shake)
+## and goes back the way it came, slowly.
 func _scene_chase(c: CanvasItem, cam: float, lt: float) -> void:
 	var period = 5.0
 	var toss_n = 2 + (run.seed % 2)                   # the pass on which the rhino tosses him
 	var n_ = floori(lt / period)
 	var p = fmod(lt, period)
-	var left = cam - 60
-	var right = cam + view_w + 60
-	var door = DOOR_X - 60.0                        # (left of the doorway: the home screen's JOUER covers it)
+	var blast_at = hs_blast - hs_t0 if hs_blast >= 0 else INF
+	if n_ * period > blast_at:
+		return                                       # (nothing new once the run is under way)
+	var left = hs_cam0 - 60
+	var right = hs_cam0 + view_w + 60
 	if n_ < toss_n:
 		if p < 2.6:                                  # across, the rhino at his heels
 			var dir = 1 if n_ % 2 == 0 else -1
 			var k = p / 2.6
 			var px = lerpf(left, right, k) if dir > 0 else lerpf(right, left, k)
-			_scene_rhino(c, px - dir * 110 - cam, dir, floori(t * 12))
+			_scene_rhino(c, px - dir * 110 - cam, dir, floori(t * 12), 0.0, -absf(sin(t * 24)) * 2)
 			guard_at(c, 0, px - cam, floor_px(px - cam), dir < 0, floori(t * 16), absf(sin(t * 16)) * 4)
 		return
-	var s = lt - toss_n * period                     # the toss: up out of sight, then head first before the doorway
-	var mid = (left + right) / 2.0
-	if s < 1.3:
-		var k = s / 1.3
-		var px = lerpf(left, mid, minf(1.0, k * 2.0))
-		_scene_rhino(c, px - 110 - cam, 1, floori(t * 12))
-		if k < 0.5:
-			guard_at(c, 0, px - cam, floor_px(px - cam), false, floori(t * 16))
-		else:
-			var y = floor_px(mid - cam) - 600 * (k - 0.5)
-			c.draw_set_transform(Vector2(mid - cam, y), s * 12.0, Vector2.ONE)
-			guard_at(c, 0, 0, 20, false, 3)
-			c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	var s_ = lt - toss_n * period
+	var mid = hs_cam0 + view_w * 0.42
+	var land = mid + 150.0
+	if s_ < 1.0:                                     # in from the left, both running
+		var k = s_ / 1.0
+		var px = lerpf(left, mid, k)
+		_scene_rhino(c, px - 105 - cam, 1, floori(t * 12), 0.0, -absf(sin(t * 24)) * 2)
+		guard_at(c, 0, px - cam, floor_px(px - cam), false, floori(t * 16), absf(sin(t * 16)) * 4)
 		return
-	if s < 2.0:                                      # coming down onto the doorway
-		var k = (s - 1.3) / 0.7
-		var y = floor_px(door - cam) - 500 * (1 - k)
-		c.draw_set_transform(Vector2(door - cam, y), PI, Vector2.ONE)
-		guard_at(c, 0, 0, 0, false, 3)
+	var rhino_x = mid - 105.0
+	var rhino_dir = 1
+	var rhino_frame = 0
+	var rot = 0.0
+	var dy = 0.0
+	var puffs = false
+	if s_ < 2.1:                                     # the toss: a high arc, spinning, head first into the ground
+		var k = (s_ - 1.0) / 1.1
+		var x = lerpf(mid, land, k)
+		var base = lerpf(floor_px(mid - cam), floor_px(land - cam), k)
+		var y = base - 20 - 150 * 4 * k * (1 - k)
+		c.draw_set_transform(Vector2(x - cam, y), k * TAU * 1.5, Vector2.ONE)
+		guard_at(c, 0, 0, 20, false, 3)
 		c.draw_set_transform_matrix(Transform2D.IDENTITY)
-		_scene_rhino(c, mid - 110 - cam, 1, 0)
-		return
-	_planted(c, 0, door - cam, s - 2.0)
-	var r0 = mid - 110                               # it comes up, stops, snorts, then goes back
-	var stop = door + (110.0 if r0 > door else -110.0)
-	var toward = 1 if stop > r0 else -1
-	var rx = r0
-	var dir = toward
-	var moving = true
-	if s < 3.4:
-		rx = lerpf(r0, stop, (s - 2.0) / 1.4)
-	elif s < 5.0:
-		rx = stop
-		moving = false
-		for k in 3:                                  # the snort
-			var q = fmod(s * 2.0 + k * 0.33, 1.0)
-			c.draw_circle(Vector2(rx - cam + toward * (40 + q * 30), floor_px(rx - cam) - 30 - q * 10), 4 + q * 6, Color(1, 1, 1, 0.5 * (1 - q)))
+		var sk = clampf((s_ - 1.0) / 0.45, 0, 1)    # the rhino: its head thrown up, then skidding to a stop
+		rhino_x = mid - 105 + 40 * sin(PI * 0.5 * sk)
+		rot = -0.22 * sin(PI * sk)
+		rhino_frame = floori(t * 12) if sk < 1 else 0
+		if sk < 1 and floori(t * 30) % 2 == 0:
+			c.draw_circle(Vector2(rhino_x - cam - 30, floor_px(rhino_x - cam) - 4), 3 + randf() * 3, Color(0.85, 0.78, 0.62, 0.6))
 	else:
-		dir = -toward
-		rx = stop + dir * (s - 5.0) * 420
-	if rx > left - 200 and rx < right + 200:
-		_scene_rhino(c, rx - cam, dir, floori(t * 12) if moving else 0)
+		_planted(c, 0, land - cam, s_ - 2.1)
+		var stop = land - 125.0
+		var from = mid - 65.0
+		if s_ < 3.0:                                 # it walks up to him
+			var k = (s_ - 2.1) / 0.9
+			rhino_x = lerpf(from, stop, k * k * (3 - 2 * k))
+			rhino_frame = floori(t * 6)
+			dy = -absf(sin(t * 10)) * 1.5
+		elif s_ < 5.4:                               # it snorts at him: head down, puffs, a hoof stamping, a shake
+			var q = s_ - 3.0
+			rhino_x = stop + sin(q * 30) * (0.6 if fmod(q, 0.8) < 0.25 else 0.0)
+			rot = 0.12 * absf(sin(q * 3.0))
+			dy = -absf(sin(q * 6.0)) * 1.0
+			rhino_frame = 1 if fmod(q, 0.6) < 0.15 else 0
+			puffs = true
+			if fmod(q, 0.6) < 0.15:                 # the hoof stamping: dust
+				for i in 2:
+					c.draw_circle(Vector2(stop - cam + 22 + i * 6, floor_px(stop - cam) - 2), 2.5 + randf() * 2, Color(0.8, 0.72, 0.55, 0.55))
+		else:                                        # it turns round and goes back, slowly, swaying
+			rhino_dir = -1
+			rhino_x = stop - (s_ - 5.4) * 70.0
+			rhino_frame = floori(t * 5)
+			dy = -absf(sin(t * 8)) * 1.5
+	_scene_rhino(c, rhino_x - cam, rhino_dir, rhino_frame, rot, dy)
+	if puffs:                                        # the snort: puffs from its nostrils, in bursts
+		var q = s_ - 3.0
+		for k in 4:
+			var u = fmod(q * 1.6 + k * 0.25, 1.0)
+			if fmod(q, 0.8) > 0.55:
+				continue
+			c.draw_circle(Vector2(rhino_x - cam + 52 + u * 34, floor_px(rhino_x - cam) - 34 - u * 12 + sin(u * 9) * 2), 3 + u * 7, Color(1, 1, 1, 0.55 * (1 - u)))
 
 ## A pygmy planted head first in the ground: his legs in the air, kicking now and then.
 func _planted(c: CanvasItem, i: int, x: float, since: float) -> void:
@@ -370,18 +398,16 @@ func _planted(c: CanvasItem, i: int, x: float, since: float) -> void:
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
 	rect(c, snap(x - 9), foot - 1, 18, 3, Color("#5a3d22"))
 
-## The rhino of the scenes, running (`dir` 1 right, -1 left).
-func _scene_rhino(c: CanvasItem, x: float, dir: int, frame: int) -> void:
+## The rhino of the scenes (`dir` 1 right, -1 left); (0.70) tilted `rot` round its feet, raised `dy`.
+func _scene_rhino(c: CanvasItem, x: float, dir: int, frame: int, rot: float = 0.0, dy: float = 0.0) -> void:
 	if x < -160 or x > view_w + 160:
 		return
 	var M: Dictionary = Art.meta.get("mounts", {}).get("rhino", {})
 	var fr = maxi(1, int(M.get("frames", 1)))
-	if dir < 0:
-		c.draw_set_transform(Vector2(x, 0), 0.0, Vector2(-1, 1))
-		draw_mount(c, "rhino", frame % fr, 0, floor_px(x), 0)
-		c.draw_set_transform_matrix(Transform2D.IDENTITY)
-	else:
-		draw_mount(c, "rhino", frame % fr, x, floor_px(x), 0)
+	var foot = floor_px(x)
+	c.draw_set_transform(Vector2(x, foot + dy), rot * dir, Vector2(dir, 1))
+	draw_mount(c, "rhino", frame % fr, 0, 0, 0)
+	c.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 ## (0.59) Histoire, the dungeon: the slimes hopping after him (squashed as they land, stretched as they leap).
 func draw_slimes(c: CanvasItem) -> void:
@@ -720,6 +746,23 @@ func draw_digit(c: CanvasItem, d: int, x: float, y: float, k: float) -> void:
 
 # ---------- three depths of scenery ----------
 
+## (0.70) A strip's waterfalls (Art.falls), drawn over each of its tiles where they are (mirrored with the odd
+## tiles, as strip draws them), their frame turning with the time.
+func _falls(c: CanvasItem, F: Dictionary, tx: Texture2D, offset: float, y: float, clip: Rect2) -> void:
+	if F.is_empty() or tx == null:
+		return
+	var w = float(tx.get_width())
+	var fr: Array = F["frames"]
+	var im: Texture2D = fr[floori(t * 10.0) % fr.size()]
+	var i = floori((offset + clip.position.x) / w)
+	while i * w - offset < clip.end.x:
+		var flip = (i & 1) == 1
+		var fx = w - float(F["x"]) - float(F["w"]) if flip else float(F["x"])
+		var r = Rect2(snap(i * w - offset + fx), y + float(F["y"]), float(F["w"]), float(F["h"]))
+		if r.intersects(clip):
+			region_clip(c, im, Rect2(0, 0, F["w"], F["h"]), r, clip, flip)
+		i += 1
+
 func strip(c: CanvasItem, tx: Texture2D, offset: float, y: float, clip: Rect2) -> void:
 	var w = float(tx.get_width())
 	var h = float(tx.get_height())
@@ -734,10 +777,12 @@ func paint(c: CanvasItem, S: Dictionary, clip: Rect2, sky: bool) -> void:
 		c.draw_rect(clip, S["sky"])
 	if S["bg"] != null:
 		strip(c, S["bg"], cam * 0.18, VH - S["bg"].get_height(), clip)
+		_falls(c, S.get("falls_bg", {}), S["bg"], cam * 0.18, VH - S["bg"].get_height(), clip)
 	if S["mid"] == null:
 		return
 	var y: float = GN + 20 - S["mid"].get_height()
 	strip(c, S["mid"], cam * 0.5, y, clip)
+	_falls(c, S.get("falls", {}), S["mid"], cam * 0.5, y, clip)      # (0.70) the heights' waterfalls flow
 	var base = Rect2(0, y + S["mid"].get_height(), view_w, VH).intersection(clip)   # seen only where the path dips
 	if base.has_area():
 		c.draw_rect(base, S["base"])
@@ -1036,7 +1081,9 @@ func draw_hanging_vines(c: CanvasItem) -> void:
 		var which = floori(h01(i, 23) * int(H["n"]))
 		var x = snap(wx - cam)
 		var ln = float(H["len"][which])
-		if biome <= 1:
+		if biome == Game.SKY:
+			continue                                 # (0.70) the heights: clouds only, no creepers
+		if biome == 0:
 			hang(c, Art.hangs, H, which, x, -2, i)
 		elif biome == 3:
 			hang_chain(c, x, -4, roundf(ln * 0.8), i, IRON["dim"])
@@ -1808,6 +1855,55 @@ func _draw_end_column(c: CanvasItem, e) -> void:
 	var rs = 0.45
 	c.draw_texture_rect(relic_amber, Rect2(snap(rx - relic_amber.get_width() * rs / 2), snap(ry - relic_amber.get_height() * rs / 2), relic_amber.get_width() * rs, relic_amber.get_height() * rs), false)
 
+## (0.70) The heights' scenery behind the action, slower than it and darkened: pinnacles (no longer in the way),
+## and here and there a piece of scenery (sky-far-*: pillars with a walkway, a wooden hut on a rock, a chunk of
+## forest), all standing in the mist. (The temple columns of 0.59 are gone.)
+func _draw_sky_far(c: CanvasItem) -> void:
+	var pin: Texture2D = Art.tex.get("pinnacle")
+	var pics: Array = [Art.tex.get("sky-far-0"), Art.tex.get("sky-far-1"), Art.tex.get("sky-far-2")].filter(func(q): return q != null)
+	var off = run.cam / PIXEL * 0.62
+	var k0 = floori(off / PILLAR_STEP) - 1
+	for k in range(k0, k0 + int(view_w / PILLAR_STEP) + 3):
+		var h = absi(hash(k * 7919 + 29))
+		var sxp = k * PILLAR_STEP + (h % 120) - off
+		var wx = run.cam + sxp * PIXEL
+		if Game.biome_at(run, wx) != Game.SKY:
+			continue
+		var pic: Texture2D = pin
+		if not pics.is_empty() and h % 3 == 0:
+			pic = pics[(h / 3) % pics.size()]
+		if pic == null:
+			continue
+		var sc = (0.42 + float(h % 5) * 0.05) * (1.0 if pic == pin else 0.9)
+		var pw = pic.get_width() * sc
+		var ph_ = pic.get_height() * sc
+		var foot = GN + 34.0
+		if pic == Art.tex.get("sky-far-0") or pic == Art.tex.get("sky-far-1"):   # a chunk of forest floats
+			foot = GN - 50.0 - float(h % 70) + sin(t * 0.6 + k) * 3.0
+		c.draw_texture_rect(pic, Rect2(snap(sxp - pw / 2), snap(foot - ph_), snap(pw), snap(ph_)), false, Color(0.62, 0.74, 0.76, 0.62))
+
+## (0.70) In front, now and then, a pinnacle as a dark silhouette rising from the bottom edge (never higher than
+## a third of the screen), faster than the action.
+func _draw_sky_front(c: CanvasItem) -> void:
+	var pin: Texture2D = Art.tex.get("pinnacle")
+	if pin == null:
+		return
+	var off = run.cam / PIXEL * 1.35
+	var step = 520.0
+	var k0 = floori(off / step) - 1
+	for k in range(k0, k0 + int(view_w / step) + 3):
+		var h = absi(hash(k * 104729 + 7))
+		if h % 2 == 0:
+			continue
+		var sxp = k * step + (h % 200) - off
+		var wx = run.cam + (sxp / 1.35) * PIXEL
+		if Game.biome_at(run, wx) != Game.SKY:
+			continue
+		var sc = 0.55 + float(h % 4) * 0.08
+		var pw = pin.get_width() * sc
+		var ph_ = minf(pin.get_height() * sc, VH * 0.34)
+		c.draw_texture_rect_region(pin, Rect2(snap(sxp - pw / 2), VH - ph_ + 4, snap(pw), snap(ph_)), Rect2(0, 0, pin.get_width(), ph_ / sc), Color(0.1, 0.17, 0.2, 0.8))
+
 ## (0.59) The heights: whole temple columns standing in the mist far off (PixelLab: sky-pillar-0/1), slower
 ## than the road (0.55 of it), pale with the distance; never two side by side.
 const PILLAR_STEP := 260.0
@@ -2091,7 +2187,7 @@ func _draw_back(c: CanvasItem) -> void:
 	Ambient.draw_sky(c, t, view_w)
 
 	draw_hills(c)                                    # dark hills behind the path
-	_draw_sky_pillars(c)                             # (0.59) the heights: whole columns standing in the mist
+	_draw_sky_far(c)                                 # (0.70) the heights: pinnacles and pieces of scenery far off
 	if run.eagle != null or eagle_dark > 0.01:       # (0.60) the eagle: its sky, then itself
 		_draw_eagle_sky(c)
 	if run.eagle != null:
@@ -2632,8 +2728,6 @@ func _draw_obstacles(c: CanvasItem) -> void:
 		var name: String = ROLE[o.kind][o.biome]
 		if o.kind == "hover" and o.biome == 0:          # the forest's hanging dangers: its spiders
 			name = "spider-mid" if o.mid else "spider-low"
-		if name == "rocket" and int(o.ph * 7) % 2 == 1 and Art.haz.has("toucan"):
-			name = "toucan"                          # (0.53) a fonceur of the heights: a rocket, or a toucan diving
 		if not Art.haz.has(name):
 			continue
 		var H: Dictionary = Art.haz[name]
@@ -2756,6 +2850,8 @@ func _draw_front(c: CanvasItem) -> void:
 	# closest layer: weather, then the leaves along the bottom and top edges. The faster the run, the
 	# fainter these leaves: they race past the eye and would hide what is coming.
 	Ambient.draw_weather(c, cam, t, view_w)
+	if run.biome == Game.SKY or run.prev_biome == Game.SKY:
+		_draw_sky_front(c)                           # (0.70) pinnacles in front: silhouettes only
 	var fast = clampf((run.speed - 480) / 380, 0, 1)
 	var mod = Color(1, 1, 1, 1 - 0.7 * fast)
 	var edge = snap(run.biome_x / PIXEL - cam)

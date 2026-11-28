@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.69.0"
+const VERSION := "0.70.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -77,6 +77,7 @@ var adopted_note := ""                # said once on the menu: the web version's
 var photo: ImageTexture = null          # the game as it was the moment he fell, for the end screen
 var quick_on := false                  # (0.68) the « Partie rapide » searching (its lobby's free places say so)
 const QUICK_EVERY := 5.0               # (0.68) ... looking again this often while alone in my room
+var skin_still_t := 0.0                # (0.70) the moment the Skins preview stands still at
 var esc_hold := 0.0                    # (0.68) freed: the escape's panel stays this long
 var photo_taken := false
 var touches := {}                     # fingers down on the game (not on a button): the jump is held while one stays
@@ -1361,15 +1362,27 @@ func _build_menu() -> void:
 	var on_up = func() -> void:
 		tab = "up"
 		go_from("shop", "right")
-	right.add_child(_home_square("blank", "coin-icon", 16, "AMÉLIORATIONS", on_up, true))
+	var up_sq = _home_square("blank", "coin-icon", 16, "AMÉLIORATIONS", on_up, true)
+	right.add_child(up_sq)
 	var on_skins = func() -> void:
 		tab = "skin"
 		go_from("shop", "right")
-	right.add_child(_home_square("blank", "ico-star", 22, "SKINS", on_skins, true))
+	var skin_sq = _home_square("blank", "ico-star", 22, "SKINS", on_skins, true)
+	right.add_child(skin_sq)
 	var quests_sq = _home_square("blank", "ico-target", 22, "DÉFIS", func() -> void: _home_quests(not w["menu-quests-box"].visible), true)
 	right.add_child(quests_sq)
 	w["menu-quests-btn"] = quests_sq.get_meta("button")
+	# (0.70) a gold « ! » when there is something new behind: an item unlocked, a skin won, a new objective
+	w["new-up"] = _home_dot(up_sq.get_meta("button"), "!", 25)
+	w["new-skin"] = _home_dot(skin_sq.get_meta("button"), "!", 25)
+	w["new-quest"] = _home_dot(w["menu-quests-btn"], "!", 25)
 	s.add_child(right)
+	# (0.70) the objectives always on the home screen, light, without a panel (Défis opens the full one)
+	var ql = _vbox(3)
+	ql.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_place(ql, 569 - M - 84 - 196, 78, 192, 80)
+	w["menu-qlite"] = ql
+	s.add_child(ql)
 	var band = _box()                                # for two: with whom, and leaving
 	var band_row = _hbox(4)
 	w["menu-coop-text"] = _plain(_label("", ts("s"), GOLD, 0), "s")
@@ -1601,6 +1614,9 @@ func _home_modes(open: bool) -> void:
 			tw.tween_callback(func() -> void: b.visible = false)
 		_menu_tip("")
 
+	if w.has("menu-qlite"):                          # (0.70) the objectives step aside while the modes are out
+		w["menu-qlite"].visible = not open and not w["menu-quests-box"].visible
+
 ## The words beside each mode: where Histoire stands, the record, the group.
 func _mode_texts() -> void:
 	if not w.has("menu-modes"):
@@ -1760,16 +1776,71 @@ func _daily_panel() -> void:
 	root.add_child(p)
 	Audio.sfx("click")
 
+## (0.70) The objectives on the home screen: each one line, outlined to read over the scene, no panel.
+func _quest_lite() -> void:
+	if not w.has("menu-qlite"):
+		return
+	var ql: VBoxContainer = w["menu-qlite"]
+	for ch in ql.get_children():
+		ch.queue_free()
+	for q in save["quests"]:
+		var row = _hbox(4)
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.alignment = BoxContainer.ALIGNMENT_END
+		var l = _label("%s  %d/%d" % [Progress.quest_text(q), floori(float(q["p"])), q["goal"]], ts("s"), INK, 0)
+		l.label_settings.outline_size = roundi(a(3))
+		l.label_settings.outline_color = Color(0.04, 0.03, 0.09, 0.85)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		l.custom_minimum_size.x = a(178)
+		row.add_child(l)
+		var ic = _icon_rect(icon("ico-target"), 10)
+		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(ic)
+		ql.add_child(row)
+
+## (0.70) What is new behind the home's buttons (save.seen keeps what was shown): an item unlocked and never seen
+## in Améliorations, a skin won and never seen in Skins, an objective never seen in Défis.
+func _news() -> void:
+	if not w.has("new-up"):
+		return
+	var seen: Dictionary = save["seen"]
+	if not seen.has("since"):                        # (a save from before: what it has is not new)
+		seen["since"] = VERSION
+		for k in ["up", "skins", "quests"]:
+			_seen(k)
+	var ups = SaveData.UPGRADES.filter(func(u): return u.has("unlock") and SaveData.unlocked(save, u)).map(func(u): return u["id"])
+	w["new-up"].visible = ups.any(func(id): return not id in seen.get("up", []))
+	w["new-skin"].visible = save["skins"]["owned"].any(func(id): return not id in seen.get("skins", []))
+	var qs = save["quests"].map(func(q): return Progress.quest_text(q))
+	w["new-quest"].visible = qs.any(func(t): return not t in seen.get("quests", []))
+
+## (0.70) What a screen shows is now seen: its dot goes.
+func _seen(what: String) -> void:
+	var seen: Dictionary = save["seen"]
+	match what:
+		"up":
+			seen["up"] = SaveData.UPGRADES.filter(func(u): return u.has("unlock") and SaveData.unlocked(save, u)).map(func(u): return u["id"])
+		"skins":
+			seen["skins"] = save["skins"]["owned"].duplicate()
+		"quests":
+			seen["quests"] = save["quests"].map(func(q): return Progress.quest_text(q))
+	SaveData.store(save)
+
 ## The objectives' panel, in from the right edge or back out.
 func _home_quests(open: bool) -> void:
 	if not w.has("menu-quests-box"):
 		return
 	var box: Control = w["menu-quests-box"]
 	if open:
+		_seen("quests")
+		_news()
 		_home_modes(false)
 		w["menu-info"].visible = false
 		_mark_slots("")
 	_slide(box, open, "right")
+	if w.has("menu-qlite"):                          # (0.70) the light list hides behind the full panel
+		w["menu-qlite"].visible = not open
 
 ## A panel of the home screen (or a window) brought in from `side`, or sent back there and hidden.
 func _slide(p: Control, open: bool, side: String) -> void:
@@ -2684,7 +2755,16 @@ func _build_score(name: String) -> void:
 	if name == "over":
 		_actions(s, [_button("Menu", "", func() -> void: go("menu")), _button("Rejouer", "big", _replay)])
 	else:
-		_actions(s, [_button("Abandonner", "stop", func() -> void: go("menu")), _button("Réglages", "", func() -> void: go("settings")), _button("Reprendre", "go", resume)], 150)
+		# (0.70) the settings: the home screen's small gear square, top left; Reprendre in the middle, Recommencer right
+		_actions(s, [_button("Abandonner", "stop", func() -> void: go("menu")), _button("Reprendre", "go", resume), _button("Recommencer", "", _restart_run)], 150)
+		var gear = Button.new()
+		gear.focus_mode = Control.FOCUS_NONE
+		_kit_square(gear, "gear", 36)
+		_place(gear, M, M, 36, 36)
+		gear.pressed.connect(func() -> void:
+			Audio.sfx("click")
+			go("settings"))
+		s.add_child(gear)
 		var eye = Button.new()                       # the eye: the menu goes, the game is seen (still paused); again: back
 		eye.focus_mode = Control.FOCUS_NONE
 		_kit_square(eye, "blank", 36)
@@ -2780,6 +2860,8 @@ func refresh_menu() -> void:
 	w["menu-urns-n"].text = str(nu) if nu < 100 else "99+"
 	_set_coins(w["menu-coins"], save["coins"])
 	_quest_cards(w["menu-quests"])
+	_quest_lite()
+	_news()
 	_mode_texts()
 	_fill_group()
 	_send_kit()
@@ -3297,16 +3379,64 @@ func _send_feedback() -> void:
 	Audio.sfx("click")
 
 ## (0.64) « Changements »: reglages/changements.txt, the latest versions first.
+## (0.70) « Changements »: short notes (reglages/notes.txt), the latest versions first, in a list that scrolls
+## inside its panel; « Journal complet » opens the site's full changelog; « Fermer » always in sight.
 func _show_changes() -> void:
-	var out: Array = []
-	for line in FileAccess.get_file_as_string("res://reglages/changements.txt").split("\n"):
+	if modal != null:
+		modal.queue_free()
+	var layer = CanvasLayer.new()
+	layer.layer = 40
+	add_child(layer)
+	var root = Control.new()
+	root.size = Vector2(W, H)
+	root.theme = ui.theme
+	layer.add_child(root)
+	var shade = ColorRect.new()
+	shade.color = Color(8 / 255.0, 10 / 255.0, 24 / 255.0, 0.7)
+	shade.size = Vector2(W, H)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(shade)
+	var p = PanelContainer.new()
+	p.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
+	p.mouse_filter = Control.MOUSE_FILTER_STOP
+	_place(p, 569 / 2.0 - 150, 22, 300, 276)
+	var col = _vbox(6)
+	var title = _label("CHANGEMENTS", ts("m"), GOLD, 1)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+	var sc = ScrollContainer.new()
+	sc.custom_minimum_size = Vector2(a(262), a(178))
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var list = _vbox(2)
+	list.custom_minimum_size.x = a(250)
+	for line in FileAccess.get_file_as_string("res://reglages/notes.txt").split("\n"):
 		var t = line.strip_edges()
 		if t == "" or t.begins_with("#"):
 			continue
-		out.append(("Version " + t.substr(1).strip_edges()) if t.begins_with("=") else "• " + t)
-		if out.size() >= 14:
-			break
-	_confirm("\n".join(out), func() -> void: pass, "OK", "Fermer")
+		var head = t.begins_with("=")
+		var l = _label(("Version " + t.substr(1).strip_edges()) if head else "• " + t, ts("s"), GOLD if head else INK, 0)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = a(248)
+		if head and list.get_child_count() > 0:
+			var gap = Control.new()
+			gap.custom_minimum_size.y = a(4)
+			list.add_child(gap)
+		list.add_child(l)
+	sc.add_child(list)
+	col.add_child(sc)
+	var row = _hbox(10)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var close = func() -> void:
+		layer.queue_free()
+		modal = null
+	row.add_child(_button("Fermer", "small plain", close))
+	row.add_child(_button("Journal complet", "small gold", func() -> void:
+		Audio.sfx("click")
+		OS.shell_open(Net.page + "journal.html")))
+	col.add_child(row)
+	p.add_child(col)
+	root.add_child(p)
+	modal = layer
 
 func _update_now() -> void:
 	_upd_say("Rechargement…")
@@ -3363,6 +3493,10 @@ func _on_pagehide(_args: Array) -> void:
 
 func refresh_shop(just_bought: String = "") -> void:
 	_set_coins(w["shop-coins"], save["coins"])
+	if tab == "up":                                  # (0.70) seen: the home's dots go
+		_seen("up")
+	elif tab == "skin":
+		_seen("skins")
 	for k in TABS:
 		_shop_skin(w["tab-" + k], "tab", k == tab)
 		w["tab-" + k].add_theme_font_size_override("font_size", roundi(5.5 * U))
@@ -3765,11 +3899,22 @@ func _break_urn() -> void:
 	show.burst.connect(func() -> void:
 		if res["rarity"] != "common":
 			confetti(70 if res["rarity"] == "legendary" else 24))
+	var won_skin = ""                                # (0.70) a skin won: straight to its preview (Skins tab)
+	for g in res["got"]:
+		if g["what"] == "skin" and str(g.get("id", "")) != "":
+			won_skin = str(g["id"])
 	show.closed.connect(func() -> void:
 		urn_busy = false
 		show.queue_free()
-		if treasure != null:
+		if won_skin != "":
+			_close_treasure()
+			picked_skin = won_skin
+			tab = "skin"
+			go_from("shop", "right")
+		elif treasure != null:
 			_treasure_fill())
+	if won_skin != "":
+		show.hint_text = "Touche pour voir ton nouveau skin"
 	treasure.add_child(show)
 
 ## (0.68) The opening of an urn, drawn over the Trésor. Its time: the urn coming to the middle (0.35 s), then
@@ -3794,6 +3939,7 @@ class UrnShow extends Control:
 	var sizes: Array = [26, 14, 11]
 	var colour := Color.WHITE
 	var title := ""
+	var hint_text := "Touche pour continuer"
 	var t := 0.0
 	var burst_at := -1.0
 	var shards: Array = []
@@ -3970,7 +4116,7 @@ class UrnShow extends Control:
 					var name_: String = str(got[i]["name"])
 					draw_string(text_font, Vector2(r_.position.x + 44 * u, r_.position.y + r_.size.y / 2 + sizes[2] * 0.35), name_, HORIZONTAL_ALIGNMENT_LEFT, cw - 50 * u, sizes[2], Color(1, 0.97, 0.9, appear))
 			if shown >= n and since > 0.6 + n * ITEM_GAP[rar] + 0.3 and text_font != null:
-				var hint = "Touche pour continuer"
+				var hint = hint_text
 				var hw = text_font.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, sizes[2]).x
 				draw_string(text_font, Vector2(size.x / 2 - hw / 2, size.y * 0.93), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, sizes[2], Color(0.79, 0.84, 0.76, 0.5 + 0.5 * absf(sin(t * 3))))
 		draw_set_transform(Vector2.ZERO)
@@ -4466,6 +4612,14 @@ func over_view(count_up: bool) -> void:
 
 ## « Rejouer »: after a run for two, the host starts the next one for both (the guest goes back home, where
 ## it will start); alone, again.
+## (0.70) « Recommencer » from the pause: the coins of this run kept, a new run at once.
+func _restart_run() -> void:
+	if state != "pause" or run == null or run.coop:
+		return
+	bank()
+	state = "menu"
+	go("play")
+
 func _replay() -> void:
 	if coop_last and coop.state == "ready":
 		if coop.role == "host":
@@ -6651,6 +6805,7 @@ func _esc_view() -> void:
 		else:
 			w["esc-label"].text = "Capturé ! Couteau suisse : %d" % run.free_knives
 		w["esc-hint"].text = "Touche le couteau !"
+		ev.mouse_filter = Control.MOUSE_FILTER_STOP     # (the knife: touched there)
 		ev.phase = "offer"
 		ev.e = {}
 		ev.left = maxf(0, c.timer)
@@ -6659,6 +6814,7 @@ func _esc_view() -> void:
 		var e: Dictionary = c.esc
 		w["esc-label"].text = ("Extirpe-toi ! Encore %d" if slime else "Ronge les cordes ! Encore %d") % e.rope
 		w["esc-hint"].text = "Touche quand le curseur est dans le vert"
+		ev.mouse_filter = Control.MOUSE_FILTER_IGNORE   # (0.70) a click on the panel too bites the rope (it kept it)
 		ev.phase = "escape"
 		ev.e = e
 		ev.left = maxf(0, e.time)
@@ -7219,9 +7375,12 @@ func _process(delta: float) -> void:
 	var shown: Game.Run = run if (state == "play" or state == "pause" or state == "over" or state == "tally" or in_run) and run != null else still
 	render.show_run(shown, time, q)
 	if state == "shop" and demo.run != null:         # the shop's preview: a tiny real run
-		demo.step(dt)
+		var frozen = tab == "skin" and demo.run.t > 0.45   # (0.70) Skins: a still picture of him wearing it
+		if not frozen:
+			demo.step(dt)
+			skin_still_t = time
 		demo_render.position = Vector2(0, (Demo.H - 320) * q)   # the floor at the bottom
-		demo_render.show_run(demo.run, time, q)
+		demo_render.show_run(demo.run, skin_still_t if frozen else time, q)
 
 ## Every 30 frames: the average time spent in the game's rules and in its drawing, in milliseconds.
 func _measure() -> void:

@@ -1,0 +1,21 @@
+# Jungle Loop — les notes courtes du bouton « Changements » (Réglages). Une ligne « = 0.xx » ouvre chaque version,
+# la plus récente en premier ; une à trois lignes très courtes par version. Le journal complet est
+# reglages/changements.txt (publié sur le site : journal.html). Les lignes en # sont ignorées.
+= 0.70
+Pause : réglages en haut à gauche, bouton Recommencer.
+Accueil : tes défis à l'écran, des pastilles quand il y a du nouveau.
+Pitons brumeux refaits ; conduits du donjon entre toutes les lignes.
+= 0.69
+Donjon : un pont continu, des conduits qui se croisent.
+Un étage difficile, un étage tranquille.
+= 0.68
+Urnes : trois raretés et une ouverture grandiose.
+Évasion : le couteau en grand ; ton avis par le site.
+= 0.67
+Donjon coupé en deux, haut et bas.
+= 0.66
+Partie rapide ; scènes des pygmées à l'accueil.
+= 0.65
+Types d'Affrontement ; pouvoirs de gravité ; mode Sphère.
+= 0.64
+Araignées rouges plus lisibles ; mise directe.

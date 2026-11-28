@@ -198,7 +198,8 @@ func _init() -> void:
 		var row = i >= 2 and absf(dx - (pins[i - 1].x - pins[i - 2].x)) < 1
 		if row and absf(pins[i].y - pins[i - 1].y) < 1:
 			same += 1
-	check(pins.size() > 20 and close == 0, "les pitons d'une rangée jamais trop près (%d pitons, %d trop près)" % [pins.size(), close])
+	var lilies = h.obs.filter(func(q): return q.kind == "hover").size()
+	check(pins.size() == 0 and lilies > 20, "(0.70) les pitons sont du décor : %d sur la route, %d nénuphars" % [pins.size(), lilies])
 	check(same == 0, "dans une rangée, chaque piton change de hauteur (%d pareils)" % same)
 	check(not h.obs.any(func(q): return q.kind == "spiky" or q.kind == "acid"), "rien au sol dans les pitons")
 	print("BILAN falaise : %d vérifications, %d échecs" % [checks, fails])

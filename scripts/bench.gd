@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour69": false, "tour68": false, "tour67": false, "tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour70s": false, "tour70": false, "tour69": false, "tour68": false, "tour67": false, "tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,8 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour70s": opts["tour70s"] = true      # 0.70: the heights remade (lily pads, scenery, clouds, falls)
+			"tour70": opts["tour70"] = true        # 0.70: the home's objectives and dots, the pause, the notes, the rhino, Skins
 			"tour69": opts["tour69"] = true        # 0.69: the dungeon in two, its pipes in an X
 			"shape": Game.TUBE_FORCE = kv[1]       # (with --tour69: only that shape of pipe, one shot)
 			"tour68": opts["tour68"] = true        # 0.68: the home lifted, the urns opened, the escape
@@ -159,6 +161,12 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour70s"]:
+		await _tour70s()
+		return
+	if opts["tour70"]:
+		await _tour70()
 		return
 	if opts["tour69"]:
 		await _tour69()
@@ -530,6 +538,78 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour70s: the heights in a Run illimitée, untouchable, a shot every 0.6 s for 12 s.
+var shots70s := 0
+
+func _tour70s() -> void:
+	if t > 0.5 and shots70s == 0:
+		shots70s = 1
+		_run59(1)
+		var r: Game.Run = main.run
+		r.mode = "endless"
+		r.sky_ok = true
+		r.up["flight"] = 1
+		r.god = true
+		return
+	if shots70s == 0:
+		return
+	if main.state == "pause":
+		main.resume()
+	if t >= 1.5 + (shots70s - 1) * 0.6:
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(opts["shots"].path_join("70s-%02d.png" % shots70s))
+		shots70s += 1
+	if shots70s > 20:
+		get_tree().quit()
+
+## --tour70: the home screen (its objectives without a panel, the novelty dots), the pause, the notes of
+## « Changements », Skins standing still, then the rhino's scene from its toss to its going (seed 1: the 3rd pass).
+var steps70: Array = []
+
+func _tour70() -> void:
+	if steps70.is_empty():
+		steps70 = [[0.5, "setup", ""], [1.4, "shot", "70-01-accueil"], [1.5, "play", ""], [3.5, "pause", ""], [4.0, "shot", "70-02-pause"],
+			[4.1, "notes", ""], [4.6, "shot", "70-03-changements"], [4.7, "unnotes", ""], [4.8, "menu", ""], [5.2, "skins", ""], [6.6, "shot", "70-04-skins"],
+			[6.7, "rhino", ""]]
+		for k in 14:
+			steps70.append([6.8 + 10.0 + k * 0.45, "shot", "70-%02d-rhino" % (5 + k)])
+		steps70.append([6.8 + 10.0 + 14 * 0.45 + 0.2, "quit", ""])
+	while tour_i < steps70.size() and t >= steps70[tour_i][0]:
+		var st = steps70[tour_i]
+		tour_i += 1
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(st[2] + ".png"))
+			"setup":
+				main.save["seenIntro"] = true
+				main.save["xp"] = 9000.0
+				main.save["skins"]["owned"].append("shoes-gold")
+				main.save["seen"] = {"since": "x", "up": [], "skins": [], "quests": []}
+				main.still.home_scene = 1
+				main.refresh_menu()
+			"play":
+				main.save["mode"] = "endless"
+				main.go("play")
+			"pause": main.pause()
+			"notes": main._show_changes()
+			"unnotes":
+				if main.modal != null:
+					main.modal.queue_free()
+					main.modal = null
+			"menu": main.go("menu")
+			"skins":
+				main.tab = "skin"
+				main.picked_skin = "shoes-gold"
+				main.go("shop")
+			"rhino":
+				main.go("menu")
+				main.still.seed = 0
+				main.still.home_scene = 2
+				main.render.hs_run = null
+				main.refresh_menu()
 			"quit": get_tree().quit()
 
 ## --tour69: the dungeon in two in a Run illimitée, rolled up (Sphère's mode): a shot every 0.45 s for 12 s (the

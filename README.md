@@ -105,6 +105,40 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
 
+## 0.70.0
+
+- **Pitons** : la brume ne fait plus rebondir (`p.vy = 0` à `MIST_SINK`, il vole le long d'elle) ; plus de pitons
+  sur la route : `lilyrow` (colonnes de deux nénuphars fixes, l'écart d'une colonne à l'autre monte ou descend) et
+  `lilythread` (un fixe, un mobile au-dessus) à la place de `pinrow` / `pinthread`. Rôles du décor 1 : fonceur =
+  `glider` (pygmée en deltaplane), suspendu = `sky-lily`, nuée = `sky-toucan` (images provisoires : propositions A).
+  Décor : `_draw_sky_far` (pitons au loin, petits et pâlis, morceaux de forêt flottants `sky-far-0/1`, cabane
+  `sky-far-2`, PixelLab), `_draw_sky_front` (pitons en silhouette, un tiers d'écran au plus) ; plus de colonnes ni
+  de portique ; plus de lianes ; avant-plan en nuages (`Art.clouds`, `cloud_row`). Cascades animées :
+  `tools/find_falls.py` → `assets/img/heights-falls.json`, `Art.falls` (8 images de traînées), `Render._falls`.
+- **Gorille / rhino à la falaise** : la monture s'arrête sur le haut de la falaise, une libellule est posée 17,5 m
+  après le bord.
+- **Donjon** : conduits d'une ligne à une autre (`Zone.from_line` / `to_line` : 0 sol, 1 saut, 2 pont, 3 saut
+  au-dessus du pont ; `line_y`, `TUBE_AIR` 150) ; un conduit part de chaque étage à chaque cycle ; une bouche en
+  l'air se prend en traversant sa hauteur, en boule.
+- **Accueil** : les défis à l'écran sans panneau (`_quest_lite`, cachés quand les modes ou le panneau Défis
+  sont ouverts) ; pastilles de nouveautés (`_news`, `_seen`, `save.seen`) sur Améliorations, Skins, Défis.
+- **Pause** : roue dentée en carré en haut à gauche, Abandonner / Reprendre / Recommencer (`_restart_run`).
+- **Changements** : `reglages/notes.txt` (notes courtes), liste qui défile, « Journal complet » (journal.html).
+- **Évasion** : pendant l'évasion le panneau laisse passer les clics (avant, un clic dessus ne coupait rien).
+- **Urnes / Skins** : un skin gagné ouvre Skins sur lui ; l'aperçu de Skins s'arrête sur une image fixe.
+- **Scène du rhino** (`_scene_chase`) : posée dans le monde (`hs_cam0`), aucun passage ne commence après
+  l'explosion ; lancer visible en arc, plantage devant, freinage, approche, souffle (tête, naseaux, sabot), départ
+  au pas ; `_scene_rhino` penche et rebondit.
+- **ntfy** : secret `NTFY_TOPIC` posé sur le serveur (les retours arrivent en notification).
+- **Jouer à plusieurs hors du navigateur** : l'extension officielle `webrtc-native` 1.2.2 (`addons/webrtc_native`,
+  bibliothèques Windows / Linux x86_64 et Android arm64 / x86_64 seulement ; jamais dans l'export Web) :
+  `Coop.supported()` est vrai dans les versions installées. Test `tests/webrtc_070.gd` (deux pairs sur ce PC se
+  parlent par un canal de données).
+- **Site** : `tools/build_site.py` → `site/infos.html`, `journal.html`, `feuille-de-route.html`
+  (`reglages/feuille-de-route.txt`), `dev/index.html` (propositions, ébauches de l'Aigle, images du jeu), `site.css`.
+- Tests : `tests/sky_070.gd` (brume, gorille → libellule), `split_067` (14), `sky_053`, `cliff_054` adaptés ;
+  bancs `--tour70` (accueil, pause, notes, Skins, rhino), `--tour70s` (pitons).
+
 ## 0.69.0
 
 - **Le donjon en deux, refait** : le pont (`_deck`) ne s'interrompt plus. Tous les `SPLIT_CYCLE` **40 m**, deux

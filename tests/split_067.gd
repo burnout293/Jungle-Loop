@@ -99,7 +99,11 @@ func _init() -> void:
 		if deck[i][0] > deck[i - 1][1] + 1:
 			holes += 1
 	check(deck.size() > 3 and holes == 0, "le pont tout du long, sans trou (%d dalles)" % deck.size())
-	check(ups > 3 and ups == downs, "des conduits qui montent et qui descendent : %d / %d" % [ups, downs])
+	check(ups > 3 and downs > 3, "des conduits qui montent et qui descendent : %d / %d" % [ups, downs])
+	var starts := {}                                 # (0.70) from any line to any other
+	for z in seen_z:
+		starts["%d>%d" % [z.from_line, z.to_line]] = true
+	check(starts.size() >= 6 and seen_z.keys().all(func(z): return z.from_line != z.to_line), "des conduits entre toutes les lignes (%s)" % [starts.keys()])
 	var same = func(d: Dictionary) -> int:
 		var keys = d.keys()
 		keys.sort()
@@ -124,6 +128,26 @@ func _init() -> void:
 		if r3.p.ball != null or (r3.p.plat != null and r3.p.plat.kind == "slab"):
 			up3 = true
 	check(not up3 and r3.dist >= 500, "sans la Sphère : en bas tout du long (%d m)" % r3.dist)
+	# (0.70) a mouth in the air: jumping through it, in
+	var r5 = dungeon_run(9, 12.0)
+	r5.up["sphere"] = 1
+	r5.ball_on = true
+	for i in 400:
+		Game.update(r5, 1.0 / 60, inp)
+	var px5 = r5.cam + r5.sx
+	var fl5 = Game.floor_at(r5, px5)
+	var z5 = Game._tube(r5, px5 + 10, 460, fl5, fl5 - Game.DECK_H, 1, 3, "rampe")
+	r5.p.ball = null
+	r5.p.ground = false
+	r5.p.plat = null
+	r5.p.vy = -10
+	r5.p.y = z5.path[0].y + Game.BALL_MID
+	var in5 = false
+	for i in 6:
+		Game.update(r5, 1.0 / 60, inp)
+		if r5.p.ball == z5:
+			in5 = true
+	check(in5, "une bouche en l'air : en sautant à travers, il y entre")
 	# a swarm in the dungeon in two: one wisp in each part
 	var r4 = dungeon_run(5, 14.0)
 	for i in 120:

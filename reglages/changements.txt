@@ -1,5 +1,19 @@
 # Jungle Loop — les changements montrés par le bouton « Changements » (Réglages, à côté de « Mettre à jour »).
 # La version la plus récente en premier ; une ligne « = 0.xx » ouvre chaque version. Lignes en # ignorées.
+= 0.70
+Pitons brumeux : plus de piliers sur la route ; ils sont du décor (au loin et assombris, ou devant en silhouette), avec des morceaux de forêt volants et une cabane.
+Pitons brumeux : de petits nénuphars volants, fixes (AF) ou mobiles (AM), une nuée de toucans, un pygmée qui fonce en deltaplane.
+Pitons brumeux : au plus bas, la brume te porte et tu voles le long d'elle, sans rebond ; les cascades coulent ; devant, seulement des nuages, plus de lianes.
+Avec le gorille (ou le rhino), il s'arrête au bord de la falaise et une libellule t'attend plus loin.
+Donjon : les conduits partent de n'importe quelle ligne (sol, saut, pont, saut au-dessus du pont) vers n'importe quelle autre ; les bouches en l'air se prennent en sautant à travers.
+Accueil : tes trois défis à l'écran, sans panneau ; des pastilles « ! » sur Améliorations (objet débloqué), Skins (skin gagné) et Défis (nouveau défi).
+Pause : les réglages en petit carré en haut à gauche, Reprendre au centre, Recommencer à droite.
+Changements : des notes courtes qui défilent, et « Journal complet » vers le site.
+Évasion : le clic sur le panneau coupe aussi la corde.
+Urnes : un skin gagné s'ouvre aussitôt dans Skins ; l'aperçu des skins est une image fixe.
+Accueil, scène du rhino : le pygmé est lancé sous nos yeux et se plante devant ; le rhino freine, s'approche, souffle et repart doucement ; la scène ne recommence plus une fois la course lancée.
+Versions installées (Windows, Linux, Android) : on peut jouer à deux et en Affrontement.
+Site : un portail (infos.html) avec le journal, la feuille de route, les magasins et une dev-library de toutes les propositions et images.
 = 0.69
 Donjon : le pont entre le haut et le bas ne s'interrompt plus.
 Tous les 40 m, deux conduits se croisent en X derrière le pont : l'un monte, l'autre descend ; en Sphère, rouler sur une bouche fait changer d'étage, sauter par-dessus la laisse passer.
