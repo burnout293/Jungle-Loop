@@ -1,7 +1,7 @@
 # Jungle Loop — version Godot
 
 Portage du jeu web (branche `main` du dépôt `Jungle-Loop`, dossier `js/`) vers **Godot 4.7.2**. Version
-**0.66.0** (28/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
+**0.67.0** (28/11/2026) : **c'est le jeu** depuis le 18/11 (la conversion est déclarée finie) ; à parité avec la
 version web 0.28, puis ses propres changements (plus bas, « Depuis la parité »). Le jeu
 tourne : courses automatiques sans erreur (départ, Vorace jusqu'à sa chute, les trois montures, Run
 illimitée, changements de décor), écrans vérifiés en capture, export web mesuré dans Edge (une image coûte
@@ -104,6 +104,16 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   hauteur de tête) pendant un moment ; une attaque n'est lancée que si un petit saut passe encore tout,
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
+
+## 0.67.0
+
+- **Le donjon en deux** (`SPLIT_ON`, `split_at`, `lay_split`, `_deck`) : un pont de dalles (`slab`, épaisseur
+  `SLAB_T`) à `DECK_H` 8,75 m au-dessus du sol tout le long du donjon, plafond du bas et sol du haut ; chaque
+  section a deux lignes (le sol ou le pont, et un saut). Tous les `SPLIT_CYCLE` 80 m : un conduit du sol
+  (`launch_v` = `SPLIT_LAUNCH`) propulse sur le pont par un puits ; du pont, le puits ramène en bas (ou on le
+  saute). Les dangers alternent bas / haut, jamais l'un au-dessus de l'autre ; les chauves-souris mobiles
+  restent dans leur section. Pas de nuée dans le donjon coupé. Les conduits ne se prennent **qu'en mode Sphère**
+  (sans la Sphère, on reste en bas : tout y est franchissable). Test `tests/split_067.gd` (9), banc `--tour67`.
 
 ## 0.66.0
 

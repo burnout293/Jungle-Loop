@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour67": false, "tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,7 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour67": opts["tour67"] = true        # 0.67: the dungeon in two
 			"tour66": opts["tour66"] = true        # 0.66: the temple's three scenes
 			"tour60": opts["tour60"] = true        # 0.60's: the eagle's fight, each of its moments
 			"tour59": opts["tour59"] = true        # 0.59's: slimes, the dungeon's pipes, the wall of wisps, the heights, the long fall
@@ -155,6 +156,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour67"]:
+		await _tour67()
 		return
 	if opts["tour66"]:
 		await _tour66()
@@ -518,6 +522,28 @@ func _tour52() -> void:
 				main.go("play")
 				main.run.god = true
 			"quit": get_tree().quit()
+
+## --tour67: the dungeon in two, in the Sphère's mode (thrown up onto the deck, along it, down the shaft).
+var shots67 := 0
+
+func _tour67() -> void:
+	if t > 0.5 and shots67 == 0:
+		shots67 = 1
+		_run59(3)
+		var r: Game.Run = main.run
+		r.up["sphere"] = 1
+		r.ball_on = true
+		r.god = true
+		return
+	if shots67 == 0:
+		return
+	var at = [2.0, 3.0, 3.6, 4.2, 5.5, 7.0, 8.5, 10.0, 11.5, 13.0]
+	if shots67 - 1 < at.size() and t >= at[shots67 - 1] + 0.5:
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(opts["shots"].path_join("67-%02d.png" % shots67))
+		shots67 += 1
+	if shots67 - 1 >= at.size():
+		get_tree().quit()
 
 ## --tour66: the temple's scenes: each on the home screen, then as the run starts (the blast and after).
 var steps66: Array = []

@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.66.0"
+const VERSION := "0.67.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0

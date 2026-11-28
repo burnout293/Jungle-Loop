@@ -1,5 +1,8 @@
 # Jungle Loop — les changements montrés par le bouton « Changements » (Réglages, à côté de « Mettre à jour »).
 # La version la plus récente en premier ; une ligne « = 0.xx » ouvre chaque version. Lignes en # ignorées.
+= 0.67
+Donjon coupé en deux sections, Haut et Bas, chacune avec ses dangers ; un conduit tous les 80 m (en Sphère) pour monter, un puits pour redescendre.
+Les conduits ne se prennent plus qu'en mode Sphère.
 = 0.66
 Partie rapide : contre d'autres joueurs (Jouer, ou Amis → Groupe).
 Réglages : envoyer un retour à l'auteur du jeu.

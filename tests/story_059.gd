@@ -151,8 +151,13 @@ func _init() -> void:
 	# --- the dungeon's pipes ---
 	var zs = road_zones("endless", 3, 21)
 	check(zs.all(func(z): return z.open), "le donjon : tous ses conduits s'ouvrent à tous (%d)" % zs.size())
-	check(zs.any(func(z): return z.launch) and zs.any(func(z): return z.mouth > 0) and zs.any(func(z): return z.kind == "log"), "trois sortes : propulsé en haut, bouche en l'air, droits")
+	if Game.SPLIT_ON:                                # (0.67) the dungeon in two: a pipe that throws up to the deck, each cycle
+		check(zs.size() > 0 and zs.all(func(z): return z.launch and z.launch_v == Game.SPLIT_LAUNCH), "le donjon en deux : des conduits qui propulsent sur le pont (%d)" % zs.size())
+	else:
+		check(zs.any(func(z): return z.launch) and zs.any(func(z): return z.mouth > 0) and zs.any(func(z): return z.kind == "log"), "trois sortes : propulsé en haut, bouche en l'air, droits")
 	r = ready_run("endless", 3, 8)
+	r.up["sphere"] = 1                         # (0.67: the pipes, in the Sphère's mode only)
+	r.ball_on = true
 	var px = r.cam + r.sx
 	var z = Game.tight(r, "gallery", px + 40, 600, Game.GROUND + Game.GALLERY - 22)
 	z.launch = true
@@ -167,8 +172,10 @@ func _init() -> void:
 			vy_out = r.p.vy
 			break
 		k += 1
-	check(went_in and vy_out < -800, "un conduit propulseur : il y entre sans la Sphère, en sort lancé vers le haut (%.0f)" % vy_out)
+	check(went_in and vy_out < -800, "un conduit propulseur : il y entre en mode Sphère, en sort lancé vers le haut (%.0f)" % vy_out)
 	r = ready_run("endless", 3, 9)
+	r.up["sphere"] = 1                         # (0.67: the pipes, in the Sphère's mode only)
+	r.ball_on = true
 	px = r.cam + r.sx
 	var zm = Game.tight(r, "chute", px + 260, 600, Game.GROUND - 24)
 	zm.mouth = 150.0
@@ -189,6 +196,8 @@ func _init() -> void:
 
 	# --- a wall of will-o'-the-wisps, a pipe under it ---
 	r = ready_run("endless", 3, 10)
+	r.up["sphere"] = 1                         # (0.67: the pipes, in the Sphère's mode only)
+	r.ball_on = true
 	r.dist = 800.0
 	var f = Game.Swarm.new()
 	f.biome = 3
