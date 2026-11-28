@@ -1,5 +1,7 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Le donjon se coupe en deux : en bas, ou en haut sur le pont de pierre.
-Tous les 80 m, un conduit (en Sphère) te propulse sur le pont ; son puits te ramène en bas.
+Urnes : trois raretés bien visibles, et une ouverture grandiose, plus forte pour les plus rares.
+Évasion : le couteau suisse en grand avec son compte à rebours, un son à chaque corde coupée.
+Accueil plus bas, avec ses panneaux ; les scènes des pygmées passent devant le temple.
+Sphère : plus de Vol ni de double saut, une boule plus petite ; ton avis par une page du site.

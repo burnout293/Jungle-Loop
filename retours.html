@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jungle Loop — ton avis</title>
+<link rel="icon" href="index.icon.png">
+<style>
+@font-face { font-family: "Silkscreen"; src: url("fonts/Silkscreen-Regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Silkscreen"; src: url("fonts/Silkscreen-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+:root {
+  --bg: #0a0f14; --panel: #16201c; --panel2: #1d2a24; --ink: #fff8e6; --dim: #c9d6c3; --gold: #ffd35c;
+  --line: #2c3456; --leaf: #6cc22e; --relic: #5cf2e0; --wood: #3b2a1c;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: radial-gradient(ellipse at 50% -10%, #1f3a2a 0%, var(--bg) 60%) fixed, var(--bg);
+  min-height: 100vh;
+}
+main { max-width: 620px; margin: 0 auto; padding: 28px 16px 56px; }
+h1 { font-family: "Silkscreen", monospace; font-weight: 700; color: var(--gold); font-size: 30px; line-height: 1.1;
+  margin: 0; letter-spacing: 1px; text-shadow: 0 3px 0 #1a1024; }
+.sub { color: var(--dim); margin: 6px 0 22px; }
+form { background: var(--panel); border: 2px solid #1a1024; border-radius: 6px; padding: 18px 16px 20px;
+  box-shadow: 0 0 0 2px #2b3b2f inset, 0 6px 0 #05070a; }
+label.f { display: block; font-family: "Silkscreen", monospace; color: var(--gold); font-size: 15px; margin: 16px 0 6px; }
+label.f:first-child { margin-top: 0; }
+label.f small { font-family: system-ui, sans-serif; color: var(--dim); font-size: 13px; letter-spacing: 0; }
+input[type=text], textarea {
+  width: 100%; background: #0d1411; color: var(--ink); border: 2px solid #1a1024; border-radius: 4px;
+  padding: 10px 12px; font: inherit; box-shadow: 0 0 0 1px #2b3b2f inset;
+}
+input[type=text]:focus, textarea:focus { outline: 2px solid var(--relic); outline-offset: 1px; }
+textarea { min-height: 96px; resize: vertical; }
+.levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.levels input { position: absolute; opacity: 0; pointer-events: none; }
+.levels label {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center;
+  min-height: 74px; padding: 8px 4px; border-radius: 6px; cursor: pointer; user-select: none;
+  background: var(--panel2); border: 2px solid #1a1024; color: var(--dim); font-size: 13px; line-height: 1.2;
+  transition: transform .08s ease, background .15s ease;
+}
+.levels label i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #1a1024; background: var(--c); }
+.levels input:checked + label { background: color-mix(in srgb, var(--c) 28%, var(--panel2)); color: var(--ink);
+  box-shadow: 0 0 0 2px var(--c) inset; transform: translateY(-2px); }
+.levels input:focus-visible + label { outline: 2px solid var(--relic); outline-offset: 2px; }
+.send { display: block; width: 100%; margin-top: 22px; padding: 14px; border: 2px solid #1a1024; border-radius: 6px;
+  background: linear-gradient(#ffe48a, var(--gold) 55%, #d9a92c); color: #2a1a08; cursor: pointer;
+  font: 700 18px "Silkscreen", monospace; letter-spacing: 1px; box-shadow: 0 4px 0 #8a6516; }
+.send:active { transform: translateY(2px); box-shadow: 0 2px 0 #8a6516; }
+.send:disabled { filter: grayscale(.7) brightness(.7); cursor: default; }
+#msg { min-height: 24px; margin: 14px 2px 0; font-weight: 600; }
+#msg.ok { color: var(--leaf); } #msg.err { color: #ff7a7a; }
+.trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+footer { color: var(--dim); font-size: 13px; margin-top: 18px; }
+footer a { color: var(--gold); }
+@media (max-width: 460px) { .levels { grid-template-columns: repeat(2, 1fr); } h1 { font-size: 24px; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Ton avis</h1>
+<p class="sub">Un bug, une idée pour Jungle Loop ? Écris-le ici : l'auteur du jeu le reçoit directement.</p>
+<form id="f" novalidate>
+  <label class="f" for="pseudo">Pseudo <small>(facultatif)</small></label>
+  <input type="text" id="pseudo" name="pseudo" maxlength="24" autocomplete="nickname">
+
+  <label class="f" for="bug">Bug constaté</label>
+  <textarea id="bug" name="bug" maxlength="1500" placeholder="Ce qui s'est passé, où, et ce que tu faisais."></textarea>
+
+  <label class="f" for="idea">Idée d'amélioration</label>
+  <textarea id="idea" name="idea" maxlength="1500" placeholder="Ce qui rendrait le jeu meilleur."></textarea>
+
+  <span class="f" style="display:block;font-family:Silkscreen,monospace;color:var(--gold);font-size:15px;margin:16px 0 6px">Niveau de gêne</span>
+  <div class="levels" role="radiogroup" aria-label="Niveau de gêne">
+    <input type="radio" name="level" id="l0" value="0" checked><label for="l0" style="--c:#6cc22e"><i></i>On s'en fout</label>
+    <input type="radio" name="level" id="l1" value="1"><label for="l1" style="--c:#ffd35c"><i></i>Un peu chiant</label>
+    <input type="radio" name="level" id="l2" value="2"><label for="l2" style="--c:#ff9a3c"><i></i>Relou</label>
+    <input type="radio" name="level" id="l3" value="3"><label for="l3" style="--c:#ff4d5e"><i></i>Bloquant</label>
+  </div>
+
+  <div class="trap" aria-hidden="true"><label for="site">Ne pas remplir</label><input type="text" id="site" name="site" tabindex="-1" autocomplete="off"></div>
+
+  <button class="send" id="send" type="submit">Envoyer</button>
+  <p id="msg" role="status" aria-live="polite"></p>
+</form>
+<footer>
+  <span id="ver"></span> · Ce qui est gardé : <a href="confidentialite.html">confidentialité</a> · <a href="./">Retour au jeu</a>
+</footer>
+</main>
+<script>
+(() => {
+  const SERVER = 'https://jungle-loop.burnout293.workers.dev/api/feedback/web';
+  // what the game passes after the # (never sent to any server by the browser): pseudo, version, platform
+  const h = new URLSearchParams(location.hash.slice(1));
+  const $ = (id) => document.getElementById(id);
+  let kept = '';
+  try { kept = localStorage.getItem('jl-pseudo') || ''; } catch (e) { /* private window */ }
+  $('pseudo').value = (h.get('pseudo') || kept).slice(0, 24);
+  const version = (h.get('v') || '').slice(0, 16);
+  const os = (h.get('os') || 'site').slice(0, 16);
+  $('ver').textContent = version ? 'Version ' + version : 'Jungle Loop';
+  const msg = (text, cls) => { $('msg').textContent = text; $('msg').className = cls || ''; };
+  $('f').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const bug = $('bug').value.trim();
+    const idea = $('idea').value.trim();
+    if (!bug && !idea) { msg('Écris un bug ou une idée (au moins l\'un des deux).', 'err'); $('bug').focus(); return; }
+    const level = Number(document.querySelector('input[name=level]:checked').value);
+    const pseudo = $('pseudo').value.trim();
+    try { localStorage.setItem('jl-pseudo', pseudo); } catch (e) { /* fine */ }
+    $('send').disabled = true;
+    msg('Envoi…');
+    try {
+      const r = await fetch(SERVER, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ pseudo, bug, idea, level, version, os, site: $('site').value }) });
+      const d = await r.json().catch(() => ({}));
+      if (d.ok) {
+        msg('Merci ! Ton retour est bien arrivé.', 'ok');
+        $('bug').value = ''; $('idea').value = '';
+      } else if (d.error === 'busy') {
+        msg('Beaucoup de retours d\'un coup : réessaie dans une heure.', 'err');
+      } else {
+        msg('Le retour n\'est pas parti : réessaie plus tard.', 'err');
+      }
+    } catch (e) {
+      msg('Pas de connexion : réessaie plus tard.', 'err');
+    }
+    $('send').disabled = false;
+  });
+})();
+</script>
+</body>
+</html>
