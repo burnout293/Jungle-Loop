@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour70s": false, "tour70": false, "tour69": false, "tour68": false, "tour67": false, "tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour72": false, "tour70s": false, "tour70": false, "tour69": false, "tour68": false, "tour67": false, "tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -42,6 +42,7 @@ func _ready() -> void:
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
 			"tour70s": opts["tour70s"] = true      # 0.70: the heights remade (lily pads, scenery, clouds, falls)
+			"tour72": opts["tour72"] = true        # 0.72: Skins laid out as A, the city's crates, toucans, rocket, the heights' end
 			"tour70": opts["tour70"] = true        # 0.70: the home's objectives and dots, the pause, the notes, the rhino, Skins
 			"tour69": opts["tour69"] = true        # 0.69: the dungeon in two, its pipes in an X
 			"shape": Game.TUBE_FORCE = kv[1]       # (with --tour69: only that shape of pipe, one shot)
@@ -161,6 +162,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour72"]:
+		await _tour72()
 		return
 	if opts["tour70s"]:
 		await _tour70s()
@@ -538,6 +542,79 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour72: 0.72 in pictures: the Skins tab laid out as A (a category of each family), the city's crates (a
+## heap ahead, then him right before it), the heights with a swarm of toucans and a rocket on its way, the heights'
+## end (« falaise A » the other way round, the dungeon's floor out of the mist).
+var steps72: Array = []
+
+func _tour72() -> void:
+	if steps72.is_empty():
+		steps72 = [[0.5, "setup", ""]]
+		var at = 0.8
+		for id in ["pepito-gold", "trail-rainbow", "sign-neon", "rhino-sand", "fall-flower", "pygmies:", "emote-gg", "ghost-gold", "scarf-striped", "buttons:"]:
+			steps72.append([at, "skin", id])
+			steps72.append([at + 0.6, "shot", "72-skin-" + id.replace(":", "")])
+			at += 0.8
+		steps72.append_array([[at, "city", ""], [at + 0.6, "crates", ""], [at + 1.2, "shot", "72-caisses-1"], [at + 2.0, "shot", "72-caisses-2"],
+			[at + 2.6, "shot", "72-caisses-3"], [at + 2.8, "sky", ""], [at + 3.4, "swarm", ""], [at + 4.4, "shot", "72-toucans-1"],
+			[at + 4.9, "shot", "72-toucans-2"], [at + 5.0, "rocket", ""], [at + 5.6, "shot", "72-fusee-1"], [at + 6.3, "shot", "72-fusee-2"],
+			[at + 6.4, "end", ""], [at + 7.4, "shot", "72-fin-pitons-1"], [at + 8.2, "shot", "72-fin-pitons-2"], [at + 8.4, "quit", ""]])
+	while tour_i < steps72.size() and t >= steps72[tour_i][0]:
+		var st = steps72[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				main.save["seenIntro"] = true
+				main.save["xp"] = 9000.0
+				for id in ["pepito-gold", "trail-rainbow", "sign-neon", "rhino-sand", "fall-flower", "emote-gg", "emote-wow", "ghost-gold"]:
+					if not id in main.save["skins"]["owned"]:
+						main.save["skins"]["owned"].append(id)
+				main.save["skins"]["worn"]["trail"] = "trail-rainbow"
+				main.tab = "skin"
+				main.picked_skin = "pepito-gold"
+				main.go("shop")
+			"skin":
+				main.picked_skin = arg
+				main.refresh_shop()
+			"city":
+				main.go("menu")
+				_run59(2)
+				main.run.mode = "endless"
+			"crates":
+				var r: Game.Run = main.run
+				r.decor = []
+				Game.add_decor(r, r.cam + r.sx + 330.0)
+				Game.add_decor(r, r.cam + r.sx + 1300.0)
+			"sky":
+				_run59(Game.SKY)
+				main.run.mode = "endless"
+				main.run.up["flight"] = 1
+				main.run.sky_ok = true
+			"swarm":
+				var r: Game.Run = main.run
+				r.dist = 600.0
+				var f = Game.Swarm.new()
+				f.biome = Game.SKY
+				r.fm = f
+				Game.wave(r)
+			"rocket":
+				var r: Game.Run = main.run
+				r.fm = null
+				var o = Game.add_dart(r, r.cam + r.view_w + 40, 220.0)
+				o.state = "warn"
+				o.t = 0.2
+			"end":                                   # the heights end just ahead: the dungeon next
+				var r: Game.Run = main.run
+				r.prev_biome = Game.SKY
+				r.biome = 3
+				r.biome_x = r.cam + r.view_w * 0.55
+				r.obs = r.obs.filter(func(o): return o.x < r.biome_x - 600)
 			"quit": get_tree().quit()
 
 ## --tour70s: the heights in a Run illimitée, untouchable, a shot every 0.6 s for 12 s.

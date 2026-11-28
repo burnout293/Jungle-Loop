@@ -1,5 +1,13 @@
 # Jungle Loop — les changements montrés par le bouton « Changements » (Réglages, à côté de « Mettre à jour »).
 # La version la plus récente en premier ; une ligne « = 0.xx » ouvre chaque version. Lignes en # ignorées.
+= 0.72
+Pitons : la falaise du bout de la forêt refaite (fougères, mousse, lianes qui se balancent, gouttes, nuages qui roulent) ; la même, retournée, à la sortie des pitons, où le donjon commence.
+Pitons : la nuée de toucans bat des ailes (ils regardent enfin vers toi) ; les petits nénuphars volants battent de leurs ailes de feuilles et perdent des gouttes : violets quand ils restent sur place, rouges quand ils bougent.
+Pitons : la fusée de bambou revient comme Fonceur, lancée par un pygmée en deltaplane ; elle crépite et ses feuilles frémissent. Les pygmées qui foncent en deltaplane sont gardés pour plus tard.
+Ville : les caisses à casser sont une pile de trois caisses rayées jaune et noir ; leur symbole bleu s'allume et s'éteint, celle du haut tremble de temps en temps, toutes tremblent quand tu arrives.
+Panneaux de record : deux planches moussues, le pseudo en grand au milieu ; ils oscillent un peu au vent, tremblent et perdent des feuilles quand tu passes devant. Les panneaux des skins gardent leurs couleurs.
+Accueil : le rhino qui poursuit le pygmée a ses propres dessins (il n'est plus la monture) : il court, s'approche lourdement, souffle, gratte le sol, montre les dents, puis repart en bougonnant.
+Menu Skins refait (maquette A) : à gauche les familles (Pépito, Effets, Social, Montures, Autres) qui se déplient ; au milieu les skins en vignettes bordées de la couleur de leur rareté (coche sur celui porté, « ! » sur un nouveau) ; à droite l'aperçu et « Porter ».
 = 0.71
 Panneaux de record sur la route : seulement le pseudo (« TOI » pour le tien), en lettres plus grandes et cernées, et leur poteau descend jusqu'en bas de l'écran : ils ne flottent plus.
 Donjon : à l'entrée de chaque partie coupée en deux, une bannière rouge (deux barres) sur l'étage difficile, une verte (une feuille) sur le tranquille.

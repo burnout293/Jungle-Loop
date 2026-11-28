@@ -1,19 +1,17 @@
 # Jungle Loop — la feuille de route publiée sur le site (feuille-de-route.html, par tools/build_site.py).
 # Une ligne « [Section] » ouvre une partie ; chaque ligne en dessous est un point. Lignes en # ignorées.
 [En cours]
-Les pitons brumeux refaits : nénuphars volants, nuée de toucans, pygmée en deltaplane (choix des dessins en cours).
 Les pygmées de l'accueil : leurs propres dessins, leurs émotions, leurs animations.
 Jouer à plusieurs dans les versions installées (Windows, Linux, Android).
 [Prévu]
 Sortie sur Steam et sur le Play Store.
-Un nouveau menu des skins, avec beaucoup plus de catégories.
-Les falaises du début et de la fin des pitons, refaites.
-Des caisses de la ville bien reconnaissables ; de nouveaux panneaux de record.
+Les pygmées en deltaplane (gardés de côté), en danger ou en décor.
 Le boss de la cité et celui du donjon (Histoire).
 [Idées]
 Des boss tous les 1000 m dans la finale du Trésor (Affrontement).
-Un rhino plus sérieux, voire énervé.
 [Fait récemment]
+Pitons refaits et animés : falaise, toucans, nénuphars, fusée de bambou.
+Menu Skins en colonnes ; panneaux de record en planches ; caisses de la ville ; rhino énervé à l'accueil.
 Donjon en deux étages, conduits entre toutes les lignes.
 Urnes à trois raretés, ouverture grandiose.
 Évasion au couteau suisse refaite ; page « Ton avis ».

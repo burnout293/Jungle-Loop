@@ -123,6 +123,8 @@ def build():
         for d in sorted((ARCH / 'propositions').iterdir(), reverse=True):
             if d.is_dir():
                 sources.append((f'Propositions {d.name}', d, f'propositions/{d.name}'))
+    if (ARCH / 'animations').is_dir():              # (0.72) the game's animations, as GIFs (tools/make_anim.py gifs)
+        sources.insert(0, ('Animations du jeu', ARCH / 'animations', 'animations'))
     if (ARCH / 'boss2').is_dir():
         sources.append(("L'Aigle (boss 2) : ébauches", ARCH / 'boss2', 'boss2'))
     sources.append(('Images du jeu (assets/img)', HERE / 'assets' / 'img', 'assets'))

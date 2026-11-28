@@ -26,7 +26,7 @@ const BIOMES := [
 		"platform": "dungeon-platform", "pillar": "dungeon-pillar", "crate": "dungeon-crate", "slab": "dungeon-slab", "tunnel": "dungeon-tunnel", "plat_top": 2, "slab_top": 2, "hollow": ["#4a3026", "#140d0d", "#5c4636", "#0a0707"]},
 ]
 
-const NAMES := ["sky-lily", "sky-toucan", "sky-far-0", "sky-far-1", "sky-far-2", "campfire", "temple", "temple-mid", "temple-front", "temple-rubble", "vorace-legs", "vorace-head", "vorace-body", "vorace-log", "crate-big", "lilypad", "walkway", "hover-plat", "vine-garland", "vine-hang",
+const NAMES := ["sky-lily", "sky-lily-am", "sky-toucan", "scene-rhino-run", "scene-rhino-snort", "scene-rhino-walk", "city-crate-a", "city-crate-a-lit", "city-crates", "sign-board", "cliff-a", "sky-far-0", "sky-far-1", "sky-far-2", "campfire", "temple", "temple-mid", "temple-front", "temple-rubble", "vorace-legs", "vorace-head", "vorace-body", "vorace-log", "crate-big", "lilypad", "walkway", "hover-plat", "vine-garland", "vine-hang",
 	"spikebot", "spider-low", "spider-mid", "bat", "thornball", "beartrap", "vulture", "arrow", "missile", "idol", "drone", "wasp", "drone-big",
 	"pinnacle", "glider", "hornets", "toucan", "rocket", "cliff",
 	"hero-body", "hero-ball", "hero-rotor", "hero-fist", "hero-shoe", "mount-gorilla", "mount-gorilla-hang", "mount-rhino", "mount-dragonfly",
@@ -36,7 +36,7 @@ const NAMES := ["sky-lily", "sky-toucan", "sky-far-0", "sky-far-1", "sky-far-2",
 
 # Frames of each danger's sheet.
 const HAZ_FRAMES := {"spiky": 1, "thornball": 1, "beartrap": 2, "spikebot": 1, "fly": 4, "vulture": 2, "arrow": 1, "missile": 1, "spider-low": 2, "spider-mid": 2,
-	"idol": 1, "bat": 3, "drone": 1, "mosquito": 4, "wasp": 1, "drone-big": 1, "glider": 1, "hornets": 1, "toucan": 1, "rocket": 1, "sky-lily": 1, "sky-toucan": 1}
+	"idol": 1, "bat": 3, "drone": 1, "mosquito": 4, "wasp": 1, "drone-big": 1, "glider": 1, "hornets": 1, "toucan": 1, "rocket": 6, "sky-lily": 8, "sky-lily-am": 8, "sky-toucan": 8}   # (0.72: PixelLab's animations, tools/make_anim.py)
 
 static var img := {}          # name -> Image, as loaded (RGBA8)
 static var tex := {}          # name -> Texture2D
@@ -128,9 +128,13 @@ static func load_all() -> void:
 		scene.append(build_scene(b))
 	build_haz()
 	# the forest's big crate, the ruins' jar, the city's crates, the dungeon's barrel: a little darker
+	# (0.72: the city's, three crates in a heap, city-crates; one of them alone, city-crate-a, as render.gd lays
+	# them out again, alive)
 	decor = []
-	for n in ["crate-big", "ruins-prop-1", "city-prop-3", "dungeon-prop-1"]:
+	for n in ["crate-big", "ruins-prop-1", "city-crates" if img.has("city-crates") else "city-prop-3", "dungeon-prop-1"]:
 		decor.append(make(tinted(img[n], rgba(14, 8, 26, 0.26))) if img.has(n) else null)
+	if img.has("city-crate-a"):
+		tex["city-crate-a"] = make(tinted(img["city-crate-a"], rgba(14, 8, 26, 0.26)))
 	# the hero's pieces, redrawn four times finer with their stair-steps rounded off
 	var dim = rgba(16, 12, 40, 0.38)
 	for k in ["hero-body", "hero-rotor", "hero-fist", "hero-shoe", "hero-ball"]:

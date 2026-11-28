@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.71.0"
+const VERSION := "0.72.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -2452,6 +2452,17 @@ func _build_shop() -> void:
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	_place(scroll, 66, 30, 236, 282)
 	w["shop-scroll"] = scroll
+	var cats_scroll = ScrollContainer.new()          # (0.72) Skins: the families and their categories, on the left
+	cats_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	cats_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_place(cats_scroll, 66, 30, 84, 282)
+	w["skin-cats"] = _vbox(2)
+	w["skin-cats"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	w["skin-cats"].mouse_filter = Control.MOUSE_FILTER_PASS
+	cats_scroll.add_child(w["skin-cats"])
+	cats_scroll.visible = false
+	s.add_child(cats_scroll)
+	w["skin-cats-scroll"] = cats_scroll
 	w["shop-list"] = _vbox(3)
 	w["shop-list"].size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	w["shop-list"].mouse_filter = Control.MOUSE_FILTER_PASS
@@ -3496,7 +3507,16 @@ func refresh_shop(just_bought: String = "") -> void:
 	if tab == "up":                                  # (0.70) seen: the home's dots go
 		_seen("up")
 	elif tab == "skin":
+		for id in save["skins"]["owned"]:          # (0.72) won since last seen: a « ! » on its picture
+			if not id in save["seen"].get("skins", []) and not id in skin_fresh:
+				skin_fresh.append(id)
 		_seen("skins")
+	var skin_on = tab == "skin"                      # (0.72) Skins: its categories on the left, the grid narrower
+	w["skin-cats-scroll"].visible = skin_on
+	var sc: Control = w["shop-scroll"]
+	_place(sc, 154 if skin_on else 66, 30, 148 if skin_on else 236, 282)
+	if sc.has_meta("rest"):                          # (where show_screen brings it back as the screen flies in)
+		sc.set_meta("rest", sc.position)
 	for k in TABS:
 		_shop_skin(w["tab-" + k], "tab", k == tab)
 		w["tab-" + k].add_theme_font_size_override("font_size", roundi(5.5 * U))
@@ -3620,10 +3640,20 @@ const SKIN_TEXT := {"pepito": "Les mêmes feuilles, dans d'autres couleurs.", "s
 	"emote": "Des mots à dire à deux : le bouton « ! » pendant la course.",
 	"buttons": "Les boutons de pierre d'avant, gravés et couverts de lianes."}
 
-## The Skins tab (0.47): each target (Pépito, the mounts, the pygmies) under its name, its original look then
-## its skins; a skin picked is shown at once (the preview, and the game behind); owned, it is worn with
-## « Porter »; not owned, it comes out of the urns or is bought with coins. 0.58: grouped in the urns' three
-## families (Pépito's look, effects, social) then the rest; the emotes are all owned at once (none worn).
+## The Skins tab (0.47; 0.72 laid out as « A · Vestiaire en colonnes », the user's choice): on the left the families
+## (Pépito, Effets, Social, Montures, Autres), the open one showing its categories; in the middle the category's
+## skins as pictures, edged in their rarity's colour (the original or « Aucun » first; worn: a tick; new: a
+## « ! »); on the right the card: a still picture of him with it, what it is, « Porter » or its price. A skin
+## picked is shown at once (the preview, and the game behind); owned, it is worn with « Porter »; not owned, it
+## comes out of the urns or is bought with coins. The emotes are all owned at once (none worn).
+const SKIN_GROUPS := [["PÉPITO", ["pepito", "shoes", "bag", "scarf"]], ["EFFETS", ["rotor", "trail", "jump", "fall"]],
+	["SOCIAL", ["sign", "ghost", "emote"]], ["MONTURES", ["gorilla", "rhino", "dragonfly"]], ["AUTRES", ["pygmies", "buttons"]]]
+const SKIN_SHORT := {"pepito": "Feuilles", "shoes": "Chaussures", "bag": "Sac à dos", "scarf": "Écharpe", "rotor": "Hélice",
+	"trail": "Traînée", "jump": "Saut", "fall": "Chute", "sign": "Panneau", "ghost": "Fantôme", "emote": "Émotes",
+	"gorilla": "Gorille", "rhino": "Rhino", "dragonfly": "Libellule", "pygmies": "Pygmées", "buttons": "Boutons"}
+var skin_fresh: Array = []             # (0.72) skins won since the tab was last seen: a « ! » on them until picked
+var skin_thumbs := {}                  # "<target>|<id>" -> its picture in the grid
+
 func _skins_tab(list: VBoxContainer) -> void:
 	w["shop-title"].text = "SKINS"
 	var worn: Dictionary = save["skins"]["worn"]
@@ -3637,56 +3667,67 @@ func _skins_tab(list: VBoxContainer) -> void:
 	else:
 		look[target] = picked_skin
 	Skins.apply(look)
-	var fam_now = "-"
-	for t in Skins.ORDER:
-		var fam: String = Skins.TARGETS[t].get("family", "")
-		if fam != fam_now:                           # (0.58) the family's title
-			fam_now = fam
-			for f in Skins.FAMILIES:
-				if f[0] == fam:
-					list.add_child(_label(f[1], ts("s"), GOLD, 1.5))
-		var head = _label(Skins.TARGETS[t]["name"].to_upper(), ts("s"), RELIC, 1.5)
-		list.add_child(head)
-		var many: bool = Skins.TARGETS[t].get("many", false)
-		if not many:
-			var orig_id: String = t + ":"
-			var orig_right = _note("Porté" if not worn.has(t) else "", RELIC)
-			var on_orig = func() -> void:
-				picked_skin = orig_id
-				refresh_shop()
-			list.add_child(_row(null, "Original" if fam in ["", "look"] else "Aucun", orig_right, picked_skin == orig_id, 0, on_orig))
-		for sk in Skins.of_target(t):
-			var id: String = sk["id"]
-			var right: Control
-			if worn.get(t, "") == id and not many:
-				right = _note("Porté", RELIC)
-			elif id in owned:
-				right = _note("Possédé", DIM)
-			else:
-				right = _price(Treasure.skin_price(id), GOLD if int(save["coins"]) >= Treasure.skin_price(id) else DIM)
-			var on_skin = func() -> void:
-				picked_skin = id
-				refresh_shop()
-			var row = _row(null, sk["name"], right, picked_skin == id, 0, on_skin)
-			list.add_child(row)
-		if t == "buttons":                           # 0.50: a button of the look picked (or worn)
-			var look_id = picked_skin if Skins.skin(picked_skin).get("target", "") == "buttons" else ("" if picked_skin == "buttons:" else str(worn.get("buttons", "")))
-			var pic = TextureRect.new()
-			var pic_path = "res://assets/img/ui-v2/%sbtn-normal-50.png" % ("" if look_id == "buttons-stone" else "wood/")
-			pic.texture = load(pic_path) if ResourceLoader.exists(pic_path) else null
-			pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			pic.custom_minimum_size = Vector2(a(236), a(54))
-			pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			list.add_child(pic)
-		if t == "pygmies":                           # the pygmies have no preview run: one of them, alive
-			var stage = MountStage.new()
-			stage.tex = Art.tex.get("guard-club")
-			stage.frames = 8
-			stage.custom_minimum_size = Vector2(a(236), a(100))
-			stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			list.add_child(stage)
+	# the families and their categories
+	var cats: VBoxContainer = w["skin-cats"]
+	for ch in cats.get_children():
+		ch.queue_free()
+	for g in SKIN_GROUPS:
+		var open: bool = target in g[1]
+		var first: String = g[1][0]
+		var on_group = func() -> void:
+			if not open:
+				_skin_pick_target(first)
+		var head = _skin_cat_button(("- " if open else "+ ") + str(g[0]), open, true, g[1].any(func(t): return _skin_fresh_in(t)), on_group)
+		cats.add_child(head)
+		if not open:
+			continue
+		for t in g[1]:
+			var tt: String = t
+			var on_cat = func() -> void:
+				_skin_pick_target(tt)
+			cats.add_child(_skin_cat_button(SKIN_SHORT.get(t, t), t == target, false, _skin_fresh_in(t), on_cat))
+	# the category's skins, in a grid
+	var grid = GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", roundi(a(5)))
+	grid.add_theme_constant_override("v_separation", roundi(a(5)))
+	grid.mouse_filter = Control.MOUSE_FILTER_PASS
+	var many: bool = Skins.TARGETS[target].get("many", false)
+	var fam: String = Skins.TARGETS[target].get("family", "")
+	if not many:
+		var orig_id: String = target + ":"
+		var on_orig = func() -> void:
+			picked_skin = orig_id
+			refresh_shop()
+		grid.add_child(_skin_tile(_skin_thumb(target, ""), "Original" if fam in ["", "look"] and target != "scarf" else "Aucun", "", picked_skin == orig_id, not worn.has(target), true, false, on_orig))
+	for sk in Skins.of_target(target):
+		var id: String = sk["id"]
+		var on_skin = func() -> void:
+			picked_skin = id
+			skin_fresh.erase(id)
+			refresh_shop()
+		var have: bool = id in owned
+		grid.add_child(_skin_tile(_skin_thumb(target, id), str(sk["name"]).replace("« ", "").replace(" »", ""), str(Skins.RARITIES[sk["rarity"]]["colour"]),
+			picked_skin == id, have and (many or worn.get(target, "") == id), have, id in skin_fresh, on_skin))
+	list.add_child(grid)
+	if target == "buttons":                          # 0.50: a button of the look picked (or worn)
+		var look_id = picked_skin if Skins.skin(picked_skin).get("target", "") == "buttons" else ("" if picked_skin == "buttons:" else str(worn.get("buttons", "")))
+		var pic = TextureRect.new()
+		var pic_path = "res://assets/img/ui-v2/%sbtn-normal-50.png" % ("" if look_id == "buttons-stone" else "wood/")
+		pic.texture = load(pic_path) if ResourceLoader.exists(pic_path) else null
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		pic.custom_minimum_size = Vector2(a(148), a(40))
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		list.add_child(pic)
+	if target == "pygmies":                          # the pygmies have no preview run: one of them, alive
+		var stage = MountStage.new()
+		stage.tex = Art.tex.get("guard-club")
+		stage.frames = 8
+		stage.custom_minimum_size = Vector2(a(148), a(70))
+		stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		list.add_child(stage)
 	var sk2 = Skins.skin(picked_skin)
 	var acts: HBoxContainer = w["card-actions"]
 	var many2: bool = Skins.TARGETS[target].get("many", false)
@@ -3726,6 +3767,257 @@ func _skins_tab(list: VBoxContainer) -> void:
 			b.disabled = int(save["coins"]) < cost
 			acts.add_child(b)
 	_show_demo({"pepito": "sprint", "gorilla": "m-gorilla", "rhino": "m-rhino", "dragonfly": "m-dragonfly"}.get(target, "sprint"), 1)
+
+## (0.72) A category of the Skins tab picked: its worn skin (or its original; the emotes: the first one).
+func _skin_pick_target(t: String) -> void:
+	if Skins.TARGETS[t].get("many", false):
+		var all = Skins.of_target(t)
+		picked_skin = str(all[0]["id"]) if not all.is_empty() else t + ":"
+	else:
+		var worn: Dictionary = save["skins"]["worn"]
+		picked_skin = str(worn[t]) if worn.has(t) else t + ":"
+	refresh_shop()
+
+func _skin_fresh_in(t: String) -> bool:
+	return skin_fresh.any(func(id): return str(Skins.skin(id).get("target", "")) == t)
+
+## (0.72) A family's title (`head`) or one of its categories, in the left column of the Skins tab.
+func _skin_cat_button(text: String, sel: bool, head: bool, fresh: bool, fn: Callable) -> Button:
+	var b = Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_filter = Control.MOUSE_FILTER_PASS
+	b.text = text
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.clip_text = true
+	b.custom_minimum_size = Vector2(a(84), a(20 if head else 22))
+	if head:
+		for st in ["normal", "hover", "pressed", "disabled", "focus"]:
+			var e = StyleBoxEmpty.new()
+			e.content_margin_left = a(3)
+			b.add_theme_stylebox_override(st, e)
+		b.add_theme_font_override("font", bold)
+		for k in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]:
+			b.add_theme_color_override(k, GOLD if sel else DIM)
+	else:
+		_shop_skin(b, "item", sel)
+		for st in ["normal", "hover", "pressed", "disabled"]:   # (the name off the plaque's left end)
+			var sb: StyleBox = b.get_theme_stylebox(st).duplicate()
+			sb.content_margin_left = a(7)
+			sb.content_margin_right = a(4)
+			b.add_theme_stylebox_override(st, sb)
+	b.add_theme_font_size_override("font_size", roundi(ts("s") * (0.82 if head else 0.78)))
+	if fresh:                                        # something new in there
+		var dot = _label("!", roundi(ts("s") * 0.8), GOLD, 1)
+		dot.position = Vector2(a(74), a(2))
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(dot)
+	var on_b = func() -> void:
+		Audio.sfx("click")
+		fn.call()
+	b.pressed.connect(on_b)
+	return b
+
+## (0.72) A skin in the grid: its picture, its name, edged in its rarity's colour (`edge`, "" for the original);
+## worn: a tick; not owned: greyed; new: a « ! ».
+func _skin_tile(pic: Texture2D, name: String, edge: String, sel: bool, on: bool, have: bool, fresh: bool, fn: Callable) -> Button:
+	var b = Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	b.mouse_filter = Control.MOUSE_FILTER_PASS        # a finger dragging over the tiles scrolls the grid
+	b.custom_minimum_size = Vector2(a(46), a(54))
+	var col = Color(edge) if edge != "" else Color("#5b6b5e")
+	for st in ["normal", "hover", "pressed", "disabled"]:
+		var sb = StyleBoxFlat.new()
+		sb.bg_color = Color("#2f4a3a") if sel else (Color("#24332c") if st == "hover" else Color("#1b2622"))
+		sb.border_color = GOLD if sel else col
+		sb.set_border_width_all(roundi(a(2.5 if sel else 1.5)))
+		sb.set_corner_radius_all(roundi(a(3)))
+		b.add_theme_stylebox_override(st, sb)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var r = TextureRect.new()
+	r.texture = pic
+	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	r.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	r.position = Vector2(a(5), a(4))
+	r.size = Vector2(a(36), a(32))
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not have:
+		r.modulate = Color(0.5, 0.5, 0.56)
+	b.add_child(r)
+	var l = _label(name, roundi(ts("s") * 0.72), (GOLD if sel else (INK if have else DIM)), 0)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	l.clip_text = true
+	l.position = Vector2(a(2), a(38))
+	l.size = Vector2(a(42), a(13))
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(l)
+	if on:                                           # worn
+		var tick = _label("✓", roundi(ts("s") * 0.8), RELIC, 1)
+		tick.position = Vector2(a(35), a(1))
+		tick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(tick)
+	if fresh:
+		var dot = _label("!", roundi(ts("s") * 0.8), GOLD, 1)
+		dot.position = Vector2(a(4), a(1))
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(dot)
+	var on_b = func() -> void:
+		Audio.sfx("click")
+		fn.call()
+	b.pressed.connect(on_b)
+	return b
+
+## (0.72) A skin's picture for the grid, made once: his leaves, shoes, bag or rotor, a mount or a pygmy in its
+## colours (Skins.recolour on the original pictures); a scarf, a trail, a burst, a board, a ghost or a bubble
+## drawn in its colours; the fall's own picture; « Aucun »: an empty ring.
+func _skin_thumb(target: String, id: String) -> Texture2D:
+	var key = target + "|" + id
+	if skin_thumbs.has(key):
+		return skin_thumbs[key]
+	var sk: Dictionary = Skins.skin(id)
+	var rules: Array = sk.get("rules", [])
+	var fx: Dictionary = sk.get("fx", {})
+	var im: Image = null
+	match target:
+		"pepito", "bag":
+			im = _thumb_pepito(rules, [])
+		"shoes":                                    # (his feet, closer: the shoes are small)
+			im = _thumb_pepito([], rules)
+			if im != null:
+				im = im.get_region(Rect2i(0, im.get_height() - 24, im.get_width(), 24))
+		"rotor":
+			im = _thumb_src("hero-rotor", 1, rules)
+		"gorilla", "rhino", "dragonfly":
+			im = _thumb_src("mount-" + target, int(Art.meta["mounts"][target]["frames"]), rules)
+		"pygmies":
+			im = _thumb_src("guard-club", 8, rules)
+		"fall":
+			if Art.img.has(str(fx.get("pic", ""))):
+				im = Art.img[str(fx["pic"])].duplicate()
+				im.resize(im.get_width() * 2, im.get_height() * 2, Image.INTERPOLATE_NEAREST)
+		"buttons":
+			var path = "res://assets/img/ui-v2/%sbtn-normal-50.png" % ("" if id == "buttons-stone" else "wood/")
+			if ResourceLoader.exists(path):
+				im = (load(path) as Texture2D).get_image()
+				if im.is_compressed():
+					im.decompress()
+		_:
+			if not fx.is_empty():
+				im = _thumb_drawn(target, fx)
+	if im == null:
+		im = _thumb_none()
+	im.convert(Image.FORMAT_RGBA8)
+	var used = im.get_used_rect()
+	if used.has_area():
+		im = im.get_region(used)
+	var tex = ImageTexture.create_from_image(im)
+	skin_thumbs[key] = tex
+	return tex
+
+## The first picture of `name` (a sheet of `frames`), in the colours of `rules`.
+func _thumb_src(name: String, frames: int, rules: Array) -> Image:
+	if not Art.img.has(name):
+		return null
+	var src: Image = Art.img[name]
+	var one = src.get_region(Rect2i(0, 0, src.get_width() / frames, src.get_height()))
+	return Skins.recolour(one, rules) if not rules.is_empty() else one
+
+## Pépito whole for the grid: his body (leaves, bag) in `body_rules`' colours, his two shoes in `shoe_rules`'.
+func _thumb_pepito(body_rules: Array, shoe_rules: Array) -> Image:
+	var body = _thumb_src("hero-body", 1, body_rules)
+	var shoe = _thumb_src("hero-shoe", 1, shoe_rules)
+	if body == null:
+		return null
+	var im = Image.create_empty(body.get_width() + 4, body.get_height() + 10, false, Image.FORMAT_RGBA8)
+	if shoe != null:
+		var far = shoe.duplicate()
+		for y in far.get_height():
+			for x in far.get_width():
+				var c = far.get_pixel(x, y)
+				if c.a > 0:
+					far.set_pixel(x, y, Color(c.darkened(0.4), c.a))
+		im.blend_rect(far, Rect2i(Vector2i.ZERO, far.get_size()), Vector2i(7, body.get_height() - 1))
+	im.blend_rect(body, Rect2i(Vector2i.ZERO, body.get_size()), Vector2i(2, 0))
+	if shoe != null:
+		im.blend_rect(shoe, Rect2i(Vector2i.ZERO, shoe.get_size()), Vector2i(15, body.get_height()))
+	return im
+
+func _thumb_none() -> Image:
+	var im = Image.create_empty(21, 21, false, Image.FORMAT_RGBA8)
+	for y in 21:
+		for x in 21:
+			var d = Vector2(x - 10, y - 10).length()
+			if (d > 7.2 and d < 9.2) or (absi(x - (20 - y)) <= 0 and d < 8.5):
+				im.set_pixel(x, y, DIM)
+	return im
+
+## A scarf, a trail or a burst, a board, a ghost, a bubble: in the colours of the skin's `fx`.
+func _thumb_drawn(target: String, fx: Dictionary) -> Image:
+	var im = Image.create_empty(32, 24, false, Image.FORMAT_RGBA8)
+	match target:
+		"scarf":
+			var c1 = Color(str(fx.get("col", "#e0383e")))
+			var c2 = Color(str(fx.get("col2", "#a01e2e")))
+			for x in 26:
+				var y0 = 6 + roundi(sin(x * 0.45) * 2.0)
+				var c = c2 if fx.get("stripes", false) and (x / 3) % 2 == 1 else c1
+				im.fill_rect(Rect2i(x + 1, y0, 1, 5), c)
+				im.set_pixel(x + 1, y0 + 4, c.darkened(0.35))
+				if fx.get("shine", false) and x % 7 == 2:
+					im.set_pixel(x + 1, y0 + 1, Color("#fff8e6"))
+			im.fill_rect(Rect2i(22, 10, 4, 11), c1)  # its loose end
+			im.fill_rect(Rect2i(22, 19, 4, 2), c2)
+		"trail", "jump":
+			var cols: Array = fx.get("cols", ["#ffd35c"])
+			var shape = str(fx.get("shape", "dot"))
+			for k in 6:
+				var c = Color(str(cols[k % cols.size()]))
+				var cx = 4 + k * 5
+				var cy = (19 - k * 2) if target == "trail" else (12 + roundi(sin(k * 1.3) * 7))
+				match shape:
+					"star":
+						im.fill_rect(Rect2i(cx - 1, cy, 3, 1), c)
+						im.fill_rect(Rect2i(cx, cy - 1, 1, 3), c)
+					"leaf":
+						im.fill_rect(Rect2i(cx - 1, cy, 2, 2), c)
+						im.set_pixel(cx + 1, cy - 1, c)
+					"ring":
+						for o in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+							im.set_pixel(cx + o.x * 2, cy + o.y * 2, c)
+					"puff":
+						im.fill_rect(Rect2i(cx - 2, cy - 1, 4, 3), c)
+						im.fill_rect(Rect2i(cx - 1, cy - 2, 2, 5), c)
+					_:
+						im.fill_rect(Rect2i(cx - 1, cy - 1, 2 + k % 2, 2 + k % 2), c)
+		"sign":
+			var wood = Color(str(fx.get("wood", "#8a5a2b")))
+			var dark = Color(str(fx.get("dark", "#2a160a")))
+			var lite = Color(str(fx.get("lite", "#b07a3e")))
+			var ink = Color(str(fx.get("ink", "#fff8e6")))
+			im.fill_rect(Rect2i(14, 14, 3, 10), dark)
+			im.fill_rect(Rect2i(1, 2, 30, 13), dark)
+			im.fill_rect(Rect2i(2, 3, 28, 11), wood)
+			im.fill_rect(Rect2i(2, 3, 28, 1), lite)
+			for k in 5:
+				im.fill_rect(Rect2i(6 + k * 4, 7, 3, 3), ink)
+		"ghost":
+			var body: Image = _thumb_src("hero-body", 1, [])
+			if body != null:
+				var c = Color(str(fx.get("col", "#ffffff")))
+				im = Image.create_empty(body.get_width(), body.get_height(), false, Image.FORMAT_RGBA8)
+				for y in body.get_height():
+					for x in body.get_width():
+						if body.get_pixel(x, y).a > 0.1:
+							im.set_pixel(x, y, Color(c, 0.8).lerp(Color(1, 1, 1, 0.8), 0.15 if (x + y) % 5 == 0 else 0.0))
+		"emote":
+			im.fill_rect(Rect2i(2, 2, 28, 15), LINE)
+			im.fill_rect(Rect2i(3, 3, 26, 13), INK)
+			im.fill_rect(Rect2i(6, 17, 4, 3), LINE)
+			im.fill_rect(Rect2i(7, 16, 2, 2), INK)
+			for k in 3:
+				im.fill_rect(Rect2i(9 + k * 6, 8, 3, 3), LINE)
+	return im
 
 func _buy_skin(id: String) -> void:
 	var ok = Treasure.buy_skin(save, id)

@@ -29,6 +29,8 @@ const SHROOM_GLOW := 0.3
 const JUMP_CUE := 0.3                   # (0.56) seconds before a city laser that would catch him standing: « SAUTE ! »                # (0.56) how much a brushed mushroom lights up, of what it did before
 const CLIFF_FACE := 24                  # (0.54) cliff.png: its rock face this far from its left side, its floor line
 const CLIFF_TOP_ROW := 28               # on this row (tools: assets/src/falaise)
+const CLIFF_A_ROW := 14                 # (0.72) cliff-a.png (« falaise A », 8 pictures): its moss's top on this row,
+const CLIFF_A_LIP := 79                 # its edge (where the floor ends) on this column
 const SLICE := 4
 const TILE := 16.0
 const SPREAD := 120.0
@@ -48,8 +50,9 @@ const RED := Color("#ff3b4e")
 # (PixelLab): the pygmies' bamboo rockets and the diving toucans, the pygmies on leaf gliders, the hornets.
 const ROLE := {
 	"spiky": ["spiky", "thornball", "spikebot", "beartrap"],
-	"dart": ["fly", "glider", "missile", "arrow"],          # (0.70) the heights: a pygmy charging on his glider,
-	"hover": ["spider", "sky-lily", "drone", "bat"],         # little flying lily pads, a swarm of toucans
+	"dart": ["fly", "rocket", "missile", "arrow"],          # (0.72) the heights: the bamboo rocket again (its pygmy
+	"hover": ["spider", "sky-lily", "drone", "bat"],         # on his glider fires it), little flying lily pads (the
+	                                                         # mobile ones red: sky-lily-am), a swarm of toucans
 	"swarm": ["mosquito", "sky-toucan", "drone-big", "wisp"],
 }
 const DIGITS := {1: "010110010010111", 2: "111001111100111", 3: "111001111001111"}
@@ -318,7 +321,7 @@ func _scene_chase(c: CanvasItem, cam: float, lt: float) -> void:
 			var dir = 1 if n_ % 2 == 0 else -1
 			var k = p / 2.6
 			var px = lerpf(left, right, k) if dir > 0 else lerpf(right, left, k)
-			_scene_rhino(c, px - dir * 110 - cam, dir, floori(t * 12), 0.0, -absf(sin(t * 24)) * 2)
+			_scene_rhino(c, px - dir * 110 - cam, dir, floori(t * 13), 0.0, -absf(sin(t * 13 * PI / 2)) * 1.5)
 			guard_at(c, 0, px - cam, floor_px(px - cam), dir < 0, floori(t * 16), absf(sin(t * 16)) * 4)
 		return
 	var s_ = lt - toss_n * period
@@ -327,12 +330,13 @@ func _scene_chase(c: CanvasItem, cam: float, lt: float) -> void:
 	if s_ < 1.0:                                     # in from the left, both running
 		var k = s_ / 1.0
 		var px = lerpf(left, mid, k)
-		_scene_rhino(c, px - 105 - cam, 1, floori(t * 12), 0.0, -absf(sin(t * 24)) * 2)
+		_scene_rhino(c, px - 105 - cam, 1, floori(t * 13), 0.0, -absf(sin(t * 13 * PI / 2)) * 1.5)
 		guard_at(c, 0, px - cam, floor_px(px - cam), false, floori(t * 16), absf(sin(t * 16)) * 4)
 		return
 	var rhino_x = mid - 105.0
 	var rhino_dir = 1
 	var rhino_frame = 0
+	var anim = "run"                                 # (0.72) its own pictures: run, snort, walk (PixelLab)
 	var rot = 0.0
 	var dy = 0.0
 	var puffs = false
@@ -347,41 +351,44 @@ func _scene_chase(c: CanvasItem, cam: float, lt: float) -> void:
 		var sk = clampf((s_ - 1.0) / 0.45, 0, 1)    # the rhino: its head thrown up, then skidding to a stop
 		rhino_x = mid - 105 + 40 * sin(PI * 0.5 * sk)
 		rot = -0.22 * sin(PI * sk)
-		rhino_frame = floori(t * 12) if sk < 1 else 0
+		rhino_frame = floori(t * 13) if sk < 1 else 0
+		if sk >= 1:
+			anim = "snort"                           # (standing, its head still low)
 		if sk < 1 and floori(t * 30) % 2 == 0:
 			c.draw_circle(Vector2(rhino_x - cam - 30, floor_px(rhino_x - cam) - 4), 3 + randf() * 3, Color(0.85, 0.78, 0.62, 0.6))
 	else:
 		_planted(c, 0, land - cam, s_ - 2.1)
 		var stop = land - 125.0
 		var from = mid - 65.0
-		if s_ < 3.0:                                 # it walks up to him
+		if s_ < 3.0:                                 # it walks up to him, heavily
 			var k = (s_ - 2.1) / 0.9
 			rhino_x = lerpf(from, stop, k * k * (3 - 2 * k))
-			rhino_frame = floori(t * 6)
-			dy = -absf(sin(t * 10)) * 1.5
-		elif s_ < 5.4:                               # it snorts at him: head down, puffs, a hoof stamping, a shake
-			var q = s_ - 3.0
-			rhino_x = stop + sin(q * 30) * (0.6 if fmod(q, 0.8) < 0.25 else 0.0)
-			rot = 0.12 * absf(sin(q * 3.0))
-			dy = -absf(sin(q * 6.0)) * 1.0
-			rhino_frame = 1 if fmod(q, 0.6) < 0.15 else 0
-			puffs = true
-			if fmod(q, 0.6) < 0.15:                 # the hoof stamping: dust
-				for i in 2:
-					c.draw_circle(Vector2(stop - cam + 22 + i * 6, floor_px(stop - cam) - 2), 2.5 + randf() * 2, Color(0.8, 0.72, 0.55, 0.55))
-		else:                                        # it turns round and goes back, slowly, swaying
+			anim = "walk"
+			rhino_frame = floori(t * 9)
+		elif s_ < 5.6:                               # it snorts at him: head down, puffs, a hoof scraping, then its
+			var q = s_ - 3.0                         # teeth bared (its pictures, played once), a shake now and then
+			anim = "snort"
+			rhino_frame = mini(8, floori(q / 2.3 * 9))
+			rhino_x = stop + (roundf(sin(q * 40)) if fmod(q, 0.9) < 0.2 else 0.0)
+			puffs = rhino_frame < 6
+			if rhino_frame >= 6 and fmod(q, 0.3) < 0.15:   # the hoof stamping: dust
+				for i in 3:
+					c.draw_circle(Vector2(stop - cam + 26 + i * 6, floor_px(stop - cam) - 2), 2.5 + randf() * 2.5, Color(0.8, 0.72, 0.55, 0.55))
+		else:                                        # it turns round and goes back, slowly, grumbling
 			rhino_dir = -1
-			rhino_x = stop - (s_ - 5.4) * 70.0
-			rhino_frame = floori(t * 5)
-			dy = -absf(sin(t * 8)) * 1.5
-	_scene_rhino(c, rhino_x - cam, rhino_dir, rhino_frame, rot, dy)
+			anim = "walk"
+			rhino_x = stop - (s_ - 5.6) * 46.0
+			rhino_frame = floori(t * 7)
+			if fmod(s_ - 5.6, 1.6) < 0.25:           # a last puff over its shoulder
+				puffs = true
+	_scene_rhino(c, rhino_x - cam, rhino_dir, rhino_frame, rot, dy, anim)
 	if puffs:                                        # the snort: puffs from its nostrils, in bursts
 		var q = s_ - 3.0
 		for k in 4:
 			var u = fmod(q * 1.6 + k * 0.25, 1.0)
 			if fmod(q, 0.8) > 0.55:
 				continue
-			c.draw_circle(Vector2(rhino_x - cam + 52 + u * 34, floor_px(rhino_x - cam) - 34 - u * 12 + sin(u * 9) * 2), 3 + u * 7, Color(1, 1, 1, 0.55 * (1 - u)))
+			c.draw_circle(Vector2(rhino_x - cam + rhino_dir * (40 + u * 30), floor_px(rhino_x - cam) - 22 - u * 12 + sin(u * 9) * 2), 2 + u * 6, Color(1, 1, 1, 0.5 * (1 - u)))
 
 ## A pygmy planted head first in the ground: his legs in the air, kicking now and then.
 func _planted(c: CanvasItem, i: int, x: float, since: float) -> void:
@@ -398,9 +405,47 @@ func _planted(c: CanvasItem, i: int, x: float, since: float) -> void:
 	c.draw_set_transform_matrix(Transform2D.IDENTITY)
 	rect(c, snap(x - 9), foot - 1, 18, 3, Color("#5a3d22"))
 
-## The rhino of the scenes (`dir` 1 right, -1 left); (0.70) tilted `rot` round its feet, raised `dy`.
-func _scene_rhino(c: CanvasItem, x: float, dir: int, frame: int, rot: float = 0.0, dy: float = 0.0) -> void:
+## (0.72) The city's crates, three in a heap (laid out as in Art.decor's picture, city-crates): each one's cyan
+## glyph glowing up and down in its own time, the top one rattling now and then (something in there wants out),
+## and all three trembling as he comes up to them.
+func _crate_heap(c: CanvasItem, dc, x: float, y: float) -> void:
+	var one: Texture2D = Art.tex["city-crate-a"]
+	var lit: Texture2D = Art.tex.get("city-crate-a-lit")
+	var w = one.get_width()
+	var h = one.get_height()
+	var ahead = sx(dc.x + Game.DECOR_W / 2) - n(run.sx)
+	var near = ahead > -20 and ahead < 120 and not run.dead
+	var spots = [[0, h - 2], [w - 1, h - 2], [(w - 1) / 2 + 2, 0]]
+	for i in 3:
+		var jig = 0.0
+		var up = 0.0
+		var rattle = fmod(t * 0.8 + dc.x * 0.013 + i * 0.9, 3.1) < 0.3
+		if (i == 2 and rattle) or near:
+			jig = roundf(sin(t * 55 + i * 2) * 1.0)
+			up = -1.0 if floori(t * 24 + i) % 3 == 0 else 0.0
+		var cx = snap(x + spots[i][0] + jig)
+		var cy = snap(y + spots[i][1] + up)
+		blit(c, one, cx, cy)
+		if lit != null:
+			var a = pow(0.5 + 0.5 * sin(t * 2.4 + i * 2.1 + dc.x * 0.01), 2)
+			glow(c, cx + w / 2.0, cy + h * 0.55, 10 + 4 * a, Color(90 / 255.0, 240 / 255.0, 236 / 255.0, 0.12 + 0.22 * a))
+			blit(c, lit, cx, cy, false, Color(1, 1, 1, a))
+
+## The rhino of the scenes (`dir` 1 right, -1 left); (0.70) tilted `rot` round its feet, raised `dy`. (0.72) Not
+## the mount but its own rhino (« rhino B », serious and cross): `anim` run, snort (9 pictures, played once) or
+## walk (scene-rhino-*, tools/make_anim.py); the mount's pictures if they are missing.
+func _scene_rhino(c: CanvasItem, x: float, dir: int, frame: int, rot: float = 0.0, dy: float = 0.0, anim: String = "run") -> void:
 	if x < -160 or x > view_w + 160:
+		return
+	var own: Texture2D = Art.tex.get("scene-rhino-" + anim)
+	if own != null:
+		var nf = 9 if anim == "snort" else 8
+		var fw = own.get_width() / float(nf)
+		var fl = floor_px(x)
+		c.draw_set_transform(Vector2(x, fl + dy), rot * dir, Vector2(dir, 1))
+		shadow(c, 0, 0, fw * 0.62)
+		region(c, own, fw * (frame % nf), 0, fw, own.get_height(), -roundf(fw / 2), 1 - own.get_height(), fw, own.get_height())
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
 		return
 	var M: Dictionary = Art.meta.get("mounts", {}).get("rhino", {})
 	var fr = maxi(1, int(M.get("frames", 1)))
@@ -1533,6 +1578,7 @@ func label(c: CanvasItem, text: String, x: float, y: float, col: Color, right: b
 
 ## 0.48: a wooden board on a post at a friend's record (his own: a stone one, in gold).
 const SIGN_FONT := 10                  # (0.70) the signs' letters, bigger (they were 8)
+const SIGN_BIG := 16                   # (0.72) on the planks of « panneau B »: the typeface's own pixels, twice
 
 func _draw_signs(c: CanvasItem) -> void:
 	for sg in run.signs:
@@ -1543,23 +1589,22 @@ func _draw_signs(c: CanvasItem) -> void:
 			continue
 		var own: bool = sg["own"]
 		var tier = int(sg.get("tier", -1))
-		if not sg.has("lines"):                      # (its lines and their widths, measured once)
+		var style: Dictionary = Skins.fx("sign") if own else Skins.skin(str(sg.get("look", ""))).get("fx", {})   # (0.58)
+		var board: Texture2D = Art.tex.get("sign-board")    # (0.72) « panneau B »: two mossy planks, stretched by
+		var planks = board != null and tier < 0 and style.is_empty()   # their middle (the skins keep their colours)
+		var fs = SIGN_BIG if planks else SIGN_FONT
+		if not sg.has("lines") or int(sg.get("fs", 0)) != fs:   # (its lines and their widths, measured once)
 			if tier >= 0:                            # (0.58) a tier of the Course du jour
 				sg["lines"] = [str(sg["name"]).to_upper(), "%d M" % int(sg["d"])]
 			else:
 				sg["lines"] = ["TOI"] if own else [str(sg["name"]).to_upper().left(12)]   # (0.70) the pseudo only
-			sg["widths"] = sg["lines"].map(func(l): return sign_font.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, SIGN_FONT).x)
+			sg["widths"] = sg["lines"].map(func(l): return sign_font.get_string_size(l, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+			sg["fs"] = fs
 		var lines: Array = sg["lines"]
-		var w = ceilf(sg["widths"].max()) + 10
-		var h = float(SIGN_FONT) * lines.size() + 6
-		var gy = floor_px(x)
-		var top = snap(gy - 26 - h)
-		var x0 = snap(x - w / 2)
 		var wood = Color("#9aa0b8") if own else Color("#8a5a2b")
 		var dark = Color("#2a2a3a") if own else Color("#2a160a")
 		var lite = Color("#c9cde0") if own else Color("#b07a3e")
 		var ink = Color()
-		var style: Dictionary = Skins.fx("sign") if own else Skins.skin(str(sg.get("look", ""))).get("fx", {})   # (0.58)
 		if tier >= 0:
 			wood = Color(Daily.TIER_COLOURS[tier]).darkened(0.25)
 			dark = Color(Daily.TIER_COLOURS[tier]).darkened(0.75)
@@ -1570,21 +1615,77 @@ func _draw_signs(c: CanvasItem) -> void:
 			dark = Color(style["dark"])
 			lite = Color(style["lite"])
 			ink = Color(style["ink"])
+		var w = ceilf(sg["widths"].max()) + 10
+		var h = float(SIGN_FONT) * lines.size() + 6
+		if planks:
+			w = maxf(float(board.get_width()), ceilf(sg["widths"].max()) + 26)
+			h = float(board.get_height())
+			dark = Color("#1b1a0e")
+		var gy = floor_px(x)
+		var top = snap(gy - 26 - h)
 		var post_end = VH + lift + 4                 # (0.70) the post down to the bottom of the screen: never flying
-		rect(c, snap(x) - 2, top + h - 1, 4, post_end - top - h + 2, dark)        # the post
-		rect(c, snap(x) - 1, top + h - 1, 2, post_end - top - h + 1, Color("#5a3a1a") if not own else Color("#6d6f86"))
-		rect(c, x0 - 1, top - 1, w + 2, h + 2, dark)                             # the board
-		rect(c, x0, top, w, h, wood)
-		rect(c, x0, top, w, 1, lite)
-		rect(c, x0, top + h - 2, w, 1, dark.lerp(wood, 0.5))
+		rect(c, snap(x) - 2, top + h - 6, 4, post_end - top - h + 7, Color("#1b1a0e") if planks else dark)   # the post
+		rect(c, snap(x) - 1, top + h - 6, 2, post_end - top - h + 6, Color("#4a3a1c") if planks else (Color("#5a3a1a") if not own else Color("#6d6f86")))
+		# (0.72) alive: it sways a little in the wind; as he runs past it, it shakes and drops a few leaves
+		var hx = n(run.sx)
+		if not sg.has("hit") and x <= hx + 6 and x > hx - 30:
+			sg["hit"] = t
+		var since = t - float(sg.get("hit", -9.0))
+		var rot = 0.014 * sin(t * 1.7 + float(sg["x"]) * 0.01)
+		if since >= 0 and since < 2.5:
+			rot += 0.16 * exp(-2.6 * since) * sin(since * 16)
+		c.draw_set_transform(Vector2(snap(x), top + h - 3), rot, Vector2.ONE)
+		var x0 = -roundf(w / 2)
+		var y0 = 3 - h
+		if planks:
+			_sign_planks(c, board, x0, y0, w)
+		else:
+			rect(c, x0 - 1, y0 - 1, w + 2, h + 2, dark)                         # the board
+			rect(c, x0, y0, w, h, wood)
+			rect(c, x0, y0, w, 1, lite)
+			rect(c, x0, y0 + h - 2, w, 1, dark.lerp(wood, 0.5))
 		for i in lines.size():
 			var col = Color("#ffd35c") if own else (Color("#fff8e6") if i == 1 else Color("#ffe9a0"))
 			if ink != Color():
 				col = ink
-			var at = Vector2(snap(x - float(sg["widths"][i]) / 2), top + 3 + SIGN_FONT * i + SIGN_FONT - 2)
+			var base = y0 + 3 + SIGN_FONT * i + SIGN_FONT - 2
+			if planks:                               # (one line, its capitals in the middle of the planks)
+				base = y0 + roundf((h + fs * 0.62) / 2.0)
+			var at = Vector2(-roundf(float(sg["widths"][i]) / 2), base)
 			for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:   # (0.70) outlined: readable
-				c.draw_string(sign_font, at + o, lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, SIGN_FONT, dark)
-			c.draw_string(sign_font, at, lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, SIGN_FONT, col)
+				c.draw_string(sign_font, at + o, lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, dark)
+			c.draw_string(sign_font, at, lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+		c.draw_set_transform_matrix(Transform2D.IDENTITY)
+		var corner = Vector2(snap(x) + w / 2 - 8, top + 3)   # the moss's corner: a leaf now and then, more when shaken
+		for k in 6:
+			var u: float
+			if since >= 0 and since < 1.6:
+				u = since / 1.6 + k * 0.04
+			elif k == 0:
+				u = fmod(t * 0.22 + float(sg["x"]) * 0.003, 1.0) * 2.5
+			else:
+				continue
+			if u > 1.0:
+				continue
+			var lx = corner.x - k * 5 + sin(u * 9 + k) * 5 + u * 10
+			var ly = corner.y + u * (gy - corner.y + 4)
+			rect(c, snap(lx), snap(ly), 2, 1, Color("#7fc23a", 1 - u * 0.6))
+			rect(c, snap(lx) + (1 if floori(u * 12 + k) % 2 == 0 else -1), snap(ly) + 1, 2, 1, Color("#4e8a22", 1 - u * 0.6))
+
+## (0.72) The record sign's board of planks, `w` wide from (x0, y0): its two ends as they are, its middle repeated.
+const SIGN_CAP := 14
+func _sign_planks(c: CanvasItem, board: Texture2D, x0: float, y0: float, w: float) -> void:
+	var bw = board.get_width()
+	var bh = board.get_height()
+	var mid = bw - 2 * SIGN_CAP
+	region(c, board, 0, 0, SIGN_CAP, bh, x0, y0, SIGN_CAP, bh)
+	var x = x0 + SIGN_CAP
+	var end = x0 + w - SIGN_CAP
+	while x < end:
+		var piece = minf(mid, end - x)
+		region(c, board, SIGN_CAP, 0, piece, bh, x, y0, piece, bh)
+		x += piece
+	region(c, board, bw - SIGN_CAP, 0, SIGN_CAP, bh, end, y0, SIGN_CAP, bh)
 
 # ---------- 0.58: the urns' effects (Skins.fx) ----------
 var fx_pts: Array = []        # bits of the trail and of the jump's burst: {x, y (game units), vx, vy, t0, life, col, shape}
@@ -2210,7 +2311,10 @@ func _draw_back(c: CanvasItem) -> void:
 		var y = floor_px(x + im.get_width() / 2.0) - im.get_height() + 3
 		if x > view_w or x + im.get_width() < 0:
 			continue
-		blit(c, im, x, y)
+		if dc.biome == 2 and Art.tex.has("city-crate-a"):
+			_crate_heap(c, dc, x, y)
+		else:
+			blit(c, im, x, y)
 		if run.lvl("breaker") > 0 and sin(t * 4 + dc.x) > 0.7:
 			var gx = snap(x + im.get_width() * 0.7)
 			var gy = y + 4
@@ -2234,7 +2338,23 @@ func _draw_back(c: CanvasItem) -> void:
 	if ghost.has_area():
 		draw_ground(c, Art.scene[run.strip_biome]["ground"], ghost.position.x, ghost.end.x, VH + 8 + lift)
 	var cliff: Texture2D = Art.tex.get("cliff")
-	if cliff != null and run.cliff_x > -INF:         # (0.54) the forest's end: its cliff over the heights' mist
+	var cliff_a: Texture2D = Art.tex.get("cliff-a")
+	if cliff_a != null:                              # (0.72) « falaise A », alive: there and back through its pictures
+		var cw = cliff_a.get_width() / 8.0
+		var i = floori(t * 5) % 14
+		var fr = i if i < 8 else 14 - i
+		if run.cliff_x > -INF:                       # the forest's end, its moss's edge where the floor ends
+			var lip = snap((run.cliff_x + Game.CLIFF_LIP) / PIXEL - cam)
+			if lip - CLIFF_A_LIP < view_w and lip - CLIFF_A_LIP + cw > 0:
+				region(c, cliff_a, cw * fr, 0, cw, cliff_a.get_height(), lip - CLIFF_A_LIP, n(Game.GROUND - Game.CLIFF_H) - CLIFF_A_ROW, cw, cliff_a.get_height())
+		if run.prev_biome == Game.SKY and run.biome != Game.SKY:   # the heights' end: the same, the other way round,
+			var start = snap(run.biome_x / PIXEL - cam)             # the next place's floor out of the mist
+			var lx = start - (cw - 1 - CLIFF_A_LIP)
+			if lx < view_w and lx + cw > 0:
+				c.draw_set_transform(Vector2(lx + cw, floor_px(start + 8) - CLIFF_A_ROW), 0.0, Vector2(-1, 1))
+				region(c, cliff_a, cw * fr, 0, cw, cliff_a.get_height(), 0, 0, cw, cliff_a.get_height())
+				c.draw_set_transform_matrix(Transform2D.IDENTITY)
+	elif cliff != null and run.cliff_x > -INF:       # (0.54) the forest's end: its cliff over the heights' mist
 		var ex = snap(run.cliff_x / PIXEL - cam)     # (its rock face where the forest's floor is cut)
 		if ex - CLIFF_FACE < view_w and ex - CLIFF_FACE + cliff.get_width() > 0:
 			blit(c, cliff, ex - CLIFF_FACE, n(Game.GROUND - Game.CLIFF_H) - CLIFF_TOP_ROW)
@@ -2754,6 +2874,8 @@ func _draw_obstacles(c: CanvasItem) -> void:
 		var name: String = ROLE[o.kind][o.biome]
 		if o.kind == "hover" and o.biome == 0:          # the forest's hanging dangers: its spiders
 			name = "spider-mid" if o.mid else "spider-low"
+		if name == "sky-lily" and o.amp > 0 and Art.haz.has("sky-lily-am"):
+			name = "sky-lily-am"                         # (0.72) a mobile one (AM): the red lily pad
 		if not Art.haz.has(name):
 			continue
 		var H: Dictionary = Art.haz[name]
@@ -2764,7 +2886,7 @@ func _draw_obstacles(c: CanvasItem) -> void:
 		var cx = x + n(o.w) / 2
 		var cy = y + n(o.h) / 2
 		var mod = Color(1, 1, 1, 0.78 + 0.1 * sin(t * 6 + o.x)) if o.ghost else Color.WHITE
-		if o.kind == "hover" and o.biome != 0 and o.amp > 0 and not o.ghost:
+		if o.kind == "hover" and o.biome != 0 and o.amp > 0 and not o.ghost and name != "sky-lily-am":
 			mod = Color(1.0, 0.5, 0.42)              # (0.64) a mobile one (AM): a drone or a bat in red, as the forest's red spiders
 		if o.kind == "spiky":                        # on the floor
 			var shut = name == "beartrap" and absf(cx - n(run.sx)) < 30    # the trap snaps as he goes over it
@@ -2783,7 +2905,7 @@ func _draw_obstacles(c: CanvasItem) -> void:
 					if gl != null:
 						blit(c, gl, snap(view_w - 30 - stack.get(o, 0) * 27), snap(cy - gl.get_height() - 4 + sin(t * 4 + o.ph) * 2), true)
 			elif o.state == "go":
-				var frame = floori(t * (14 if name == "fly" else 9) + o.ph) % frames if frames > 1 else 0
+				var frame = floori(t * (14 if name == "fly" else (12 if name == "rocket" else 9)) + o.ph) % frames if frames > 1 else 0
 				var x0 = snap(cx - fw / 2)
 				big(c, cx, cy)
 				for k in 3:                          # the wind it leaves behind
@@ -2803,6 +2925,8 @@ func _draw_obstacles(c: CanvasItem) -> void:
 				frame = floori(t * 3 + o.ph) % 2
 			if name == "bat":
 				frame = 1 + (floori(t * 12 + o.ph) & 1)
+			if name.begins_with("sky-lily"):          # (0.72) its leaf wings beating, drops falling
+				frame = floori(t * 11 + o.ph * 5) % frames
 			if name == "idol":                       # the glow of its eyes and runes
 				glow(c, cx, top + im.get_height() * 0.4, 20, Color(1, 150 / 255.0, 40 / 255.0, 0.35 + 0.15 * sin(t * 4 + o.ph)))
 			var fl = floor_px(cx)
@@ -2998,10 +3122,14 @@ func _draw_swarm(c: CanvasItem) -> void:
 			var frames = int(H["frames"])
 			var fw = im.get_width() / float(frames)
 			var frame = 0
-			if frames > 1:
+			if name == "sky-toucan":                 # (0.72) the toucans: a whole beat of their wings, faster as they fire
+				frame = floori(t * (13 if aiming else 20) + k * 3) % frames
+			elif frames > 1:
 				frame = [0, 1, 2, 1][floori(t * 22 + k) % 4] if aiming else (3 if floori(t * 24 + k) % 2 == 1 else 1)
 			var still = 0.4 if name == "drone-big" else 1.0
 			var sc = clampf(Game.FM_THICK / 0.65, 0.5, 1.5) * 0.8 * SIZE   # (smaller with the band: 0.8 of its picture at 65 %)
+			if name == "sky-toucan":
+				sc *= 0.8                            # (its picture is bigger than a mosquito's)
 			c.draw_set_transform_matrix(Transform2D(0, Vector2(cx + jx * still, cy + jy * still)).scaled_local(Vector2(sc, sc)))
 			sheet(c, im, frames, frame, -fw / 2, -im.get_height() / 2.0, Color(1, 1, 1, alpha))
 			c.draw_set_transform_matrix(Transform2D.IDENTITY)

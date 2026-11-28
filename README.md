@@ -105,6 +105,29 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
 
+## 0.72.0
+
+Les choix de l'utilisateur sur la planche de la 0.70 (toucans C, nénuphars C en violet / rouge, falaise A, panneau B,
+caisse A, rhino B, menu Skins A ; le Fonceur des pitons : la fusée de bambou de nouveau, les pygmées en deltaplane
+gardés de côté), et « de belles animations pour chaque asset ».
+
+- **Animations PixelLab** (`animate_image`, une à la fois) gardées image par image dans `assets/src/anim/<nom>/f*.png` ;
+  `tools/make_anim.py` en fait les bandes du jeu : un même cadre pour toutes les images (rien ne saute), retournées
+  (`mirror`), recolorées (`hues`), nettoyées (`erase`), ou un cadre imposé (`RHINO_BOX`). `sky-toucan` (8, tournés
+  vers la gauche), `sky-lily` (8, violet) et `sky-lily-am` (8, rouge : l'AM n'est plus teinté), `rocket` (6),
+  `scene-rhino-run` / `-snort` (9, jouées une fois) / `-walk`, `cliff-a` (8, jouées en aller-retour : la 1re image
+  de PixelLab, redessinée, est laissée de côté).
+- **Faits à la main** (PixelLab changeait le symbole d'une image à l'autre) : `city-crate-a` et `city-crate-a-lit`
+  (son symbole cyan éclairci et un halo, fondu par-dessus), `city-crates` (la pile, `Art.decor[2]` et ses morceaux) ;
+  `sign-board` (deux des trois planches du panneau B).
+- `render.gd` : `ROLE.dart[1]` = `rocket` ; `_crate_heap` (trois caisses, lueur de chacune, celle du haut qui
+  tremble, toutes quand il arrive) ; `_draw_signs` (planches étirées par leur milieu `_sign_planks`, `SIGN_BIG` 16,
+  balancement, secousse et feuilles quand il passe : `sg.hit`) ; la falaise `cliff-a` (`CLIFF_A_ROW` 14,
+  `CLIFF_A_LIP` 79) au bout de la forêt et, retournée, au début du donjon après les pitons ; `_scene_rhino(…, anim)`.
+- `main.gd` : l'onglet Skins en trois colonnes (`SKIN_GROUPS`, `_skin_cat_button`, `_skin_tile`, `_skin_thumb` :
+  vignettes recolorées par `Skins.recolour` ou dessinées) ; `shop-scroll` déplacé avec sa place de repos (`rest`).
+- `bench.gd` : `--tour72` (chaque famille de Skins, les caisses, les toucans, la fusée, la fin des pitons).
+
 ## 0.71.0
 
 - **Panneaux de record** (`_draw_signs`) : le pseudo seul (« TOI » pour le sien), `SIGN_FONT` 10 cerné de sombre,
