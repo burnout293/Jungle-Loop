@@ -14,10 +14,10 @@ Tous ont un contour sombre et un bord éclairé (lisibilité 5) ; le décor de f
 
 | Rôle (comment l'éviter) | Forêt | Pitons (0.53) | Donjon | Cité |
 |---|---|---|---|---|
-| **Au sol** : sauter | hérisson violet | aucun : pas de sol, seulement la brume (y tomber coûte un cœur) | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
-| **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur (avec le Vol : la tienne, et il vient si tu restes trop à la même hauteur), puis il traverse l'écran | coléoptère | fusée en bambou des pygmées, ou toucan qui pique | flèche enflammée | missile |
-| **Aérien fixe (AF) et Aérien mobile (AM)** (0.64, ex-Suspendu) : dans le vide ; AF immobile, AM monte ou descend jusqu'à sa place (en rouge : araignée rouge, drone et chauve-souris rouges) ; bas (sauter) dès 150 m (nids dès 900 m), à hauteur de tête (rester au sol) dès 1500 m ; avec le Vol aussi plus haut, et en rideaux (une colonne avec un seul passage) | araignée jaune (basse, immobile), rouge (plus haut, monte et descend de 5 m, va dans un seul sens jusqu'à sa place, immobile 10 m avant Pépito) | pygmée en deltaplane de feuilles ; et les pitons, à survoler | chauve-souris | drone |
-| **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | frelons | feux follets | gros drones qui tirent un laser au lieu de foncer |
+| **Au sol** : sauter | hérisson violet | aucun : pas de sol, seulement la brume (0.70 : elle te porte, tu voles le long d'elle) | piège à loup (se referme au passage) | robot à pointes, œil bleu clignotant |
+| **Fonceur** : gros panneau rouge « ! » et klaxon au bord droit (plus à gauche avec « Signalements décalés »), à sa hauteur (avec le Vol : la tienne, et il vient si tu restes trop à la même hauteur), puis il traverse l'écran | coléoptère | (0.70) pygmée qui fonce en deltaplane (3 dessins proposés) | flèche enflammée | missile |
+| **Aérien fixe (AF) et Aérien mobile (AM)** (0.64, ex-Suspendu) : dans le vide ; AF immobile, AM monte ou descend jusqu'à sa place (en rouge : araignée rouge, drone et chauve-souris rouges) ; bas (sauter) dès 150 m (nids dès 900 m), à hauteur de tête (rester au sol) dès 1500 m ; avec le Vol aussi plus haut, et en rideaux (une colonne avec un seul passage) | araignée jaune (basse, immobile), rouge (plus haut, monte et descend de 5 m, va dans un seul sens jusqu'à sa place, immobile 10 m avant Pépito) | (0.70) petits nénuphars volants, fixes ou mobiles (rouges) ; les pitons ne sont plus que du décor | chauve-souris | drone |
+| **Nuée** : vise un couloir (bande rouge), puis fonce ; jamais de Fonceur pendant une nuée | moustiques | (0.70) nuée de toucans | feux follets | gros drones qui tirent un laser au lieu de foncer |
 
 0.49 : tous les dangers, le héros, les pièces et les objets sont dessinés 15 % plus grands. Ordre d'apparition :
 araignées 150 m, nuées 300 m, Fonceurs (missiles) 400 m, nids 900 m.
@@ -135,6 +135,12 @@ suivent un moment. La brume ne fait plus mal : elle le renvoie vers le haut. Ses
 de pitons qui montent et descendent, un deltaplane au-dessus d'un piton, trois deltaplanes en biais, rideaux) :
 les pitons (les survoler), le pygmée en deltaplane de feuilles, les frelons, le toucan qui pique, la fusée en
 bambou des pygmées. Rien au sol, aucune plateforme.
+**0.70** : les pitons ne sont plus sur la route (au loin et pâlis, ou devant en silhouette), avec des morceaux de
+forêt qui flottent et une cabane sur un piton (PixelLab) ; plus de colonnes ni de portique ; les cascades coulent ;
+devant, seulement des nuages. Les dangers : petits nénuphars volants (fixes, ou mobiles en rouge), rangés en
+colonnes de deux dont l'écart monte ou descend, une nuée de toucans, un pygmée qui fonce en deltaplane. La brume
+porte Pépito : il vole le long d'elle sans rebondir. Monté sur le gorille ou le rhino, l'animal s'arrête au bord
+de la falaise et une libellule l'attend dans le ciel.
 
 ## La relique (0.49)
 
