@@ -101,6 +101,8 @@ slime est rejeté loin en arrière, et il repart.
 Les nuées du donjon : des flammes pâles aux yeux noirs, en bande, qui visent puis chargent depuis la droite.
 Depuis la 0.59, une fois sur trois environ (après 450 m), la première vague est un **mur** dans toutes les voies :
 un conduit est posé juste dessous, on s'y glisse et ils passent au-dessus.
+Depuis la 0.69, dans le donjon en deux (haut et bas), une nuée met **un feu follet dans chaque étage**, sur
+le sol ou à hauteur de saut : l'autre ligne de l'étage reste libre (pas de mur là).
 
 ## Amis et trésors
 
