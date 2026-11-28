@@ -1,6 +1,7 @@
 # Jungle Loop — ce que la fenêtre « Nouvelle version disponible » dit de la nouvelle version.
 # Copié à côté du jeu en ligne par tools/publish_web.py ; les joueurs qui ont l'ancienne version le lisent au
 # démarrage. 4 lignes au plus (les lignes qui commencent par # sont ignorées), courtes : à réécrire à chaque version.
-Panneaux de record : le pseudo seul, en plus grand, et le poteau jusqu'en bas (ils ne volent plus).
-Donjon : une bannière rouge sur l'étage difficile, une verte sur le tranquille.
-Pitons : plus de bande noire sous la brume.
+Pitons : nouvelle falaise animée, toucans et nénuphars (violets, rouges s'ils bougent) qui battent des ailes, la fusée de bambou revient.
+Menu Skins refait : les familles à gauche, les skins en vignettes, l'aperçu à droite.
+Panneaux de record en planches moussues : ils tremblent quand tu passes.
+Les caisses de la ville en pile, et un vrai rhino énervé à l'accueil.
