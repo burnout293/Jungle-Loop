@@ -244,4 +244,29 @@ await call('room/close', { id: a.id, secret: a.secret, room: qr.room });
 assert.equal((await call('match', { id: b.id, secret: b.secret })).room, undefined);
 ok('quick match: no room, then the waiting one (never my own), gone once closed');
 
+// 0.68: the site's form, without identity; the author told by push / e-mail when the server has the secrets
+const sent = [];
+const realFetch68 = globalThis.fetch;
+globalThis.fetch = async (url, init) => { sent.push({ url: String(url), init }); return new Response('{}'); };
+const web = async (body, extra = {}) => {
+  const e = { ...env, ...extra };
+  const r = await worker.fetch(new Request('http://x/api/feedback/web', { method: 'POST', body: JSON.stringify(body), headers: { 'cf-connecting-ip': '203.0.113.7' } }), e);
+  return { status: r.status, ...(await r.json()) };
+};
+assert.equal((await web({ pseudo: 'Léa', bug: '', idea: '' })).error, 'empty');
+assert.equal((await web({ pseudo: 'Léa', bug: 'le saut', level: 9 })).ok, true);
+assert.equal(sent.length, 0);
+assert.equal((await web({ pseudo: 'Léa', idea: 'des pièces', level: 2 }, { NTFY_TOPIC: 'jl-test', RESEND_KEY: 'k', NOTIFY_EMAIL: 'a@example.com' })).ok, true);
+assert.equal(sent.length, 2);
+assert.ok(sent.some((x) => x.url === 'https://ntfy.sh/jl-test' && x.init.body.includes('des pièces') && x.init.headers.priority === '4'));
+assert.ok(sent.some((x) => x.url === 'https://api.resend.com/emails' && JSON.parse(x.init.body).to[0] === 'a@example.com' && JSON.parse(x.init.body).subject.includes('Relou')));
+const rows = (await env.DB.prepare('SELECT * FROM reports ORDER BY id').all()).results;
+assert.equal(rows.length, 2); assert.equal(rows[0].level, 3); assert.equal(rows[0].ip.length, 24); assert.ok(!rows[0].ip.includes('203'));
+assert.equal((await web({ bug: 'robot', site: 'http://spam' })).ok, true);
+assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM reports').first()).n, 2);
+await web({ bug: '3' }); await web({ bug: '4' }); await web({ bug: '5' });
+assert.equal((await web({ bug: '6' })).error, 'busy');
+globalThis.fetch = realFetch68;
+ok("the site's form: kept without identity (the address hashed), a robot ignored, 5 an hour, the author told");
+
 console.log(`\n${n} checks passed`);

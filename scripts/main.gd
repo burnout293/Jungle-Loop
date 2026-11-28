@@ -3,7 +3,7 @@ extends Node
 ## The screen is 1280 x 720 units, shown in 16:9 with bars around it (project settings); one art
 ## pixel is U units, and the interface is measured in art pixels like the web version's (--ui).
 
-const VERSION := "0.67.0"
+const VERSION := "0.68.0"
 const U := 2.25
 const W := 1280.0
 const H := 720.0
@@ -75,6 +75,9 @@ var taps: Array = []                   # touches on the level badge: five in a r
 var net: Net                           # the server (net.gd): nothing is sent until it is deployed
 var adopted_note := ""                # said once on the menu: the web version's game was taken over
 var photo: ImageTexture = null          # the game as it was the moment he fell, for the end screen
+var quick_on := false                  # (0.68) the « Partie rapide » searching (its lobby's free places say so)
+const QUICK_EVERY := 5.0               # (0.68) ... looking again this often while alone in my room
+var esc_hold := 0.0                    # (0.68) freed: the escape's panel stays this long
 var photo_taken := false
 var touches := {}                     # fingers down on the game (not on a button): the jump is held while one stays
 var confetti_layer: Control
@@ -130,6 +133,7 @@ var group_note := ""                    # (0.58) a word for Amis → Groupe (a c
 var board: Array = []                  # the friends' board, as the server sent it
 var treasure: CanvasLayer = null       # the Trésor (0.47): the urns to break, what is in the bag
 var urn_busy := false                  # an urn is being broken (its shake): one at a time
+var urn_pick := ""                     # (0.68) the rarity of urn to open next (the Trésor)
 var picked_skin := ""                  # the shop's Skins tab: the row picked ("<target>:" for an original look)
 var race: Race                         # 0.48: the race for four (race.gd)
 var race_start := {}                   # a race about to start: {seed, biome, tier, up, at}
@@ -1086,34 +1090,35 @@ func _build_hud() -> void:
 	w["btn-ball"] = bb
 	_place(acts, 569 - 12 - 360, 320 - 12 - 52, 360, 52)       # room for the five (three at most are equipped) and the Sphère
 	s.add_child(acts)
-	# 0.47: caught by the pygmies: the Couteau suisse offered, then the escape (a cursor, a zone, the ropes)
+	# 0.47: caught by the pygmies: the Couteau suisse offered, then the escape (a cursor, a zone, the ropes).
+	# (0.68) The knife big, its countdown round it: touched, the escape; each rope cut pops with a sound, and
+	# freed, a fanfare (EscapeView draws both phases).
 	var esc = PanelContainer.new()
 	esc.add_theme_stylebox_override("panel", _kit_tall("menu-info"))
 	esc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var ec = _vbox(4)
+	var ec = _vbox(2)
 	ec.alignment = BoxContainer.ALIGNMENT_CENTER
 	w["esc-label"] = _label("", ts("m"), INK, 0)
 	w["esc-label"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ec.add_child(w["esc-label"])
-	var eb = EscapeBar.new()
-	eb.custom_minimum_size = Vector2(a(250), a(44))
-	eb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ec.add_child(eb)
-	w["esc-bar"] = eb
-	var kb = _button("S'évader", "gold", _use_knife)
-	kb.icon = icon("ico-knife")
-	kb.expand_icon = true
-	kb.add_theme_constant_override("icon_max_width", roundi(a(18)))
-	kb.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	kb.custom_minimum_size = Vector2(a(150), a(34))
-	ec.add_child(kb)
-	w["esc-knife"] = kb
-	var et = _bar(10, 6, GOLD)
-	et.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ec.add_child(et)
-	w["esc-time"] = et
+	var ev = EscapeView.new()
+	ev.custom_minimum_size = Vector2(a(276), a(104))
+	ev.knife = icon("ico-knife")
+	ev.digits = bold
+	ev.digits_size = ts("xl")
+	ev.u = U
+	ev.mouse_filter = Control.MOUSE_FILTER_STOP
+	ev.gui_input.connect(func(e: InputEvent) -> void:
+		if (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT) or (e is InputEventScreenTouch and e.pressed):
+			if ev.on_knife(e.position):
+				_use_knife())
+	ec.add_child(ev)
+	w["esc-bar"] = ev
+	w["esc-hint"] = _label("", ts("s"), DIM, 0)
+	w["esc-hint"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ec.add_child(w["esc-hint"])
 	esc.add_child(ec)
-	_place(esc, 569 / 2.0 - 140, 44, 280, 110)
+	_place(esc, 569 / 2.0 - 150, 22, 300, 156)
 	esc.visible = false
 	s.add_child(esc)
 	w["esc"] = esc
@@ -1146,30 +1151,133 @@ class Confetti extends Control:
 		draw_set_transform(Vector2.ZERO)
 
 ## The shade sweeping round an active's button while it charges (conic-gradient in the web version).
-## The escape's bar (0.47): the zone (green) and the cursor (gold) going to and fro, as Game keeps them.
-class EscapeBar extends Control:
-	var e: Dictionary = {}
-	func _draw() -> void:
-		if e.is_empty():
+## (0.68) The escape, drawn: offered, the Couteau suisse big in a ring that empties with the seconds left (the
+## number beside it), a touch on it and the escape begins; then the bar (0.47: the zone in green, the cursor in
+## gold going to and fro, as Game keeps them), the ropes as big dots under it, the seconds left beside it. A rope
+## cut: its dot pops (a ring, rays, the knife slashing over it); a miss: the bar shakes, red. Freed: every dot
+## gold, a burst, for a moment.
+class EscapeView extends Control:
+	var e: Dictionary = {}                       # the escape (Game's), or empty while offered
+	var phase := ""                              # offer, escape, free
+	var left := 0.0                              # seconds left
+	var full := 1.0
+	var knife: Texture2D
+	var digits: Font
+	var digits_size := 26
+	var u := 1.0
+	var t := 0.0
+	var pops: Array = []                         # {i, t}: a rope cut
+	var miss_t := -1.0
+	var free_t := -1.0
+	func _process(delta: float) -> void:
+		if not is_visible_in_tree():
 			return
-		var W_ = size.x
-		var H_ = size.y * 0.55                    # (0.65) the bar above, the ropes' dots below
-		var n = int(e.get("ropes", 3))           # (0.65) one big dot a good touch: black, yellow once cut
-		var r = minf(size.y * 0.18, W_ / (n * 3.0))
+		t += delta
+		for q in pops:
+			q["t"] += delta
+		pops = pops.filter(func(q): return q["t"] < 0.6)
+		if miss_t >= 0:
+			miss_t += delta
+			if miss_t > 0.35:
+				miss_t = -1.0
+		if free_t >= 0:
+			free_t += delta
+		queue_redraw()
+	func pop(i: int) -> void:
+		pops.append({"i": i, "t": 0.0})
+	func miss() -> void:
+		miss_t = 0.0
+	func freed() -> void:
+		free_t = 0.0
+		phase = "free"
+	func _dial_c() -> Vector2:
+		return Vector2(size.x / 2 - 22 * u, size.y / 2)
+	func on_knife(pos: Vector2) -> bool:
+		return phase == "offer" and pos.distance_to(_dial_c()) < 50 * u
+	func _num(at: Vector2, text: String, col: Color) -> void:
+		if digits == null:
+			return
+		for o in [Vector2(-2, 0), Vector2(2, 0), Vector2(0, -2), Vector2(0, 2), Vector2(0, 3)]:
+			draw_string(digits, at + o * u * 0.6, text, HORIZONTAL_ALIGNMENT_LEFT, -1, digits_size, Color("#1a1024"))
+		draw_string(digits, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, digits_size, col)
+	func _draw() -> void:
+		var ink = Color("#1a1024")
+		var gold = Color("#ffd35c")
+		var red = Color("#ff5a6e")
+		var k = clampf(left / maxf(full, 0.01), 0.0, 1.0)
+		var hurry = left < 2.0
+		if phase == "offer":
+			var c = _dial_c()
+			var r = 40.0 * u
+			var beat = 1.0 + (0.07 if hurry else 0.04) * sin(t * (14.0 if hurry else 7.0))
+			draw_circle(c, r + 6 * u, ink)
+			draw_circle(c, r, Color("#3b2a1c"))
+			draw_arc(c, r - 1 * u, 0, TAU, 48, Color(1, 1, 1, 0.1), 5 * u)
+			if k > 0:
+				draw_arc(c, r - 1 * u, -PI / 2, -PI / 2 + TAU * k, 48, red if hurry else gold, 5 * u)
+			var glow = 0.25 + 0.15 * sin(t * 6)
+			draw_circle(c, r * 0.72, Color(1, 0.83, 0.36, glow * 0.35))
+			if knife != null:
+				var ks = 56.0 * u / maxf(knife.get_width(), knife.get_height()) * beat
+				var kw = knife.get_width() * ks
+				var kh = knife.get_height() * ks
+				draw_set_transform(c, -0.25 + 0.06 * sin(t * 3), Vector2.ONE)
+				draw_texture_rect(knife, Rect2(-kw / 2, -kh / 2, kw, kh), false)
+				draw_set_transform(Vector2.ZERO)
+			_num(Vector2(c.x + r + 16 * u, c.y + 12 * u), str(ceili(left)), red if hurry else gold)
+			return
+		# the bar, the ropes, the seconds
+		var W_ = 216.0 * u
+		var H_ = 26.0 * u
+		var x0 = 4.0 * u
+		var y0 = 10.0 * u
+		if miss_t >= 0:
+			x0 += sin(miss_t * 70) * 5 * u * (1 - miss_t / 0.35)
+		draw_rect(Rect2(x0 - 2 * u, y0 - 2 * u, W_ + 4 * u, H_ + 4 * u), ink)
+		draw_rect(Rect2(x0, y0, W_, H_), Color("#3b2a1c"))
+		if not e.is_empty():
+			var zw: float = e["w"] * W_
+			var zx: float = x0 + e["zone"] * W_ - zw / 2
+			draw_rect(Rect2(zx, y0, zw, H_), Color("#6cc22e"))
+			draw_rect(Rect2(zx, y0, zw, 3 * u), Color("#a8f060"))
+			if phase == "escape":
+				var cx: float = x0 + e["cur"] * W_
+				draw_rect(Rect2(cx - 3 * u, y0 - 4 * u, 6 * u, H_ + 8 * u), ink)
+				draw_rect(Rect2(cx - 1.5 * u, y0 - 3 * u, 3 * u, H_ + 6 * u), gold)
+		if miss_t >= 0:
+			draw_rect(Rect2(x0, y0, W_, H_), Color(1, 0.2, 0.25, 0.5 * (1 - miss_t / 0.35)))
+		var n = int(e.get("ropes", 3)) if not e.is_empty() else 3
+		var cut_n = n if phase == "free" else (n - int(e.get("rope", n)) if not e.is_empty() else 0)
+		var r = 11.0 * u
+		var dy = y0 + H_ + 26 * u
 		for i in n:
-			var c = Vector2(W_ / 2 + (i - (n - 1) / 2.0) * r * 3.0, size.y - r - 1)
-			var cut = i < n - int(e.get("rope", n))
-			draw_circle(c, r + 2, Color("#1a1024"))
-			draw_circle(c, r, Color("#ffd35c") if cut else Color("#2a2030"))
-		draw_rect(Rect2(0, 0, W_, H_), Color("#1a1024"))
-		draw_rect(Rect2(2, 2, W_ - 4, H_ - 4), Color("#3b2a1c"))
-		var zw: float = e["w"] * (W_ - 4)
-		var zx: float = 2 + e["zone"] * (W_ - 4) - zw / 2
-		draw_rect(Rect2(zx, 2, zw, H_ - 4), Color("#6cc22e"))
-		draw_rect(Rect2(zx, 2, zw, 3), Color("#a8f060"))
-		var cx: float = 2 + e["cur"] * (W_ - 4)
-		draw_rect(Rect2(cx - 3, -3, 6, H_ + 6), Color("#1a1024"))
-		draw_rect(Rect2(cx - 1.5, -2, 3, H_ + 4), Color("#ffd35c"))
+			var c = Vector2(x0 + W_ / 2 + (i - (n - 1) / 2.0) * r * 3.4, dy)
+			var cut = i < cut_n
+			var grow = 1.0
+			for q in pops:
+				if q["i"] == i:
+					var pk = q["t"] / 0.6
+					grow = 1.0 + 0.8 * sin(PI * minf(1.0, pk * 1.6)) * (1 - pk)
+					draw_arc(c, r * (1.0 + 2.4 * pk), 0, TAU, 32, Color(1, 0.9, 0.4, 1 - pk), 3 * u)
+					for ray in 8:
+						var ang = ray * TAU / 8 + 0.3
+						var d0 = r * (1.3 + 1.6 * pk)
+						draw_line(c + Vector2(cos(ang), sin(ang)) * d0, c + Vector2(cos(ang), sin(ang)) * (d0 + 7 * u * (1 - pk)), Color(1, 0.95, 0.6, 1 - pk), 2 * u)
+					if knife != null and pk < 0.5:   # the knife slashing over the rope
+						var ks = 26.0 * u / knife.get_width()
+						draw_set_transform(c + Vector2(0, -r * 1.6), lerpf(-1.1, 0.9, pk * 2), Vector2(ks, ks))
+						draw_texture(knife, Vector2(-knife.get_width() / 2.0, -knife.get_height() / 2.0), Color(1, 1, 1, 1 - pk * 2))
+						draw_set_transform(Vector2.ZERO)
+			draw_circle(c, (r + 3 * u) * grow, ink)
+			draw_circle(c, r * grow, gold if cut else Color("#2a2030"))
+			if cut:                                  # a tick in it
+				var s_ = r * grow * 0.5
+				draw_polyline(PackedVector2Array([c + Vector2(-s_, 0), c + Vector2(-s_ * 0.2, s_ * 0.7), c + Vector2(s_, -s_ * 0.6)]), ink, 2.5 * u)
+		if phase == "free":
+			var fk = clampf(free_t / 0.7, 0, 1)
+			draw_arc(Vector2(x0 + W_ / 2, dy), 30 * u + 120 * u * fk, 0, TAU, 48, Color(1, 0.85, 0.35, 1 - fk), 4 * u)
+		else:
+			_num(Vector2(x0 + W_ + 14 * u, y0 + H_ + 4 * u), str(ceili(left)), red if hurry else gold)
 
 class Cooldown extends Control:
 	var k := 0.0
@@ -1353,7 +1461,7 @@ func _build_menu() -> void:
 	# (0.57) two small panels in the bottom corners: the items equipped (left), the group (right, only when
 	# there is one)
 	var gbox = PanelContainer.new()
-	gbox.add_theme_stylebox_override("panel", styles["box"])
+	gbox.add_theme_stylebox_override("panel", _home_panel(150))   # (0.68) a plaque of their own (PixelLab)
 	gbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var gcol = _vbox(1)
 	var gt = _label("TON GROUPE", ts("s"), RELIC, 0)
@@ -1369,7 +1477,7 @@ func _build_menu() -> void:
 	s.add_child(gbox)
 	w["menu-group-box"] = gbox
 	var lbox = PanelContainer.new()
-	lbox.add_theme_stylebox_override("panel", styles["box"])
+	lbox.add_theme_stylebox_override("panel", _home_panel(126))
 	lbox.mouse_filter = Control.MOUSE_FILTER_PASS
 	var lcol = _vbox(1)
 	var lt = _label("ÉQUIPEMENT", ts("s"), RELIC, 0)
@@ -1387,6 +1495,20 @@ func _build_menu() -> void:
 	version.modulate.a = 0.75
 	_place(version, 569 / 2.0 - 60, 320 - 9, 120, 9)
 	s.add_child(version)
+
+## (0.68) The home screen's corner panels: their own plaque at its exact size (tools/make_home_panels.py), the
+## content inside its frame; without the picture, the plain box.
+func _home_panel(width: int) -> StyleBox:
+	var tex = icon("ui-v2/wood/panel-%d" % width)
+	if tex == null:
+		return styles["box"]
+	var sb = StyleBoxTexture.new()
+	sb.texture = tex
+	sb.content_margin_left = a(17)
+	sb.content_margin_right = a(17)
+	sb.content_margin_top = a(9)
+	sb.content_margin_bottom = a(6)
+	return sb
 
 ## A square of the home screen with its name under it: `kit` the kit's square (gear, or blank with `ico`).
 ## Its button is the column's meta "button" (for the dots, the bench).
@@ -1537,6 +1659,7 @@ func _pick_mode(mode: String) -> void:
 	if mode == "race":                               # 0.51: the group's room first, where the bets are made
 		race_seen = true
 		if race.role == "":                          # (0.55) no group yet: one is made, its screen shows
+			quick_on = false
 			_race_host()
 		else:
 			go("race")
@@ -2366,15 +2489,14 @@ func _build_settings() -> void:
 	um.custom_minimum_size.x = a(300)
 	w["upd-msg"] = um
 	game.add_child(um)
-	var fb = _hbox(4)                                  # (0.66) a word to the author, sent to the server
-	w["fb-text"] = _field("", 600, "Ton retour sur le jeu :", _send_feedback)
-	w["fb-text"].placeholder_text = "Un retour, une idée, un bug…"
-	w["fb-text"].custom_minimum_size = Vector2(a(220), a(22))
-	fb.add_child(w["fb-text"])
-	fb.add_child(_button("Envoyer", "small", _send_feedback))
+	var fb = _hbox(6)                                  # (0.68) a word to the author: the site's form (retours.html)
+	var fbb = _button("Donner mon avis", "small", _send_feedback)
+	fbb.custom_minimum_size.x = a(150)
+	fb.add_child(fbb)
+	var fbn = _label("Un bug, une idée : une page s'ouvre.", ts("s"), DIM, 0)
+	fbn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fb.add_child(fbn)
 	game.add_child(fb)
-	w["fb-note"] = _label("", ts("s"), DIM, 0)
-	game.add_child(w["fb-note"])
 	w["panel-game"] = game
 	all.add_child(game)
 	# Affichage
@@ -3165,21 +3287,14 @@ func _offer_update() -> void:
 	text += "\n\nLe jeu se recharge, ta partie est gardée."
 	_confirm(text, _update_now, "Mettre à jour", "Plus tard")
 
-## (0.66) « Envoyer un retour »: the text to the server (never anything else than it and the version).
+## (0.68) « Donner mon avis »: the site's form, in the browser (or the phone's), the pseudo, the version and the
+## platform after the # (filled in there, never sent by the browser itself).
 func _send_feedback() -> void:
-	var t = str(w["fb-text"].text).strip_edges()
-	if t == "":
-		return
-	if not Net.enabled():
-		w["fb-note"].text = "Hors ligne : le retour ne peut pas partir."
-		return
-	w["fb-note"].text = "Envoi…"
-	var r = await net.feedback(save, t, VERSION)
-	if r.has("error"):
-		w["fb-note"].text = "Trop de retours d'un coup : réessaie plus tard." if r["error"] == "busy" else "Le retour n'est pas parti : réessaie plus tard."
-	else:
-		w["fb-text"].text = ""
-		w["fb-note"].text = "Merci, ton retour est bien arrivé !"
+	var where = "web" if OS.has_feature("web") else OS.get_name().to_lower()
+	var pseudo = str(save.get("online", {}).get("name", ""))
+	var url = Net.page + "retours.html#pseudo=%s&v=%s&os=%s" % [pseudo.uri_encode(), VERSION.uri_encode(), where.uri_encode()]
+	OS.shell_open(url)
+	Audio.sfx("click")
 
 ## (0.64) « Changements »: reglages/changements.txt, the latest versions first.
 func _show_changes() -> void:
@@ -3489,6 +3604,8 @@ func _buy_skin(id: String) -> void:
 ## The Trésor (0.47): on the left the urns, broken one by one (a shake, then what came out, in the colour of
 ## its rarity); on the right the bag (0.55: the coins and the skins owned; one money only).
 func _treasure() -> void:
+	if not Treasure.identify(save).is_empty():        # (0.68) each urn won gets its rarity, shown as it is
+		SaveData.store(save)
 	if treasure != null:
 		treasure.queue_free()
 	var layer = CanvasLayer.new()
@@ -3516,16 +3633,34 @@ func _treasure() -> void:
 	var left = _vbox(5)
 	left.alignment = BoxContainer.ALIGNMENT_CENTER
 	left.custom_minimum_size.x = a(150)
-	var urn = TextureRect.new()
-	urn.texture = icon("ico-urn")
-	urn.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	urn.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	urn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	urn.custom_minimum_size = Vector2(a(70), a(88))
-	urn.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	left.add_child(urn)
-	w["tr-urn"] = urn
-	w["tr-count"] = _label("", ts("m"), INK, 0)
+	var urns = _hbox(4)                              # (0.68) the three rarities, each its own urn; the one to open chosen
+	urns.alignment = BoxContainer.ALIGNMENT_CENTER
+	for rk in ["common", "rare", "legendary"]:
+		var cell = _vbox(1)
+		cell.alignment = BoxContainer.ALIGNMENT_END
+		var ub = Button.new()
+		ub.flat = true
+		ub.focus_mode = Control.FOCUS_NONE
+		ub.custom_minimum_size = Vector2(a(46), a(60))
+		ub.icon = icon("urn-" + rk)
+		ub.expand_icon = true
+		ub.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ub.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+		ub.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		ub.pressed.connect(func() -> void:
+			if Treasure.count(save, rk) > 0 and not urn_busy:
+				urn_pick = rk
+				Audio.sfx("click")
+				_treasure_fill())
+		cell.add_child(ub)
+		w["tr-u-" + rk] = ub
+		var cl = _label("", ts("s"), Color(Treasure.COLOURS[rk]), 0)
+		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cell.add_child(cl)
+		w["tr-n-" + rk] = cl
+		urns.add_child(cell)
+	left.add_child(urns)
+	w["tr-count"] = _label("", ts("s"), INK, 0)
 	w["tr-count"].horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	left.add_child(w["tr-count"])
 	var open = _button("Ouvrir", "gold", _break_urn)
@@ -3542,10 +3677,6 @@ func _treasure() -> void:
 	right.add_child(w["tr-bag"])
 	row.add_child(right)
 	col.add_child(row)
-	var reveal = _vbox(3)
-	reveal.custom_minimum_size.y = a(56)
-	col.add_child(reveal)
-	w["tr-reveal"] = reveal
 	var close = _button("Fermer", "small plain", func() -> void: _close_treasure())
 	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	col.add_child(close)
@@ -3564,17 +3695,28 @@ func _close_treasure() -> void:
 	elif state == "shop":
 		refresh_shop()
 
-## The urns' count and the bag, as the save has them now.
+## The urns (0.68: by rarity, the one to open chosen) and the bag, as the save has them now.
 func _treasure_fill() -> void:
 	var nu = Treasure.total(save)
-	var bag: Dictionary = save.get("urnBag", {})
-	var known: Array = []
-	for rk in ["legendary", "rare", "common"]:
-		if int(bag.get(rk, 0)) > 0:
-			known.append("%d %s" % [int(bag[rk]), Treasure.NAMES[rk].to_lower()])
-	w["tr-count"].text = ("Urnes : %d" % nu) + (("\n(dont " + ", ".join(known) + ")") if not known.is_empty() else "")
+	if Treasure.count(save, urn_pick) <= 0:
+		urn_pick = ""
+		for rk in ["legendary", "rare", "common"]:   # the best there is, by default
+			if Treasure.count(save, rk) > 0:
+				urn_pick = rk
+				break
+	for rk in ["common", "rare", "legendary"]:
+		var n = Treasure.count(save, rk)
+		var ub: Button = w["tr-u-" + rk]
+		ub.modulate = Color.WHITE if n > 0 else Color(0.35, 0.35, 0.4, 0.6)
+		ub.scale = Vector2.ONE
+		ub.pivot_offset = ub.size / 2
+		var pick = rk == urn_pick
+		w["tr-n-" + rk].text = ("× %d" % n) if n > 0 else "—"
+		ub.add_theme_stylebox_override("normal", _flat(Color(1, 0.83, 0.36, 0.18), GOLD, 2.0) if pick else StyleBoxEmpty.new())
+		ub.add_theme_stylebox_override("hover", ub.get_theme_stylebox("normal"))
+		ub.add_theme_stylebox_override("pressed", ub.get_theme_stylebox("normal"))
+	w["tr-count"].text = ("Urne %s choisie" % Treasure.NAMES[urn_pick].to_lower()) if urn_pick != "" else "Aucune urne : gagne des niveaux !"
 	w["tr-open"].disabled = nu <= 0 or urn_busy
-	w["tr-urn"].modulate = Color.WHITE if nu > 0 else Color(0.5, 0.5, 0.55)
 	var bagbox: VBoxContainer = w["tr-bag"]
 	for ch in bagbox.get_children():
 		bagbox.remove_child(ch)
@@ -3591,63 +3733,247 @@ func _treasure_fill() -> void:
 		h.add_child(_label(ln[2], ts("s"), GOLD, 0))
 		bagbox.add_child(h)
 
-## « Ouvrir »: the urn shakes, swells, then breaks: what came out, in the colour of its rarity.
+## « Ouvrir » (0.68): an event, over everything (UrnShow): the urn of the rarity chosen comes to the middle, swells
+## and shakes as its cracks let the light out, then bursts; what came out, one thing after the other. The rarer,
+## the longer and the bigger (rays, shards, a fanfare, confetti for a legendary one).
 func _break_urn() -> void:
 	if urn_busy or Treasure.total(save) <= 0:
 		return
-	urn_busy = true
-	w["tr-open"].disabled = true
-	for ch in w["tr-reveal"].get_children():
-		ch.queue_free()
-	Audio.sfx("urn")
-	var u: TextureRect = w["tr-urn"]
-	u.pivot_offset = Vector2(u.size.x / 2, u.size.y)
-	var tw = create_tween()
-	for i in 6:
-		tw.tween_property(u, "rotation", (0.16 if i % 2 == 0 else -0.16) * (1.0 + i * 0.12), 0.07)
-	tw.tween_property(u, "rotation", 0.0, 0.05)
-	tw.tween_property(u, "scale", Vector2(1.3, 1.3), 0.1)
-	tw.tween_callback(_urn_reveal)
-	tw.tween_property(u, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-func _urn_reveal() -> void:
-	if treasure == null:
-		return
-	var res = Treasure.open(save)
+	var res = Treasure.open(save, urn_pick)
 	SaveData.store(save)
-	urn_busy = false
 	if res.is_empty():
 		_treasure_fill()
 		return
-	var rar: String = res["rarity"]
-	var box: VBoxContainer = w["tr-reveal"]
-	var head = _label("URNE %s !" % Treasure.NAMES[rar].to_upper(), ts("m"), Color(Treasure.COLOURS[rar]), 1.5)
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(head)
-	var items: HBoxContainer = null
-	var k = 0
-	for g in res["got"]:                             # two to a row (a legendary urn gives four things)
-		if k % 2 == 0:
-			items = _hbox(14)
-			items.alignment = BoxContainer.ALIGNMENT_CENTER
-			box.add_child(items)
-		var h = _hbox(4)
-		h.add_child(_icon_rect(icon(g["icon"]), 16))
-		h.add_child(_label(g["name"], ts("s"), INK, 0))
-		items.add_child(h)
-		k += 1
-	box.modulate.a = 0
-	box.scale = Vector2(0.8, 0.8)
-	box.pivot_offset = Vector2(box.size.x / 2, 0)
-	var tw = create_tween()
-	tw.tween_property(box, "modulate:a", 1.0, 0.2)
-	tw.parallel().tween_property(box, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	Audio.sfx({"common": "quest", "rare": "level", "legendary": "record"}[rar])
-	if rar != "common":
-		confetti(60 if rar == "legendary" else 18)
+	urn_busy = true
+	w["tr-open"].disabled = true
 	if res["got"].any(func(g): return g["what"] == "skin"):
 		Skins.apply(save["skins"]["worn"])
-	_treasure_fill()
+	var show = UrnShow.new()
+	show.size = Vector2(W, H)
+	show.u = U
+	show.rar = res["rarity"]
+	show.got = res["got"]
+	show.urn = icon("urn-" + res["rarity"])
+	show.title_font = bold
+	show.text_font = font
+	show.sizes = [ts("xl"), ts("m"), ts("s")]
+	show.colour = Color(Treasure.COLOURS[res["rarity"]])
+	show.title = "URNE %s !" % Treasure.NAMES[res["rarity"]].to_upper()
+	for g in res["got"]:
+		show.icons.append(icon(g["icon"]))
+	show.sound.connect(func(name: String) -> void: Audio.sfx(name))
+	show.burst.connect(func() -> void:
+		if res["rarity"] != "common":
+			confetti(70 if res["rarity"] == "legendary" else 24))
+	show.closed.connect(func() -> void:
+		urn_busy = false
+		show.queue_free()
+		if treasure != null:
+			_treasure_fill())
+	treasure.add_child(show)
+
+## (0.68) The opening of an urn, drawn over the Trésor. Its time: the urn coming to the middle (0.35 s), then
+## the charge (CHARGE by rarity: it swells, shakes harder and harder, cracks three times, light and sparks
+## through the cracks, rays turning behind it for a rare or a legendary one), the burst (a white flash, a ring,
+## the urn in shards, a shake of the whole screen), then what came out, one after the other, each with its pop.
+## A touch during the charge goes straight to the burst; once everything is out, a touch closes it.
+class UrnShow extends Control:
+	signal sound(name: String)
+	signal burst
+	signal closed
+	const CHARGE := {"common": 1.1, "rare": 2.0, "legendary": 3.1}
+	const COME := 0.35
+	const ITEM_GAP := {"common": 0.35, "rare": 0.45, "legendary": 0.6}
+	var u := 1.0
+	var rar := "common"
+	var got: Array = []
+	var icons: Array = []
+	var urn: Texture2D
+	var title_font: Font
+	var text_font: Font
+	var sizes: Array = [26, 14, 11]
+	var colour := Color.WHITE
+	var title := ""
+	var t := 0.0
+	var burst_at := -1.0
+	var shards: Array = []
+	var sparks: Array = []
+	var cracks: Array = []
+	var shown := 0
+	var heard := {}
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		var rng = RandomNumberGenerator.new()
+		for k in 3:                                  # three cracks, each a zigzag from near the middle outwards
+			var pts = PackedVector2Array()
+			var ang = rng.randf_range(0, TAU)
+			var at = Vector2(rng.randf_range(-0.15, 0.15), rng.randf_range(-0.1, 0.2))
+			pts.append(at)
+			for j in 4:
+				ang += rng.randf_range(-0.7, 0.7)
+				at += Vector2(cos(ang), sin(ang)) * rng.randf_range(0.1, 0.16)
+				pts.append(at)
+			cracks.append(pts)
+		sound.emit("urnrise" + {"common": "1", "rare": "2", "legendary": "3"}[rar])
+	func _charge() -> float:
+		return CHARGE[rar]
+	func _gui_input(e: InputEvent) -> void:
+		var tap = (e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT) or (e is InputEventScreenTouch and e.pressed)
+		if not tap:
+			return
+		accept_event()
+		if burst_at < 0 and t > COME:
+			t = COME + _charge()                     # straight to the burst
+		elif burst_at >= 0 and shown >= got.size() and t - burst_at > 0.6 + got.size() * ITEM_GAP[rar]:
+			closed.emit()
+		elif burst_at >= 0:
+			t = burst_at + 0.6 + got.size() * ITEM_GAP[rar]   # everything out at once
+	func _process(delta: float) -> void:
+		t += delta
+		var end_charge = COME + _charge()
+		if burst_at < 0 and t >= end_charge:
+			burst_at = t
+			_explode()
+		if burst_at < 0 and t > COME:                # sparks through the cracks
+			var k = (t - COME) / _charge()
+			var n = int(randf() < 0.3 + k * ({"common": 0.6, "rare": 1.2, "legendary": 2.0}[rar]))
+			for i in n:
+				sparks.append({"p": _mid() + Vector2(randf_range(-14, 14), randf_range(-20, 10)) * u * _scale(), "v": Vector2(randf_range(-60, 60), randf_range(-220, -80)) * u, "life": randf_range(0.4, 0.8), "t": 0.0, "c": colour.lerp(Color.WHITE, randf() * 0.6)})
+		if burst_at >= 0:
+			var since = t - burst_at
+			var want = clampi(floori((since - 0.6) / ITEM_GAP[rar]) + 1, 0, got.size()) if since >= 0.6 else 0
+			while shown < want:
+				shown += 1
+				sound.emit("itempop")
+			if since > 0.6 + got.size() * ITEM_GAP[rar] + 0.1 and not heard.has("win"):
+				heard["win"] = true
+				sound.emit("urnwin" + {"common": "1", "rare": "2", "legendary": "3"}[rar])
+		for s_ in shards:
+			s_["t"] += delta
+			s_["v"].y += 900 * u * delta
+			s_["p"] += s_["v"] * delta
+			s_["r"] += s_["w"] * delta
+		for q in sparks:
+			q["t"] += delta
+			q["v"].y += 260 * u * delta
+			q["p"] += q["v"] * delta
+		sparks = sparks.filter(func(q): return q["t"] < q["life"])
+		shards = shards.filter(func(s_): return s_["t"] < 1.6)
+		queue_redraw()
+	func _mid() -> Vector2:
+		return Vector2(size.x / 2, size.y * 0.47)
+	func _scale() -> float:                          # the urn's size: it comes in, then swells
+		var come = clampf(t / COME, 0, 1)
+		var k = clampf((t - COME) / _charge(), 0, 1) if burst_at < 0 else 1.0
+		var top = {"common": 2.4, "rare": 2.8, "legendary": 3.2}[rar]
+		return lerpf(0.6, 1.9, come * come * (3 - 2 * come)) + (top - 1.9) * k * k
+	func _explode() -> void:
+		sound.emit("urnburst")
+		burst.emit()
+		var n = {"common": 10, "rare": 16, "legendary": 24}[rar]
+		var w_ = urn.get_width() if urn != null else 40
+		var h_ = urn.get_height() if urn != null else 50
+		for i in n:
+			var sx_ = randf_range(0, w_ * 0.7)
+			var sy_ = randf_range(0, h_ * 0.7)
+			var ang = randf_range(0, TAU)
+			var sp = randf_range(260, 620) * ({"common": 0.8, "rare": 1.0, "legendary": 1.3}[rar])
+			shards.append({"src": Rect2(sx_, sy_, w_ * 0.3, h_ * 0.3), "p": _mid(), "v": Vector2(cos(ang), sin(ang) - 0.6) * sp * u, "r": 0.0, "w": randf_range(-9, 9), "t": 0.0})
+		for i in n * 3:
+			var ang = randf_range(0, TAU)
+			sparks.append({"p": _mid(), "v": Vector2(cos(ang), sin(ang)) * randf_range(120, 520) * u, "life": randf_range(0.5, 1.1), "t": 0.0, "c": colour.lerp(Color.WHITE, randf() * 0.7)})
+	func _draw() -> void:
+		var mid = _mid()
+		var shake = Vector2.ZERO
+		var since = t - burst_at if burst_at >= 0 else -1.0
+		if since >= 0 and since < 0.4:              # the whole screen shakes as it bursts
+			var amp = {"common": 4.0, "rare": 7.0, "legendary": 11.0}[rar] * u * (1 - since / 0.4)
+			shake = Vector2(randf_range(-amp, amp), randf_range(-amp, amp))
+		draw_set_transform(shake)
+		draw_rect(Rect2(-40, -40, size.x + 80, size.y + 80), Color(6 / 255.0, 4 / 255.0, 16 / 255.0, 0.88 * clampf(t / 0.25, 0, 1)))
+		var k = clampf((t - COME) / _charge(), 0, 1) if burst_at < 0 else 1.0
+		# rays turning behind it: a rare one 8, a legendary one 16 and a second set the other way
+		if rar != "common":
+			var nr = 8 if rar == "rare" else 16
+			var grow = k if burst_at < 0 else 1.0 + minf(1.0, since) * 0.6
+			var ra = (90 + 220 * grow) * u
+			for set_ in (2 if rar == "legendary" else 1):
+				for i in nr:
+					var a0 = t * (0.5 if set_ == 0 else -0.35) + i * TAU / nr
+					var pts = PackedVector2Array([mid, mid + Vector2(cos(a0 - 0.09), sin(a0 - 0.09)) * ra, mid + Vector2(cos(a0 + 0.09), sin(a0 + 0.09)) * ra])
+					draw_colored_polygon(pts, Color(colour.r, colour.g, colour.b, (0.16 if set_ == 0 else 0.1) * clampf(grow, 0, 1)))
+		var glow_r = (30 + 70 * k) * u * (1.0 if burst_at < 0 else 1.0 + minf(1.0, since) * 1.5)
+		for g in 4:
+			draw_circle(mid, glow_r * (1.0 - g * 0.2), Color(colour.r, colour.g, colour.b, 0.08 + 0.05 * g))
+		if burst_at < 0 and urn != null:             # the urn, swelling and shaking, its cracks glowing
+			var sc = _scale() * u
+			var amp = (1.0 + 5.0 * k * k) * u * ({"common": 1.0, "rare": 1.3, "legendary": 1.7}[rar]) if t > COME else 0.0
+			var off = Vector2(sin(t * 47) * amp, cos(t * 39) * amp * 0.4)
+			var rot = sin(t * 31) * 0.05 * k
+			draw_set_transform(mid + off + shake, rot, Vector2(sc, sc))
+			draw_texture(urn, Vector2(-urn.get_width() / 2.0, -urn.get_height() / 2.0))
+			var lines = 0 if k < 0.35 else (1 if k < 0.65 else (2 if k < 0.88 else 3))
+			for i in lines:
+				var pts = PackedVector2Array()
+				for q in cracks[i]:
+					pts.append(Vector2(q.x * urn.get_width(), q.y * urn.get_height()))
+				draw_polyline(pts, Color(1, 1, 1, 0.9), 1.6)
+				draw_polyline(pts, Color(colour.r, colour.g, colour.b, 0.7), 3.0)
+			draw_set_transform(shake)
+		for s_ in shards:                            # the shards of the urn, spinning away
+			if urn == null:
+				break
+			var sc2 = _scale() * u
+			draw_set_transform(s_["p"] + shake, s_["r"], Vector2(sc2, sc2))
+			var src: Rect2 = s_["src"]
+			draw_texture_rect_region(urn, Rect2(-src.size / 2, src.size), src, Color(1, 1, 1, clampf(1.6 - s_["t"], 0, 1)))
+			draw_set_transform(shake)
+		for q in sparks:
+			var a_ = 1.0 - q["t"] / q["life"]
+			draw_rect(Rect2(q["p"] - Vector2(2, 2) * u, Vector2(4, 4) * u), Color(q["c"].r, q["c"].g, q["c"].b, a_))
+		if since >= 0:
+			if since < 0.5:                          # the flash, the ring
+				draw_rect(Rect2(-40, -40, size.x + 80, size.y + 80), Color(1, 1, 1, 0.9 * (1 - since / 0.5) * ({"common": 0.5, "rare": 0.8, "legendary": 1.0}[rar])))
+			if since < 0.8:
+				draw_arc(mid, (20 + 520 * since) * u, 0, TAU, 64, Color(colour.r, colour.g, colour.b, 1 - since / 0.8), 6 * u)
+			# the title, then what came out
+			if since > 0.25 and title_font != null:
+				var tk = clampf((since - 0.25) / 0.3, 0, 1)
+				var tsz = int(sizes[0] * (1.0 + 0.4 * (1 - tk)))
+				var tw = title_font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, tsz).x
+				var ty = size.y * 0.2
+				for o in [Vector2(-2, 0), Vector2(2, 0), Vector2(0, -2), Vector2(0, 3)]:
+					draw_string(title_font, Vector2(size.x / 2 - tw / 2, ty) + o * u, title, HORIZONTAL_ALIGNMENT_LEFT, -1, tsz, Color(0.1, 0.06, 0.14, tk))
+				draw_string(title_font, Vector2(size.x / 2 - tw / 2, ty), title, HORIZONTAL_ALIGNMENT_LEFT, -1, tsz, Color(colour.r, colour.g, colour.b, tk))
+			var n = got.size()
+			var cw = 150.0 * u
+			var ch = 44.0 * u
+			var cols = mini(n, 2)
+			for i in shown:
+				var row_ = i / 2
+				var col_ = i % 2
+				var in_row = mini(cols, n - row_ * 2)
+				var x = size.x / 2 - in_row * (cw + 10 * u) / 2 + col_ * (cw + 10 * u)
+				var y = size.y * 0.5 + row_ * (ch + 8 * u)
+				var appear = clampf((since - 0.6 - i * ITEM_GAP[rar]) / 0.25, 0, 1)
+				var pop = 1.0 + 0.25 * sin(PI * appear) * (1 - appear * 0.5)
+				var r_ = Rect2(x + cw / 2 * (1 - pop), y + ch / 2 * (1 - pop), cw * pop, ch * pop)
+				draw_rect(r_.grow(2 * u), Color(0.1, 0.06, 0.14, appear))
+				draw_rect(r_, Color(0.18, 0.13, 0.1, appear))
+				draw_rect(Rect2(r_.position, Vector2(r_.size.x, 3 * u)), Color(colour.r, colour.g, colour.b, appear))
+				var ic: Texture2D = icons[i] if i < icons.size() else null
+				if ic != null:
+					var ih = 30.0 * u * pop
+					var iw = ih * ic.get_width() / maxf(1, ic.get_height())
+					draw_texture_rect(ic, Rect2(r_.position.x + 7 * u, r_.position.y + (r_.size.y - ih) / 2, iw, ih), false, Color(1, 1, 1, appear))
+				if text_font != null:
+					var name_: String = str(got[i]["name"])
+					draw_string(text_font, Vector2(r_.position.x + 44 * u, r_.position.y + r_.size.y / 2 + sizes[2] * 0.35), name_, HORIZONTAL_ALIGNMENT_LEFT, cw - 50 * u, sizes[2], Color(1, 0.97, 0.9, appear))
+			if shown >= n and since > 0.6 + n * ITEM_GAP[rar] + 0.3 and text_font != null:
+				var hint = "Touche pour continuer"
+				var hw = text_font.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, sizes[2]).x
+				draw_string(text_font, Vector2(size.x / 2 - hw / 2, size.y * 0.93), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, sizes[2], Color(0.79, 0.84, 0.76, 0.5 + 0.5 * absf(sin(t * 3))))
+		draw_set_transform(Vector2.ZERO)
 
 ## An animal on the road or not (the Montures tab: its box, or its card's button).
 func _toggle_mount(mk: String) -> void:
@@ -4461,7 +4787,9 @@ func _build_group_g1(s: Control) -> void:
 	lh.add_child(lv)
 	var rv = _vbox(5)
 	rv.alignment = BoxContainer.ALIGNMENT_CENTER
-	w["ra-host"] = _button("Créer un groupe", "small gold", func() -> void: _race_host(false))
+	w["ra-host"] = _button("Créer un groupe", "small gold", func() -> void:
+		quick_on = false
+		_race_host(false))
 	rv.add_child(w["ra-host"])
 	w["ra-quick"] = _button("Partie rapide", "small gold", _race_quick)   # (0.66) strangers, in a race
 	rv.add_child(w["ra-quick"])
@@ -5377,6 +5705,9 @@ func refresh_race() -> void:
 			sub = "invité…"
 		var free = not there and nm == ""
 		w["rc-nm-%d" % i].text = "PLACE LIBRE" if free else nm
+		w["rc-nm-%d" % i].set_meta("search", free and quick_on)   # (0.68) « Recherche… », moving (_process)
+		if not (free and quick_on):
+			w["rc-nm-%d" % i].modulate.a = 1.0
 		_set_colour(w["rc-nm-%d" % i], Race.COLOURS[i] if there else DIM)
 		w["rc-sub-%d" % i].text = sub
 		_set_colour(w["rc-sub-%d" % i], sub_c)
@@ -5675,13 +6006,16 @@ func _race_host(show: bool = true) -> void:
 		refresh_friends()
 
 ## (0.66) « Partie rapide »: into a race room waiting for players, or my own opened and offered to them (renewed
-## while it waits, until full or started).
+## while it waits, until full or started). (0.68) It searches on its own: while I wait alone in mine, every few
+## seconds it looks for another room waiting; of two players waiting alone each in his own, the one whose room
+## has the later code goes to the other (so both never swap). The free places say « Recherche… », moving.
 func _race_quick() -> void:
 	if not Net.enabled():
 		group_note = "Hors ligne : pas de partie rapide."
 		refresh_friends()
 		return
 	race.save = save
+	quick_on = true
 	race_note = "Recherche d'adversaires…"
 	race_seen = true
 	var r = await net.quick_match(save)
@@ -5691,13 +6025,27 @@ func _race_quick() -> void:
 		race.join(str(r["room"]))
 		return
 	await _race_host(true)
-	race_note = "En attente d'adversaires (partie rapide)…"
+	race_note = "Recherche d'adversaires…"
 	refresh_race()
-	while race.role == "host" and race.state == "lobby" and race.count() < 4 and race.room != "":
-		await net.match_open(save, race.room)
-		await get_tree().create_timer(45.0).timeout
+	var opened_at = -INF
+	while quick_on and race.role == "host" and race.in_lobby() and race.count() < 4 and race.room != "":
+		var now = Time.get_ticks_msec() / 1000.0
+		if now - opened_at > 30.0:
+			opened_at = now
+			await net.match_open(save, race.room)
+		if race.count() == 1 and race.role == "host" and race.room != "":
+			var r2 = await net.quick_match(save)
+			var other = str(r2.get("room", ""))
+			if other != "" and race.count() == 1 and race.role == "host" and other < race.room:
+				race.leave()
+				race_note = ""
+				go("race")
+				race.join(other)
+				return
+		await get_tree().create_timer(QUICK_EVERY).timeout
 
 func _race_join() -> void:
+	quick_on = false
 	var code = w["ra-code"].text.strip_edges().to_upper()
 	if code.length() != 4:
 		group_note = "Le code d'un groupe a 4 lettres."
@@ -6280,32 +6628,41 @@ func show_levels(after: Callable = Callable()) -> void:
 
 ## A short notice at the top of the screen: objective done, level gained.
 ## Caught: the Couteau suisse's offer (0.55: equipped only), then the escape, over the game (Game keeps the state).
+## (0.68) Freed, the panel stays a moment, every rope cut (esc_hold).
 func _esc_view() -> void:
 	if not w.has("esc") or not is_instance_valid(w["esc"]):
 		return
 	var c = run.caught if run != null else null
 	var ph: String = c.phase if c != null else ""
+	var ev: EscapeView = w["esc-bar"]
+	if esc_hold > 0:
+		esc_hold -= get_process_delta_time()
+		w["esc"].visible = esc_hold > 0
+		w["esc"].modulate.a = clampf(esc_hold / 0.25, 0, 1)
+		return
+	w["esc"].modulate.a = 1.0
 	w["esc"].visible = ph == "offer" or ph == "escape"
 	var slime = c != null and c.get("by", "") == "slime"   # (0.59) Histoire, the dungeon
 	if ph == "offer":
 		if slime:
-			w["esc-label"].text = "Avalé ! Une chance de t'extirper (une par niveau)"
+			w["esc-label"].text = "Avalé ! Une chance de t'extirper"
 		elif Game.story_revive_ok(run):
-			w["esc-label"].text = "Capturé ! Une chance de t'évader (une par niveau)"
+			w["esc-label"].text = "Capturé ! Une chance de t'évader"
 		else:
 			w["esc-label"].text = "Capturé ! Couteau suisse : %d" % run.free_knives
-		w["esc-knife"].text = "S'extirper" if slime else "S'évader"
-		w["esc-knife"].visible = true
-		w["esc-bar"].visible = false
-		set_bar(w["esc-time"], c.timer / Game.ESC_OFFER)
+		w["esc-hint"].text = "Touche le couteau !"
+		ev.phase = "offer"
+		ev.e = {}
+		ev.left = maxf(0, c.timer)
+		ev.full = Game.ESC_OFFER
 	elif ph == "escape":
 		var e: Dictionary = c.esc
 		w["esc-label"].text = ("Extirpe-toi ! Encore %d" if slime else "Ronge les cordes ! Encore %d") % e.rope
-		w["esc-knife"].visible = false
-		w["esc-bar"].visible = true
-		w["esc-bar"].e = e
-		w["esc-bar"].queue_redraw()
-		set_bar(w["esc-time"], maxf(0, e.time) / e.full)
+		w["esc-hint"].text = "Touche quand le curseur est dans le vert"
+		ev.phase = "escape"
+		ev.e = e
+		ev.left = maxf(0, e.time)
+		ev.full = e.full
 
 ## The Couteau suisse taken from the stock (0.54: the one equipped first, it costs nothing): the escape begins.
 func _use_knife() -> void:
@@ -6399,7 +6756,7 @@ func hud() -> void:
 			create_tween().tween_property(h, "modulate", Color(0.35, 0.35, 0.35, 0.5) if lost else Color.WHITE, 0.2)
 			create_tween().tween_property(h, "scale", Vector2(0.8, 0.8) if lost else Vector2.ONE, 0.2)
 			i += 1
-	w["btn-ball"].modulate = Color(1.0, 0.85, 0.35) if run.ball_on else Color.WHITE   # (0.65) lit while rolled up
+	w["btn-ball"].modulate = Color(1.0, 0.85, 0.35) if run.ball_on else (Color(0.5, 0.5, 0.55, 0.6) if run.sky else Color.WHITE)   # (0.65) lit while rolled up (0.68: greyed in the heights)
 	for k in ACTS:
 		var act = {"dash": run.dash, "slow": run.slow, "boots": run.boots, "tnt": run.tnt, "monster": run.monster}[k]
 		var cool: Cooldown = w["cd-" + k]
@@ -6671,7 +7028,19 @@ func _step(h: float) -> void:
 			"hurt", "rewind", "hit": stats["hurt"] = true
 			"urn":                                  # 0.47: an urn (on the road; 0.55: Vorace's too)
 				toast("ico-urn", "Une urne !", 0, 0)
+			"cut":                                  # (0.68) a rope cut: its dot pops
+				if w.has("esc-bar") and run.caught != null:
+					var ee: Dictionary = run.caught.esc
+					w["esc-bar"].pop(int(ee.get("ropes", 3)) - int(ee.get("rope", 0)) - 1)
+			"miss":
+				if w.has("esc-bar"):
+					w["esc-bar"].miss()
 			"free":                                 # escaped: the next fall will have its own photo
+				if w.has("esc-bar") and w["esc"].visible:   # (0.68) the panel a moment more, every rope cut
+					w["esc-bar"].freed()
+					w["esc-label"].text = "Libre !"
+					w["esc-hint"].text = ""
+					esc_hold = 0.9
 				banner("Libre !")
 				photo_taken = false
 				photo = null
@@ -6730,6 +7099,15 @@ func _taps_done() -> void:
 
 func _process(delta: float) -> void:
 	var dt = minf(0.034, delta)                  # (30 images a second, in Éco, still run at full speed)
+	if quick_on and state == "race" and race.in_lobby():   # (0.68) the quick match searching: its free places say so
+		var tq = Time.get_ticks_msec() / 1000.0
+		for i in 4:
+			var lq: Label = w.get("rc-nm-%d" % i)
+			if lq != null and is_instance_valid(lq) and lq.get_meta("search", false):
+				lq.text = "RECHERCHE" + ".".repeat(1 + floori(tq * 3.0) % 3)
+				lq.modulate.a = 0.55 + 0.45 * absf(sin(tq * 2.6 + i * 0.7))
+	elif quick_on and not race.in_lobby() and race.role == "" and state != "race":
+		quick_on = false
 	if rebuild_due and state != "play" and state != "loading" and state != "pause":
 		rebuild_t -= delta
 		if rebuild_t <= 0:

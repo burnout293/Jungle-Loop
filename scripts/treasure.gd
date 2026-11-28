@@ -92,16 +92,40 @@ static func give_look(save: Dictionary, id: String) -> Dictionary:
 	save["skins"]["owned"].append(id)
 	return {"what": "skin", "n": 1, "id": id, "name": label, "icon": "ico-star"}
 
-## Breaks one urn of the save: what it gave, already in the save. {rarity, got: [{what, n, name, icon, id}]}.
-static func open(save: Dictionary) -> Dictionary:
+## (0.68) Every urn of the save gets its rarity: the ones won (levels, the road, the boss) are drawn now (with the
+## same odds and guarantees as before, when they were drawn as broken) and go into the bag of known rarities, so
+## the Trésor shows each in its own colours. Returns the rarities drawn.
+static func identify(save: Dictionary) -> Array:
+	var out: Array = []
+	while int(save.get("urns", 0)) > 0:
+		save["urns"] = int(save["urns"]) - 1
+		var rar = _roll(save)
+		add_urn(save, rar)
+		out.append(rar)
+	return out
+
+## Breaks one urn of the save (0.68: of the rarity asked, else the best there is): what it gave, already in the
+## save. {rarity, got: [{what, n, name, icon, id}]}.
+static func open(save: Dictionary, want: String = "") -> Dictionary:
+	identify(save)
 	var bag: Dictionary = save.get("urnBag", {})
+	if want != "" and int(bag.get(want, 0)) > 0:
+		bag[want] = int(bag[want]) - 1
+		return _open_as(save, want)
 	for rk in ["legendary", "rare", "common"]:        # (0.58) the Course du jour's first, the best first
 		if int(bag.get(rk, 0)) > 0:
 			bag[rk] = int(bag[rk]) - 1
 			return _open_as(save, rk)
-	if int(save["urns"]) <= 0:
-		return {}
-	save["urns"] = int(save["urns"]) - 1
+	return {}
+
+## The count of one rarity in the bag.
+static func count(save: Dictionary, rar: String) -> int:
+	return int(save.get("urnBag", {}).get(rar, 0))
+
+## One urn's rarity, drawn: legendary every cfg.leg_pity at the latest, rare every cfg.rare_pity.
+static func _roll(save: Dictionary) -> String:
+	if not save.get("urnPity") is Dictionary:
+		save["urnPity"] = {"r": 0, "l": 0}
 	var pity: Dictionary = save["urnPity"]
 	pity["r"] = int(pity.get("r", 0)) + 1
 	pity["l"] = int(pity.get("l", 0)) + 1
@@ -116,7 +140,7 @@ static func open(save: Dictionary) -> Dictionary:
 		pity["r"] = 0
 	elif rar == "rare":
 		pity["r"] = 0
-	return _open_as(save, rar)
+	return rar
 
 static func _open_as(save: Dictionary, rar: String) -> Dictionary:
 	var entries: Array = table[rar] if rar == "legendary" else [_draw(table[rar])]

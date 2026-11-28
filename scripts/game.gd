@@ -693,6 +693,10 @@ const COIN_TOP := 30.0 * SIZE
 const COIN_UNDER := 4.0
 const BALL_REACH := 64.0 * SIZE
 const BALL_UNDER := 20.0
+# (0.68) Rolled up in the Sphère's mode, he is the ball: its hitbox (the leaves' ball, 57 units across, forgiving
+# as his own is).
+const BALL_TALL := 50.0
+const BALL_HALF := 20.0
 const BLAST_COINS := 30
 const CELL := 44.0
 const REACH := [230.0, 400.0, 600.0]
@@ -3901,8 +3905,8 @@ static func hitboxes(run: Run) -> Dictionary:
 	var p = run.p
 	var px = run.cam + run.sx
 	var M: Dictionary = MOUNTS[run.mount.kind] if run.mount != null else {}
-	var half: float = M["half"] if run.mount != null else HERO_HALF
-	var tall: float = M["tall"] if run.mount != null else HERO_H
+	var half: float = M["half"] if run.mount != null else (BALL_HALF if run.ball_on else HERO_HALF)
+	var tall: float = M["tall"] if run.mount != null else (BALL_TALL if run.ball_on else HERO_H)
 	var out: Array = []
 	var box = func(L: float, R: float, T: float, B: float, kind: String) -> void:
 		out.append({"L": L, "R": R, "T": T, "B": B, "kind": kind})
@@ -3913,7 +3917,7 @@ static func hitboxes(run: Run) -> Dictionary:
 	var grab = M.has("grab_w")
 	if grab:
 		box.call(px - M["grab_w"], px + M["grab_w"], p.y - M["grab_h"], p.y + 10, "coins")
-	elif p.ball != null:
+	elif p.ball != null or run.ball_on:
 		box.call(px - COIN_HALF, px + COIN_HALF, p.y - BALL_REACH, p.y + BALL_UNDER, "coins")
 	else:
 		box.call(px - COIN_HALF, px + COIN_HALF, p.y - tall - COIN_TOP, p.y + COIN_UNDER, "coins")
@@ -4123,10 +4127,13 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		run.events.append("monster")
 	if run.monster.t > 0 and randf() < 0.6:          # red fizz flying off behind him
 		part(run, run.cam + run.sx - rnd(10, 40), run.p.y - rnd(10, 70), -rnd(160, 420), rnd(-60, 40), rnd(0.2, 0.45), colour_of(["#ff3b3b", "#ff6b4a", "#ffd35c"]), rnd(4, 9), 0)
-	if input.ball and run.lvl("sphere") > 0 and not run.dead:   # (0.65) Normal / Sphère, no wait
-		run.ball_on = not run.ball_on
+	if input.ball and run.lvl("sphere") > 0 and not run.dead and not run.sky:   # (0.65) Normal / Sphère, no wait
+		run.ball_on = not run.ball_on                # (0.68: never in the heights, where all is flight)
 		run.p.balled = 0
 		run.events.append("roll" if run.ball_on else "unroll")
+		if run.ball_on:                              # (0.68) rolled up: no Vol (its cruise ends, the rotor stops)
+			run.p.cruise = 0
+			run.p.rotor = false
 	if run.ball_on and run.p.ball == null:
 		run.p.roll += run.speed * dt / 26
 		run.p.balled += dt
@@ -4245,6 +4252,9 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			else:
 				p.cruise = maxf(p.cruise, CRUISE_TIME * 0.5)   # at cruising height on his own until the first press
 				run.events.append("takeoff")
+	if sky_now and run.ball_on:                      # (0.68) into the heights: unrolled, the Vol takes him
+		run.ball_on = false
+		run.events.append("unroll")
 	run.sky = sky_now
 
 	if run.skyfall != null:                          # (0.59) Histoire, the heights: the long fall to the forest's floor
@@ -4313,8 +4323,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		p.buf = maxf(0, p.buf - dt)
 		p.spin = maxf(0, p.spin - dt)
 		p.flying = false
-		var half: float = M["half"] if mounted else HERO_HALF
-		var tall: float = M["tall"] if mounted else HERO_H
+		var half: float = M["half"] if mounted else (BALL_HALF if run.ball_on else HERO_HALF)
+		var tall: float = M["tall"] if mounted else (BALL_TALL if run.ball_on else HERO_H)
 		if p.ball != null and px > p.ball.x + p.ball.w:   # out at the far end, back on his feet
 			var out_of: Zone = p.ball
 			p.ball = null
@@ -4395,7 +4405,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			if p.y - tall < CEIL:
 				p.y = CEIL + tall
 				p.vy = maxf(p.vy, 0)
-		elif p.cruise > 0 and not mounted:
+		elif p.cruise > 0 and not mounted and not run.ball_on:
 			# with the Vol, out of the temple: he flies on his own at cruising height until the first press
 			p.cruise -= dt
 			p.ground = false
@@ -4442,11 +4452,11 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 					jump(run, -sqrt(2 * 2400 * maxf(80, p.y - HANG_Y + 40)))
 					p.vine_leap = true
 					burst(run, px, p.y, Color.WHITE, 8, 160)
-				elif not mounted and run.lvl("doubleJump") > 0 and p.jumps < 2:
+				elif not mounted and run.lvl("doubleJump") > 0 and p.jumps < 2 and not run.ball_on:   # (0.68: not rolled up)
 					jump(run, -JUMP_DOUBLE * spring)
 					burst(run, px, p.y, Color.WHITE, 6, 120)
 					p.rotor = run.lvl("flight") > 0
-				elif not mounted and run.lvl("flight") > 0 and not p.diving:   # in the air, every press lifts him at once
+				elif not mounted and run.lvl("flight") > 0 and not p.diving and not run.ball_on:   # in the air, every press lifts him at once
 					p.rotor = true
 					p.spin = 0.22
 					p.vy = minf(p.vy, -flap(run))
@@ -4565,7 +4575,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			it.y = fb - BONUS_LOW - (BONUS_HIGH - BONUS_LOW) * (zk if zk < 1 else 2 - zk)
 			if it.gone or absf(px - it.x) > (52.0 if it.kind == "brake" else 40.0) * SIZE:
 				continue
-			var tall_b: float = MOUNTS[run.mount.kind]["tall"] if run.mount != null else HERO_H
+			var tall_b: float = MOUNTS[run.mount.kind]["tall"] if run.mount != null else (BALL_TALL if run.ball_on else HERO_H)
 			if it.y < p.y - tall_b - 30 or it.y > p.y + 10:
 				continue
 			it.gone = true
@@ -4781,7 +4791,8 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				return
 	run.items = run.items.filter(func(it): return not it.gone and it.x > run.cam - 200)
 	run.decor = run.decor.filter(func(dc): return dc.x > run.cam - 900)   # (0.65: wide pictures, kept until well off screen)
-	run.hills = run.hills.filter(func(hl): return hl.x + hl.w > run.cam - 200)
+	run.hills = run.hills.filter(func(hl): return hl.x + hl.w > run.cam - 900)   # (0.68: was 200: a hill's last picture,
+	# which runs well past its stretch, vanished behind him)
 	run.zones = run.zones.filter(func(z): return z.x + z.w > run.cam - 200 or z == run.p.ball)
 	run.obs = run.obs.filter(func(o): return not o.gone and o.x + o.w > run.cam - 120)
 	run.plats = run.plats.filter(func(pl): return pl.x + pl.w > run.cam - 120)
@@ -4890,13 +4901,13 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 	var mm = run.lvl(run.mount.kind + "Magnet") if run.mount != null else 0   # the mount's own Aimant
 	if mm > 0:
 		reach = maxf(reach, MOUNT_MAGNET[mini(mm, MOUNT_MAGNET.size() - 1)])
-	var cy = p.y - (20.0 if p.ball != null else 40.0)
+	var cy = p.y - (20.0 if p.ball != null or run.ball_on else 40.0)
 	var grab_w = 0.0
 	var grab_h = 0.0
 	if run.mount != null and MOUNTS[run.mount.kind].has("grab_w"):
 		grab_w = MOUNTS[run.mount.kind]["grab_w"]
 		grab_h = MOUNTS[run.mount.kind]["grab_h"]
-	var tall_now = MOUNTS[run.mount.kind]["tall"] if run.mount != null else HERO_H
+	var tall_now = MOUNTS[run.mount.kind]["tall"] if run.mount != null else (BALL_TALL if run.ball_on else HERO_H)
 	for c in run.coins:
 		if run.bubble:
 			break                                    # floating: he picks up nothing
@@ -4940,7 +4951,7 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			caught = true                            # the Esquive went through it
 		elif grab_w > 0:                             # a mount's own reach
 			caught = absf(dx) < grab_w and c.y > p.y - grab_h and c.y < p.y + 10
-		elif p.ball != null:
+		elif p.ball != null or run.ball_on:
 			caught = absf(dx) < COIN_HALF and c.y < p.y + BALL_UNDER and c.y > p.y - BALL_REACH
 		else:
 			caught = absf(dx) < COIN_HALF and c.y < p.y + COIN_UNDER and c.y > p.y - tall_now - COIN_TOP

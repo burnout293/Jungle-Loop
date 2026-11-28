@@ -30,6 +30,9 @@
 //   invite/no     {id, secret, room}                       -> {ok}              (the host reads {"t":"no"})
 //   room/close    {id, secret, room}                       -> {ok}              (the host left: room and invitation go)
 //   feedback      {id, secret, text, version}              -> {ok}              (0.66: a player's word, 5 an hour at most)
+//   feedback/web  {pseudo, bug, idea, level, version, os}   -> {ok}              (0.68: the site's form, no identity:
+//                                                                                5 an hour from one address at most;
+//                                                                                the author told by e-mail or push)
 //   match         {id, secret}                             -> {room} | {}       (0.66: « Partie rapide »: a room waiting for
 //                                                                                players, or none: open one, then match/open)
 //   match/open    {id, secret, room}                       -> {ok}              (0.66: my race room waits for players)
@@ -358,6 +361,27 @@ const routes = {
     return { ok: true };
   },
 
+  // 0.68: the site's form (retours.html): a pseudonym, what went wrong, an idea, how much it bothers (0 « on s'en
+  // fout » to 3 « bloquant »). No identity: 5 an hour from one address (kept only as a salted hash, for that).
+  // The author is told at once if the server has the means (notify).
+  async 'feedback/web'(db, body, now, me, env) {
+    const clean = (v, n) => String(v || '').replace(/[\u0000-\u0008\u000b-\u001f]/g, ' ').trim().slice(0, n);
+    if (clean(body.site, 100)) return { ok: true };          // the hidden field: a robot filled it in
+    const pseudo = clean(body.pseudo, 24);
+    const bug = clean(body.bug, 1500);
+    const idea = clean(body.idea, 1500);
+    if (!bug && !idea) return { error: 'empty' };
+    const level = Math.max(0, Math.min(3, parseInt(body.level, 10) || 0));
+    const ip = String(body._ip || '');
+    const recent = await db.prepare('SELECT COUNT(*) AS n FROM reports WHERE ip = ? AND at > ?').bind(ip, now - 3600 * 1000).first();
+    if (recent && recent.n >= 5) return { error: 'busy' };
+    const row = { pseudo, bug, idea, level, version: clean(body.version, 16), os: clean(body.os, 16) };
+    await db.prepare('INSERT INTO reports (pseudo, version, os, bug, idea, level, ip, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(row.pseudo, row.version, row.os, row.bug, row.idea, row.level, ip, now).run();
+    await notify(env, row);
+    return { ok: true };
+  },
+
   // 0.66: « Partie rapide »: a race room waiting for players (not mine, fresh, not full), else nothing.
   async 'match'(db, body, now, me) {
     await db.prepare('DELETE FROM queue WHERE at < ?').bind(now - QUEUE_LIFE).run();
@@ -401,6 +425,40 @@ const routes = {
   },
 };
 
+// 0.68: a report from the site's form, told to the author: by e-mail through Resend (secrets RESEND_KEY and
+// NOTIFY_EMAIL, set by notify.ps1) and/or as a push on his phone through ntfy (secret NTFY_TOPIC). Neither set:
+// nothing is sent, the report waits in the base. A failure here never loses the report.
+const LEVELS = ["On s'en fout", 'Un peu chiant', 'Relou', 'Bloquant'];
+async function notify(env, r) {
+  const title = `Jungle Loop : ${LEVELS[r.level]}${r.pseudo ? ' · ' + r.pseudo : ''}`;
+  const text = [`Gêne : ${LEVELS[r.level]}`, `Pseudo : ${r.pseudo || '(aucun)'}`, `Version : ${r.version || '?'} (${r.os || '?'})`, '',
+    'Bug constaté :', r.bug || '(rien)', '', "Idée d'amélioration :", r.idea || '(rien)'].join('\n');
+  const jobs = [];
+  if (env.RESEND_KEY && env.NOTIFY_EMAIL) {
+    jobs.push(fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${String(env.RESEND_KEY).trim()}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ from: 'Jungle Loop <onboarding@resend.dev>', to: [String(env.NOTIFY_EMAIL).trim()], subject: title, text }),
+    }));
+  }
+  if (env.NTFY_TOPIC) {
+    jobs.push(fetch(`https://ntfy.sh/${encodeURIComponent(String(env.NTFY_TOPIC).trim())}`, {
+      method: 'POST',
+      headers: { title: encodeURIComponent(title), priority: String([2, 3, 4, 5][r.level]), tags: 'jungle-loop', 'x-title-encoding': 'url' },
+      body: text,
+    }));
+  }
+  try { await Promise.allSettled(jobs); } catch { /* the report is kept anyway */ }
+}
+
+// The address a request comes from, as a hash salted with the day (for the form's limit only, never kept as is).
+async function ipHash(request) {
+  const ip = request.headers.get('cf-connecting-ip') || '';
+  const day = new Date().toISOString().slice(0, 10);
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`jungle-loop|${day}|${ip}`));
+  return [...new Uint8Array(d)].slice(0, 12).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export default {
   async fetch(request, env) {
     const origin = env.ORIGIN || '*';
@@ -414,7 +472,9 @@ export default {
     try { body = await request.json(); } catch { return json({ error: 'bad json' }, 400, origin); }
     const now = Date.now();
     let me = null;
-    if (route !== 'player') {
+    if (route === 'feedback/web') {
+      body._ip = await ipHash(request);
+    } else if (route !== 'player') {
       me = await who(env.DB, body);
       if (!me) return json({ error: 'who' }, 403, origin);
     }

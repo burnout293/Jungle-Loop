@@ -94,3 +94,15 @@ le relais ou pas du tout).
 Reste :
 - l'essai sur deux vrais téléphones, sur deux réseaux différents ;
 - plus tard : Android sur le même Wi-Fi sans serveur, Steam.
+
+## Les retours des joueurs (0.68)
+
+La page « Ton avis » du site (`retours.html`, ouverte par Réglages › Jeu › « Donner mon avis ») envoie au
+serveur un pseudo, le bug, l'idée et le niveau de gêne (route `feedback/web`, table `reports`). Pour les lire,
+depuis ce dossier :
+
+    npx --yes wrangler@4 d1 execute jungle-loop --remote --command="SELECT datetime(at/1000,'unixepoch') AS quand, level, pseudo, version, os, bug, idea FROM reports ORDER BY at DESC"
+
+Pour être prévenu à chaque retour, une fois : `powershell -ExecutionPolicy Bypass -File notify.ps1`
+(1 = par e-mail avec un compte Resend gratuit, 2 = en notification sur le téléphone avec l'appli ntfy).
+Les anciens retours envoyés depuis le jeu (0.66, 0.67) sont dans la table `feedback`.

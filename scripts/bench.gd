@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour67": false, "tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour68": false, "tour67": false, "tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,7 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour68": opts["tour68"] = true        # 0.68: the home lifted, the urns opened, the escape
 			"tour67": opts["tour67"] = true        # 0.67: the dungeon in two
 			"tour66": opts["tour66"] = true        # 0.66: the temple's three scenes
 			"tour60": opts["tour60"] = true        # 0.60's: the eagle's fight, each of its moments
@@ -156,6 +157,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour68"]:
+		await _tour68()
 		return
 	if opts["tour67"]:
 		await _tour67()
@@ -521,6 +525,65 @@ func _tour52() -> void:
 				main.save["mode"] = "endless"
 				main.go("play")
 				main.run.god = true
+			"quit": get_tree().quit()
+
+## --tour68: the home screen lifted (its panels), the Trésor's three urns and each opened, then a capture and the
+## escape (offered, a rope cut, a miss, freed).
+var steps68: Array = []
+
+func _tour68() -> void:
+	if steps68.is_empty():
+		steps68 = [[0.5, "setup", ""], [1.6, "shot", "68-01-accueil"], [1.7, "urns", ""], [2.3, "shot", "68-02-tresor"],
+			[2.4, "open", "legendary"], [2.9, "shot", "68-03-leg-arrive"], [4.2, "shot", "68-04-leg-charge"], [5.6, "shot", "68-05-leg-fissures"],
+			[5.9, "shot", "68-06-leg-eclat"], [6.6, "shot", "68-07-leg-objets"], [8.6, "shot", "68-08-leg-fin"], [8.8, "close", ""],
+			[9.0, "open", "rare"], [10.6, "shot", "68-09-rare-charge"], [11.5, "shot", "68-10-rare-eclat"], [13.2, "shot", "68-11-rare-fin"], [13.4, "close", ""],
+			[13.6, "open", "common"], [14.5, "shot", "68-12-commune-charge"], [15.3, "shot", "68-13-commune-eclat"], [16.4, "shot", "68-14-commune-fin"], [16.6, "close", ""],
+			[16.8, "shot", "68-15-tresor-apres"], [16.9, "untreasure", ""], [17.0, "play", ""], [19.5, "catch", ""], [25.0, "shot", "68-16-offre"],
+			[25.1, "knife", ""], [25.5, "shot", "68-17-evasion"], [25.6, "cut", ""], [25.75, "shot", "68-18-corde"], [26.0, "miss", ""], [26.1, "shot", "68-19-rate"],
+			[26.6, "cut", ""], [27.0, "cut", ""], [27.15, "shot", "68-20-libre"], [28.0, "quit", ""]]
+	while tour_i < steps68.size() and t >= steps68[tour_i][0]:
+		var st = steps68[tour_i]
+		tour_i += 1
+		var arg: String = st[2]
+		match st[1]:
+			"shot":
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join(arg + ".png"))
+			"setup":
+				main.save["seenIntro"] = true
+				main.save["upgrades"]["magnet"] = 1
+				main.save["upgrades"]["spring"] = 1
+				main.save["equipped"] = ["magnet", "spring"]
+				main.save["coins"] = 12000
+				main.refresh_menu()
+			"urns":
+				main.save["urnBag"] = {"common": 2, "rare": 1, "legendary": 1}
+				main._treasure()
+			"open":
+				main.urn_pick = arg
+				main._break_urn()
+			"close":
+				for ch in main.treasure.get_children():
+					if ch is Control and ch.has_signal("closed"):
+						ch.closed.emit()
+			"untreasure": main._close_treasure()
+			"play":
+				main.save["mode"] = "endless"
+				main.go("play")
+				main.run.free_knives = 2
+			"catch":
+				var r: Game.Run = main.run
+				r.obs.clear()
+				r.god = false
+				r.hearts = 1
+				Game.hit(r, null)
+			"knife": main._use_knife()
+			"cut", "miss":
+				var c = main.run.caught
+				if c != null and c.phase == "escape":
+					var e: Dictionary = c.esc
+					e["cur"] = e["zone"] if st[1] == "cut" else fmod(e["zone"] + 0.5, 1.0)
+					Game.escape_tap(main.run)
 			"quit": get_tree().quit()
 
 ## --tour67: the dungeon in two, in the Sphère's mode (thrown up onto the deck, along it, down the shaft).

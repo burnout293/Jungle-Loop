@@ -184,6 +184,35 @@ static func arp(semis: Array, dur: float, wave: String, vol: float, gap: float) 
 		out.append(T(hz(semis[k] + 12), dur, wave, vol, k * gap))
 	return out
 
+## (0.68) An urn's charge: a drum roll whose hits come closer and closer, under a tone rising an octave and more,
+## `dur` seconds long; `vol` its loudness.
+static func _rise(dur: float, vol: float) -> Array:
+	var out: Array = [T(160, dur, "sawtooth", 0.07 * vol, 0, 520), T(320, dur, "triangle", 0.06 * vol, 0, 1240)]
+	var at = 0.0
+	var gap = 0.16
+	while at < dur:
+		out.append(N(0.05, (0.18 + 0.3 * at / dur) * vol, 700))
+		out[out.size() - 1][5] = at
+		at += gap
+		gap = maxf(0.035, gap * 0.9)
+	return out
+
+## (0.68) A legendary urn's fanfare: three rising calls, then a held chord, a shimmer over it, a drum under it.
+static func _fanfare() -> Array:
+	var out: Array = []
+	for i in 3:
+		var at = i * 0.16
+		out.append(T(hz(12 + [0, 4, 7][i]), 0.15, "square", 0.12, at))
+		out.append(T(hz(12 + [0, 4, 7][i]) * 2, 0.15, "sawtooth", 0.04, at))
+	for semi in [12, 16, 19, 24]:
+		out.append(T(hz(semi + 12), 1.4, "square", 0.07, 0.5))
+		out.append(T(hz(semi + 12), 1.4, "triangle", 0.09, 0.5))
+	out.append(T(80, 0.3, "sine", 0.5, 0.5, 40))
+	out.append(N(0.9, 0.12, 8000, 0.5))
+	for i in 6:
+		out.append(T(hz(36 + [0, 4, 7, 12, 7, 4][i]), 0.12, "triangle", 0.07, 0.6 + i * 0.1))
+	return out
+
 func _recipes() -> Dictionary:
 	var warn: Array = []
 	for at in [0.0, 0.42]:                       # a two-tone klaxon, twice ("dan-ger, dan-ger")
@@ -251,7 +280,21 @@ func _recipes() -> Dictionary:
 		"roar": [T(160, 0.9, "sawtooth", 0.22, 0.0, 90), N(0.8, 0.25, 600)],
 		"thunder": [N(1.4, 0.7, 300), T(55, 1.2, "sine", 0.6, 0.0, 30), N(0.2, 0.5, 3000)],
 		"eaglefall": [T(700, 0.5, "sine", 0.2, 0.0, 120), N(0.4, 0.55, 500, 0.45), T(90, 0.4, "sine", 0.5, 0.45, 40)],
-		"pop": [T(300, 0.12, "sine", 0.35, 0.0, 900), N(0.12, 0.3, 2400, 0.02)],                    # ... he gets out
+		"pop": [T(300, 0.12, "sine", 0.35, 0.0, 900), N(0.12, 0.3, 2400, 0.02)],
+		# (0.68) the escape: a rope cut (a snip, a twang, a spark), a touch out of the green, freed (a fanfare)
+		# (0.68) an urn opened: its charge (a drum roll speeding up under a rising tone, as long as the charge),
+		# its burst (a crash, a boom, glass), then a fanfare by rarity, and a pop for each thing out of it
+		"urnrise1": _rise(1.45, 0.7),
+		"urnrise2": _rise(2.35, 0.85),
+		"urnrise3": _rise(3.45, 1.0),
+		"urnburst": [N(0.7, 0.7, 2200), T(65, 0.7, "sine", 0.7, 0, 30), N(0.35, 0.5, 6000, 0.02), T(2600, 0.12, "square", 0.06, 0.03, 3400), T(3100, 0.12, "square", 0.05, 0.09, 2400), T(2200, 0.15, "square", 0.05, 0.15, 3000)],
+		"itempop": [T(hz(19), 0.08, "square", 0.09, 0, hz(24)), T(hz(31), 0.14, "triangle", 0.1, 0.05)],
+		"urnwin1": arp([7, 12, 16, 19], 0.2, "triangle", 0.2, 0.08),
+		"urnwin2": arp([0, 4, 7, 12, 16], 0.18, "square", 0.09, 0.07) + [T(hz(24), 0.9, "triangle", 0.16, 0.36), T(hz(28), 0.9, "triangle", 0.13, 0.36), T(hz(31), 1.0, "triangle", 0.12, 0.36), N(0.3, 0.12, 7000, 0.36)],
+		"urnwin3": _fanfare(),
+		"cut": [N(0.04, 0.5, 5200), T(hz(19), 0.06, "square", 0.1), T(hz(24), 0.12, "triangle", 0.2, 0.04), T(320, 0.2, "sawtooth", 0.07, 0.02, 110), T(hz(31), 0.22, "triangle", 0.1, 0.1)],
+		"miss": [T(150, 0.22, "square", 0.13, 0, 90), N(0.12, 0.22, 420)],
+		"free": arp([0, 4, 7, 12], 0.16, "square", 0.1, 0.07) + [T(90, 0.2, "sine", 0.45, 0.28, 45), N(0.16, 0.3, 3000, 0.28), T(hz(28), 0.75, "triangle", 0.15, 0.3), T(hz(31), 0.75, "triangle", 0.13, 0.3), T(hz(36), 0.85, "triangle", 0.13, 0.3), T(hz(24), 0.8, "square", 0.05, 0.3)],                    # ... he gets out
 		"scuffle": [N(0.07, 0.4, 900), T(180, 0.08, "square", 0.1, 0, 90)],                       # a blow in the cloud of dust
 		"bonk": [T(620, 0.1, "square", 0.1, 0, 300), N(0.03, 0.25, 3200)],                         # ... a head knocked
 		"skewer": [T(70, 0.14, "sine", 0.55), T(70, 0.14, "sine", 0.5, 0.18), T(90, 0.22, "sine", 0.55, 0.36), T(hz(12), 0.14, "triangle", 0.16, 0.5), T(hz(15), 0.14, "triangle", 0.16, 0.59), T(hz(19), 0.14, "triangle", 0.16, 0.68), T(hz(24), 0.32, "triangle", 0.16, 0.77)],   # tied to the spit: drums, a little tune
@@ -288,9 +331,6 @@ func _recipes() -> Dictionary:
 		"lantern": [T(hz(24), 0.25, "sine", 0.06), T(hz(31), 0.3, "sine", 0.04, 0.05)],
 		# the escape: the knife out (a metal flick), a rope bitten through, a miss, free, the rope that held
 		"knife": [T(1800, 0.06, "square", 0.08, 0, 2600), T(2400, 0.12, "triangle", 0.1, 0.05, 1600)],
-		"cut": [N(0.08, 0.35, 2600), T(700, 0.08, "square", 0.1, 0, 1400)],
-		"miss": [T(200, 0.18, "square", 0.14, 0, 120)],
-		"free": arp([0, 4, 7, 12, 19], 0.22, "triangle", 0.2, 0.06),
 		"held": [T(300, 0.5, "triangle", 0.18, 0, 110)],
 	}
 

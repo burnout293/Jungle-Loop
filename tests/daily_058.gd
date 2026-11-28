@@ -137,9 +137,11 @@ func _init() -> void:
 	Treasure.add_urn(u, "common")
 	Treasure.add_urn(u, "legendary")
 	check(Treasure.total(u) == 4, "toutes les urnes comptées (4)")
+	var drawn = Treasure.identify(u)                 # (0.68) every urn gets its rarity as the Trésor opens
+	check(drawn.size() == 2 and int(u["urns"]) == 0 and Treasure.total(u) == 4, "(0.68) les urnes gagnées reçoivent leur rareté (%s)" % [drawn])
 	var r1 = Treasure.open(u)
-	var r2 = Treasure.open(u)
-	check(r1["rarity"] == "legendary" and r2["rarity"] == "common" and int(u["urns"]) == 2, "d'abord celles de la Course du jour, la meilleure d'abord")
+	var r2 = Treasure.open(u, "common")
+	check(r1["rarity"] == "legendary" and r2["rarity"] == "common" and Treasure.total(u) == 2, "la meilleure d'abord, ou celle choisie")
 	var whats = {}
 	u["urns"] = 300
 	seed(58)

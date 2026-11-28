@@ -12,6 +12,9 @@ const PIXEL := Game.PIXEL
 const SIZE := Game.SIZE                 # 0.49: the hero, the dangers, the coins, the things picked up: 15 % bigger
 const VH := 320.0                      # play area height, in art pixels
 const GN := 280.0                      # floor line where the path is at its starting level
+const HOME_LIFT := 30.0                # (0.68) on the whole temple (the home screen, the start) the world is drawn this
+                                       # much higher: its floor just over JOUER and the corner panels; it comes down
+                                       # as the camera slides to the doorway
 const TEMPLE_X := -185.0               # temple's left edge, at camera 0 (its doorway's middle at x 48, as before)
 const DOOR_X := 35.0                   # and its doorway (0.52: the corridor's open end is x 220 to 250 of its pictures)
 const TEMPLE_FLOOR := 218.0            # the row of the temple's pictures that stands on the floor line
@@ -153,8 +156,9 @@ func show_run(r: Game.Run, time: float, q_: int) -> void:
 	var off = Vector2.ZERO
 	if r.shake > 0:
 		off = Vector2(roundf((randf() - 0.5) * r.shake * 7), roundf((randf() - 0.5) * r.shake * 7))
+	lift = roundf(HOME_LIFT * clampf(-r.cam / Game.TEMPLE_PAN, 0.0, 1.0))
 	for l in [back, hero_clip, front]:
-		l.position = off
+		l.position = off + Vector2(0, -lift)
 	seat = _seat()
 	# he steps out of the doorway: hidden while still inside
 	var in_temple = TEMPLE_X - r.cam / PIXEL > -_w("temple")
@@ -223,6 +227,7 @@ func draw_guards(c: CanvasItem) -> void:
 ## right, where he finds them later, heads in the ground. 1: pygmies sitting on the temple's ledges, who jump
 ## at the blast. 2: a pygmy chased by the rhino across the screen, now and then; once, tossed out of sight,
 ## he lands head first before the doorway; the rhino comes up, stops, snorts, and goes back the way it came.
+var lift := 0.0                                  # (0.68) HOME_LIFT now (art pixels)
 var hs_run = null
 var hs_t0 := 0.0
 var hs_blast := -1.0
@@ -1286,10 +1291,10 @@ func draw_ground(c: CanvasItem, G: Dictionary, x0: float, x1: float, bottom: flo
 					region_clip(c, g["tex"], Rect2(a, 0, cw, h), Rect2(x, ya, cw, h), clip)
 					# under a raised stretch: the earth of the piece's lower half again, as often as needed
 					var yy = ya + h - 1
-					while yy < VH:
+					while yy < VH + lift:            # (0.68: lower still while the world is lifted)
 						region_clip(c, g["tex"], Rect2(a, h - EARTH - 2, cw, EARTH), Rect2(x, yy, cw, EARTH), clip)
 						yy += EARTH
-					if ya + h < bottom and ya + h >= VH:
+					if ya + h < bottom and ya + h >= VH + lift:
 						var fill = Rect2(x, ya + h, cw, bottom - ya - h).intersection(clip)
 						if fill.has_area():
 							c.draw_rect(fill, soil)
@@ -2115,10 +2120,15 @@ func _draw_back(c: CanvasItem) -> void:
 	var cut = clampf(edge, 0, view_w)               # the floor changes exactly where the new place begins
 	var changing = run.prev_biome != run.biome
 	if changing:
-		draw_ground(c, Art.scene[run.prev_biome]["ground"], 0, cut, VH + 8)
-	draw_ground(c, now["ground"], cut if changing else 0.0, view_w, VH + 8)
+		draw_ground(c, Art.scene[run.prev_biome]["ground"], 0, cut, VH + 8 + lift)
+	draw_ground(c, now["ground"], cut if changing else 0.0, view_w, VH + 8 + lift)
+	if lift > 0:                                     # (0.68) the earth shown under the lifted floor, sinking into the dark
+		var k = lift / HOME_LIFT
+		for band in 4:
+			var y0 = GN + 18 + band * 12
+			rect(c, 0, y0, view_w, VH + lift - y0, Color(10 / 255.0, 6 / 255.0, 24 / 255.0, 0.16 * k))
 	if ghost.has_area():
-		draw_ground(c, Art.scene[run.strip_biome]["ground"], ghost.position.x, ghost.end.x, VH + 8)
+		draw_ground(c, Art.scene[run.strip_biome]["ground"], ghost.position.x, ghost.end.x, VH + 8 + lift)
 	var cliff: Texture2D = Art.tex.get("cliff")
 	if cliff != null and run.cliff_x > -INF:         # (0.54) the forest's end: its cliff over the heights' mist
 		var ex = snap(run.cliff_x / PIXEL - cam)     # (its rock face where the forest's floor is cut)
@@ -2148,7 +2158,6 @@ func _draw_back(c: CanvasItem) -> void:
 	_draw_items(c)
 	_draw_obstacles(c)
 	draw_guards(c)
-	draw_home_scene(c)                               # (0.66) the pygmies by the temple
 	draw_slimes(c)                                   # (0.59) Histoire, the dungeon
 
 	if not run.dead or show_dead:
@@ -2659,6 +2668,8 @@ func _draw_front(c: CanvasItem) -> void:
 	var pillars: Texture2D = Art.tex.get("temple-front")    # (0.50) the temple's jaguar pillars, in front of him
 	if pillars != null and snap(TEMPLE_X - cam) > -pillars.get_width():
 		blit(c, pillars, snap(TEMPLE_X - cam), GN - TEMPLE_FLOOR)
+	draw_home_scene(c)                               # (0.66) the pygmies by the temple (0.68: in front of its pillars,
+	# which hid them)
 	if run.p.ball != null and run.p.ball.kind == "log" and not run.dead:
 		ribs(c, run.p.ball, true)                    # he rolls inside the trunk, not in front of it
 	_draw_swarm(c)

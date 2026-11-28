@@ -1,5 +1,14 @@
 # Jungle Loop — les changements montrés par le bouton « Changements » (Réglages, à côté de « Mettre à jour »).
 # La version la plus récente en premier ; une ligne « = 0.xx » ouvre chaque version. Lignes en # ignorées.
+= 0.68
+Urnes : chacune a sa rareté dès l'ouverture du Trésor (commune, rare, légendaire), chacune son apparence ; on choisit celle à ouvrir.
+Ouverture d'une urne : elle grossit, tremble, se fissure, éclate ; rayons, éclats, fanfare, plus longue et plus forte pour une rare ou une légendaire.
+Évasion : le couteau suisse en grand dans un cercle qui se vide, le compte à rebours à côté ; chaque corde coupée claque (animation et son), libéré : une fanfare.
+Sphère : en boule, ni Vol ni double saut, et la boule est plus petite que Pépito debout ; pas de Sphère dans les pitons.
+Le décor (les collines) ne disparaît plus derrière Pépito.
+Accueil : le sol juste au-dessus de JOUER, les panneaux Équipement et Groupe en bois ; les scènes des pygmées passent devant l'entrée du temple.
+Partie rapide : la recherche se fait toute seule, les places libres disent « Recherche… ».
+Ton avis : « Donner mon avis » (Réglages) ouvre une page du site : bug, idée, niveau de gêne.
 = 0.67
 Donjon coupé en deux sections, Haut et Bas, chacune avec ses dangers ; un conduit tous les 80 m (en Sphère) pour monter, un puits pour redescendre.
 Les conduits ne se prennent plus qu'en mode Sphère.

@@ -105,6 +105,39 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
 
+## 0.68.0
+
+- **Sphère** : en mode Sphère (`run.ball_on`), ni Vol (ni sa croisière) ni double saut ; sa boîte est celle de
+  la boule (`BALL_TALL` 50, `BALL_HALF` 20 au lieu de 92 × 16), ses pièces aussi (`BALL_REACH`) ; le bouton est
+  grisé dans les pitons, où elle se déroule seule (tout y est Vol).
+- **Évasion** (`EscapeView` dans main.gd) : offerte, le couteau suisse en grand (`ico-knife`) dans un anneau qui
+  se vide avec les secondes, le compte à côté (rouge sous 2 s) ; un toucher dessus lance l'évasion. Puis la barre,
+  les cordes en gros points : une corde coupée éclate (anneau, rayons, le couteau qui tranche, son `cut`), un
+  raté secoue la barre en rouge (`miss`), libre : tous cochés, une onde et une fanfare (`free`), le panneau reste
+  0,9 s (`esc_hold`).
+- **Décor** : les collines restent jusqu'à 900 unités derrière la caméra (leur dernière image dépasse leur
+  étendue de près de 460 unités ; à 200 elles disparaissaient derrière Pépito).
+- **Accueil** : le monde dessiné `HOME_LIFT` 30 pixels plus haut tant que la caméra est sur le temple (il
+  redescend pendant qu'elle glisse vers la porte) : le sol juste au-dessus de JOUER ; la terre dessous assombrie
+  par bandes. Panneaux Équipement / Groupe : plaque PixelLab (`assets/src/home/panel-pixellab.png`) coupée à
+  leur taille exacte par `tools/make_home_panels.py` (`ui-v2/wood/panel-126|150.png`). Les scènes des pygmées
+  sont dessinées devant les piliers du temple (`_draw_front`).
+- **Urnes** : `Treasure.identify` donne leur rareté à toutes les urnes gagnées dès que le Trésor s'ouvre (mêmes
+  chances et mêmes garanties qu'avant) ; le Trésor montre les trois (`urn-common|rare|legendary.png`, rare et
+  légendaire faites par PixelLab à partir de l'urne), on choisit laquelle ouvrir (`urn_pick`). L'ouverture
+  (`UrnShow`) : l'urne au milieu, elle grossit et tremble de plus en plus, trois fissures, des étincelles, des
+  rayons qui tournent (rare 8, légendaire 2 × 16), puis l'éclat (flash, onde, éclats de l'urne, secousse de
+  l'écran, confettis), le titre, les objets un par un (`itempop`), la fanfare (`urnwin1-3`). Charge 1,1 / 2 /
+  3,1 s ; un toucher va droit à l'éclat.
+- **Partie rapide** : seul dans son salon, on cherche un autre salon toutes les `QUICK_EVERY` 5 s ; de deux
+  joueurs seuls, celui dont le salon a le code le plus grand rejoint l'autre. Les places libres disent
+  « RECHERCHE… », animé (`quick_on`).
+- **Ton avis** : « Donner mon avis » (Réglages › Jeu) ouvre `retours.html` sur le site (pseudo, version et
+  plateforme après le `#`). Serveur : route `feedback/web` sans identité (5 par heure et par adresse, adresse
+  gardée en empreinte salée du jour), table `reports` (`server/migrate-068.sql`) ; l'auteur prévenu par e-mail
+  (Resend) ou notification (ntfy) si `server/notify.ps1` a rangé les secrets. Test serveur : 28.
+- Banc `--tour68` (accueil, Trésor, les trois ouvertures, capture et évasion).
+
 ## 0.67.0
 
 - **Le donjon en deux** (`SPLIT_ON`, `split_at`, `lay_split`, `_deck`) : un pont de dalles (`slab`, épaisseur
