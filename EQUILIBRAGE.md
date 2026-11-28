@@ -1,6 +1,6 @@
 # Jungle Loop — toutes les valeurs de jeu
 
-État au 24/11/2026, **version 0.64.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
+État au 24/11/2026, **version 0.65.0** (le jeu, à l'adresse principale depuis le 18/11 ; le code est
 dans la branche `godot`, `scripts/game.gd`). L'ancienne version web (0.28.1, `js/`) n'est plus en
 ligne depuis la 0.51 (archivée) ; là où elle différait, c'est dit. Les noms entre accents graves sont ceux du code Godot quand ils
 existent, sinon ceux de js/. Le menu de debug (5 touches sur le niveau, à l'accueil ; depuis la 0.48, un mot de passe le protège dans les versions publiées) change en direct la vitesse, l'accélération, le Sprint, les distances minimum et la venue du boss, et affiche les mesures en jeu (vitesse, hauteur…). « Hitbox » y montre les boîtes que les règles testent. Dès qu'un champ y est changé : fin bandeau rouge « DEBUG » en haut de l'écran, champs changés en rouge, aucun record enregistré ; « Stopper le débogage » remet tout à l'origine. Pour changer une valeur, dis-moi la ligne et le nouveau chiffre
@@ -53,6 +53,7 @@ L'accueil a un bouton par mode ; « Rejouer » relance le dernier mode choisi.
 | Double saut | 2,6 m de plus (4,1 m maintenu) | élan `-700` |
 | Ressort | élan +10 % par niveau, soit hauteur +21 % puis +44 % | `spring` |
 | Bottes de métal | il retombe 1,25 fois plus vite (la montée ne change pas : les sauts gardent leur hauteur) ; le bouton (ou S / ↓) le fait plonger à 37,5 m/s, ou secoue le sol sur place s'il y est : la secousse casse le décor et écrase les créatures au sol ou basses (jusqu'à 3,75 m) à 3 / 4,5 m autour de lui ; ce qu'il touche en plongeant est écrasé ; recharge 8 / 5 s | `BOOTS_*`, `quake` |
+| Gravité (0.65) | les pouvoirs Gravité augmentée / réduite multiplient toute la gravité de Pépito (saut, retombée, Vol relâché) ; les tests d'équité sont faits à la gravité normale | `Run.grav()` |
 | Vol | chaque appui : montée à **12 m/s** tant qu'on tient (niveau 2 : 13,5 ; niveau 3 : 15) ; relâché : la montée s'arrête net, puis chute **1,2** fois plus rapide qu'un saut, jusqu'à toucher le sol | `FLAP_LV`, `VOL_STOP`, `VOL_DROP`, `flew` |
 | Plafond | à 0,6 m du haut de l'écran | `CEIL` |
 | Appui juste avant d'atterrir | retenu 0,12 s | `p.buf` |
@@ -102,7 +103,12 @@ Un motif à la fois, tiré au sort dans une liste. Chaque ligne a la même chanc
 | Pas de campement (Vol) | rester 2,6 s à la même hauteur (à 1,75 m près) amène un volant visé sur toi, puis un autre 1,6 s plus tard si tu y restes ; jamais deux volants à la fois, ni quand un danger à ta hauteur (à 4 m près) arrive déjà ; sans le Vol, rien de tel (le sol est ta place) | `CAMP_*`, `camp` |
 | Araignées (0.32) | bien plus nombreuses : suspendu ×8 entrées, motif « araignées » ×5 (0.42 ; 2 ou 3 à la suite : une jaune immobile, des rouges ; 1,15 s d'écart à la vitesse prévue, 11 m au moins, autant après la file) ; **nids** ×6 (0.44, comme avec la libellule) : 4 ou 5 araignées à 5 m d'écart, toutes à l'écran ensemble : une jaune basse à sauter, au-dessus de ton saut seulement des hors d'atteinte (11,65 m), ailleurs au-dessus de ta tête (6,8 ; 9,4 ou 11,65 m), dès 1500 m parfois une à hauteur de tête, loin du saut ; **jaunes immobiles, rouges qui montent et descendent de 2,5 m de chaque côté en 2,4 s**, du sol jusqu'au plafond ; une colonne bouge d'un bloc ; **jamais plus de 2 l'une au-dessus de l'autre** (0.34 : une troisième n'est pas posée ; aussi la porte et la tour de la libellule) | `SPIDER_*`, `SPIDER_COLUMN`, `add_hover` |
 | Vagues de volants | 3 fois plus souvent qu'un motif simple (0.42 ; `vagues, poids`) ; 2 à 10 volants, de 0,9 s d'écart à 9 m/s jusqu'à 0,3 s à 30 m/s ; à pied 0,85 s d'écart au moins (0.55 : à pied chacun garde sa hauteur, jamais deux fois de suite la même ; chacun se saute) ; avec le Vol l'écart de la vague ; rien d'autre sur la route pendant une vague | `WAVE_*`, `_wave` |
-| Objets rares | seul : un sablier ou une urne (0.47 : plus de vies volantes ; 0.55 : plus de plume, un sablier à sa place ; 85 % sablier, le reste une urne, une par course au plus, dès 600 m ; à deux : rien), qui zigzaguent entre 1,5 et 7,25 m (0,7 s par aller ; à portée de saut), un tous les 1 400 à 2 400 m environ (dès 300 m). Une fois à l'écran, ils avancent à **75 % de ta vitesse** (0.44, les deux) : ils restent longtemps en vue. Le sablier ôte **20 % de ta vitesse** du moment (pour le reste de la course ; en Histoire, du décor) | `BONUS_*`, `add_bonus`, `BRAKE_SHARE`, `BRAKE_PACE` |
+| Objets volants (0.65) | zigzaguent entre 1,5 et 7,25 m (0,7 s par aller, à portée de saut) et avancent à **75 % de ta vitesse** une fois à l'écran ; un objet tous les **1 400 à 2 400 m** (le premier dès 300 m). Voir le tableau ci-dessous | `BONUS_*`, `add_bonus`, `BRAKE_PACE` |
+
+| Objet volant | Distance min | Distance max entre deux | Dans quelles courses |
+|---|---|---|---|
+| Sablier (ôte 20 % de ta vitesse du moment, pour le reste de la course ; en Histoire, du décor) | 300 m | 2 400 m | Histoire seul, Run illimitée, Affrontement, Course du jour ; jamais à deux (coop) |
+| Urne (extrêmement rare) | 25 000 m | 25 000 m (une tous les 25 000 m : au premier objet volant passé 25 000, 50 000 m…) | Run illimitée et Affrontement seulement ; jamais en Histoire ni à deux (`URN_EVERY`) |
 | Toujours esquivable | vérifié par un banc qui essaie toutes les façons de jouer image par image : à pied (sauts tapés ou tenus de 0,1 à 0,5 s) et avec le Vol (tenu ou relâché à chaque image, montée 12 m/s, celle du niveau 1, vraie chute ×1,2), 43 200 images chacun (12 min) : aucun passage impossible ; un campeur volant prend 17 à 21 coups par minute | bancs fair_bfs, fly_tests |
 | Aérien fixe (AF) / Aérien mobile (AM) (ex-Suspendu) | araignée (forêt et ruines) / drone / chauve-souris, immobile dans le vide ; bas (milieu à 1,6 m, sauter) dès 150 m, à hauteur de tête (4,1 m, rester au sol) dès 1500 m, 4 fois sur 10 | `HOVER`, `LOW`, `HEAD`, `FROM` |
 | Mise en avant des dangers | façon 5 (son choix du 17/11) : contour sombre et bord éclairé en haut à gauche sur tout ce qui fait mal, décor de fond et décor du chemin assombris ; liseré rouge en plus en option (Réglages, Accessibilité) | `LOOK`, `setDangerRim` |
@@ -224,7 +230,9 @@ Moustiques en forêt, guêpes dans les ruines, feux follets au donjon : ils vise
 | Relique altérée | 5 | 2600 / 3600 / 4600 | 6 / 10 / 15 % d'éthérées ; le décor ne change plus |
 | Vol (pouvoir) | 5 | 4800 / 40000 / 120000 | montée 12 / 13,5 / 15 m/s |
 | Sprint (pouvoir) | 5 | 4000 | +4 m/s |
-| Sphère (pouvoir) | 5 | 60000 |  |
+| Sphère (pouvoir) | 5 | 60000 | (0.65) un bouton Normal / Sphère (touche B), sans recharge : en Sphère, Pépito roule toute la course et va **+4 m/s** plus vite (`BALL_PLUS`) ; les conduits ne se prennent qu'en Sphère (tout seuls) ; sans le pouvoir Sphère, les conduits ouverts du donjon restent permis (sinon le donjon serait infranchissable) |
+| Gravité augmentée (pouvoir, 0.65) | 9 | 6000 | gravité ×1,2 (`GRAV_UP`) : sauts moins hauts, retombée plus rapide |
+| Gravité réduite (pouvoir, 0.65) | 9 | 6000 | gravité ×0,82 (`GRAV_DOWN`) : sauts plus hauts, retombée plus lente |
 | Trèfle | 6 | 800 / 2400 | voir § 5 |
 | Ami de la nature | 6 | 1200 / 2800 / 40000 | montures 1,25 / 1,5 / 1,75 fois plus tôt |
 | Vitalité | 7 | 5000 / 60000 / 200000 | 2 / 3 / 4 cœurs |
@@ -380,3 +388,12 @@ sur chaque défi de l'accueil ; il disparaît une fois utilisé) ; les plumes de
 | Accueil | Jouer (la Run illimitée), Histoire, Améliorations ; survolé, ou tenu un moment au doigt (le lâcher ne lance alors rien), chaque bouton ouvre un panneau qui en dit l'esprit | `MENU_TIPS`, `_menu_tip` |
 | Photo de la chute | prise sans le filtre rouge du coup | `show_dead` |
 | Réglages | rien à faire défiler (0.43) : à gauche Son (musique, effets) et Image (qualité, plein écran, images par seconde) ; à droite trois onglets : Lisibilité (police pixel ; contour rouge des dangers ; signalements décalés : les alertes des Fonceurs à 64 % de la largeur au lieu du bord droit, loin du pouce), Sauvegarde (code, fichier, tout effacer ; ouverte depuis la pause, elle attend la fin de la course), Version (dans le navigateur, « Mettre à jour » : lit `version.txt`, plus récente le jeu se recharge sans ses fichiers gardés, la sauvegarde reste ; un « ! » doré sur la roue dentée de l'accueil quand une version plus récente est en ligne) | `_build_settings` |
+
+## Affrontement : types de course (0.65)
+
+| Type | Règle | Où |
+|---|---|---|
+| Distance | le plus loin gagne | `rules.score = "dist"` |
+| Pièces | le plus de pièces ramassées gagne ; la route passe la falaise vers les piliers brumeux à 150 m et y reste | `"gold"`, `SKY_RACE_AT`, `Run.sky_only` |
+| Trésor | 3, 5, 7 ou 10 courses, chacune sous une règle (et son équipement) de la Course du jour ; les mises vont dans la cagnotte, rien n'est rendu ; la dernière : vitesse ×1,4, 3 cœurs, aucune pièce ; 80 % de la cagnotte au 1er, 20 % au 2e | `"treasure"`, `rounds`, `pot`, `FINAL_SPEED` |
+| Mystère | une règle de la Course du jour, cachée ; « Valider » au lieu de « Prêt », sans retour ; révélée quand tous ont validé ; l'hôte lance, départ 3 s après | `"mystery"`, `pick` |
