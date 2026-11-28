@@ -146,13 +146,21 @@ static var JUMP_DOUBLE := 700.0
 static var JUMP_GRAVITY := 2400.0
 static var JUMP_HELD := 1500.0
 # (0.67) The dungeon in two: a deck of stone slabs DECK_H over the floor runs all along it (the lower part's roof,
-# the upper part's floor), each part two lines high (the floor or the deck, and a jump). Every SPLIT_CYCLE metres
-# a pipe of the floor throws whoever takes it up through a shaft in the deck (SPLIT_LAUNCH); from the deck, the
-# shaft drops him to the floor (or he jumps over it). Each part has its own dangers, never more than it can pass.
+# the upper part's floor), each part two lines high (the floor or the deck, and a jump). (0.69) The deck never
+# breaks. Every SPLIT_CYCLE metres two pipes cross in an X, in the scenery behind: one from the floor up to the
+# deck, one from the deck down to the floor (TUBE_W long, in one of TUBE_SHAPES); rolled up (the Sphère's mode),
+# rolling over a mouth takes the pipe (jumping over it does not). Dangers in both parts, even at the same place,
+# but never two in one part at once (one of its lines always free). As the dungeon begins, one part is drawn the
+# hard one (dangers SPLIT_HARD apart, many coins), the other the calm one (SPLIT_CALM, few coins).
 static var SPLIT_ON := true
 static var DECK_H := 350.0
-static var SPLIT_CYCLE := 80.0
-static var SPLIT_LAUNCH := 1420.0
+static var SPLIT_CYCLE := 40.0
+static var SPLIT_LAUNCH := 1420.0     # (0.67: the old shaft's throw; kept for old tests' sake)
+static var TUBE_W := 460.0
+const TUBE_SHAPES := ["rampe", "looping", "serpent", "escalier"]
+static var TUBE_FORCE := ""           # (the bench's --shape=: every pipe of that shape)
+static var SPLIT_HARD := 0.75         # × max(the spiders' gap, 1 s of running)... (the hard part)
+static var SPLIT_CALM := 2.4          # ... × that again (the calm part)
 static var SKY_RACE_AT := 150.0   # (0.65) Affrontement « Pièces »: the cliff to the heights this many metres in
 static var BALL_PLUS := 4.0      # (0.65) m/s more while rolled up (the Sphère's mode)
 static var GRAV_UP := 1.2        # (0.65) Gravité augmentée: gravity times this (jumps 1/1.2 as high, back down sooner)
@@ -721,6 +729,7 @@ static var shapes: Array = []
 # ---------- the things in a run ----------
 
 class Player:
+	var bdx := 0.0                 # (0.69) in a pipe of the dungeon: where the ball is drawn, ahead (+) or behind
 	var y := 630.0
 	var vy := 0.0
 	var ground := true
@@ -854,6 +863,10 @@ class Zone:
 	var launch_v := 0.0    # (0.67) ... this fast (0: PIPE_LAUNCH)
 	var mouth := -1.0      # ... its mouth in the air, this high over the floor (in as he passes it), out by the floor
 	var wall := false      # ... the way under a wall of will-o'-the-wisps: in anywhere along it
+	var tube := 0          # (0.69) the dungeon in two: +1 from the floor up to the deck, -1 from the deck down
+	var shape := ""        # ... its way (TUBE_SHAPES)
+	var path := PackedVector2Array()    # ... the ball's middle along it (world), from its mouth to its way out
+	var lens := PackedFloat32Array()    # ... the length run at each point
 
 class Monkey:
 	var x := 0.0
@@ -978,6 +991,9 @@ class Run:
 	var by_mark := false
 	var glitch := 0.0
 	var calm_until := 0.0          # after the boss: only coins, then a gentle road (world x)
+	var split_end := -INF          # (0.69) the dungeon in two: where its last cycle ended (a new stretch past it)
+	var split_hard := 0            # ... which part is the hard one in this stretch: 0 below, 1 above
+	var split_next := [0.0, 0.0]   # ... where each part's next danger may stand (kept from one cycle to the next)
 	var easy_until := 0.0
 	var dash := Active.new()
 	var slow := Active.new()
@@ -1785,51 +1801,151 @@ static func _nest(run: Run, x: float) -> float:
 static func split_at(run: Run, x: float) -> bool:
 	return SPLIT_ON and biome_at(run, x) == 3
 
-## (0.67) One cycle of the dungeon in two, from x: the deck all along (a shaft in it over the pipe's way out), the
-## pipe of the floor that throws up through the shaft, then the dangers: below, those of the floor (a hedgehog or
-## a low bat to jump, a bat at head height to stay under); above, on the deck, a low bat to jump or a bat at
-## head height. One part's danger never stands over the other's: they come one after the other.
+## (0.69) One cycle of the dungeon in two, from x: the deck all along; at its start two pipes crossing in an X (up
+## and down, one shape); then each part's dangers, one at a time in each part (the hard part closer together, with
+## many coins; the calm part far apart, a few coins). Kept clear: round the mouths (to jump over them) and where
+## the pipes let the ball out. During a swarm (or as it is due), no danger at all.
 static func lay_split(run: Run, x: float) -> void:
 	var L = SPLIT_CYCLE * PPM
 	var v = lay_speed(run, x)
-	var deck_y = floor_at(run, x) - DECK_H
-	var pipe_x = x + 260.0
-	var pipe_w = roundf(wrnd(620, 760))
-	var out_x = pipe_x + pipe_w                     # where the pipe throws him up
-	var hole0 = out_x - 60.0
-	var hole1 = out_x + maxf(220.0, v * 0.45)       # the shaft: long enough to land beyond it, short enough to jump
-	_deck(run, x, hole0, deck_y)
-	_deck(run, hole1, x + L, deck_y)
-	var z = tight(run, "gallery", pipe_x, pipe_w, GROUND + GALLERY - 22)
-	z.launch = true
-	z.launch_v = SPLIT_LAUNCH
-	z.open = true
-	coin_line(run, pipe_x - 160, floor_at(run, pipe_x) - 40, 3)
-	coin_arc(run, hole1 + 60, DECK_H + 60, 5, 260)
-	# the dangers, from after the shaft to the end of the cycle; below and above in turn
-	var gap = maxf(spider_gap(run, x) * 1.6, v * 1.1)
-	var at = hole1 + maxf(320.0, v * 0.7)
-	var lower = W.randf() < 0.5
-	while at < x + L - 260:
-		var k = W.randf()
-		var o: Obs = null
-		if lower:
-			if k < 0.4:
-				add_spiky(run, at)
+	var fl = floor_at(run, x)
+	var deck_y = fl - DECK_H
+	if x > run.split_end + 1.0:                      # a new stretch of dungeon: which part is the hard one
+		run.split_hard = 0 if W.randf() < 0.5 else 1
+		run.split_next = [x + 200.0, x + 200.0]
+	run.split_end = x + L
+	_deck(run, x, x + L, deck_y)
+	var a = x + 100.0
+	var shape: String = TUBE_SHAPES[W.randi() % TUBE_SHAPES.size()]
+	if TUBE_FORCE != "":
+		shape = TUBE_FORCE
+	var tw = TUBE_W
+	_tube(run, a, tw, fl, deck_y, 1, shape)
+	_tube(run, a, tw, fl, deck_y, -1, shape)
+	var quiet = run.fm != null or run.fm_due
+	var base = maxf(spider_gap(run, x), v * 1.0)
+	var spots = [[a + 200.0, a + tw - 80.0], [a + tw + 300.0, x + L - 140.0]]   # where dangers may stand (never
+	# round a mouth: room to jump over it, or to roll into it)
+	var last_end = x
+	for part in 2:                                   # 0 below, 1 above
+		var hard = part == run.split_hard
+		var gap = base * (SPLIT_HARD if hard else SPLIT_HARD * SPLIT_CALM)
+		var floor_y = fl if part == 0 else deck_y
+		var at = maxf(float(run.split_next[part]), spots[0][0])
+		var prev_low = false                         # the one before blocked the floor's line (he had to jump)
+		var placed = 0
+		while at < x + L - 40:
+			var inside = false
+			for sp in spots:
+				if at >= sp[0] and at <= sp[1]:
+					inside = true
+			if not inside:
+				at = spots[1][0] if at < spots[1][0] else x + L
+				continue
+			if quiet:
+				break
+			var k = W.randf()
+			var low = k < 0.65                       # the floor's line blocked (jump it) or the jump's (stay down)
+			if placed > 0 and low != prev_low:
+				at += v * 0.3                        # (a change of line: room to land, or to come down)
+				if at > x + L - 40:
+					break
+			if part == 0:
+				if low and k < 0.35:
+					add_spiky(run, at)
+				else:
+					var o = add_hover(run, at, LOW if low else HEAD)
+					if o != null:                    # (a mobile one never goes up into the deck)
+						o.amp = minf(o.amp, maxf(0.0, DECK_H - SLAB_T - 20 - ((LOW if low else HEAD) + HOVER_H / 2)))
 			else:
-				o = add_hover(run, at, LOW if k < 0.7 else HEAD)
-				if o != null:                        # (a mobile one never goes up into the deck)
-					o.amp = minf(o.amp, maxf(0.0, DECK_H - SLAB_T - 20 - ((LOW if k < 0.7 else HEAD) + HOVER_H / 2)))
-			coin_line(run, at + gap * 0.45, floor_at(run, at) - 40, 2)
-		else:
-			var h = DECK_H + (LOW if k < 0.55 else HEAD)
-			o = add_hover(run, at, h)
-			if o != null:                            # (nor down through it)
-				o.amp = minf(o.amp, maxf(0.0, h - HOVER_H / 2 - DECK_H - 20))
-			coin_line(run, at + gap * 0.45, deck_y - 40, 2)
-		lower = not lower
-		at += gap * wrnd(0.95, 1.25)
+				if low and k < 0.3:
+					if not "spiky" in run.drop_kinds:
+						add_obs(run, at, deck_y - SPIKY_H, SPIKY_W, SPIKY_H, "spiky", false).biome = 3
+				else:
+					var h = DECK_H + (LOW if low else HEAD)
+					var o = add_hover(run, at, h)
+					if o != null:                    # (nor down through it)
+						o.amp = minf(o.amp, maxf(0.0, h - HOVER_H / 2 - DECK_H - 20))
+			if hard:                                 # the hard part's coins: where its free line is
+				if low:
+					for ci in 4:                     # an arc over it, from its part's floor
+						var ck = ci / 3.0
+						coin(run, at - 70 + 200 * ck, floor_y - 40 - 110 * 4 * ck * (1 - ck))
+				else:
+					coin_line(run, at - 60, floor_y - 40, 4)
+			placed += 1
+			prev_low = low
+			last_end = maxf(last_end, at + 80)
+			at += gap * wrnd(1.0, 1.3)
+		run.split_next[part] = at if not quiet else x + L
+		if hard and quiet:                           # (a swarm: the hard part's coins still)
+			coin_line(run, spots[1][0], floor_y - 40, 5)
+		elif not hard:                               # the calm part: a few coins
+			coin_line(run, spots[1][0] + 40, floor_y - 40, 2)
+	run.block_end = maxf(run.block_end, last_end)
 	run.next_x = x + L
+
+## (0.69) A pipe of the dungeon in two: from its mouth at a (on the floor if it goes up, on the deck if it goes
+## down) to its way out tw further, on the other part's floor. The ball's middle follows `path`.
+static func _tube(run: Run, a: float, tw: float, fl: float, deck_y: float, dir: int, shape: String) -> Zone:
+	var z = Zone.new()
+	z.x = a
+	z.w = tw
+	z.kind = "tube"
+	z.tube = dir
+	z.shape = shape
+	z.open = true
+	var y0 = (fl if dir > 0 else deck_y) - BALL_MID
+	var y1 = (deck_y if dir > 0 else fl) - BALL_MID
+	z.path = tube_path(a, y0, a + tw, y1, shape, dir)
+	var total = 0.0
+	z.lens.append(0.0)
+	for i in range(1, z.path.size()):
+		total += z.path[i].distance_to(z.path[i - 1])
+		z.lens.append(total)
+	run.zones.append(z)
+	return z
+
+const BALL_MID := 28.5                 # (0.69) the ball's middle over the floor (it is drawn so)
+
+## (0.69) The way of a pipe of the dungeon, 48 points from (x0, y0) to (x1, y1): a diagonal easing out of its
+## mouth and into its way out (rampe), with a loop in its middle (looping), waving (serpent), or in four steps
+## (escalier). `dir` +1 going up: the loop goes up the way it climbs.
+static func tube_path(x0: float, y0: float, x1: float, y1: float, shape: String, dir: int) -> PackedVector2Array:
+	var out = PackedVector2Array()
+	var n = 48
+	for i in n + 1:
+		var u = float(i) / n
+		var x = lerpf(x0, x1, u)
+		var e = u * u * (3 - 2 * u)
+		var y = lerpf(y0, y1, e)
+		match shape:
+			"looping":                               # a full loop, the ball upside down at its top (low in the lower
+				var u0 = 0.2 if dir > 0 else 0.58    # part, where the deck does not hide it)
+				if u > u0 and u < u0 + 0.22:
+					var v = (u - u0) / 0.22
+					x += 54.0 * sin(TAU * v)
+					y -= 54.0 * (1.0 - cos(TAU * v))
+			"serpent":
+				y += 46.0 * sin(3.0 * PI * u) * sin(PI * u)
+			"escalier":                              # four steps: flat, then a rise
+				var k = u * 4.0
+				var st = floorf(minf(k, 3.999))
+				var f = clampf((k - st - 0.5) / 0.5, 0.0, 1.0)
+				y = lerpf(y0, y1, (st + f * f * (3 - 2 * f)) / 4.0)
+		out.append(Vector2(x, y))
+	return out
+
+## (0.69) Where the ball is in a pipe of the dungeon, `u` of the way along it (by the length run).
+static func tube_at(z: Zone, u: float) -> Vector2:
+	if z.path.is_empty():
+		return Vector2(z.x + z.w * u, GROUND - BALL_MID)
+	var want = clampf(u, 0.0, 1.0) * z.lens[z.lens.size() - 1]
+	for i in range(1, z.lens.size()):
+		if z.lens[i] >= want:
+			var seg = maxf(0.001, z.lens[i] - z.lens[i - 1])
+			return z.path[i - 1].lerp(z.path[i], (want - z.lens[i - 1]) / seg)
+	return z.path[z.path.size() - 1]
 
 ## (0.67) The deck of the dungeon in two, from x0 to x1: slabs end to end (their pillars down to the floor).
 static func _deck(run: Run, x0: float, x1: float, y: float) -> void:
@@ -3749,6 +3865,17 @@ static func wave(run: Run) -> void:
 		f.sx = run.view_w + 90
 		f.hit = false
 		return
+	if split_at(run, run.cam + run.sx):              # (0.69) the dungeon in two: one wisp in each part, on its floor's
+		f.act[W.randi() % 2] = true                  # line or its jump's (the other line stays free)
+		f.act[3 + W.randi() % 2] = true
+		f.level = 1
+		f.phase = "aim"
+		f.t = 0
+		f.sx = run.view_w + 90
+		f.hit = false
+		f.ghost = run.lvl("drunk") > 0 and randf() < DRUNK[run.lvl("drunk")]
+		run.events.append("fm")
+		return
 	if level < 2:                                    # one or two lanes, among those he is likely to be in
 		var low: Array = [0, 1, 2].filter(func(k): return k != safe)
 		wshuffle(low)
@@ -3799,10 +3926,6 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 		run.next_fm = maxf(run.next_fm, run.dist + 150)
 		return
 	if run.fm == null:
-		if split_at(run, px) or split_at(run, px + run.view_w):   # (0.67) not in the dungeon in two
-			run.fm_due = false
-			run.next_fm = maxf(run.next_fm, run.dist + 100)
-			return
 		if run.mount != null:                        # never on top of a ride
 			run.fm_due = false
 			run.next_fm = maxf(run.next_fm, run.dist + 100)
@@ -3815,7 +3938,7 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 		nf.biome = biome_at(run, px)
 		nf.waves = 1 + (1 if run.dist > 450 and W.randf() < 0.6 else 0) + (1 if run.dist > 900 and W.randf() < 0.5 else 0)
 		nf.aim = 1.7
-		nf.wall = nf.biome == 3 and run.dist > 450 and not run.coop and W.randf() < WISP_WALL   # (0.59)
+		nf.wall = nf.biome == 3 and run.dist > 450 and not run.coop and W.randf() < WISP_WALL and not split_at(run, px)   # (0.59; 0.69: not in the dungeon in two)
 		run.fm = nf
 		wave(run)
 	var f: Swarm = run.fm
@@ -3856,7 +3979,7 @@ static func followers(run: Run, d: float, box: Box, dashing: bool) -> void:
 	else:
 		f.sx += (260.0 if f.t < 0.14 else -FM_RUSH) * d   # a short recoil, then the charge
 	var x0 = run.cam + f.sx - FM_W / 2
-	var under = p.ball != null and p.ball.kind == "gallery"   # (0.59) in a pipe under the floor: out of their reach
+	var under = p.ball != null and (p.ball.kind == "gallery" or p.ball.tube != 0)   # (0.59) in a pipe: out of their reach
 	if not f.hit and not f.ghost and not under and x0 + 8 < box.r and x0 + FM_W - 8 > box.l:
 		for k in FM_LANES:
 			var y0 = GROUND - (k + 0.5) * FM_STEP - FM_H * FM_THICK / 2
@@ -4325,6 +4448,18 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 		p.flying = false
 		var half: float = M["half"] if mounted else (BALL_HALF if run.ball_on else HERO_HALF)
 		var tall: float = M["tall"] if mounted else (BALL_TALL if run.ball_on else HERO_H)
+		if p.ball != null and p.ball.tube != 0 and px > p.ball.x + p.ball.w:   # (0.69) out of a pipe of the dungeon
+			var tz: Zone = p.ball
+			p.ball = null
+			p.bdx = 0.0
+			var end = tz.path[tz.path.size() - 1]
+			p.y = end.y + BALL_MID
+			p.vy = -180.0
+			p.ground = false
+			p.plat = null
+			p.jumps = 1
+			_puff(run, px, p.y)
+			run.events.append("bounce")
 		if p.ball != null and px > p.ball.x + p.ball.w:   # out at the far end, back on his feet
 			var out_of: Zone = p.ball
 			p.ball = null
@@ -4337,8 +4472,20 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 				p.vy = -(out_of.launch_v if out_of.launch_v > 0 else PIPE_LAUNCH)
 				p.jumps = 1
 				run.events.append("bounce")
+		if p.ball == null and not mounted and run.ball_on and p.ground:   # (0.69) rolling over a mouth of the dungeon in two
+			var on_deck = p.plat != null and p.plat.kind == "slab"
+			for z in run.zones:
+				if z.tube != 0 and px >= z.x - 40 and px < z.x + 60 and ((z.tube > 0 and p.plat == null) or (z.tube < 0 and on_deck)):
+					p.ball = z
+					p.balled = 0
+					p.plat = null
+					_puff(run, px, p.y)
+					run.events.append("roll")
+					break
 		if p.ball == null and not mounted and p.plat == null:   # the Sphère (0.59: or a pipe of the dungeon): in he rolls
 			for z in run.zones:
+				if z.tube != 0:
+					continue                         # (0.69: taken above, by their mouth)
 				if not run.ball_on and not (z.open and not SPLIT_ON and run.lvl("sphere") <= 0):
 					continue                         # (0.65, 0.67) in the Sphère's mode only (before the dungeon in two: its open pipes for all)
 				if z.mouth > 0:                      # (0.59) a mouth in the air: in as he passes it
@@ -4364,7 +4511,12 @@ static func update(run: Run, dt: float, input: Controls) -> void:
 			p.flew = false
 			p.jumps = 0
 			p.y = fl + (GALLERY * maxf(0, k) if z.kind == "gallery" else 0.0)
-			if z.mouth > 0:                          # (0.59) down from the mouth to the floor, then along it
+			p.bdx = 0.0
+			if z.tube != 0:                          # (0.69) along the pipe's way, the ball drawn where it is on it
+				var at = tube_at(z, (px - z.x) / z.w)
+				p.y = at.y + BALL_MID
+				p.bdx = at.x - px
+			elif z.mouth > 0:                          # (0.59) down from the mouth to the floor, then along it
 				var u = clampf((px - z.x) / PIPE_SLOPE, 0, 1)
 				p.y = lerpf(fl - z.mouth + HERO_H * 0.5, fl, u * u * (3 - 2 * u))
 			p.roll += run.speed * d / 26

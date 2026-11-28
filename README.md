@@ -105,6 +105,27 @@ niveau de l'accueil. Ses réglages sont gardés dans `user://jungle-loop-debug.j
   avec 0,2 s entre deux gestes (`_threats`, `_fits`, `_attack_fits` dans `game.gd`). Sur 30 combats
   simulés : aucune paire impossible.
 
+## 0.69.0
+
+- **Le donjon en deux, refait** : le pont (`_deck`) ne s'interrompt plus. Tous les `SPLIT_CYCLE` **40 m**, deux
+  conduits (`Zone.tube` +1 / -1, `_tube`) se croisent en X derrière le pont, de la même forme (`TUBE_SHAPES` :
+  rampe, looping, serpent, escalier ; `tube_path`, 48 points, `tube_at` par la longueur parcourue) : en mode
+  Sphère, rouler sur une bouche (le sol pour celui qui monte, le pont pour celui qui descend) l'y fait entrer ;
+  la boule suit le chemin (`p.bdx` : où elle est dessinée), sort avec un petit rebond sur le sol de l'autre étage.
+  Sauter par-dessus la bouche la laisse passer. Rien ne l'atteint dans un conduit.
+- Dangers dans les deux étages, même au même endroit, mais jamais deux dans le même étage à moins d'un écart
+  (une de ses lignes toujours libre) ; rien autour des bouches ni des sorties. À l'entrée du donjon, un étage
+  tiré difficile (`run.split_hard`, dangers à `SPLIT_HARD` × max(écart des araignées, 1 s de course), une ligne
+  ou un arc de 4 pièces par danger), l'autre tranquille (× `SPLIT_CALM` en plus, 2 pièces par cycle) ; l'écart
+  court d'un cycle à l'autre (`run.split_next`).
+- **Nuées de feux follets** dans le donjon en deux : un feu follet dans chaque étage (`wave` : une voie parmi 0-1,
+  une parmi 3-4) ; pas de mur de feux follets là. Pendant une nuée, aucun danger n'est posé.
+- Rendu : `_draw_tube` (le conduit, son ombre, son reflet, ses bagues) derrière le pont, `_draw_tube_ends` (les
+  bouches, avec des flèches dorées quand il est en boule) devant.
+- Tests : `tests/split_067.gd` refait (12 : monter / descendre à 11 et 28 m/s, pont sans trou, conduits par
+  paires, un danger à la fois par étage, étage difficile, sans Sphère en bas, une nuée), `story_059` adapté ;
+  banc `--tour69` (`--shape=` : une seule forme).
+
 ## 0.68.0
 
 - **Sphère** : en mode Sphère (`run.ball_on`), ni Vol (ni sa croisière) ni double saut ; sa boîte est celle de

@@ -1867,6 +1867,8 @@ func draw_hero(c: CanvasItem, st, who = null, at_x: float = NAN, who_leap = null
 	var R: Dictionary = Art.meta["rig"]
 	var dashing = me and run.dash.t > 0
 	var ox = n(run.sx) if is_nan(at_x) else at_x
+	if p.ball != null and p.ball.tube != 0:          # (0.69) along a pipe's way: where the ball is on it
+		ox += n(p.bdx)
 	var oy = n(p.y)
 	if dashing:                                      # the relic's aura
 		glow(c, ox, oy - 18 * SIZE, (30 + sin(t * 30) * 2) * SIZE, Color(1, 211 / 255.0, 92 / 255.0, 0.6))
@@ -2150,6 +2152,7 @@ func _draw_back(c: CanvasItem) -> void:
 		_draw_cues(c)
 	_draw_zones(c)
 	_draw_plats(c)
+	_draw_tube_ends(c)                               # (0.69) the dungeon in two: its pipes' mouths, over the deck
 	for co in run.coins:
 		if co.tight != "log":
 			coin_at(c, co)
@@ -2216,7 +2219,7 @@ func _draw_zones(c: CanvasItem) -> void:
 		var w = n(z.w)
 		var bi = Game.biome_at(run, z.x)
 		var S: Dictionary = Art.scene[bi]
-		if x > view_w or x + w < -10:
+		if (x > view_w or x + w < -10) and not (z.tube != 0 and x + w > -80 and x < view_w + 80):
 			continue
 		if z.kind == "log":
 			var y = n(Game.GROUND - Game.LOG_H)
@@ -2239,6 +2242,8 @@ func _draw_zones(c: CanvasItem) -> void:
 			ribs(c, z, false)
 		elif z.kind == "chute":                      # (0.59) the dungeon: a mouth in the air, down to the floor
 			_draw_chute(c, z, x, w, S)
+		elif z.tube != 0:                            # (0.69) the dungeon in two: its pipes, behind the deck
+			_draw_tube(c, z, S)
 		else:
 			if z.im == null or z.of != bi:          # the burrow is drawn once, then kept with its zone
 				var deep = roundi(Game.GALLERY / PIXEL)
@@ -2272,6 +2277,50 @@ func _draw_zones(c: CanvasItem) -> void:
 				var ax = snap(x + 30)
 				for i in 3:
 					rect(c, ax - 4 + i, snap(GN - 26 + i * 3 + sin(t * 7) * 2), 9 - 2 * i, 2, Color(0.47, 1, 0.86, 0.9))
+
+## (0.69) A pipe of the dungeon in two, along its way (Zone.path): a dark outline, the pipe, its shade and its
+## glint, ribbed every few points; the two of a cycle cross in an X. Its ends come later, over the deck
+## (_draw_tube_ends).
+func _draw_tube(c: CanvasItem, z, S: Dictionary) -> void:
+	var hol: Array = S["hollow"]
+	var pts = PackedVector2Array()
+	for q in z.path:
+		pts.append(Vector2(sx(q.x), n(q.y)))
+	var th = 22.0
+	for pass_ in [[th + 4, INK], [th, hol[0]], [th - 8, hol[3]]]:
+		c.draw_polyline(pts, pass_[1], pass_[0], true)
+	var hi = PackedVector2Array()
+	for q in pts:
+		hi.append(q + Vector2(0, -th * 0.32))
+	c.draw_polyline(hi, Color(hol[2], 0.8), 2.0, true)
+	for i in range(3, pts.size() - 2, 5):           # its rings
+		var d = (pts[i + 1] - pts[i - 1]).normalized()
+		var nrm = Vector2(-d.y, d.x) * (th / 2 + 1)
+		c.draw_line(pts[i] - nrm, pts[i] + nrm, INK, 3.0)
+		c.draw_line(pts[i] - nrm * 0.9, pts[i] + nrm * 0.9, hol[2], 1.0)
+
+## (0.69) The ends of the pipes of the dungeon in two, over the deck: the mouth (a dark round opening, a gold
+## glint and arrows over it while he is rolled up: roll over it to go in) and the way out.
+func _draw_tube_ends(c: CanvasItem) -> void:
+	for z in run.zones:
+		if z.tube == 0 or z.path.is_empty():
+			continue
+		var S: Dictionary = Art.scene[Game.biome_at(run, z.x)]
+		var hol: Array = S["hollow"]
+		var m = Vector2(sx(z.path[0].x), n(z.path[0].y))
+		var e = Vector2(sx(z.path[z.path.size() - 1].x), n(z.path[z.path.size() - 1].y))
+		if m.x > view_w + 30 or e.x < -30:
+			continue
+		for end in [e, m]:
+			c.draw_circle(end, 15, INK)
+			c.draw_circle(end, 13, hol[0])
+			c.draw_circle(end, 9, hol[1])
+			c.draw_arc(end, 13, -2.6, -0.6, 10, hol[2], 2.0)
+		if run.ball_on:                              # rolled up: this way in
+			var a_ = 0.45 + 0.45 * sin(t * 7)
+			for i in 3:
+				var ay = snap(m.y - 24 - i * 5 + sin(t * 6) * 1.5)
+				rect(c, snap(m.x - 3 + i), ay, 7 - 2 * i, 2, Color(1, 0.83, 0.36, a_))
 
 ## (0.59) A pipe of the dungeon whose mouth is in the air (Zone.mouth over the floor): its mouth, the slope
 ## down to the floor, then along it to its way out. In the scenery's own pipe colours (S["hollow"]).

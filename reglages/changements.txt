@@ -1,5 +1,12 @@
 # Jungle Loop — les changements montrés par le bouton « Changements » (Réglages, à côté de « Mettre à jour »).
 # La version la plus récente en premier ; une ligne « = 0.xx » ouvre chaque version. Lignes en # ignorées.
+= 0.69
+Donjon : le pont entre le haut et le bas ne s'interrompt plus.
+Tous les 40 m, deux conduits se croisent en X derrière le pont : l'un monte, l'autre descend ; en Sphère, rouler sur une bouche fait changer d'étage, sauter par-dessus la laisse passer.
+Quatre formes de conduits : rampe, looping, serpent, escalier.
+Dangers en haut et en bas à la fois, jamais deux dans le même étage au même endroit.
+À l'entrée du donjon, un étage est tiré difficile (plus de dangers, beaucoup de pièces), l'autre tranquille.
+Les nuées de feux follets reviennent dans le donjon : un feu follet dans chaque étage.
 = 0.68
 Urnes : chacune a sa rareté dès l'ouverture du Trésor (commune, rare, légendaire), chacune son apparence ; on choisit celle à ouvrir.
 Ouverture d'une urne : elle grossit, tremble, se fissure, éclate ; rayons, éclats, fanfare, plus longue et plus forte pour une rare ou une légendaire.

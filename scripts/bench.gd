@@ -8,7 +8,7 @@ extends Node
 var main: Node
 var tour_i := 0
 var saved_loadout := []
-var opts := {"tour68": false, "tour67": false, "tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
+var opts := {"tour69": false, "tour68": false, "tour67": false, "tour66": false, "tour60": false, "tour59": false, "tour58": false, "tour57": false, "tour56": false, "tour55": false, "tour54": false, "tour53": false, "tour52": false, "tour51": false, "tour50": false, "race": "", "friends": "", "bet": 0, "on": -1, "me": "", "tour48": false, "mock": false, "tour47": false,"showcase": false, "quality": "", "prof": false, "tour": false, "seconds": 30.0, "shots": "", "start": 0.0, "god": false, "up": [], "mode": "story", "mount": "", "screen": "", "ride": "", "biome": -1, "still": false, "hitbox": false, "coop": "", "room": "", "mate": "", "friend": "", "slow": 0, "every": 2.0, "die": -1.0}
 var t := 0.0
 var next_press := 0.6
 var hold_left := 0.0
@@ -41,6 +41,8 @@ func _ready() -> void:
 			"tour": opts["tour"] = true
 			"tour48": opts["tour48"] = true        # 0.48's: friends, the race for four, the signs, the debug lock
 			"mock": opts["mock"] = true            # (with --tour48: only the pictures the mock-ups are drawn on)
+			"tour69": opts["tour69"] = true        # 0.69: the dungeon in two, its pipes in an X
+			"shape": Game.TUBE_FORCE = kv[1]       # (with --tour69: only that shape of pipe, one shot)
 			"tour68": opts["tour68"] = true        # 0.68: the home lifted, the urns opened, the escape
 			"tour67": opts["tour67"] = true        # 0.67: the dungeon in two
 			"tour66": opts["tour66"] = true        # 0.66: the temple's three scenes
@@ -157,6 +159,9 @@ func _process(delta: float) -> void:
 		return
 	if opts["tour52"]:
 		await _tour52()
+		return
+	if opts["tour69"]:
+		await _tour69()
 		return
 	if opts["tour68"]:
 		await _tour68()
@@ -526,6 +531,43 @@ func _tour52() -> void:
 				main.go("play")
 				main.run.god = true
 			"quit": get_tree().quit()
+
+## --tour69: the dungeon in two in a Run illimitée, rolled up (Sphère's mode): a shot every 0.45 s for 12 s (the
+## pipes' mouths, the ball along them, the deck, the dangers of both parts); `--shape=` lays only that shape.
+var shots69 := 0
+
+func _tour69() -> void:
+	if t > 0.5 and shots69 == 0:
+		shots69 = 1
+		_run59(3)
+		var r: Game.Run = main.run
+		r.mode = "endless"
+		r.slimes.clear()
+		r.up["sphere"] = 1
+		r.ball_on = true
+		r.god = true
+		main.save["seenIntro"] = true
+		return
+	if shots69 == 0:
+		return
+	if main.state == "pause":
+		main.resume()
+	if Game.TUBE_FORCE != "":                        # one shape: a single shot, its pipes in the middle of the screen
+		for z in main.run.zones:
+			var zx = (z.x - main.run.cam) / Game.PIXEL
+			if z.tube != 0 and zx > 220 and zx < 250:
+				await RenderingServer.frame_post_draw
+				get_viewport().get_texture().get_image().save_png(opts["shots"].path_join("69-forme-%s.png" % Game.TUBE_FORCE))
+				get_tree().quit()
+				return
+		return
+	var at = 1.5 + (shots69 - 1) * 0.45
+	if t >= at:
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(opts["shots"].path_join("69-%02d.png" % shots69))
+		shots69 += 1
+	if shots69 > 26:
+		get_tree().quit()
 
 ## --tour68: the home screen lifted (its panels), the Trésor's three urns and each opened, then a capture and the
 ## escape (offered, a rope cut, a miss, freed).

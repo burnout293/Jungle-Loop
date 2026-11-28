@@ -151,8 +151,8 @@ func _init() -> void:
 	# --- the dungeon's pipes ---
 	var zs = road_zones("endless", 3, 21)
 	check(zs.all(func(z): return z.open), "le donjon : tous ses conduits s'ouvrent à tous (%d)" % zs.size())
-	if Game.SPLIT_ON:                                # (0.67) the dungeon in two: a pipe that throws up to the deck, each cycle
-		check(zs.size() > 0 and zs.all(func(z): return z.launch and z.launch_v == Game.SPLIT_LAUNCH), "le donjon en deux : des conduits qui propulsent sur le pont (%d)" % zs.size())
+	if Game.SPLIT_ON:                                # (0.69) the dungeon in two: two pipes crossing each cycle, up and down
+		check(zs.size() > 0 and zs.all(func(z): return z.tube != 0) and zs.filter(func(z): return z.tube > 0).size() == zs.filter(func(z): return z.tube < 0).size(), "le donjon en deux : des conduits qui montent et qui descendent (%d)" % zs.size())
 	else:
 		check(zs.any(func(z): return z.launch) and zs.any(func(z): return z.mouth > 0) and zs.any(func(z): return z.kind == "log"), "trois sortes : propulsé en haut, bouche en l'air, droits")
 	r = ready_run("endless", 3, 8)
